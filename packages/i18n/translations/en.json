@@ -108,6 +108,7 @@
 			"socialAccountAlreadyLinked": "This account is already linked to a user.",
 			"userEmailNotFound": "Email not found.",
 			"userAlreadyExists": "This user already exists.",
+			"userAlreadyExistsUseAnotherEmail": "User already exists. Use another email.",
 			"invalidInvitation": "The invitation is invalid or expired.",
 			"sessionExpired": "The session has expired.",
 			"failedToUnlinkLastAccount": "Failed to unlink account",
