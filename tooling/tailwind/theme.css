@@ -47,8 +47,8 @@
 
 @layer base {
 	:root {
-		--border: #e0e3e0;
-		--input: #d0d4d0;
+		--border: #dbdad6;
+		--input: #d4d3d1;
 		--ring: #3875c8;
 		--background: #f2f1ed;
 		--foreground: #1c1e1e;
@@ -64,7 +64,7 @@
 		--muted-foreground: #1d1f1f;
 		--accent: #e8e7f0;
 		--accent-foreground: #1d1f1f;
-		--popover: #ffffff;
+		--popover: #f9f8f6;
 		--popover-foreground: #1d1f1f;
 		--card: #f9f8f6;
 		--card-foreground: #1d1f1f;
@@ -92,7 +92,7 @@
 		--muted-foreground: #94a3b8;
 		--accent: #1e293b;
 		--accent-foreground: #f8fafc;
-		--popover: #161818;
+		--popover: #1c1e1e;
 		--popover-foreground: #eae9e5;
 		--card: #1c1e1e;
 		--card-foreground: #eae9e5;
