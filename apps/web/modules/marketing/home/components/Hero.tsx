@@ -8,7 +8,7 @@ import heroImageDark from "../../../../public/images/hero-image-dark.png";
 
 export function Hero() {
 	return (
-		<div className="relative max-w-full overflow-x-hidden bg-card">
+		<div className="relative max-w-full overflow-x-hidden">
 			<div className="container relative z-20 pt-44 pb-12 lg:pb-16">
 				<div className="mb-4 flex justify-start">
 					<div className="flex flex-wrap items-center justify-start rounded-full bg-muted p-px px-3 py-1 font-normal text-foreground text-sm">
@@ -21,11 +21,11 @@ export function Hero() {
 					</div>
 				</div>
 
-				<h1 className="text-balance font-medium text-3xl md:text-4xl lg:text-5xl xl:text-6xl leading-tighter font-serif text-foreground">
+				<h1 className="text-balance font-medium text-4xl md:text-5xl lg:text-6xl xl:text-7xl leading-tighter font-serif text-foreground">
 					Your revolutionary SaaS built with Next.js
 				</h1>
 
-				<p className="mt-2 text-foreground/60 text-sm sm:text-lg">
+				<p className="mt-2 text-foreground/60 text-sm sm:text-lg max-w-3xl">
 					This is a demo application built with supastarter. It will
 					save you a lot of time and effort building your next SaaS.
 				</p>

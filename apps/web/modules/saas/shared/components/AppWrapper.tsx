@@ -5,7 +5,7 @@ import type { PropsWithChildren } from "react";
 
 export function AppWrapper({ children }: PropsWithChildren) {
 	return (
-		<div>
+		<div className="bg-muted">
 			<NavBar />
 			<div
 				className={cn("md:pr-4 py-4 flex", [
@@ -16,7 +16,7 @@ export function AppWrapper({ children }: PropsWithChildren) {
 			>
 				<main
 					className={cn(
-						"py-6 rounded-3xl bg-card px-4 md:p-8 min-h-full w-full",
+						"py-6 rounded-3xl bg-background px-4 md:p-8 min-h-full w-full",
 					)}
 				>
 					<div className="container px-0">{children}</div>

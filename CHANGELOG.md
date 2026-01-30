@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-01-30 v1.3.5
+
+### Design system updates and UI improvements
+
+#### Visual design updates
+- Updated color scheme: replaced `bg-card` with `bg-background` in navigation and app wrapper for better contrast
+- Changed newsletter section background from `bg-primary/5` to `bg-muted` for consistency
+- Removed borders from card components and dropdown menus for a cleaner look
+- Updated button styles: changed from `rounded-md` to `rounded-full` for a more modern appearance
+- Increased container max-width from `--container-6xl` to `--container-7xl` for better use of screen space
+
+#### Typography improvements
+- Increased heading sizes across marketing pages (Hero, Features sections)
+- Adjusted letter spacing from `-0.02em` to `-0.01em` for improved readability
+- Added max-width constraint to hero paragraph for better text flow
+
+#### Component enhancements
+- Enhanced changelog component: added title field to changelog items with improved layout
+- Updated changelog section styling: switched to `rounded-3xl` with `bg-muted` background
+- Improved dropdown menu styling: updated border radius and shadow for better visual hierarchy
+- Updated settings item component: removed explicit border and rounded corners for cleaner appearance
+
+---
 ## 2026-01-26 v1.3.4
 
 ### Enhanced organization dashboard with visual trend charts
