@@ -23,11 +23,6 @@
 	--radius-lg: var(--radius);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-sm: calc(var(--radius) - 4px);
-	--radius-xs: calc(var(--radius) - 6px);
-	--radiux-xl: calc(var(--radius) + 2px);
-	--radius-2xl: calc(var(--radius) + 4px);
-	--radius-3xl: calc(var(--radius) + 6px);
-	--radius-4xl: calc(var(--radius) + 8px);
 
 	--animation-accordion-down: accordion-down 0.2s ease-out;
 	--animation-accordion-up: accordion-up 0.2s ease-out;
@@ -52,10 +47,10 @@
 
 @layer base {
 	:root {
-		--border: #e4e4e4;
+		--border: #eaeaea;
 		--input: #dfdfdf;
 		--ring: #3875c8;
-		--background: #f4f4f4;
+		--background: #f8f8f8;
 		--foreground: #313539;
 		--primary: #3875c8;
 		--primary-foreground: #ffffff;

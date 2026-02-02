@@ -47,7 +47,7 @@ export function Hero() {
 					)}
 				</div>
 
-				<div className="mx-auto mt-12 lg:mt-16 xl:mt-24 lg:flex-1 rounded-4xl bg-primary/10 p-4 lg:p-6">
+				<div className="mx-auto mt-12 lg:mt-16 xl:mt-24 lg:flex-1 rounded-4xl bg-primary/5 p-4 border">
 					<Image
 						src={heroImage}
 						alt="Our application"
