@@ -2,7 +2,6 @@
 
 import { DropdownMenuSub } from "@radix-ui/react-dropdown-menu";
 import { authClient } from "@repo/auth/client";
-import { config as authConfig } from "@repo/auth/config";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -63,7 +62,7 @@ export function UserMenu({ showUserName }: { showUserName?: boolean }) {
 			fetchOptions: {
 				onSuccess: async () => {
 					window.location.href = new URL(
-						authConfig.redirectAfterLogout,
+						config.saas.redirectAfterLogout,
 						window.location.origin,
 					).toString();
 				},

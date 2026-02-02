@@ -37,7 +37,7 @@ export function Newsletter() {
 	});
 
 	return (
-		<section className="pb-12 lg:pb-16 xl:pb-24">
+		<section className="py-12 lg:py-16 xl:py-24">
 			<div className="container max-w-3xl">
 				<div className="p-6 bg-muted rounded-4xl lg:p-8">
 					<div className="mb-8 text-center">

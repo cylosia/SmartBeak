@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 export function SettingsMenu({
 	menuItems,
+	className,
 }: {
 	menuItems: {
 		title: string;
@@ -17,6 +18,7 @@ export function SettingsMenu({
 			icon?: ReactNode;
 		}[];
 	}[];
+	className?: string;
 }) {
 	const pathname = usePathname();
 
@@ -26,7 +28,7 @@ export function SettingsMenu({
 	const allItems = menuItems.flatMap((item) => item.items);
 
 	return (
-		<div className="relative border-b border-gray-200">
+		<div className={cn("relative border-b", className)}>
 			<nav className="flex gap-0">
 				{allItems.map((item, index) => {
 					const isActive = isActiveMenuItem(item.href);
@@ -37,8 +39,8 @@ export function SettingsMenu({
 							className={cn(
 								"relative border-b-2 px-4 py-2 text-sm transition-colors",
 								isActive
-									? "border-black font-bold text-black"
-									: "border-transparent font-normal text-gray-600",
+									? "border-primary font-semibold text-primary"
+									: "border-transparent font-medium text-foreground/60",
 							)}
 						>
 							{item.title}

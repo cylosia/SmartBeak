@@ -97,6 +97,7 @@ export function CreateOrganizationForm({
 					<Button
 						className="mt-6 w-full"
 						type="submit"
+						variant="primary"
 						loading={form.formState.isSubmitting}
 					>
 						{t("organizations.createForm.submit")}
