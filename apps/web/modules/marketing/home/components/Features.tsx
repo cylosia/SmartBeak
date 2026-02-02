@@ -111,16 +111,29 @@ export function Features() {
 			</div>
 
 			<div>
-				<div className="container mt-8 lg:mt-12 grid grid-cols-1 gap-4">
+				<div className="container mt-8 lg:mt-12 grid grid-cols-1 gap-8 md:gap-12 lg:gap-16 xl:gap-24">
 					{featureTabs.map((tab) => {
 						const filteredStack = tab.stack || [];
 						const filteredHighlights = tab.highlights || [];
 						return (
-							<div
-								key={tab.id}
-								className="bg-card rounded-4xl p-6 lg:p-8"
-							>
-								<div className="grid grid-cols-1 items-center gap-8 md:grid-cols-2 lg:gap-12">
+							<div key={tab.id} className="">
+								<div className="grid grid-cols-1 items-center gap-8 md:grid-cols-2">
+									<div>
+										{tab.image && (
+											<Image
+												src={tab.image}
+												alt={tab.title}
+												className={cn(
+													" h-auto w-full max-w-xl",
+													{
+														"rounded-2xl border-4":
+															tab.imageBorder,
+													},
+												)}
+											/>
+										)}
+									</div>
+
 									<div>
 										<h3 className="font-normal text-lg text-foreground leading-tight md:text-xl lg:text-2xl">
 											<span className="font-medium">
@@ -158,21 +171,6 @@ export function Features() {
 											</div>
 										)}
 									</div>
-									<div>
-										{tab.image && (
-											<Image
-												src={tab.image}
-												alt={tab.title}
-												className={cn(
-													" h-auto w-full max-w-xl",
-													{
-														"rounded-2xl border-4":
-															tab.imageBorder,
-													},
-												)}
-											/>
-										)}
-									</div>
 								</div>
 
 								{filteredHighlights.length > 0 && (
@@ -181,7 +179,7 @@ export function Features() {
 											(highlight, k) => (
 												<div
 													key={`highlight-${k}`}
-													className="flex flex-col items-stretch justify-between rounded-2xl p-4 lg:p-6 bg-background"
+													className="flex flex-col items-stretch justify-between rounded-2xl p-4 lg:p-6 bg-card"
 												>
 													<div>
 														<highlight.icon
