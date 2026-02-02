@@ -58,7 +58,7 @@ export function ContactForm() {
 				<Form {...form}>
 					<form
 						onSubmit={onSubmit}
-						className="flex flex-col items-stretch gap-4"
+						className="flex flex-col items-stretch gap-6"
 					>
 						{form.formState.errors.root?.message && (
 							<Alert variant="error">
