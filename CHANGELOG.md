@@ -4,124 +4,195 @@
 
 ### Major architectural changes and breaking updates
 
-This release introduces significant architectural changes that require migration steps. The major version bump reflects multiple breaking changes across the codebase.
+This release introduces significant architectural changes that require migration steps. The major version bump reflects multiple breaking changes across the codebase. All existing code has been updated to use the new structure, but custom code will need manual migration.
+
+#### Summary of breaking changes
+
+- **Docs application**: Moved from web app to standalone Next.js app (`apps/docs`)
+- **UI components**: Moved from `apps/web/modules/ui/` to `packages/ui/`
+- **Configuration**: Removed centralized `config/` package, now scoped to individual packages
+- **Shared components**: Removed `Logo` and `Spinner` components (moved to `@repo/ui`)
+- **Mail package**: Removed Logo component and custom provider
+- **Payments package**: Removed helper utility files
+- **Import paths**: All imports updated throughout codebase
 
 #### Dedicated docs application
 
-Documentation has been moved from the web app to a standalone Next.js application.
+Documentation has been moved from the web app to a standalone Next.js application using fumadocs.
 
 **Breaking changes:**
 - Removed docs routes from `apps/web/app/(marketing)/[locale]/docs/[[...path]]/`
 - Removed docs API route `apps/web/app/api/docs-search/route.ts`
 - Removed `apps/web/app/docs-source.ts`
-- Removed all docs content from `apps/web/content/docs/`
+- Removed all docs content from `apps/web/content/docs/` (including `getting-started/` and `index.mdx`)
 - Removed `TableOfContents` component from marketing shared components
+- Removed docs image from `apps/web/public/images/docs/login.png`
+- Updated `apps/web/content-collections.ts` to exclude docs content
+- Updated `apps/web/app/sitemap.ts` to exclude docs routes
 
 **New structure:**
 - Created new `apps/docs` application using fumadocs
 - Docs now run as a separate Next.js app (default port 3001)
 - Docs content moved to `apps/docs/content/docs/`
 - Uses fumadocs-ui for improved documentation experience
+- Includes AI-powered page actions component
+- New docs app has its own `package.json`, `tsconfig.json`, and `next.config.ts`
 
 **Migration steps:**
 1. If you have custom docs content, migrate it to `apps/docs/content/docs/`
 2. Update any links pointing to `/docs/*` routes - docs are now served from the separate app
 3. Remove any imports of `TableOfContents` component
-4. Run `pnpm dev` in the `apps/docs` directory to start the docs server
+4. Run `pnpm dev` in the `apps/docs` directory to start the docs server (or use `pnpm --filter @repo/docs dev`)
+5. Update any CI/CD pipelines that build or deploy docs
 
 #### UI components moved to packages
 
-All UI components have been moved from the web app to a shared package.
+All UI components have been moved from the web app to a shared package for better reusability across the monorepo.
 
 **Breaking changes:**
-- Removed all UI components from `apps/web/modules/ui/components/`
+- Removed all UI components from `apps/web/modules/ui/components/` (25+ components including accordion, alert, button, card, dialog, form, input, select, etc.)
 - Removed `apps/web/modules/ui/lib/index.ts`
-- Removed `apps/web/components.json` (shadcn config)
+- Removed `apps/web/components.json` (shadcn config file)
+- All component imports throughout the codebase have been updated
 
 **New structure:**
 - Created `packages/ui` package containing all UI components
 - Components now imported from `@repo/ui/components/[component-name]`
-- Shared utilities available from `@repo/ui`
+- Shared utilities (like `cn`) available from `@repo/ui`
+- `components.json` moved to `packages/ui/components.json`
+- Package includes all Radix UI dependencies and styling utilities
 
 **Migration steps:**
 1. Update all imports from `apps/web/modules/ui/components/*` to `@repo/ui/components/*`
 2. Update imports of `cn` utility from `apps/web/modules/ui` to `@repo/ui`
 3. Remove any references to `components.json` in the web app
 4. Install `@repo/ui` as a dependency if using UI components in other packages
+5. Update TypeScript path aliases if you had custom ones pointing to the old location
 
 #### Configuration restructuring
 
-The centralized config package has been removed in favor of scoped configuration files.
+The centralized config package has been removed in favor of scoped configuration files for better package isolation.
 
 **Breaking changes:**
-- Removed `config/` package entirely (`config/index.ts`, `config/package.json`, `config/tsconfig.json`, `config/types.ts`)
+- Removed `config/` package entirely:
+  - `config/index.ts`
+  - `config/package.json`
+  - `config/tsconfig.json`
+  - `config/types.ts`
+- All imports from `@repo/config` or `config` will fail
 - Config is now scoped to individual packages
 
 **New structure:**
-- Each package now has its own `config.ts` file
-- Web app config moved to `apps/web/config.ts`
-- Package configs available at `packages/[package-name]/config.ts`
+- Each package now has its own `config.ts` file:
+  - `apps/web/config.ts` - Web app configuration
+  - `packages/api/config.ts` - API configuration
+  - `packages/auth/config.ts` - Auth configuration
+  - `packages/i18n/config.ts` - i18n configuration
+  - `packages/mail/config.ts` - Mail configuration
+  - `packages/payments/config.ts` - Payments configuration
+  - `packages/storage/config.ts` - Storage configuration
+- Root `config.ts` file for shared configuration
 
 **Migration steps:**
 1. Update imports from `@repo/config` or `config` to package-specific configs:
    - `import { config } from "@/config"` for web app
    - `import { config as i18nConfig } from "@repo/i18n/config"` for package configs
 2. Update any code referencing the old config package structure
+3. Review each package's config file to understand what configuration is available
+4. Update environment variable usage if config structure changed
 
 #### Shared components cleanup
 
-Removed unused shared components that are no longer needed.
+Removed unused shared components that are now available in the UI package.
 
 **Breaking changes:**
 - Removed `apps/web/modules/shared/components/Logo.tsx`
 - Removed `apps/web/modules/shared/components/Spinner.tsx`
+- All imports of these components throughout the codebase have been updated
 
 **Migration steps:**
 1. Replace any imports of `Logo` from `@shared/components/Logo` - Logo is now available from `@repo/ui`
 2. Replace any imports of `Spinner` - use skeleton components from `@repo/ui` instead
+3. Update any custom code that imports these components
 
 #### Mail package updates
 
-Mail package has been cleaned up and simplified.
+Mail package has been cleaned up and simplified by removing duplicate components.
 
 **Breaking changes:**
-- Removed `packages/mail/src/components/Logo.tsx`
+- Removed `packages/mail/src/components/Logo.tsx` (use `@repo/ui` instead)
 - Removed `packages/mail/src/provider/custom.ts` provider
+- Updated all mail provider implementations to use new config structure
 
 **Migration steps:**
-1. If using the Logo component in mail templates, import from `@repo/ui` instead
-2. If using custom mail provider, migrate to one of the supported providers (resend, nodemailer, mailgun, postmark, plunk)
+1. If using the Logo component in mail templates, import from `@repo/ui` instead:
+   ```typescript
+   import { Logo } from "@repo/ui";
+   ```
+2. If using custom mail provider, migrate to one of the supported providers:
+   - Resend
+   - Nodemailer
+   - Mailgun
+   - Postmark
+   - Plunk
+3. Update mail provider configuration to use `packages/mail/config.ts`
 
 #### Payments package restructuring
 
-Payments package helper utilities have been removed.
+Payments package helper utilities have been removed in favor of direct provider implementations.
 
 **Breaking changes:**
 - Removed `packages/payments/src/lib/customer.ts`
 - Removed `packages/payments/src/lib/helper.ts`
+- Updated payment provider implementations (Stripe, LemonSqueezy, DodoPayments, Polar)
+- Updated payment procedures to use new config structure
 
 **Migration steps:**
 1. If you were using these helper functions, migrate to direct provider implementations
 2. Check payment provider implementations for equivalent functionality
+3. Update payment configuration to use `packages/payments/config.ts`
+4. Review `packages/payments/lib/` directory for new helper structure
 
 #### Import path updates
 
-All components have been updated to use the new import paths. This affects:
-- UI component imports across all modules
+All components and modules have been updated to use the new import paths throughout the entire codebase.
+
+**Affected areas:**
+- UI component imports across all modules (200+ files updated)
 - Config imports throughout the codebase
 - Shared component imports
+- Mail template imports
+- Payment provider imports
 
 **Migration steps:**
 1. Run `pnpm install` to ensure all workspace dependencies are linked correctly
-2. Update any custom code using old import paths
+2. Update any custom code using old import paths:
+   - `apps/web/modules/ui/*` → `@repo/ui/*`
+   - `@repo/config` → package-specific configs
+   - `@shared/components/Logo` → `@repo/ui`
 3. Run type checking: `pnpm type-check` to identify any remaining import issues
+4. Update any custom scripts or build tools that reference old paths
 
-#### Other changes
+#### Additional changes
 
-- Updated all Biome configurations across packages
+**Biome configuration:**
+- Updated all Biome configurations across packages to use consistent settings
+- Standardized Biome config format across the monorepo
+
+**Package dependencies:**
 - Updated package dependencies and workspace structure
-- Improved monorepo organization with better package boundaries
+- Added `@repo/ui` as a workspace dependency where needed
+- Updated `pnpm-lock.yaml` with new workspace structure
+
+**Monorepo organization:**
+- Improved package boundaries and separation of concerns
+- Better isolation between apps and packages
+- Clearer dependency relationships
+
+**Other updates:**
 - Updated sitemap generation to exclude docs routes
+- Updated `agents.md` to reflect new architecture
+- Updated `.env.local.example` with new configuration structure
 
 ---
 
