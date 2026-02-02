@@ -1,18 +1,25 @@
+"use client";
+
 import { cn } from "@repo/ui";
 import { NavBar } from "@saas/shared/components/NavBar";
 import type { PropsWithChildren } from "react";
 import { config } from "@/config";
+import { SidebarProvider, useSidebar } from "../lib/sidebar-context";
 
-export function AppWrapper({ children }: PropsWithChildren) {
+function AppContent({ children }: PropsWithChildren) {
+	const { isCollapsed } = useSidebar();
+	const { useSidebarLayout } = config.saas;
+
 	return (
 		<div className="bg-background">
 			<NavBar />
 			<div
-				className={cn("flex", [
-					config.saas.useSidebarLayout
-						? "min-h-[calc(100vh)] md:ml-[280px]"
-						: "",
-				])}
+				className={cn("flex", {
+					"min-h-[calc(100vh)] md:ml-[280px]":
+						useSidebarLayout && !isCollapsed,
+					"min-h-[calc(100vh)] md:ml-[80px]":
+						useSidebarLayout && isCollapsed,
+				})}
 			>
 				<main
 					className={cn(
@@ -23,5 +30,13 @@ export function AppWrapper({ children }: PropsWithChildren) {
 				</main>
 			</div>
 		</div>
+	);
+}
+
+export function AppWrapper({ children }: PropsWithChildren) {
+	return (
+		<SidebarProvider>
+			<AppContent>{children}</AppContent>
+		</SidebarProvider>
 	);
 }
