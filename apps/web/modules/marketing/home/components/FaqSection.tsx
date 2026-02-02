@@ -1,12 +1,12 @@
 "use client";
 
+import { cn } from "@repo/ui";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@repo/ui/components/accordion";
-import { cn } from "@repo/ui";
 import { useTranslations } from "next-intl";
 
 export function FaqSection({ className }: { className?: string }) {
@@ -42,7 +42,7 @@ export function FaqSection({ className }: { className?: string }) {
 		>
 			<div className="container max-w-3xl">
 				<div className="mb-6 text-center">
-					<h1 className="mb-2 font-serif font-medium text-xl md:text-2xl lg:text-3xl xl:text-4xl leading-tighter text-foreground">
+					<h1 className="mb-2 font-medium text-xl md:text-2xl lg:text-3xl xl:text-4xl leading-tighter text-foreground">
 						{t("faq.title")}
 					</h1>
 					<p className="text-foreground/60 text-sm sm:text-lg">

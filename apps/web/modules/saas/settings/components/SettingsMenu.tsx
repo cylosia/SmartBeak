@@ -22,40 +22,30 @@ export function SettingsMenu({
 
 	const isActiveMenuItem = (href: string) => pathname.includes(href);
 
-	return (
-		<div className="space-y-8">
-			{menuItems.map((item, i) => (
-				<div key={i}>
-					<div className="flex items-center justify-start gap-2">
-						{item.avatar}
-						<h2 className="font-semibold text-foreground/60 text-xs">
-							{item.title}
-						</h2>
-					</div>
+	// Flatten all items from all menu sections into a single array
+	const allItems = menuItems.flatMap((item) => item.items);
 
-					<ul className="mt-2 flex list-none flex-row gap-6 lg:mt-4 lg:flex-col lg:gap-2">
-						{item.items.map((subitem, k) => (
-							<li key={k}>
-								<Link
-									href={subitem.href}
-									className={cn(
-										"lg:-ml-0.5 flex items-center gap-2 border-b-2 py-1.5 text-sm lg:border-b-0 lg:border-l-2 lg:pl-2",
-										isActiveMenuItem(subitem.href)
-											? "border-primary font-bold"
-											: "border-transparent",
-									)}
-									data-active={isActiveMenuItem(subitem.href)}
-								>
-									<span className="shrink-0">
-										{subitem.icon}
-									</span>
-									<span>{subitem.title}</span>
-								</Link>
-							</li>
-						))}
-					</ul>
-				</div>
-			))}
+	return (
+		<div className="relative border-b border-gray-200">
+			<nav className="flex gap-0">
+				{allItems.map((item, index) => {
+					const isActive = isActiveMenuItem(item.href);
+					return (
+						<Link
+							key={index}
+							href={item.href}
+							className={cn(
+								"relative border-b-2 px-4 py-2 text-sm transition-colors",
+								isActive
+									? "border-black font-bold text-black"
+									: "border-transparent font-normal text-gray-600",
+							)}
+						>
+							{item.title}
+						</Link>
+					);
+				})}
+			</nav>
 		</div>
 	);
 }

@@ -42,7 +42,7 @@ export function Newsletter() {
 				<div className="p-6 bg-muted rounded-4xl lg:p-8">
 					<div className="mb-8 text-center">
 						<KeyIcon className="mx-auto mb-3 size-10 text-primary" />
-						<h1 className="font-serif font-medium text-lg md:text-xl lg:text-2xl xl:text-3xl leading-tighter text-foreground">
+						<h1 className="font-medium text-lg md:text-xl lg:text-2xl xl:text-3xl leading-tighter text-foreground">
 							{t("newsletter.title")}
 						</h1>
 						<p className="mt-2 text-foreground/60 text-sm sm:text-base">

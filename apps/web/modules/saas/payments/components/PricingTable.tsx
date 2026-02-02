@@ -161,7 +161,7 @@ export function PricingTable({
 							<div
 								key={planId}
 								className={cn(
-									"rounded-3xl bg-card border-2 border-transparent p-6",
+									"rounded-3xl bg-card border p-6",
 									{
 										"border-primary": recommended,
 									},

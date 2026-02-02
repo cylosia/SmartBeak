@@ -91,7 +91,7 @@ export function NavBar() {
 	return (
 		<nav
 			className={cn(
-				"fixed top-0 left-0 z-50 w-full transition-shadow duration-200 bg-background",
+				"sticky top-0 z-50 w-full transition-shadow duration-200 bg-background",
 			)}
 			data-test="navigation"
 		>

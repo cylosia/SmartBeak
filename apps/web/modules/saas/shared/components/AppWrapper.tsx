@@ -5,10 +5,10 @@ import { config } from "@/config";
 
 export function AppWrapper({ children }: PropsWithChildren) {
 	return (
-		<div className="bg-muted">
+		<div className="bg-background">
 			<NavBar />
 			<div
-				className={cn("md:pr-4 py-4 flex", [
+				className={cn("flex", [
 					config.saas.useSidebarLayout
 						? "min-h-[calc(100vh)] md:ml-[280px]"
 						: "",
@@ -16,10 +16,10 @@ export function AppWrapper({ children }: PropsWithChildren) {
 			>
 				<main
 					className={cn(
-						"py-6 rounded-3xl bg-background px-4 md:p-8 min-h-full w-full",
+						"py-6 bg-card px-4 md:p-8 min-h-full w-full border-t md:border-t-0 md:border-l",
 					)}
 				>
-					<div className="container px-0">{children}</div>
+					<div className="container px-0 h-full">{children}</div>
 				</main>
 			</div>
 		</div>

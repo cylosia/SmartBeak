@@ -99,7 +99,7 @@ export function Features() {
 					<small className="font-medium text-xs uppercase tracking-wider text-primary mb-4 block">
 						Incredible features
 					</small>
-					<h2 className="font-serif text-3xl lg:text-4xl xl:text-5xl font-medium">
+					<h2 className="text-3xl lg:text-4xl xl:text-5xl font-medium">
 						Features your clients will love
 					</h2>
 					<p className="mt-2 text-base lg:text-lg text-foreground/60">
@@ -122,7 +122,7 @@ export function Features() {
 							>
 								<div className="grid grid-cols-1 items-center gap-8 md:grid-cols-2 lg:gap-12">
 									<div>
-										<h3 className="font-normal text-lg text-foreground leading-tight md:text-xl lg:text-2xl font-serif">
+										<h3 className="font-normal text-lg text-foreground leading-tight md:text-xl lg:text-2xl">
 											<span className="font-medium">
 												{tab.title}.{" "}
 											</span>

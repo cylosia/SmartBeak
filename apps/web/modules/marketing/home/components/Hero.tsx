@@ -10,7 +10,7 @@ import heroImageDark from "../../../../public/images/hero-image-dark.png";
 export function Hero() {
 	return (
 		<div className="relative max-w-full overflow-x-hidden">
-			<div className="container relative z-20 pt-44 pb-12 lg:pb-16">
+			<div className="container relative z-20 pt-24 pb-12 lg:pb-16">
 				<div className="mb-4 flex justify-start">
 					<div className="flex flex-wrap items-center justify-start rounded-full bg-muted p-px px-3 py-1 font-normal text-foreground text-sm">
 						<span className="flex items-center gap-2 rounded-full font-semibold">
@@ -22,7 +22,7 @@ export function Hero() {
 					</div>
 				</div>
 
-				<h1 className="text-balance font-medium text-4xl md:text-5xl lg:text-6xl xl:text-7xl leading-tighter font-serif text-foreground">
+				<h1 className="text-balance font-medium text-4xl md:text-5xl lg:text-6xl xl:text-7xl leading-tighter text-foreground">
 					Your revolutionary SaaS built with Next.js
 				</h1>
 

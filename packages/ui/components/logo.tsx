@@ -34,9 +34,7 @@ export function Logo({
 				/>
 			</svg>
 			{withLabel && (
-				<span className="ml-3 hidden text-lg md:block font-serif">
-					acme
-				</span>
+				<span className="ml-3 hidden text-lg md:block">acme</span>
 			)}
 		</span>
 	);

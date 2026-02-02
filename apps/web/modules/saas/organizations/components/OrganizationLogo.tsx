@@ -6,7 +6,6 @@ import {
 	AvatarFallback,
 	AvatarImage,
 } from "@repo/ui/components/avatar";
-import BoringAvatar from "boring-avatars";
 import { useMemo } from "react";
 import { useIsClient } from "usehooks-ts";
 
@@ -51,14 +50,8 @@ export const OrganizationLogo = ({
 	return (
 		<Avatar ref={ref} className={className}>
 			<AvatarImage src={logoSrc} />
-			<AvatarFallback>
-				<BoringAvatar
-					size={96}
-					name={name}
-					variant="sunset"
-					colors={avatarColors}
-					square
-				/>
+			<AvatarFallback className="bg-primary/10 text-primary uppercase">
+				{name.slice(0, 2)}
 			</AvatarFallback>
 		</Avatar>
 	);

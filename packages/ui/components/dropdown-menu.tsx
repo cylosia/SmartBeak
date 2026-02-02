@@ -1,9 +1,9 @@
 "use client";
 
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { cn } from "../lib";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import * as React from "react";
+import { cn } from "../lib";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -27,7 +27,7 @@ const DropdownMenuSubTrigger = ({
 }) => (
 	<DropdownMenuPrimitive.SubTrigger
 		className={cn(
-			"flex cursor-default select-none items-center rounded-md px-3 py-1.5 text-sm outline-hidden focus:bg-accent data-[state=open]:bg-accent",
+			"flex cursor-default select-none items-center rounded-lg px-3 py-1.5 text-sm outline-hidden focus:bg-accent data-[state=open]:bg-accent",
 			inset ? "pl-8" : "",
 			className,
 		)}
@@ -44,7 +44,7 @@ const DropdownMenuSubContent = ({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) => (
 	<DropdownMenuPrimitive.SubContent
 		className={cn(
-			"data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-lg data-[state=closed]:animate-out data-[state=open]:animate-in",
+			"data-[state=closed]:fade-out-0 border data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-lg shadow-black/3 data-[state=closed]:animate-out data-[state=open]:animate-in",
 			className,
 		)}
 		{...props}
@@ -60,7 +60,7 @@ const DropdownMenuContent = ({
 		<DropdownMenuPrimitive.Content
 			sideOffset={sideOffset}
 			className={cn(
-				"z-50 min-w-[8rem] overflow-hidden rounded-xl bg-popover p-1 text-popover-foreground shadow-lg",
+				"z-50 min-w-[8rem] overflow-hidden border rounded-xl bg-popover p-1 text-popover-foreground shadow-xl shadow-black/3",
 				"data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=open]:animate-in",
 				className,
 			)}

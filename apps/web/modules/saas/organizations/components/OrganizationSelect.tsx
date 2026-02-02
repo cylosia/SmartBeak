@@ -15,11 +15,12 @@ import {
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
 import { useOrganizationListQuery } from "@saas/organizations/lib/api";
-import { ActivePlanBadge } from "@saas/payments/components/ActivePlanBadge";
+import { usePlanData } from "@saas/payments/hooks/plan-data";
+import { usePurchases } from "@saas/payments/hooks/purchases";
 import { UserAvatar } from "@shared/components/UserAvatar";
 import { useRouter } from "@shared/hooks/router";
 import { clearCache } from "@shared/lib/cache";
-import { ChevronsUpDownIcon, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { OrganizationLogo } from "./OrganizationLogo";
@@ -31,52 +32,75 @@ export function OrganzationSelect({ className }: { className?: string }) {
 	const { activeOrganization, setActiveOrganization } =
 		useActiveOrganization();
 	const { data: allOrganizations } = useOrganizationListQuery();
+	const { planData } = usePlanData();
+	const { activePlan: orgActivePlan } = usePurchases(activeOrganization?.id);
+	const { activePlan: userActivePlan } = usePurchases();
 
 	if (!user) {
 		return null;
 	}
 
+	const getPlanTitle = (planId: string | undefined) => {
+		if (!planId) {
+			return null;
+		}
+		const plan = planData[planId as keyof typeof planData];
+		return plan?.title ?? null;
+	};
+
 	return (
 		<div className={className}>
 			<DropdownMenu>
-				<DropdownMenuTrigger className="flex w-full border items-center justify-between gap-2 rounded-md p-2 text-left outline-none focus-visible:bg-primary/10 focus-visible:ring-none">
-					<div className="flex flex-1 items-center justify-start gap-2 text-sm overflow-hidden">
+				<DropdownMenuTrigger className="flex w-full items-center justify-between gap-3 text-left outline-none transition-colors">
+					<div className="flex flex-1 items-center gap-3 overflow-hidden">
 						{activeOrganization ? (
 							<>
 								<OrganizationLogo
 									name={activeOrganization.name}
 									logoUrl={activeOrganization.logo}
-									className="hidden size-6 sm:block"
+									className="size-10 shrink-0 rounded-md"
 								/>
-								<span className="block flex-1 truncate">
-									{activeOrganization.name}
-								</span>
-								{paymentsConfig.billingAttachedTo ===
-									"organization" && (
-									<ActivePlanBadge
-										organizationId={activeOrganization.id}
-									/>
-								)}
+								<div className="flex min-w-0 flex-1 flex-col">
+									<span className="truncate text-sm font-semibold text-foreground">
+										{activeOrganization.name}
+									</span>
+									{paymentsConfig.billingAttachedTo ===
+										"organization" &&
+										orgActivePlan && (
+											<span className="truncate text-xs text-primary font-medium">
+												{getPlanTitle(orgActivePlan.id)}
+											</span>
+										)}
+								</div>
 							</>
 						) : (
 							<>
 								<UserAvatar
-									className="hidden size-6 sm:block"
+									className="size-10 shrink-0"
 									name={user.name ?? ""}
 									avatarUrl={user.image}
 								/>
-								<span className="block truncate">
-									{t(
-										"organizations.organizationSelect.personalAccount",
-									)}
-								</span>
-								{paymentsConfig.billingAttachedTo ===
-									"user" && <ActivePlanBadge />}
+								<div className="flex min-w-0 flex-1 flex-col">
+									<span className="truncate text-sm font-semibold text-foreground">
+										{t(
+											"organizations.organizationSelect.personalAccount",
+										)}
+									</span>
+									{paymentsConfig.billingAttachedTo ===
+										"user" &&
+										userActivePlan && (
+											<span className="truncate text-xs text-primary font-medium">
+												{getPlanTitle(
+													userActivePlan.id,
+												)}
+											</span>
+										)}
+								</div>
 							</>
 						)}
 					</div>
 
-					<ChevronsUpDownIcon className="block size-4 opacity-50" />
+					<ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent className="w-full">
 					{!authConfig.organizations.requireOrganization && (

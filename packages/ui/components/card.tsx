@@ -1,12 +1,15 @@
-import { cn } from "../lib";
 import * as React from "react";
+import { cn } from "../lib";
 
 const Card = ({
 	className,
 	...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div
-		className={cn("rounded-3xl bg-card text-card-foreground", className)}
+		className={cn(
+			"rounded-3xl bg-card border text-card-foreground",
+			className,
+		)}
 		{...props}
 	/>
 );

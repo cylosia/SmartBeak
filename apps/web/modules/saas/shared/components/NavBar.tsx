@@ -83,19 +83,19 @@ export function NavBar() {
 		>
 			<div
 				className={cn("container max-w-6xl py-4", {
-					"container max-w-6xl py-4 md:flex md:h-full md:flex-col md:px-6 md:pt-6 md:pb-0":
+					"py-4 md:flex md:h-full md:flex-col md:px-4 md:pb-0":
 						useSidebarLayout,
 				})}
 			>
-				<div className="flex flex-wrap items-center justify-between gap-4">
+				<div className="flex flex-wrap items-center justify-between gap-6">
 					<div
-						className={cn("flex items-center gap-4 md:gap-2", {
+						className={cn("flex items-center gap-6 md:gap-2", {
 							"md:flex md:w-full md:flex-col md:items-stretch md:align-stretch":
 								useSidebarLayout,
 						})}
 					>
 						<Link href="/app" className="block">
-							<Logo />
+							<Logo withLabel={false} />
 						</Link>
 
 						{authConfig.organizations.enable &&
@@ -114,8 +114,7 @@ export function NavBar() {
 
 									<OrganzationSelect
 										className={cn({
-											"md:-mx-2 md:mt-2":
-												useSidebarLayout,
+											"md:mt-2": useSidebarLayout,
 										})}
 									/>
 								</>
@@ -136,9 +135,9 @@ export function NavBar() {
 
 				<ul
 					className={cn(
-						"no-scrollbar -mx-4 -mb-4 mt-6 flex list-none items-center justify-start gap-4 overflow-x-auto px-4 text-sm",
+						"no-scrollbar mt-4 flex list-none items-center justify-start gap-2 overflow-x-auto text-sm",
 						{
-							"md:mx-0 md:my-4 md:flex md:flex-col md:items-stretch md:gap-1 md:px-0":
+							"md:mx-0 md:my-6 md:flex md:flex-col md:items-stretch md:gap-1 md:px-0":
 								useSidebarLayout,
 						},
 					)}
@@ -148,39 +147,42 @@ export function NavBar() {
 							<Link
 								href={menuItem.href}
 								className={cn(
-									"flex items-center gap-2 whitespace-nowrap border-b-2 px-1 pb-3",
-									[
-										menuItem.isActive
-											? "border-primary font-bold"
-											: "border-transparent",
-									],
+									"flex items-center border border-transparent gap-3 whitespace-nowrap rounded-lg px-3 py-2 transition-colors",
 									{
-										"md:-mx-6 md:border-b-0 md:border-l-2 md:px-6 md:py-2":
-											useSidebarLayout,
+										"font-semibold bg-card border-border":
+											menuItem.isActive,
+										"hover:bg-muted/50": !menuItem.isActive,
+										"md:w-full": useSidebarLayout,
 									},
 								)}
 								prefetch
 							>
 								<menuItem.icon
-									className={`size-4 shrink-0 ${
+									className={cn(
+										"size-4 shrink-0",
 										menuItem.isActive
-											? "text-primary"
-											: "opacity-50"
-									}`}
+											? "text-foreground"
+											: "text-muted-foreground opacity-60",
+									)}
 								/>
-								<span>{menuItem.label}</span>
+								<span
+									className={cn({
+										"text-foreground": menuItem.isActive,
+										"text-muted-foreground":
+											!menuItem.isActive,
+									})}
+								>
+									{menuItem.label}
+								</span>
 							</Link>
 						</li>
 					))}
 				</ul>
 
 				<div
-					className={cn(
-						"-mx-4 md:-mx-6 mt-auto mb-0 hidden p-4 md:p-4",
-						{
-							"md:block": useSidebarLayout,
-						},
-					)}
+					className={cn("mt-auto mb-0 hidden py-4", {
+						"md:block": useSidebarLayout,
+					})}
 				>
 					<UserMenu showUserName />
 				</div>

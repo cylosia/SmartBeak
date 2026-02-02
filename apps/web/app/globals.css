@@ -6,17 +6,6 @@
 
 @variant dark (&:where(.dark, .dark *));
 
-body {
-	letter-spacing: -0.01em;
-}
-
-*,
-::after,
-::before,
-::backdrop,
-::file-selector-button {
-	@apply border-border;
-}
 
 @utility container {
 	margin-inline: auto;
@@ -31,4 +20,18 @@ body {
 	}
 	-ms-overflow-style: none;
 	scrollbar-width: none;
+}
+
+@layer base {
+	*,
+	::after,
+	::before,
+	::backdrop,
+	::file-selector-button {
+		border-color: var(--border);
+	}
+
+	body {
+		letter-spacing: -0.01em;
+	}
 }

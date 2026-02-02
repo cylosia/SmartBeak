@@ -5,7 +5,7 @@ export default async function PricingPage() {
 	const t = await getTranslations();
 
 	return (
-		<div className="container max-w-3xl pt-32 pb-16">
+		<div className="container max-w-3xl pt-24 pb-16">
 			<div className="mb-12 text-balance pt-8 text-center">
 				<h1 className="mb-2 font-bold text-5xl">
 					{t("changelog.title")}
