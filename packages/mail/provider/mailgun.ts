@@ -1,6 +1,6 @@
 import { logger } from "@repo/logs";
-import { config } from "../../config";
-import type { SendEmailHandler } from "../../types";
+import { config } from "../config";
+import type { SendEmailHandler } from "../types";
 
 const mailgunDomain = process.env.MAILGUN_DOMAIN as string;
 const mailgunApiKey = process.env.MAILGUN_API_KEY as string;

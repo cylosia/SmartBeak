@@ -28,6 +28,7 @@
 	},
 	"name": "@repo/payments",
 	"scripts": {
+		"clean": "git clean -xdf .cache .turbo dist node_modules",
 		"type-check": "tsc --noEmit"
 	},
 	"types": "./**/.ts",

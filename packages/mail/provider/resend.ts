@@ -1,6 +1,6 @@
 import { Resend } from "resend";
-import { config } from "../../config";
-import type { SendEmailHandler } from "../../types";
+import { config } from "../config";
+import type { SendEmailHandler } from "../types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 

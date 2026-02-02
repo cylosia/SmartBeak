@@ -9,6 +9,7 @@
 	},
 	"name": "@repo/i18n",
 	"scripts": {
+		"clean": "git clean -xdf .cache .turbo dist node_modules",
 		"type-check": "tsc --noEmit"
 	},
 	"version": "0.0.0"

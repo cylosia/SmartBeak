@@ -1,6 +1,6 @@
 import { config as i18nConfig } from "@repo/i18n/config";
 import { logger } from "@repo/logs";
-import type { mailTemplates } from "../../emails";
+import type { mailTemplates } from "../emails";
 import { send } from "../provider";
 import type { TemplateId } from "./templates";
 import { getTemplate } from "./templates";

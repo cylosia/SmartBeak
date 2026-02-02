@@ -16,29 +16,48 @@ export default function Wrapper({ children }: PropsWithChildren) {
 				theme: {
 					extend: {
 						colors: {
-							border: "#e0e3e0",
-							input: "#d0d4d0",
+							border: "#eaeaea",
+							input: "#dfdfdf",
 							ring: "#3875c8",
-							background: "#f2f1ed",
-							foreground: "#1c1e1e",
+							background: "#f8f8f8",
+							foreground: "#313539",
 							primary: {
 								DEFAULT: "#3875c8",
 								foreground: "#ffffff",
 							},
 							secondary: {
-								DEFAULT: "#292b35",
+								DEFAULT: "#e4e3e1",
+								foreground: "#1c1e1e",
+							},
+							destructive: {
+								DEFAULT: "#ef4444",
+								foreground: "#ffffff",
+							},
+							success: {
+								DEFAULT: "#39a561",
 								foreground: "#ffffff",
 							},
 							muted: {
-								DEFAULT: "#e8e7e3",
-								foreground: "#1d1f1f",
+								DEFAULT: "#f0f0f0",
+								foreground: "#4d5155",
+							},
+							accent: {
+								DEFAULT: "#e2e6ec",
+								foreground: "#313539",
+							},
+							popover: {
+								DEFAULT: "#ffffff",
+								foreground: "#313539",
 							},
 							card: {
-								DEFAULT: "#f9f8f6",
-								foreground: "#1d1f1f",
+								DEFAULT: "#ffffff",
+								foreground: "#313539",
 							},
 						},
 						borderRadius: {
+							lg: "0.75rem",
+							md: "calc(0.75rem - 2px)",
+							sm: "calc(0.75rem - 4px)",
 							DEFAULT: "0.75rem",
 						},
 					},

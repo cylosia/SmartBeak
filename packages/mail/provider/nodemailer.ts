@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
-import { config } from "../../config";
-import type { SendEmailHandler } from "../../types";
+import { config } from "../config";
+import type { SendEmailHandler } from "../types";
 
 export const send: SendEmailHandler = async ({
 	to,

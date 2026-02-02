@@ -99,10 +99,11 @@
 		"tailwindcss": "4.1.17",
 		"typescript": "5.9.3"
 	},
-	"name": "@repo/web",
+	"name": "web",
 	"private": true,
 	"scripts": {
 		"build": "next build",
+		"clean": "git clean -xdf .cache .turbo dist node_modules .next .content-collections",
 		"dev": "next dev",
 		"e2e": "pnpm exec playwright test --ui",
 		"e2e:ci": "pnpm exec playwright install && pnpm exec playwright test",

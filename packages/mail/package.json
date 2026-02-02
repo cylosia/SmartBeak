@@ -1,7 +1,7 @@
 {
 	"dependencies": {
-		"@react-email/components": "^1.0.1",
-		"@react-email/render": "^2.0.0",
+		"@react-email/components": "^1.0.6",
+		"@react-email/render": "^2.0.4",
 		"@repo/i18n": "workspace:*",
 		"@repo/logs": "workspace:*",
 		"@repo/ui": "workspace:*",
@@ -9,7 +9,7 @@
 		"nodemailer": "^7.0.10",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
-		"react-email": "^5.0.4",
+		"react-email": "^5.2.5",
 		"resend": "^6.4.2",
 		"use-intl": "^4.8.1"
 	},
@@ -24,8 +24,7 @@
 	"main": "./index.ts",
 	"name": "@repo/mail",
 	"scripts": {
-		"export": "email export",
-		"preview": "email dev --port 3005",
+		"clean": "git clean -xdf .cache .turbo dist node_modules",
 		"type-check": "tsc --noEmit"
 	},
 	"types": "./index.ts",

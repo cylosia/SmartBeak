@@ -15,6 +15,7 @@
 	"main": "./index.ts",
 	"name": "@repo/ai",
 	"scripts": {
+		"clean": "git clean -xdf .cache .turbo dist node_modules",
 		"type-check": "tsc --noEmit"
 	},
 	"types": "./**/.tsx",

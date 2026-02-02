@@ -20,6 +20,7 @@
 	"main": "./index.ts",
 	"name": "@repo/database",
 	"scripts": {
+		"clean": "git clean -xdf .cache .turbo dist node_modules",
 		"generate": "dotenv -c -e ../../.env -- prisma generate --no-hints",
 		"push": "dotenv -c -e ../../.env -- prisma db push",
 		"migrate": "dotenv -c -e ../../.env -- prisma migrate dev",
