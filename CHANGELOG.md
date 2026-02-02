@@ -11,10 +11,12 @@ This release introduces significant architectural changes that require migration
 - **Docs application**: Moved from web app to standalone Next.js app (`apps/docs`)
 - **UI components**: Moved from `apps/web/modules/ui/` to `packages/ui/`
 - **Configuration**: Removed centralized `config/` package, now scoped to individual packages
-- **Shared components**: Removed `Logo` and `Spinner` components (moved to `@repo/ui`)
-- **Mail package**: Removed Logo component and custom provider
-- **Payments package**: Removed helper utility files
-- **Import paths**: All imports updated throughout codebase
+- **Shared components**: Moved `Logo` and `Spinner` components to `@repo/ui`
+- **Mail package**: Restructured directory layout (removed `src/`), removed Logo component and custom provider
+- **Payments package**: Moved helper utilities from `src/lib/` to `lib/`
+- **Mail preview app**: New `apps/mail-preview` application added for email previewing
+- **Not-found pages**: New dedicated not-found pages for marketing and SaaS routes
+- **Import paths**: All imports updated throughout codebase (275+ files changed)
 
 #### Dedicated docs application
 
@@ -115,14 +117,25 @@ Removed unused shared components that are now available in the UI package.
 2. Replace any imports of `Spinner` - use skeleton components from `@repo/ui` instead
 3. Update any custom code that imports these components
 
-#### Mail package updates
+#### Mail package restructuring
 
-Mail package has been cleaned up and simplified by removing duplicate components.
+Mail package has been restructured with a flatter directory structure and improved organization.
 
 **Breaking changes:**
 - Removed `packages/mail/src/components/Logo.tsx` (use `@repo/ui` instead)
 - Removed `packages/mail/src/provider/custom.ts` provider
+- Restructured mail package directory layout:
+  - `src/components/` → `components/` (PrimaryButton, Wrapper moved)
+  - `src/provider/` → `provider/` (all providers moved)
+  - `src/util/` → `util/` (send, templates, translations moved)
 - Updated all mail provider implementations to use new config structure
+- Updated all mail email templates to use new import paths
+
+**New structure:**
+- Flatter directory structure without `src/` directory
+- Components, providers, and utilities at package root level
+- New `packages/mail/config.ts` for mail configuration
+- New `apps/mail-preview` application for email previewing (runs on port 3005)
 
 **Migration steps:**
 1. If using the Logo component in mail templates, import from `@repo/ui` instead:
@@ -135,23 +148,30 @@ Mail package has been cleaned up and simplified by removing duplicate components
    - Mailgun
    - Postmark
    - Plunk
+   - Console (for development)
 3. Update mail provider configuration to use `packages/mail/config.ts`
+4. Update any imports from `packages/mail/src/*` to `packages/mail/*`
+5. Use `apps/mail-preview` app for previewing emails during development
 
 #### Payments package restructuring
 
-Payments package helper utilities have been removed in favor of direct provider implementations.
+Payments package has been restructured with helper utilities moved to a new location.
 
 **Breaking changes:**
-- Removed `packages/payments/src/lib/customer.ts`
-- Removed `packages/payments/src/lib/helper.ts`
+- Moved `packages/payments/src/lib/customer.ts` → `packages/payments/lib/customer.ts`
+- Moved `packages/payments/src/lib/helper.ts` → `packages/payments/lib/helper.ts` (new location)
+- Removed old `packages/payments/src/lib/helper.ts` (duplicate removed)
 - Updated payment provider implementations (Stripe, LemonSqueezy, DodoPayments, Polar)
 - Updated payment procedures to use new config structure
 
+**New structure:**
+- Helper utilities now in `packages/payments/lib/` (without `src/` prefix)
+- New `packages/payments/config.ts` for payment configuration
+
 **Migration steps:**
-1. If you were using these helper functions, migrate to direct provider implementations
-2. Check payment provider implementations for equivalent functionality
-3. Update payment configuration to use `packages/payments/config.ts`
-4. Review `packages/payments/lib/` directory for new helper structure
+1. Update imports from `packages/payments/src/lib/*` to `packages/payments/lib/*`
+2. Update payment configuration to use `packages/payments/config.ts`
+3. Review `packages/payments/lib/` directory for helper functions
 
 #### Import path updates
 
@@ -173,26 +193,117 @@ All components and modules have been updated to use the new import paths through
 3. Run type checking: `pnpm type-check` to identify any remaining import issues
 4. Update any custom scripts or build tools that reference old paths
 
-#### Additional changes
+#### Workspace configuration updates
 
-**Biome configuration:**
+The workspace structure has been updated to reflect the new package organization.
+
+**Breaking changes:**
+- `pnpm-workspace.yaml` still references `config` package (which was removed) - this should be updated manually
+- Workspace now includes new `apps/docs` application
+- Workspace includes new `packages/ui` package
+
+**Migration steps:**
+1. Update `pnpm-workspace.yaml` to remove the `config` entry:
+   ```yaml
+   packages:
+     - apps/*
+     - packages/*
+     - tooling/*
+   ```
+2. Run `pnpm install` to refresh workspace links
+3. Verify all packages are properly linked with `pnpm list --depth=0`
+
+#### Biome configuration standardization
+
+All Biome configurations have been standardized across the monorepo for consistency.
+
+**Changes:**
 - Updated all Biome configurations across packages to use consistent settings
-- Standardized Biome config format across the monorepo
+- Standardized Biome config format: all package-level configs now extend root config with `"extends": "//"`
+- Root `biome.json` contains shared configuration
+- Package-specific `biome.json` files only override when needed
+- Database package excludes Prisma-generated zod files from linting
 
-**Package dependencies:**
-- Updated package dependencies and workspace structure
+**Migration steps:**
+1. If you have custom Biome rules, ensure they follow the new pattern:
+   ```json
+   {
+     "root": false,
+     "extends": "//"
+   }
+   ```
+2. Run `pnpm format` to apply new formatting rules
+3. Run `pnpm lint` to check for any linting issues with new config
+
+#### Package dependencies and workspace structure
+
+Package dependencies have been updated to reflect the new architecture.
+
+**Changes:**
 - Added `@repo/ui` as a workspace dependency where needed
-- Updated `pnpm-lock.yaml` with new workspace structure
+- Updated `pnpm-lock.yaml` with new workspace structure (2760+ lines changed)
+- Removed dependencies on deleted `config` package
+- Updated all package `package.json` files to reflect new structure
+- Added `@repo/docs` workspace package
+- Updated tooling packages (scripts, tailwind, typescript) with new dependencies
+- Updated i18n translations (en.json, de.json) with new messages
 
-**Monorepo organization:**
+**Migration steps:**
+1. Run `pnpm install` to ensure all workspace dependencies are linked correctly
+2. Verify workspace structure with `pnpm list --depth=0`
+3. Check for any remaining references to `@repo/config` in `package.json` files
+
+#### Monorepo organization improvements
+
+The monorepo structure has been improved for better organization and maintainability.
+
+**Changes:**
 - Improved package boundaries and separation of concerns
 - Better isolation between apps and packages
 - Clearer dependency relationships
+- New `apps/docs` application added to workspace
+- New `apps/mail-preview` application added to workspace
+- New `packages/ui` package for shared UI components
+- Removed `config/` package in favor of scoped configs
+- Flattened directory structures in mail and payments packages (removed `src/` directories)
 
-**Other updates:**
-- Updated sitemap generation to exclude docs routes
-- Updated `agents.md` to reflect new architecture
+**Benefits:**
+- Better code organization and discoverability
+- Clearer separation between application code and shared packages
+- Easier to understand dependencies between packages
+- Better support for independent package versioning
+
+#### Other updates
+
+**Documentation:**
+- Updated `agents.md` to reflect new architecture and import paths
+- Updated coding guidelines to reference new package structure
+- Updated import examples to use new `@repo/ui` package
+
+**Configuration:**
 - Updated `.env.local.example` with new configuration structure
+- Updated environment variable documentation
+
+**Build and deployment:**
+- Updated sitemap generation to exclude docs routes
+- Updated content collections configuration to exclude docs
+- Updated image proxy route configuration
+- Updated `turbo.json` to use TUI interface (`"ui": "tui"`)
+
+**New applications:**
+- Added `apps/docs` - Standalone documentation application using fumadocs
+- Added `apps/mail-preview` - Email preview application for development (port 3005)
+
+**Not-found pages:**
+- Added dedicated `not-found.tsx` pages for marketing routes (`apps/web/app/(marketing)/[locale]/not-found.tsx`)
+- Added dedicated `not-found.tsx` pages for SaaS routes (`apps/web/app/(saas)/app/not-found.tsx`)
+- Removed `NotFound` component from marketing shared components (now using Next.js not-found pages)
+
+**TypeScript:**
+- Updated TypeScript configurations across packages
+- Updated path aliases in `tsconfig.json` files
+- Added new type definitions for UI package exports
+- Added TypeScript configs for new apps (docs, mail-preview)
 
 ---
 
