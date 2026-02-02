@@ -240,10 +240,6 @@ export function NavBar() {
 							<Button
 								variant="ghost"
 								size="icon"
-								className={cn({
-									"md:w-auto": !isCollapsed,
-									"md:justify-center": isCollapsed,
-								})}
 								onClick={toggleCollapsed}
 								aria-label={
 									isCollapsed
