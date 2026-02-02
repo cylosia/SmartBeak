@@ -1,7 +1,7 @@
 "use client";
 
 import { MobileIcon } from "@radix-ui/react-icons";
-import { cn } from "@ui/lib";
+import { cn } from "@repo/ui";
 import { CloudIcon, ComputerIcon, StarIcon, WandIcon } from "lucide-react";
 import Image, { type StaticImageData } from "next/image";
 import type { JSXElementConstructor, ReactNode } from "react";
@@ -166,7 +166,7 @@ export function Features() {
 												className={cn(
 													" h-auto w-full max-w-xl",
 													{
-														"rounded-2xl border-4 border-secondary/10":
+														"rounded-2xl border-4":
 															tab.imageBorder,
 													},
 												)}

@@ -1,7 +1,15 @@
 import { logger } from "@repo/logs";
 import type { SendEmailHandler } from "../../types";
 
-export const send: SendEmailHandler = async ({ to, subject, html, text }) => {
+export const send: SendEmailHandler = async ({
+	to,
+	subject,
+	cc,
+	bcc,
+	replyTo,
+	html,
+	text,
+}) => {
 	const response = await fetch("https://api.useplunk.com/v1/send", {
 		method: "POST",
 		headers: {
@@ -10,6 +18,9 @@ export const send: SendEmailHandler = async ({ to, subject, html, text }) => {
 		},
 		body: JSON.stringify({
 			to,
+			cc,
+			bcc,
+			replyTo,
 			subject,
 			body: html,
 			text,

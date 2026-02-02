@@ -5,8 +5,8 @@ import {
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
-} from "@ui/components/accordion";
-import { cn } from "@ui/lib";
+} from "@repo/ui/components/accordion";
+import { cn } from "@repo/ui";
 import { useTranslations } from "next-intl";
 
 export function FaqSection({ className }: { className?: string }) {

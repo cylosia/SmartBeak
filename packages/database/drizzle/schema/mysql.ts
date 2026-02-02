@@ -2,6 +2,7 @@ import { createId as cuid } from "@paralleldrive/cuid2";
 import { relations } from "drizzle-orm";
 import {
 	boolean,
+	index,
 	int,
 	json,
 	mysqlEnum,

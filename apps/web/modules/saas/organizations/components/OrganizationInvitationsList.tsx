@@ -18,15 +18,20 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { Button } from "@ui/components/button";
+import { Button } from "@repo/ui/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
-import { Table, TableBody, TableCell, TableRow } from "@ui/components/table";
-import { cn } from "@ui/lib";
+} from "@repo/ui/components/dropdown-menu";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableRow,
+} from "@repo/ui/components/table";
+import { cn } from "@repo/ui";
 import {
 	CheckIcon,
 	ClockIcon,

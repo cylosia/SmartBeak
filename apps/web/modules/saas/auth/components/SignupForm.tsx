@@ -2,11 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { authClient } from "@repo/auth/client";
-import { config } from "@repo/config";
-import { useAuthErrorMessages } from "@saas/auth/hooks/errors-messages";
-import { OrganizationInvitationAlert } from "@saas/organizations/components/OrganizationInvitationAlert";
-import { Alert, AlertDescription, AlertTitle } from "@ui/components/alert";
-import { Button } from "@ui/components/button";
+import { Alert, AlertDescription, AlertTitle } from "@repo/ui/components/alert";
+import { Button } from "@repo/ui/components/button";
 import {
 	Form,
 	FormControl,
@@ -14,8 +11,10 @@ import {
 	FormItem,
 	FormLabel,
 	FormMessage,
-} from "@ui/components/form";
-import { Input } from "@ui/components/input";
+} from "@repo/ui/components/form";
+import { Input } from "@repo/ui/components/input";
+import { useAuthErrorMessages } from "@saas/auth/hooks/errors-messages";
+import { OrganizationInvitationAlert } from "@saas/organizations/components/OrganizationInvitationAlert";
 import {
 	AlertTriangleIcon,
 	ArrowRightIcon,
@@ -26,10 +25,12 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { withQuery } from "ufo";
 import { z } from "zod";
+import { config } from "@/config";
+import { useSession } from "@/modules/saas/auth/hooks/use-session";
 import {
 	type OAuthProvider,
 	oAuthProviders,
@@ -45,6 +46,7 @@ const formSchema = z.object({
 export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 	const t = useTranslations();
 	const router = useRouter();
+	const { user, loaded: sessionLoaded } = useSession();
 	const { getAuthErrorMessage } = useAuthErrorMessages();
 	const searchParams = useSearchParams();
 
@@ -62,15 +64,21 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 		},
 	});
 
-	const invitationOnlyMode = !config.auth.enableSignup && invitationId;
+	const invitationOnlyMode = !config.enableSignup && invitationId;
 
 	const redirectPath = invitationId
 		? `/organization-invitation/${invitationId}`
-		: (redirectTo ?? config.auth.redirectAfterSignIn);
+		: (redirectTo ?? config.saas.redirectAfterSignIn);
+
+	useEffect(() => {
+		if (sessionLoaded && user) {
+			router.replace(redirectPath);
+		}
+	}, [user, sessionLoaded]);
 
 	const onSubmit = form.handleSubmit(async ({ email, password, name }) => {
 		try {
-			const { error } = await (config.auth.enablePasswordLogin
+			const { error } = await (config.enablePasswordLogin
 				? await authClient.signUp.email({
 						email,
 						password,
@@ -97,7 +105,7 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 					throw error;
 				}
 
-				router.push(config.auth.redirectAfterSignIn);
+				router.push(config.saas.redirectAfterSignIn);
 			}
 		} catch (e) {
 			form.setError("root", {
@@ -183,7 +191,7 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 								)}
 							/>
 
-							{config.auth.enablePasswordLogin && (
+							{config.enablePasswordLogin && (
 								<FormField
 									control={form.control}
 									name="password"
@@ -233,30 +241,29 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 						</form>
 					</Form>
 
-					{config.auth.enableSignup &&
-						config.auth.enableSocialLogin && (
-							<>
-								<div className="relative my-6 h-4">
-									<hr className="relative top-2" />
-									<p className="-translate-x-1/2 absolute top-0 left-1/2 mx-auto inline-block h-4 bg-card px-2 text-center font-medium text-foreground/60 text-sm leading-tight">
-										{t("auth.login.continueWith")}
-									</p>
-								</div>
+					{config.enableSignup && config.enableSocialLogin && (
+						<>
+							<div className="relative my-6 h-4">
+								<hr className="relative top-2" />
+								<p className="-translate-x-1/2 absolute top-0 left-1/2 mx-auto inline-block h-4 bg-card px-2 text-center font-medium text-foreground/60 text-sm leading-tight">
+									{t("auth.login.continueWith")}
+								</p>
+							</div>
 
-								<div className="grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2">
-									{Object.keys(oAuthProviders).map(
-										(providerId) => (
-											<SocialSigninButton
-												key={providerId}
-												provider={
-													providerId as OAuthProvider
-												}
-											/>
-										),
-									)}
-								</div>
-							</>
-						)}
+							<div className="grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2">
+								{Object.keys(oAuthProviders).map(
+									(providerId) => (
+										<SocialSigninButton
+											key={providerId}
+											provider={
+												providerId as OAuthProvider
+											}
+										/>
+									),
+								)}
+							</div>
+						</>
+					)}
 				</>
 			)}
 

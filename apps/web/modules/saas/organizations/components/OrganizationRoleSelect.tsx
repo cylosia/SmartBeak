@@ -6,7 +6,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "@ui/components/select";
+} from "@repo/ui/components/select";
 
 export function OrganizationRoleSelect({
 	value,

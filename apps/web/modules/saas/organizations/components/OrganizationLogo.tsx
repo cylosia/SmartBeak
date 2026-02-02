@@ -1,7 +1,11 @@
 "use client";
 
-import { config } from "@repo/config";
-import { Avatar, AvatarFallback, AvatarImage } from "@ui/components/avatar";
+import { config as storageConfig } from "@repo/storage/config";
+import {
+	Avatar,
+	AvatarFallback,
+	AvatarImage,
+} from "@repo/ui/components/avatar";
 import BoringAvatar from "boring-avatars";
 import { useMemo } from "react";
 import { useIsClient } from "usehooks-ts";
@@ -35,7 +39,7 @@ export const OrganizationLogo = ({
 			logoUrl
 				? logoUrl.startsWith("http")
 					? logoUrl
-					: `/image-proxy/${config.storage.bucketNames.avatars}/${logoUrl}`
+					: `/image-proxy/${storageConfig.bucketNames.avatars}/${logoUrl}`
 				: undefined,
 		[logoUrl],
 	);

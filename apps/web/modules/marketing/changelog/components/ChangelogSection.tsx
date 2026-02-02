@@ -18,9 +18,13 @@ export function ChangelogSection({ items }: { items: ChangelogItem[] }) {
 									"yyyy-MM-dd",
 								)}
 							>
-								{formatDistance(parseISO(item.date), new Date(), {
-									addSuffix: true,
-								})}
+								{formatDistance(
+									parseISO(item.date),
+									new Date(),
+									{
+										addSuffix: true,
+									},
+								)}
 							</small>
 						</div>
 						<ul className="mt-4 list-disc space-y-2 pl-6">

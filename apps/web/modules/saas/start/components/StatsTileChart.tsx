@@ -5,8 +5,8 @@ import {
 	ChartContainer,
 	ChartTooltip,
 	ChartTooltipContent,
-} from "@ui/components/chart";
-import { cn } from "@ui/lib";
+} from "@repo/ui/components/chart";
+import { cn } from "@repo/ui";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 interface StatsTileChartProps {

@@ -1,4 +1,4 @@
-import { config } from "@repo/config";
+import { config as i18nConfig } from "@repo/i18n/config";
 import { logger } from "@repo/logs";
 import type { mailTemplates } from "../../emails";
 import { send } from "../provider";
@@ -8,7 +8,8 @@ import { getTemplate } from "./templates";
 export async function sendEmail<T extends TemplateId>(
 	params: {
 		to: string;
-		locale?: keyof typeof config.i18n.locales;
+		from?: string;
+		locale?: keyof typeof i18nConfig.locales;
 	} & (
 		| {
 				templateId: T;
@@ -24,7 +25,7 @@ export async function sendEmail<T extends TemplateId>(
 		  }
 	),
 ) {
-	const { to, locale = config.i18n.defaultLocale } = params;
+	const { to, from, locale = i18nConfig.defaultLocale } = params;
 
 	let html: string;
 	let text: string;
@@ -49,6 +50,7 @@ export async function sendEmail<T extends TemplateId>(
 	try {
 		await send({
 			to,
+			from,
 			subject,
 			text,
 			html,

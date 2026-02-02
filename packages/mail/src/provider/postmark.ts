@@ -1,10 +1,16 @@
-import { config } from "@repo/config";
 import { logger } from "@repo/logs";
+import { config } from "../../config";
 import type { SendEmailHandler } from "../../types";
 
-const { from } = config.mails;
-
-export const send: SendEmailHandler = async ({ to, subject, html }) => {
+export const send: SendEmailHandler = async ({
+	to,
+	from,
+	subject,
+	cc,
+	bcc,
+	replyTo,
+	html,
+}) => {
 	const response = await fetch("https://api.postmarkapp.com/email", {
 		method: "POST",
 		headers: {
@@ -13,8 +19,11 @@ export const send: SendEmailHandler = async ({ to, subject, html }) => {
 				.POSTMARK_SERVER_TOKEN as string,
 		},
 		body: JSON.stringify({
-			From: from,
+			From: from ?? config.mailFrom,
 			To: to,
+			CC: cc,
+			BCC: bcc,
+			ReplyTo: replyTo,
 			Subject: subject,
 			HtmlBody: html,
 			MessageStream: "outbound",

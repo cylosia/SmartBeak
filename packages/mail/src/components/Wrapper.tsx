@@ -6,8 +6,8 @@ import {
 	Section,
 	Tailwind,
 } from "@react-email/components";
+import { Logo } from "@repo/ui";
 import React, { type PropsWithChildren } from "react";
-import { Logo } from "./Logo";
 
 export default function Wrapper({ children }: PropsWithChildren) {
 	return (

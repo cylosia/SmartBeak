@@ -23,14 +23,19 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { Button } from "@ui/components/button";
+import { Button } from "@repo/ui/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
-import { Table, TableBody, TableCell, TableRow } from "@ui/components/table";
+} from "@repo/ui/components/dropdown-menu";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableRow,
+} from "@repo/ui/components/table";
 import { LogOutIcon, MoreVerticalIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";

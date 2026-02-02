@@ -1,10 +1,10 @@
 "use client";
-import { config } from "@repo/config";
+
+import { config as authConfig } from "@repo/auth/config";
+import { cn, Logo } from "@repo/ui";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
 import { UserMenu } from "@saas/shared/components/UserMenu";
-import { Logo } from "@shared/components/Logo";
-import { cn } from "@ui/lib";
 import {
 	BotMessageSquareIcon,
 	ChevronRightIcon,
@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { config as webConfig } from "@/config";
 import { OrganzationSelect } from "../../organizations/components/OrganizationSelect";
 
 export function NavBar() {
@@ -24,7 +25,7 @@ export function NavBar() {
 	const { user } = useSession();
 	const { activeOrganization, isOrganizationAdmin } = useActiveOrganization();
 
-	const { useSidebarLayout } = config.ui.saas;
+	const { useSidebarLayout } = webConfig.saas;
 
 	const basePath = activeOrganization
 		? `/app/${activeOrganization.slug}`
@@ -97,8 +98,8 @@ export function NavBar() {
 							<Logo />
 						</Link>
 
-						{config.organizations.enable &&
-							!config.organizations.hideOrganization && (
+						{authConfig.organizations.enable &&
+							!authConfig.organizations.hideOrganization && (
 								<>
 									<span
 										className={cn(

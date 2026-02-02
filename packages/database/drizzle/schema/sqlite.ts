@@ -2,6 +2,7 @@ import { createId as cuid } from "@paralleldrive/cuid2";
 import { relations, sql } from "drizzle-orm";
 import {
 	blob,
+	index,
 	integer,
 	sqliteTable,
 	text,

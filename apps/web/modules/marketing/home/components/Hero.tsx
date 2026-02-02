@@ -1,8 +1,9 @@
 import { LocaleLink } from "@i18n/routing";
-import { Button } from "@ui/components/button";
+import { Button } from "@repo/ui/components/button";
 import { ArrowRightIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { config } from "@/config";
 import heroImage from "../../../../public/images/hero-image.png";
 import heroImageDark from "../../../../public/images/hero-image-dark.png";
 
@@ -37,9 +38,13 @@ export function Hero() {
 							<ArrowRightIcon className="ml-2 size-4" />
 						</Link>
 					</Button>
-					<Button variant="ghost" size="lg" asChild>
-						<LocaleLink href="/docs">Documentation</LocaleLink>
-					</Button>
+					{config.docsLink && (
+						<Button variant="ghost" size="lg" asChild>
+							<LocaleLink href={config.docsLink}>
+								Documentation
+							</LocaleLink>
+						</Button>
+					)}
 				</div>
 
 				<div className="mx-auto mt-12 lg:mt-16 xl:mt-24 lg:flex-1 rounded-4xl bg-primary/10 p-4 lg:p-6">

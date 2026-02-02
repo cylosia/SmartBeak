@@ -1,7 +1,7 @@
-import { config } from "@repo/config";
+import { cn } from "@repo/ui";
 import { NavBar } from "@saas/shared/components/NavBar";
-import { cn } from "@ui/lib";
 import type { PropsWithChildren } from "react";
+import { config } from "@/config";
 
 export function AppWrapper({ children }: PropsWithChildren) {
 	return (
@@ -9,7 +9,7 @@ export function AppWrapper({ children }: PropsWithChildren) {
 			<NavBar />
 			<div
 				className={cn("md:pr-4 py-4 flex", [
-					config.ui.saas.useSidebarLayout
+					config.saas.useSidebarLayout
 						? "min-h-[calc(100vh)] md:ml-[280px]"
 						: "",
 				])}

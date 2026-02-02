@@ -1,15 +1,25 @@
-import { config } from "@repo/config";
 import { Resend } from "resend";
+import { config } from "../../config";
 import type { SendEmailHandler } from "../../types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const { from } = config.mails;
-
-export const send: SendEmailHandler = async ({ to, subject, html, text }) => {
+export const send: SendEmailHandler = async ({
+	to,
+	from,
+	subject,
+	cc,
+	bcc,
+	replyTo,
+	html,
+	text,
+}) => {
 	await resend.emails.send({
-		from,
+		from: from ?? config.mailFrom,
 		to: [to],
+		cc,
+		bcc,
+		replyTo,
 		subject,
 		html,
 		text,

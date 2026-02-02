@@ -2,7 +2,7 @@
 import { authClient } from "@repo/auth/client";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
-import { Button } from "@ui/components/button";
+import { Button } from "@repo/ui/components/button";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";

@@ -1,4 +1,5 @@
 "use client";
+
 import { PricingTable } from "@saas/payments/components/PricingTable";
 import { useTranslations } from "next-intl";
 

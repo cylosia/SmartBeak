@@ -1,20 +1,30 @@
-import { config } from "@repo/config";
 import { logger } from "@repo/logs";
+import { config } from "../../config";
 import type { SendEmailHandler } from "../../types";
-
-const { from } = config.mails;
 
 const mailgunDomain = process.env.MAILGUN_DOMAIN as string;
 const mailgunApiKey = process.env.MAILGUN_API_KEY as string;
 
-export const send: SendEmailHandler = async ({ to, subject, html, text }) => {
+export const send: SendEmailHandler = async ({
+	to,
+	from,
+	subject,
+	cc,
+	bcc,
+	replyTo,
+	html,
+	text,
+}) => {
 	if (!mailgunDomain || !mailgunApiKey) {
 		throw new Error("MAILGUN_DOMAIN and MAILGUN_API_KEY must be set");
 	}
 
 	const body = new FormData();
-	body.append("from", from);
+	body.append("from", from ?? config.mailFrom);
 	body.append("to", to);
+	body.append("cc", cc?.join(",") ?? "");
+	body.append("bcc", bcc?.join(",") ?? "");
+	body.append("reply-to", replyTo ?? "");
 	body.append("subject", subject);
 	body.append("text", text);
 	if (html) {

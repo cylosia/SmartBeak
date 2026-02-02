@@ -1,10 +1,17 @@
-import { config } from "@repo/config";
 import nodemailer from "nodemailer";
+import { config } from "../../config";
 import type { SendEmailHandler } from "../../types";
 
-const { from } = config.mails;
-
-export const send: SendEmailHandler = async ({ to, subject, text, html }) => {
+export const send: SendEmailHandler = async ({
+	to,
+	from,
+	subject,
+	cc,
+	bcc,
+	replyTo,
+	text,
+	html,
+}) => {
 	const transporter = nodemailer.createTransport({
 		host: process.env.MAIL_HOST as string,
 		port: Number.parseInt(process.env.MAIL_PORT as string, 10),
@@ -16,7 +23,10 @@ export const send: SendEmailHandler = async ({ to, subject, text, html }) => {
 
 	await transporter.sendMail({
 		to,
-		from,
+		from: from ?? config.mailFrom,
+		cc,
+		bcc,
+		replyTo,
 		subject,
 		text,
 		html,

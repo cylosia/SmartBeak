@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@ui/components/button";
+import { Button } from "@repo/ui/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
+} from "@repo/ui/components/dropdown-menu";
 import { HardDriveIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";

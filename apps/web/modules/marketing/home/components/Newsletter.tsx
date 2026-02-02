@@ -1,11 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Alert, AlertDescription, AlertTitle } from "@repo/ui/components/alert";
+import { Button } from "@repo/ui/components/button";
+import { Input } from "@repo/ui/components/input";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useMutation } from "@tanstack/react-query";
-import { Alert, AlertDescription, AlertTitle } from "@ui/components/alert";
-import { Button } from "@ui/components/button";
-import { Input } from "@ui/components/input";
 import { CheckCircleIcon, KeyIcon } from "lucide-react";
 
 import { useTranslations } from "next-intl";
@@ -15,7 +15,6 @@ import * as z from "zod";
 const formSchema = z.object({
 	email: z.string().email(),
 });
-type FormValues = z.infer<typeof formSchema>;
 
 export function Newsletter() {
 	const t = useTranslations();
@@ -23,7 +22,7 @@ export function Newsletter() {
 		orpc.newsletter.subscribe.mutationOptions(),
 	);
 
-	const form = useForm<FormValues>({
+	const form = useForm({
 		resolver: zodResolver(formSchema),
 	});
 

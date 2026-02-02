@@ -1,5 +1,6 @@
+import { config as authConfig } from "@repo/auth/config";
 import { isOrganizationAdmin } from "@repo/auth/lib/helper";
-import { config } from "@repo/config";
+import { config as paymentsConfig } from "@repo/payments/config";
 import { getActiveOrganization, getSession } from "@saas/auth/lib/server";
 import { OrganizationLogo } from "@saas/organizations/components/OrganizationLogo";
 import { SettingsMenu } from "@saas/settings/components/SettingsMenu";
@@ -57,8 +58,8 @@ export default async function SettingsLayout({
 					href: `${organizationSettingsBasePath}/members`,
 					icon: <Users2Icon className="size-4 opacity-50" />,
 				},
-				...(config.organizations.enable &&
-				config.organizations.enableBilling &&
+				...(authConfig.organizations.enable &&
+				paymentsConfig.billingAttachedTo === "organization" &&
 				userIsOrganizationAdmin
 					? [
 							{

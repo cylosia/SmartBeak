@@ -14,17 +14,22 @@ import {
 	getPaginationRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { Button } from "@ui/components/button";
-import { Card } from "@ui/components/card";
+import { Button } from "@repo/ui/components/button";
+import { Card } from "@repo/ui/components/card";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
-import { Input } from "@ui/components/input";
-import { Skeleton } from "@ui/components/skeleton";
-import { Table, TableBody, TableCell, TableRow } from "@ui/components/table";
+} from "@repo/ui/components/dropdown-menu";
+import { Input } from "@repo/ui/components/input";
+import { Skeleton } from "@repo/ui/components/skeleton";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableRow,
+} from "@repo/ui/components/table";
 import { EditIcon, MoreVerticalIcon, PlusIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";

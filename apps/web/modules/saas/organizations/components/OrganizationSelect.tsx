@@ -1,12 +1,6 @@
 "use client";
-import { config } from "@repo/config";
-import { useSession } from "@saas/auth/hooks/use-session";
-import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
-import { useOrganizationListQuery } from "@saas/organizations/lib/api";
-import { ActivePlanBadge } from "@saas/payments/components/ActivePlanBadge";
-import { UserAvatar } from "@shared/components/UserAvatar";
-import { useRouter } from "@shared/hooks/router";
-import { clearCache } from "@shared/lib/cache";
+import { config as authConfig } from "@repo/auth/config";
+import { config as paymentsConfig } from "@repo/payments/config";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -17,7 +11,14 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
+} from "@repo/ui/components/dropdown-menu";
+import { useSession } from "@saas/auth/hooks/use-session";
+import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
+import { useOrganizationListQuery } from "@saas/organizations/lib/api";
+import { ActivePlanBadge } from "@saas/payments/components/ActivePlanBadge";
+import { UserAvatar } from "@shared/components/UserAvatar";
+import { useRouter } from "@shared/hooks/router";
+import { clearCache } from "@shared/lib/cache";
 import { ChevronsUpDownIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -50,7 +51,8 @@ export function OrganzationSelect({ className }: { className?: string }) {
 								<span className="block flex-1 truncate">
 									{activeOrganization.name}
 								</span>
-								{config.organizations.enableBilling && (
+								{paymentsConfig.billingAttachedTo ===
+									"organization" && (
 									<ActivePlanBadge
 										organizationId={activeOrganization.id}
 									/>
@@ -68,9 +70,8 @@ export function OrganzationSelect({ className }: { className?: string }) {
 										"organizations.organizationSelect.personalAccount",
 									)}
 								</span>
-								{config.users.enableBilling && (
-									<ActivePlanBadge />
-								)}
+								{paymentsConfig.billingAttachedTo ===
+									"user" && <ActivePlanBadge />}
 							</>
 						)}
 					</div>
@@ -78,7 +79,7 @@ export function OrganzationSelect({ className }: { className?: string }) {
 					<ChevronsUpDownIcon className="block size-4 opacity-50" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent className="w-full">
-					{!config.organizations.requireOrganization && (
+					{!authConfig.organizations.requireOrganization && (
 						<>
 							<DropdownMenuRadioGroup
 								value={activeOrganization?.id ?? user.id}
@@ -141,7 +142,8 @@ export function OrganzationSelect({ className }: { className?: string }) {
 						))}
 					</DropdownMenuRadioGroup>
 
-					{config.organizations.enableUsersToCreateOrganizations && (
+					{authConfig.organizations
+						.enableUsersToCreateOrganizations && (
 						<DropdownMenuGroup>
 							<DropdownMenuItem
 								asChild

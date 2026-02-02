@@ -2,7 +2,7 @@
 import { authClient } from "@repo/auth/client";
 import { useRouter } from "@shared/hooks/router";
 import { clearCache } from "@shared/lib/cache";
-import { Progress } from "@ui/components/progress";
+import { Progress } from "@repo/ui/components/progress";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { withQuery } from "ufo";
