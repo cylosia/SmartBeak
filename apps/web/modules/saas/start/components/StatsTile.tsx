@@ -1,6 +1,5 @@
 "use client";
 
-import { useLocaleCurrency } from "@shared/hooks/locale-currency";
 import { Badge } from "@repo/ui/components/badge";
 import {
 	Card,
@@ -8,6 +7,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@repo/ui/components/card";
+import { useLocaleCurrency } from "@shared/hooks/locale-currency";
 import { useFormatter } from "next-intl";
 import { type PropsWithChildren, useMemo } from "react";
 

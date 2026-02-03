@@ -1,8 +1,8 @@
 "use client";
-import { StatsTile } from "@saas/start/components/StatsTile";
-import { StatsTileChart } from "@saas/start/components/StatsTileChart";
 import { Card } from "@repo/ui/components/card";
 import type { ChartConfig } from "@repo/ui/components/chart";
+import { StatsTile } from "@saas/start/components/StatsTile";
+import { StatsTileChart } from "@saas/start/components/StatsTileChart";
 
 const clientsData = [
 	{ month: "Jan", clients: 289 },

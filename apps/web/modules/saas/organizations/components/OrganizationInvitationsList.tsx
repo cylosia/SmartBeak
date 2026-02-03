@@ -3,6 +3,20 @@
 import type { ActiveOrganization } from "@repo/auth";
 import { authClient } from "@repo/auth/client";
 import { isOrganizationAdmin } from "@repo/auth/lib/helper";
+import { cn } from "@repo/ui";
+import { Button } from "@repo/ui/components/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@repo/ui/components/dropdown-menu";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableRow,
+} from "@repo/ui/components/table";
 import { useSession } from "@saas/auth/hooks/use-session";
 import {
 	fullOrganizationQueryKey,
@@ -18,20 +32,6 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { Button } from "@repo/ui/components/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@repo/ui/components/dropdown-menu";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableRow,
-} from "@repo/ui/components/table";
-import { cn } from "@repo/ui";
 import {
 	CheckIcon,
 	ClockIcon,

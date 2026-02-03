@@ -1,10 +1,10 @@
+import { cn } from "@repo/ui";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
 } from "@repo/ui/components/tooltip";
-import { cn } from "@repo/ui";
 import { CheckIcon, ClockIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 

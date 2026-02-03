@@ -1,11 +1,11 @@
 "use client";
-import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import {
 	Tabs,
 	TabsContent,
 	TabsList,
 	TabsTrigger,
 } from "@repo/ui/components/tabs";
+import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { OrganizationInvitationsList } from "./OrganizationInvitationsList";

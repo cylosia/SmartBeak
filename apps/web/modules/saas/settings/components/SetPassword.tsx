@@ -1,8 +1,8 @@
 "use client";
 import { authClient } from "@repo/auth/client";
+import { Button } from "@repo/ui/components/button";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
-import { Button } from "@repo/ui/components/button";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";

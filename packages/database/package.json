@@ -9,7 +9,7 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.3.5",
+		"@biomejs/biome": "2.3.13",
 		"@repo/tsconfig": "workspace:*",
 		"@types/node": "24.10.1",
 		"dotenv-cli": "^11.0.0",

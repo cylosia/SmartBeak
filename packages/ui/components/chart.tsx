@@ -1,8 +1,8 @@
 "use client";
 
-import { cn } from "../lib";
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
+import { cn } from "../lib";
 
 const THEMES = { light: "", dark: ".dark" } as const;
 
