@@ -1,14 +1,14 @@
 "use client";
 
 import { authClient } from "@repo/auth/client";
+import { Spinner } from "@repo/ui";
 import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
 import { organizationListQueryKey } from "@saas/organizations/lib/api";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
-import { Spinner } from "@shared/components/Spinner";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type HTMLAttributes, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { CropImageDialog } from "../../settings/components/CropImageDialog";
@@ -95,7 +95,10 @@ export function OrganizationLogoForm() {
 			title={t("organizations.settings.logo.title")}
 			description={t("organizations.settings.logo.description")}
 		>
-			<div className="relative size-24 rounded-full" {...getRootProps()}>
+			<div
+				className="relative size-24 rounded-full"
+				{...(getRootProps() as HTMLAttributes<HTMLDivElement>)}
+			>
 				<input {...getInputProps()} />
 				<OrganizationLogo
 					className="size-24 cursor-pointer text-xl"

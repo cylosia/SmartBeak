@@ -2,6 +2,19 @@
 import type { OrganizationMemberRole } from "@repo/auth";
 import { authClient } from "@repo/auth/client";
 import { isOrganizationAdmin } from "@repo/auth/lib/helper";
+import { Button } from "@repo/ui/components/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@repo/ui/components/dropdown-menu";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableRow,
+} from "@repo/ui/components/table";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useOrganizationMemberRoles } from "@saas/organizations/hooks/member-roles";
 import {
@@ -23,14 +36,6 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from "@tanstack/react-table";
-import { Button } from "@ui/components/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
-import { Table, TableBody, TableCell, TableRow } from "@ui/components/table";
 import { LogOutIcon, MoreVerticalIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -237,7 +242,7 @@ export function OrganizationMembersList({
 	});
 
 	return (
-		<div className="rounded-md border">
+		<div className="rounded-lg border">
 			<Table>
 				<TableBody>
 					{table.getRowModel().rows?.length ? (

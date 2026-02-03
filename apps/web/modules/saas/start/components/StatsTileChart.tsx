@@ -1,12 +1,12 @@
 "use client";
 
+import { cn } from "@repo/ui";
 import {
 	type ChartConfig,
 	ChartContainer,
 	ChartTooltip,
 	ChartTooltipContent,
-} from "@ui/components/chart";
-import { cn } from "@ui/lib";
+} from "@repo/ui/components/chart";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 interface StatsTileChartProps {

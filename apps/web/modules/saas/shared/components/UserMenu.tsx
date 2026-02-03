@@ -2,9 +2,6 @@
 
 import { DropdownMenuSub } from "@radix-ui/react-dropdown-menu";
 import { authClient } from "@repo/auth/client";
-import { config } from "@repo/config";
-import { useSession } from "@saas/auth/hooks/use-session";
-import { UserAvatar } from "@shared/components/UserAvatar";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -17,7 +14,9 @@ import {
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
-} from "@ui/components/dropdown-menu";
+} from "@repo/ui";
+import { useSession } from "@saas/auth/hooks/use-session";
+import { UserAvatar } from "@shared/components/UserAvatar";
 import {
 	BookIcon,
 	HardDriveIcon,
@@ -32,6 +31,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { useState } from "react";
+import { config } from "@/config";
 
 export function UserMenu({ showUserName }: { showUserName?: boolean }) {
 	const t = useTranslations();
@@ -62,7 +62,7 @@ export function UserMenu({ showUserName }: { showUserName?: boolean }) {
 			fetchOptions: {
 				onSuccess: async () => {
 					window.location.href = new URL(
-						config.auth.redirectAfterLogout,
+						config.saas.redirectAfterLogout,
 						window.location.origin,
 					).toString();
 				},
@@ -150,12 +150,14 @@ export function UserMenu({ showUserName }: { showUserName?: boolean }) {
 					</Link>
 				</DropdownMenuItem>
 
-				<DropdownMenuItem asChild>
-					<a href="https://supastarter.dev/docs/nextjs">
-						<BookIcon className="mr-2 size-4" />
-						{t("app.userMenu.documentation")}
-					</a>
-				</DropdownMenuItem>
+				{config.docsLink && (
+					<DropdownMenuItem asChild>
+						<a href={config.docsLink}>
+							<BookIcon className="mr-2 size-4" />
+							{t("app.userMenu.documentation")}
+						</a>
+					</DropdownMenuItem>
+				)}
 
 				<DropdownMenuItem asChild>
 					<Link href="/">

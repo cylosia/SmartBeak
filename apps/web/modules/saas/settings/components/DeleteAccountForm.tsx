@@ -1,11 +1,11 @@
 "use client";
 
 import { authClient } from "@repo/auth/client";
+import { Button } from "@repo/ui/components/button";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useConfirmationAlert } from "@saas/shared/components/ConfirmationAlertProvider";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useMutation } from "@tanstack/react-query";
-import { Button } from "@ui/components/button";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
@@ -52,7 +52,7 @@ export function DeleteAccountForm() {
 			description={t("settings.account.deleteAccount.description")}
 		>
 			<div className="mt-4 flex justify-end">
-				<Button variant="error" onClick={() => confirmDelete()}>
+				<Button variant="destructive" onClick={() => confirmDelete()}>
 					{t("settings.account.deleteAccount.submit")}
 				</Button>
 			</div>

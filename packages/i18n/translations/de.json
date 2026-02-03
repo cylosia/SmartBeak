@@ -823,5 +823,10 @@
 	"choosePlan": {
 		"title": "Wähle einen Plan",
 		"description": "Um weiterzumachen, wähle bitte einen Plan aus."
+	},
+	"notFound": {
+		"code": "404",
+		"title": "Seite nicht gefunden",
+		"goToDashboard": "Zum Dashboard gehen"
 	}
 }

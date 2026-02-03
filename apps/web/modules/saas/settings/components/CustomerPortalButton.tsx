@@ -1,8 +1,8 @@
 "use client";
 
+import { Button } from "@repo/ui/components/button";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useMutation } from "@tanstack/react-query";
-import { Button } from "@ui/components/button";
 import { CreditCardIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -33,7 +33,7 @@ export function CustomerPortalButton({ purchaseId }: { purchaseId: string }) {
 
 	return (
 		<Button
-			variant="light"
+			variant="secondary"
 			size="sm"
 			onClick={() => createCustomerPortal()}
 			loading={createCustomerPortalMutation.isPending}

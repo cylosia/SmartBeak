@@ -2,6 +2,9 @@
 
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import { eventIteratorToStream } from "@orpc/client";
+import { cn } from "@repo/ui";
+import { Button } from "@repo/ui/components/button";
+import { Textarea } from "@repo/ui/components/textarea";
 import { SidebarContentLayout } from "@saas/shared/components/SidebarContentLayout";
 import { orpcClient } from "@shared/lib/orpc-client";
 import { orpc } from "@shared/lib/orpc-query-utils";
@@ -11,9 +14,6 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import { Button } from "@ui/components/button";
-import { Textarea } from "@ui/components/textarea";
-import { cn } from "@ui/lib";
 import { EllipsisIcon, PlusIcon, SendIcon } from "lucide-react";
 import { useFormatter } from "next-intl";
 import { useQueryState } from "nuqs";
@@ -175,7 +175,7 @@ export function AiChat({ organizationId }: { organizationId?: string }) {
 			sidebar={
 				<div>
 					<Button
-						variant="light"
+						variant="secondary"
 						size="sm"
 						className="mb-4 flex w-full items-center gap-2"
 						loading={createChatMutation.isPending}
@@ -187,11 +187,11 @@ export function AiChat({ organizationId }: { organizationId?: string }) {
 
 					{sortedChats.map((chat) => (
 						<div className="relative" key={chat.id}>
-							<Button
-								variant="link"
+							<button
+								type="button"
 								onClick={() => setChatId(chat.id)}
 								className={cn(
-									"block h-auto w-full py-2 text-left text-foreground hover:no-underline",
+									"block h-auto w-full py-2 px-4 rounded-lg text-sm text-left text-foreground hover:no-underline",
 									chat.id === chatId &&
 										"bg-primary/10 font-bold text-primary",
 								)}
@@ -213,7 +213,7 @@ export function AiChat({ organizationId }: { organizationId?: string }) {
 										)}
 									</small>
 								</span>
-							</Button>
+							</button>
 						</div>
 					))}
 				</div>
@@ -269,7 +269,7 @@ export function AiChat({ organizationId }: { organizationId?: string }) {
 						onChange={(e) => setInput(e.target.value)}
 						disabled={!hasChat}
 						placeholder="Chat with your AI..."
-						className="min-h-8 rounded-none border-none bg-transparent focus:outline-hidden focus-visible:ring-0 shadow-none p-6 pr-14"
+						className="min-h-8 border bg-card rounded-2xl focus:outline-hidden focus-visible:ring-0 shadow-none p-6 pr-14"
 						onKeyDown={(e) => {
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
