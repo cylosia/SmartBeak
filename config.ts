@@ -1,3 +1,3 @@
 export const globalConfig = {
-	appName: "supastarter for Next.js Demo",
+	// put your global config here
 } as const;
