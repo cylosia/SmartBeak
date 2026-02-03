@@ -8,7 +8,7 @@ supastarter is the ultimate starter kit for production-ready, scalable SaaS appl
 - [🚀 Demo](https://demo.supastarter.dev)
 
 
-## Local Development Setup
+## Local Development Environment Setup
 
 ### Prerequisites
 
@@ -16,7 +16,7 @@ supastarter is the ultimate starter kit for production-ready, scalable SaaS appl
 - [Node.js](https://nodejs.org/) >= 20
 - [pnpm](https://pnpm.io/) package manager
 
-### Running with Docker Compose
+### Running third-party services locally with Docker Compose for offline development
 
 Start the local development services (PostgreSQL and MinIO):
 
@@ -62,4 +62,20 @@ To also remove the data volumes:
 
 ```bash
 docker compose down -v
+```
+
+### Get mails on local development environment
+
+To not have to set up a mail service to get mails on your local development environment, you can use `console` provider in `packages/mail`. 
+This will print the mails to the console. Simply update the `packages/mail/provider/index.ts` like this:
+
+```typescript
+export * from "./console";
+```
+
+# Development
+
+To start your the development server of your apps, run: 
+```bash
+pnpm dev
 ```
