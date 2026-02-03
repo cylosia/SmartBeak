@@ -4,14 +4,14 @@
 	"rsc": true,
 	"tsx": true,
 	"tailwind": {
-		"css": "apps/web/app/globals.css",
+		"css": "../../tooling/tailwind/theme.css",
 		"baseColor": "slate",
 		"cssVariables": true,
 		"prefix": ""
 	},
 	"aliases": {
-		"components": "./components",
-		"utils": "./lib",
-		"ui": "@repo/ui"
+		"components": "@/components",
+		"utils": "@/lib",
+		"lib": "@/lib"
 	}
 }

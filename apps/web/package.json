@@ -107,7 +107,6 @@
 		"dev": "next dev",
 		"e2e": "pnpm exec playwright test --ui",
 		"e2e:ci": "pnpm exec playwright install && pnpm exec playwright test",
-		"shadcn-ui": "pnpm dlx shadcn@latest",
 		"start": "next start",
 		"type-check": "tsc --noEmit"
 	},

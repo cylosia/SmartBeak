@@ -34,7 +34,8 @@
 	"name": "@repo/ui",
 	"scripts": {
 		"clean": "git clean -xdf .cache .turbo dist node_modules",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"shadcn-ui": "pnpm dlx shadcn@latest"
 	},
 	"version": "0.0.0"
 }
