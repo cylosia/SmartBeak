@@ -7,7 +7,6 @@ import {
 	AvatarImage,
 } from "@repo/ui/components/avatar";
 import { useMemo } from "react";
-import { useIsClient } from "usehooks-ts";
 
 export const OrganizationLogo = ({
 	name,
@@ -19,20 +18,6 @@ export const OrganizationLogo = ({
 	logoUrl?: string | null;
 	className?: string;
 }) => {
-	const isClient = useIsClient();
-	const avatarColors = useMemo(() => {
-		if (typeof window === "undefined") {
-			return [];
-		}
-
-		const styles = getComputedStyle(window.document.documentElement);
-		return [
-			styles.getPropertyValue("--color-primary"),
-			styles.getPropertyValue("--color-accent"),
-			styles.getPropertyValue("--color-foreground"),
-		];
-	}, []);
-
 	const logoSrc = useMemo(
 		() =>
 			logoUrl
@@ -42,10 +27,6 @@ export const OrganizationLogo = ({
 				: undefined,
 		[logoUrl],
 	);
-
-	if (!isClient) {
-		return null;
-	}
 
 	return (
 		<Avatar ref={ref} className={className}>
