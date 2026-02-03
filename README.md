@@ -2,6 +2,12 @@
 
 supastarter is the ultimate starter kit for production-ready, scalable SaaS applications.
 
+## Helpful links
+
+- [📘 Documentation](https://supastarter.dev/docs/nextjs)
+- [🚀 Demo](https://demo.supastarter.dev)
+
+
 ## Local Development Setup
 
 ### Prerequisites
@@ -57,8 +63,3 @@ To also remove the data volumes:
 ```bash
 docker compose down -v
 ```
-
-## Helpful links
-
-- [📘 Documentation](https://supastarter.dev/docs/nextjs)
-- [🚀 Demo](https://demo.supastarter.dev)
