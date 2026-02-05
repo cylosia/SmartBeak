@@ -17,6 +17,7 @@ import {
 	FormMessage,
 } from "@repo/ui/components/form";
 import { Input } from "@repo/ui/components/input";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { getAdminPath } from "@saas/admin/lib/links";
 import { InviteMemberForm } from "@saas/organizations/components/InviteMemberForm";
 import { OrganizationMembersBlock } from "@saas/organizations/components/OrganizationMembersBlock";
@@ -31,7 +32,6 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 
 const organizationFormSchema = z.object({
@@ -84,7 +84,7 @@ export function OrganizationForm({
 				queryKey: orpc.admin.organizations.list.key(),
 			});
 
-			toast.success(t("admin.organizations.form.notifications.success"));
+			toastSuccess(t("admin.organizations.form.notifications.success"));
 
 			if (!organization) {
 				router.replace(
@@ -92,7 +92,7 @@ export function OrganizationForm({
 				);
 			}
 		} catch {
-			toast.error(t("admin.organizations.form.notifications.error"));
+			toastError(t("admin.organizations.form.notifications.error"));
 		}
 	});
 

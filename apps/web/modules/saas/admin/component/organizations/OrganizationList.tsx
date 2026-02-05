@@ -17,6 +17,7 @@ import {
 	TableCell,
 	TableRow,
 } from "@repo/ui/components/table";
+import { toastPromise } from "@repo/ui/components/toast";
 import { getAdminPath } from "@saas/admin/lib/links";
 import { OrganizationLogo } from "@saas/organizations/components/OrganizationLogo";
 import { useConfirmationAlert } from "@saas/shared/components/ConfirmationAlertProvider";
@@ -35,7 +36,6 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo, useRef } from "react";
-import { toast } from "sonner";
 import { withQuery } from "ufo";
 import { useDebounceValue } from "usehooks-ts";
 
@@ -100,7 +100,7 @@ export function OrganizationList() {
 	}, [debouncedSearchTerm, setCurrentPage]);
 
 	const deleteOrganization = async (id: string) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				const { error } = await authClient.organization.delete({
 					organizationId: id,

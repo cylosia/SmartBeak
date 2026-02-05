@@ -27,7 +27,7 @@ import { usePurchases } from "@saas/payments/hooks/purchases";
 import { UserAvatar } from "@shared/components/UserAvatar";
 import { useRouter } from "@shared/hooks/router";
 import { clearCache } from "@shared/lib/cache";
-import { ChevronDownIcon, PlusIcon } from "lucide-react";
+import { ChevronsUpDownIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { OrganizationLogo } from "./OrganizationLogo";
@@ -134,7 +134,7 @@ export function OrganzationSelect({
 			</div>
 
 			{!collapsed && (
-				<ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+				<ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
 			)}
 		</DropdownMenuTrigger>
 	);

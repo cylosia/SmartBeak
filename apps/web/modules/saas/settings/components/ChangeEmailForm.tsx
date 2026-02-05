@@ -4,11 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { authClient } from "@repo/auth/client";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 
 const formSchema = z.object({
@@ -32,11 +32,11 @@ export function ChangeEmailForm() {
 		});
 
 		if (error) {
-			toast.error(t("settings.account.changeEmail.notifications.error"));
+			toastError(t("settings.account.changeEmail.notifications.error"));
 			return;
 		}
 
-		toast.success(t("settings.account.changeEmail.notifications.success"));
+		toastSuccess(t("settings.account.changeEmail.notifications.success"));
 
 		reloadSession();
 	});

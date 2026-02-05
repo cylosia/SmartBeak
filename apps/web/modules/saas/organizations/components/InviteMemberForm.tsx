@@ -11,13 +11,13 @@ import {
 	FormLabel,
 } from "@repo/ui/components/form";
 import { Input } from "@repo/ui/components/input";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { OrganizationRoleSelect } from "@saas/organizations/components/OrganizationRoleSelect";
 import { fullOrganizationQueryKey } from "@saas/organizations/lib/api";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 
 const formSchema = z.object({
@@ -58,13 +58,13 @@ export function InviteMemberForm({
 				queryKey: fullOrganizationQueryKey(organizationId),
 			});
 
-			toast.success(
+			toastSuccess(
 				t(
 					"organizations.settings.members.inviteMember.notifications.success.title",
 				),
 			);
 		} catch {
-			toast.error(
+			toastError(
 				t(
 					"organizations.settings.members.inviteMember.notifications.error.title",
 				),

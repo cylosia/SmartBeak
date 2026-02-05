@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-02-05 v2.0.1
+
+### UI component enhancements and design improvements
+
+#### Toast component redesign
+- **Major enhancement**: Complete redesign of the toast component with custom styling and improved UX
+- Added custom `Toast` component with support for different types (success, error, info, warning, loading, default)
+- Added automatic icons for each toast type using Lucide icons
+- Added helper functions: `toastSuccess`, `toastError`, `toastInfo`, `toastWarning`, `toastLoading`
+- Added `toastPromise` function for handling async operations with loading/success/error states
+- Improved visual design with type-specific border colors and icons
+- Added support for action and cancel buttons in toasts
+- All form components updated to use the new toast API
+
+#### Color mode toggle redesign
+- **Redesigned**: Changed from dropdown menu to a modern segmented control/toggle button style
+- Added smooth sliding indicator animation for active state
+- Replaced dropdown menu with inline toggle buttons for better UX
+- Added tooltips for each color mode option (System, Light, Dark)
+- Improved accessibility with proper ARIA labels and pressed states
+- Added translations for color mode labels (`common.colorMode.system`, `common.colorMode.light`, `common.colorMode.dark`)
+- Updated icon from `HardDriveIcon` to `MonitorCogIcon` for system mode
+
+#### User menu improvements
+- **Simplified**: Removed inline color mode selection submenu from user menu
+- Color mode toggle now uses the standalone `ColorModeToggle` component
+- Cleaner menu structure with better separation of concerns
+
+#### Component styling updates
+- **Select component**: Updated border radius from `rounded-md` to `rounded-lg` for consistency with design system
+- **SettingsItem component**: Increased left column width from `280px` to `320px` for better content spacing
+- **Theme colors**: Updated muted background color from `#1d1e1e` to `#191b1b` for improved contrast
+
+#### Form components
+- Updated all SaaS form components to use the new toast API:
+  - Organization forms (Create, Change Name, Delete, Logo, Invite Member)
+  - Settings forms (Change Email, Change Name, Change Password, Set Password, Delete Account, User Avatar, User Language)
+  - Admin components (Organization Form, Organization List, User List)
+  - Organization management components (Members List, Invitations List, Organization Select)
+  - Security components (Passkeys Block, Two Factor Block, Active Sessions Block)
+  - Customer Portal Button
+
+---
+
 ## 2026-02-02 v2.0.0
 
 ### Major architectural changes and breaking updates

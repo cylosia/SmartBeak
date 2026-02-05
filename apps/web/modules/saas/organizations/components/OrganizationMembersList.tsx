@@ -15,6 +15,7 @@ import {
 	TableCell,
 	TableRow,
 } from "@repo/ui/components/table";
+import { toastPromise } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useOrganizationMemberRoles } from "@saas/organizations/hooks/member-roles";
 import {
@@ -39,7 +40,6 @@ import {
 import { LogOutIcon, MoreVerticalIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { toast } from "sonner";
 import { OrganizationRoleSelect } from "./OrganizationRoleSelect";
 
 export function OrganizationMembersList({
@@ -61,7 +61,7 @@ export function OrganizationMembersList({
 		memberId: string,
 		role: OrganizationMemberRole,
 	) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				await authClient.organization.updateMemberRole({
 					memberId,
@@ -90,7 +90,7 @@ export function OrganizationMembersList({
 	};
 
 	const removeMember = async (memberId: string) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				await authClient.organization.removeMember({
 					memberIdOrEmail: memberId,

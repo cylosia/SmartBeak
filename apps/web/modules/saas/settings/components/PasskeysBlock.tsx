@@ -2,12 +2,16 @@
 import { authClient } from "@repo/auth/client";
 import { Button } from "@repo/ui/components/button";
 import { Skeleton } from "@repo/ui/components/skeleton";
+import {
+	toastError,
+	toastPromise,
+	toastSuccess,
+} from "@repo/ui/components/toast";
 import { userPasskeyQueryKey, useUserPasskeysQuery } from "@saas/auth/lib/api";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useQueryClient } from "@tanstack/react-query";
 import { KeyIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { toast } from "sonner";
 
 export function PasskeysBlock() {
 	const t = useTranslations();
@@ -23,14 +27,14 @@ export function PasskeysBlock() {
 					queryClient.invalidateQueries({
 						queryKey: userPasskeyQueryKey,
 					});
-					toast.success(
+					toastSuccess(
 						t(
 							"settings.account.security.passkeys.notifications.addPasskey.success.title",
 						),
 					);
 				},
 				onError: () => {
-					toast.error(
+					toastError(
 						t(
 							"settings.account.security.passkeys.notifications.addPasskey.error.title",
 						),
@@ -41,7 +45,7 @@ export function PasskeysBlock() {
 	};
 
 	const deletePasskey = (id: string) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				await authClient.passkey.deletePasskey({
 					id,

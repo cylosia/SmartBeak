@@ -12,6 +12,7 @@ import { FormItem } from "@repo/ui/components/form";
 import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { PasswordInput } from "@repo/ui/components/password-input";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useUserAccountsQuery } from "@saas/auth/lib/api";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
@@ -26,7 +27,6 @@ import {
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "react-qr-code";
-import { toast } from "sonner";
 
 export function TwoFactorBlock() {
 	const t = useTranslations();
@@ -76,7 +76,7 @@ export function TwoFactorBlock() {
 		},
 
 		onError: () => {
-			toast.error(
+			toastError(
 				t(
 					"settings.account.security.twoFactor.notifications.enable.error.title",
 				),
@@ -97,7 +97,7 @@ export function TwoFactorBlock() {
 
 			setDialogOpen(false);
 
-			toast.success(
+			toastSuccess(
 				t(
 					"settings.account.security.twoFactor.notifications.disable.success.title",
 				),
@@ -107,7 +107,7 @@ export function TwoFactorBlock() {
 		},
 
 		onError: () => {
-			toast.error(
+			toastError(
 				t(
 					"settings.account.security.twoFactor.notifications.enable.error.title",
 				),
@@ -126,7 +126,7 @@ export function TwoFactorBlock() {
 				throw error;
 			}
 
-			toast.success(
+			toastSuccess(
 				t(
 					"settings.account.security.twoFactor.notifications.verify.success.title",
 				),

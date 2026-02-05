@@ -11,12 +11,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@repo/ui/components/select";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { toast } from "sonner";
 
 const { locales } = config;
 
@@ -46,9 +46,9 @@ export function UserLanguageForm() {
 		try {
 			await updateLocaleMutation.mutateAsync();
 
-			toast.success(t("settings.account.language.notifications.success"));
+			toastSuccess(t("settings.account.language.notifications.success"));
 		} catch {
-			toast.error(t("settings.account.language.notifications.error"));
+			toastError(t("settings.account.language.notifications.error"));
 		}
 	};
 

@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { authClient } from "@repo/auth/client";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
 import { organizationListQueryKey } from "@saas/organizations/lib/api";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
@@ -10,7 +11,6 @@ import { useRouter } from "@shared/hooks/router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import { z } from "zod";
 
 const formSchema = z.object({
@@ -47,7 +47,7 @@ export function ChangeOrganizationNameForm() {
 				throw error;
 			}
 
-			toast.success(
+			toastSuccess(
 				t(
 					"organizations.settings.notifications.organizationNameUpdated",
 				),
@@ -58,7 +58,7 @@ export function ChangeOrganizationNameForm() {
 			});
 			router.refresh();
 		} catch {
-			toast.error(
+			toastError(
 				t(
 					"organizations.settings.notifications.organizationNameNotUpdated",
 				),

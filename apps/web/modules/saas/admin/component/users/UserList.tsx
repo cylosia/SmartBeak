@@ -17,6 +17,7 @@ import {
 	TableCell,
 	TableRow,
 } from "@repo/ui/components/table";
+import { dismiss, toastLoading, toastPromise } from "@repo/ui/components/toast";
 import { useConfirmationAlert } from "@saas/shared/components/ConfirmationAlertProvider";
 import { Pagination } from "@saas/shared/components/Pagination";
 import { UserAvatar } from "@shared/components/UserAvatar";
@@ -40,7 +41,6 @@ import {
 import { useTranslations } from "next-intl";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo } from "react";
-import { toast } from "sonner";
 import { useDebounceValue } from "usehooks-ts";
 import { EmailVerified } from "../EmailVerified";
 
@@ -91,7 +91,7 @@ export function UserList() {
 		userId: string,
 		{ name }: { name: string },
 	) => {
-		const toastId = toast.loading(
+		const toastId = toastLoading(
 			t("admin.users.impersonation.impersonating", {
 				name,
 			}),
@@ -101,7 +101,7 @@ export function UserList() {
 			userId,
 		});
 		await refetch();
-		toast.dismiss(toastId);
+		dismiss(toastId);
 		window.location.href = new URL(
 			"/app",
 			window.location.origin,
@@ -109,7 +109,7 @@ export function UserList() {
 	};
 
 	const deleteUser = async (id: string) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				const { error } = await authClient.admin.removeUser({
 					userId: id,
@@ -130,7 +130,7 @@ export function UserList() {
 	};
 
 	const resendVerificationMail = async (email: string) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				const { error } = await authClient.sendVerificationEmail({
 					email,

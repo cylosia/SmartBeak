@@ -17,6 +17,7 @@ import {
 	TableCell,
 	TableRow,
 } from "@repo/ui/components/table";
+import { toastPromise } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import {
 	fullOrganizationQueryKey,
@@ -41,7 +42,6 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useMemo } from "react";
-import { toast } from "sonner";
 import { OrganizationRoleSelect } from "./OrganizationRoleSelect";
 export function OrganizationInvitationsList({
 	organizationId,
@@ -69,7 +69,7 @@ export function OrganizationInvitationsList({
 	);
 
 	const revokeInvitation = (invitationId: string) => {
-		toast.promise(
+		toastPromise(
 			async () => {
 				const { error } =
 					await authClient.organization.cancelInvitation({
