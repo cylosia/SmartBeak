@@ -1,8 +1,13 @@
 "use client";
 
-import { MobileIcon } from "@radix-ui/react-icons";
 import { cn } from "@repo/ui";
-import { CloudIcon, ComputerIcon, StarIcon, WandIcon } from "lucide-react";
+import {
+	CloudIcon,
+	ComputerIcon,
+	SmartphoneIcon,
+	StarIcon,
+	WandIcon,
+} from "lucide-react";
 import Image, { type StaticImageData } from "next/image";
 import type { JSXElementConstructor, ReactNode } from "react";
 import heroImage from "../../../../public/images/feature.svg";
@@ -55,7 +60,7 @@ export const featureTabs: Array<{
 				title: "Benefit 3",
 				description:
 					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
-				icon: MobileIcon,
+				icon: SmartphoneIcon,
 			},
 		],
 	},
@@ -85,7 +90,7 @@ export const featureTabs: Array<{
 				title: "Benefit 3",
 				description:
 					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
-				icon: MobileIcon,
+				icon: SmartphoneIcon,
 			},
 		],
 	},

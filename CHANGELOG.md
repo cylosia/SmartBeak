@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-02-05 v2.0.3
+
+### Radix UI dependency consolidation
+
+#### Unified Radix UI package migration
+- **Major dependency update**: Migrated from individual `@radix-ui/react-*` packages to unified `radix-ui` package (v1.4.3)
+- **Consolidated dependencies**: Replaced 13 separate Radix UI packages with a single `radix-ui` package
+- **Updated all UI components** to use new unified package imports:
+  - `accordion.tsx`: Updated to use `Accordion` from `radix-ui`
+  - `alert-dialog.tsx`: Updated to use `AlertDialog` from `radix-ui`
+  - `avatar.tsx`: Updated to use `Avatar` from `radix-ui`
+  - `button.tsx`: Updated to use `Slot` and `Slottable` from `radix-ui`
+  - `dialog.tsx`: Updated to use `Dialog` from `radix-ui`
+  - `dropdown-menu.tsx`: Updated to use `DropdownMenu` from `radix-ui`
+  - `form.tsx`: Updated to use `Label` and `Slot` from `radix-ui`
+  - `label.tsx`: Updated to use `Label` from `radix-ui`
+  - `progress.tsx`: Updated to use `Progress` from `radix-ui`
+  - `select.tsx`: Updated to use `Select` from `radix-ui` and migrated icons to Lucide
+  - `sheet.tsx`: Updated to use `Sheet` from `radix-ui`
+  - `tabs.tsx`: Updated to use `Tabs` from `radix-ui`
+  - `tooltip.tsx`: Updated to use `Tooltip` from `radix-ui`
+
+#### Icon migration
+- **Replaced Radix icons**: Migrated from `@radix-ui/react-icons` to Lucide icons
+- **Features component**: Replaced `MobileIcon` from Radix with `SmartphoneIcon` from Lucide
+- **Select component**: Replaced `CheckIcon` from Radix with Lucide's `CheckIcon`
+- Removed `@radix-ui/react-icons` dependency
+
+#### Package updates
+- **UI package**: Updated `packages/ui/package.json` to use unified `radix-ui` package
+- **Web app**: Updated `apps/web/package.json` to use unified `radix-ui` package
+- **Dependencies**: Reduced from 13 separate Radix packages to 1 unified package
+
+**Benefits:**
+- Simplified dependency management with single package
+- Reduced bundle size and faster install times
+- Consistent versioning across all Radix UI components
+- Easier maintenance and updates
+
+---
+
 ## 2026-02-05 v2.0.2
 
 ### AI Chat refactoring and UI improvements

@@ -1,6 +1,6 @@
-import { Slot, Slottable } from "@radix-ui/react-slot";
 import type { VariantProps } from "class-variance-authority";
 import { cva } from "class-variance-authority";
+import { Slot as SlotPrimitive } from "radix-ui";
 import * as React from "react";
 import { cn } from "../lib";
 import { Spinner } from "./spinner";
@@ -51,7 +51,7 @@ const Button = ({
 	disabled,
 	...props
 }: ButtonProps) => {
-	const Comp = asChild ? Slot : "button";
+	const Comp = asChild ? SlotPrimitive.Slot : "button";
 	return (
 		<Comp
 			className={cn(buttonVariants({ variant, size, className }))}
@@ -59,7 +59,7 @@ const Button = ({
 			{...props}
 		>
 			{loading && <Spinner className="mr-1.5 size-4 text-inherit" />}
-			<Slottable>{children}</Slottable>
+			<SlotPrimitive.Slottable>{children}</SlotPrimitive.Slottable>
 		</Comp>
 	);
 };

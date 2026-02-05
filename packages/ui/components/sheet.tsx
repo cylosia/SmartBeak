@@ -1,9 +1,9 @@
 "use client";
 
-import * as SheetPrimitive from "@radix-ui/react-dialog";
 import type { VariantProps } from "class-variance-authority";
 import { cva } from "class-variance-authority";
 import { XIcon } from "lucide-react";
+import { Dialog as SheetPrimitive } from "radix-ui";
 import * as React from "react";
 import { cn } from "../lib";
 

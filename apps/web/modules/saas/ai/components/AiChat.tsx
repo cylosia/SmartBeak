@@ -69,7 +69,7 @@ export function AiChat() {
 			| React.KeyboardEvent<HTMLTextAreaElement>,
 	) => {
 		e.preventDefault();
-		
+
 		const text = input.trim();
 		if (!text) {
 			return;
