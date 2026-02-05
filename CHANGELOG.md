@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-02-05 v2.0.2
+
+### AI Chat refactoring and UI improvements
+
+#### AI Chat simplification
+- **Major refactoring**: Simplified AI chat feature to streaming-only interface, removing chat persistence
+- **Removed**: Chat storage and CRUD operations (create, list, find, update, delete, add-message procedures)
+- **Removed**: `AiChat` database model from all schemas (Prisma, Drizzle MySQL/PostgreSQL/SQLite)
+- **Removed**: Database queries for AI chats (`ai-chats.ts` files)
+- **Simplified**: AI router now only exposes a single `stream` endpoint for real-time AI responses
+- **Refactored**: `AiChat` component to use streaming without persistence, using `@ai-sdk/react`'s `useChat` hook
+- **Simplified**: Chatbot pages removed prefetching logic for chat lists and individual chats
+- **New**: `stream-message` procedure that streams AI responses without storing conversations
+
+**Breaking changes:**
+- Any code using `orpcClient.ai.chats.*` endpoints will need to be updated
+- Database migrations will need to drop the `ai_chat` table if it exists
+- Chat history persistence is no longer available - conversations are session-only
+
+#### UI component improvements
+- **NavBar**: Added conditional bottom border when scrolled (`border-b` when `!isTop`)
+- **Button component**: Removed icon opacity styling (`[&>svg]:opacity-60`) for better icon visibility
+- **Global styles**: Added consistent Lucide icon stroke-width (`1.75`) for improved icon rendering
+
+---
+
 ## 2026-02-05 v2.0.1
 
 ### UI component enhancements and design improvements

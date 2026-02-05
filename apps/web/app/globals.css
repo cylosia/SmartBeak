@@ -34,4 +34,8 @@
 	body {
 		letter-spacing: -0.01em;
 	}
+
+	svg.lucide {
+		stroke-width: 1.75;
+	}
 }
