@@ -43,8 +43,8 @@ describe('JobScheduler - P0 Critical Tests', () => {
   });
 
   describe('Queue Creation', () => {
-    it('should create queue with QueueScheduler for delayed jobs', async () => {
-      // P0-FIX: Without QueueScheduler, delayed jobs never execute
+    it('should create queue for delayed jobs', async () => {
+      // In bullmq v5.x, QueueScheduler is no longer needed for delayed jobs
       scheduler.register({
         name: 'test-job',
         queue: 'test-queue',
@@ -54,10 +54,6 @@ describe('JobScheduler - P0 Critical Tests', () => {
       // Queue should be created
       const queue = (scheduler as any).queues.get('test-queue');
       expect(queue).toBeDefined();
-
-      // QueueScheduler should be created
-      const schedulerInstance = (scheduler as any).queueSchedulers.get('test-queue');
-      expect(schedulerInstance).toBeDefined();
     });
 
     it('should reuse existing queue for same queue name', async () => {

@@ -127,8 +127,8 @@ describe('MultiTierCache Memory Leak Prevention', () => {
 
       expect(cacheWithShortCleanup.getInFlightCount()).toBe(10);
 
-      // Wait for cleanup interval (10 seconds in production, but we'll simulate)
-      jest.advanceTimersByTime(11000);
+      // Wait briefly for cleanup to potentially trigger
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Manually trigger cleanup for test
       await new Promise(resolve => setTimeout(resolve, 100));

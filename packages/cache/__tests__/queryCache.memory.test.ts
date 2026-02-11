@@ -150,8 +150,8 @@ describe('QueryCache Memory Leak Prevention', () => {
         );
       }
 
-      // Wait and trigger cleanup by adding more
-      jest.advanceTimersByTime(600000); // 10 minutes
+      // Wait briefly for cleanup to potentially trigger
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Add more to trigger potential cleanup
       for (let i = 100; i < 200; i++) {

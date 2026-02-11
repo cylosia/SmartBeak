@@ -107,7 +107,7 @@ describe('MetricsCollector Memory Leak Prevention', () => {
   });
 
   describe('Metric Recording', () => {
-    it('should clean old metrics based on retention period', () => {
+    it('should clean old metrics based on retention period', async () => {
       const shortRetentionCollector = new MetricsCollector({
         retentionMs: 100, // 100ms retention for testing
         maxKeys: 1000,
@@ -115,9 +115,9 @@ describe('MetricsCollector Memory Leak Prevention', () => {
 
       // Add a metric
       shortRetentionCollector.counter('test_metric', 1);
-      
+
       // Wait for retention period to pass
-      jest.advanceTimersByTime(200);
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Add another metric to trigger cleanup
       shortRetentionCollector.counter('test_metric', 1);
