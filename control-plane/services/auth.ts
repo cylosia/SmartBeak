@@ -1,0 +1,233 @@
+
+import { verifyToken, JwtClaims } from './jwt';
+
+export type Role = 'admin' | 'editor' | 'viewer' | 'owner';
+
+export interface AuthContext {
+  userId: string;
+  orgId: string;
+  domainId?: string | undefined;
+  role?: Role | undefined;
+  roles?: string[] | undefined;
+}
+
+/**
+* Base Auth Error class
+*/
+export class AuthError extends Error {
+  constructor(
+  message: string,
+  public readonly code: string,
+  public readonly statusCode: number = 401
+  ) {
+  super(message);
+  this.name = 'AuthError';
+  Object.setPrototypeOf(this, AuthError.prototype);
+  }
+}
+
+/**
+* Missing or invalid authorization header
+*/
+export class AuthorizationHeaderError extends AuthError {
+  constructor(message: string = 'Missing or invalid Authorization header') {
+  super(message, 'AUTHORIZATION_HEADER_MISSING', 401);
+  this.name = 'AuthorizationHeaderError';
+  Object.setPrototypeOf(this, AuthorizationHeaderError.prototype);
+  }
+}
+
+/**
+* Invalid token format or signature
+*/
+export class InvalidTokenError extends AuthError {
+  constructor(message: string = 'Invalid token') {
+  super(message, 'INVALID_TOKEN', 401);
+  this.name = 'InvalidTokenError';
+  Object.setPrototypeOf(this, InvalidTokenError.prototype);
+  }
+}
+
+/**
+* Token has expired
+*/
+export class TokenExpiredError extends AuthError {
+  constructor(message: string = 'Token has expired') {
+  super(message, 'TOKEN_EXPIRED', 401);
+  this.name = 'TokenExpiredError';
+  Object.setPrototypeOf(this, TokenExpiredError.prototype);
+  }
+}
+
+/**
+* Token has been revoked
+*/
+export class TokenRevokedError extends AuthError {
+  constructor(message: string = 'Token has been revoked') {
+  super(message, 'TOKEN_REVOKED', 401);
+  this.name = 'TokenRevokedError';
+  Object.setPrototypeOf(this, TokenRevokedError.prototype);
+  }
+}
+
+/**
+* Missing required claims in token
+*/
+export class MissingClaimsError extends AuthError {
+  constructor(claim: string) {
+  super(`Token missing required claim: ${claim}`, 'MISSING_CLAIMS', 401);
+  this.name = 'MissingClaimsError';
+  Object.setPrototypeOf(this, MissingClaimsError.prototype);
+  }
+}
+
+/**
+* Insufficient permissions for the requested resource
+*/
+export class ForbiddenError extends AuthError {
+  constructor(message: string = 'Forbidden') {
+  super(message, 'FORBIDDEN', 403);
+  this.name = 'ForbiddenError';
+  Object.setPrototypeOf(this, ForbiddenError.prototype);
+  }
+}
+
+/**
+* Organization access denied
+*/
+export class OrganizationAccessError extends AuthError {
+  constructor(message: string = 'Organization access denied') {
+  super(message, 'ORG_ACCESS_DENIED', 403);
+  this.name = 'OrganizationAccessError';
+  Object.setPrototypeOf(this, OrganizationAccessError.prototype);
+  }
+}
+
+/**
+* Role-based access denied
+*/
+export class RoleAccessError extends AuthError {
+  constructor(requiredRoles: Role[], currentRoles: Role[] | Role) {
+  const currentRolesStr = Array.isArray(currentRoles) 
+    ? currentRoles.join(', ') 
+    : currentRoles;
+  super(
+    `Forbidden: Required role: ${requiredRoles.join(' or ')}, current: ${currentRolesStr}`,
+    'ROLE_ACCESS_DENIED',
+    403
+  );
+  this.name = 'RoleAccessError';
+  Object.setPrototypeOf(this, RoleAccessError.prototype);
+  }
+}
+
+/**
+* Extract auth context from Authorization header
+*
+* Previously was synchronous but verifyToken returns a Promise
+*/
+export async function authFromHeader(header?: string): Promise<AuthContext> {
+  if (!header) {
+  throw new AuthorizationHeaderError('Missing Authorization header');
+  }
+
+  // Validate Bearer format
+  if (!header.startsWith('Bearer ')) {
+  throw new AuthorizationHeaderError('Invalid Authorization header format. Expected: Bearer <token>');
+  }
+
+  const token = header.slice(7);
+  if (!token || token.length < 10) {
+  throw new InvalidTokenError('Token too short or empty');
+  }
+
+  let claims: JwtClaims;
+  try {
+  claims = await verifyToken(token);
+  } catch (error: unknown) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  if (errorMessage.includes('expired')) {
+    throw new TokenExpiredError(errorMessage);
+  }
+  if (errorMessage.includes('revoked')) {
+    throw new TokenRevokedError(errorMessage);
+  }
+  throw new InvalidTokenError(`Token verification failed: ${errorMessage}`);
+  }
+
+  if (!claims.sub) {
+  throw new MissingClaimsError('sub (user ID)');
+  }
+
+  if (!claims["orgId"]) {
+  throw new MissingClaimsError('orgId');
+  }
+
+  if (!claims.role) {
+  throw new MissingClaimsError('role');
+  }
+
+  return {
+  userId: claims.sub,
+  orgId: claims["orgId"],
+  roles: [claims.role]
+  };
+}
+
+/**
+* Require specific role(s) for access
+* @throws RoleAccessError if role is not in allowed list
+*/
+export function requireRole(ctx: AuthContext, allowed: Role[]): void {
+  // Check single role first if available
+  if (ctx.role && allowed.includes(ctx.role as Role)) {
+    return;
+  }
+  // Check roles array
+  if (ctx.roles && ctx.roles.some(role => allowed.includes(role as Role))) {
+    return;
+  }
+  throw new RoleAccessError(allowed, (ctx.role ?? ctx.roles ?? []) as Role | Role[]);
+}
+
+/**
+* Require access to specific organization
+* @throws OrganizationAccessError if organization doesn't match
+*/
+export function requireOrgAccess(ctx: AuthContext, targetOrgId: string): void {
+  if (ctx["orgId"] !== targetOrgId) {
+  throw new OrganizationAccessError('Forbidden: Organization mismatch');
+  }
+}
+
+/**
+* Combined role and organization access check
+* @throws AuthError if either check fails
+*/
+export function requireAccess(
+  ctx: AuthContext,
+  targetOrgId: string,
+  allowedRoles: Role[]
+): void {
+  requireOrgAccess(ctx, targetOrgId);
+  requireRole(ctx, allowedRoles);
+}
+
+/**
+* Check if user has at least one of the allowed roles
+* Returns boolean instead of throwing
+*/
+export function hasRole(ctx: AuthContext, allowed: Role[]): boolean {
+  if (ctx.role && allowed.includes(ctx.role as Role)) {
+    return true;
+  }
+  return ctx.roles?.some(role => allowed.includes(role as Role)) ?? false;
+}
+
+/**
+* Check if user has access to organization
+* Returns boolean instead of throwing
+*/
+export function hasOrgAccess(ctx: AuthContext, targetOrgId: string): boolean {
+  return ctx["orgId"] === targetOrgId;
+}

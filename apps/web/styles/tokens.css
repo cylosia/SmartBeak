@@ -1,0 +1,117 @@
+/**
+ * Design Tokens - CSS Custom Properties
+ * Supports both light and dark themes
+ */
+
+/* Dark theme (default) */
+:root {
+  --bg: #0b0e14;
+  --panel: #11162a;
+  --text: #e6e8ef;
+  --muted: #9aa0b4;
+  --accent: #6cf2c2;
+  --warn: #f2c26c;
+  --danger: #f26c6c;
+  --border: #22264a;
+  --radius: 10px;
+  --pad: 16px;
+  --pad-lg: 24px;
+}
+
+/* Light theme */
+:root.light,
+html.light {
+  --bg: #ffffff;
+  --panel: #f5f5f5;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --accent: #0d9488;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --border: #e5e5e5;
+}
+
+/* System preference fallback */
+@media (prefers-color-scheme: light) {
+  :root:not(.dark):not([data-theme="dark"]) {
+    --bg: #ffffff;
+    --panel: #f5f5f5;
+    --text: #1a1a1a;
+    --muted: #666666;
+    --accent: #0d9488;
+    --warn: #d97706;
+    --danger: #dc2626;
+    --border: #e5e5e5;
+  }
+}
+
+/* Base styles */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Selection styling */
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--panel);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Link styles */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Button base styles */
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Form element styles */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}

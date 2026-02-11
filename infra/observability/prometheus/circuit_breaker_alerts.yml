@@ -1,0 +1,11 @@
+groups:
+- name: circuit_breakers
+  rules:
+  - alert: CircuitBreakerOpenTooLong
+    expr: increase(circuit_open[5m]) > 0 and increase(circuit_closed[5m]) == 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Circuit breaker open for more than 5 minutes"
+      description: "Adapter {{ $labels.name }} circuit breaker has remained open for over 5 minutes."

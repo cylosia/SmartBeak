@@ -1,0 +1,409 @@
+diff --git a/control-plane/jobs/content-scheduler.ts b/control-plane/jobs/content-scheduler.ts
+index abc123..def456 100644
+--- a/control-plane/jobs/content-scheduler.ts
++++ b/control-plane/jobs/content-scheduler.ts
+@@ -1,6 +1,18 @@
+ 
+ import { getLogger } from '@kernel/logger';
+ import { withRetry } from '@kernel/retry';
++import pLimit from 'p-limit'; // Add dependency: p-limit
+ 
+ import { PublishContent } from '../../domains/content/application/handlers/PublishContent';
+ import { PostgresContentRepository } from '../../domains/content/infra/persistence/PostgresContentRepository';
+@@ -60,45 +72,30 @@ export async function runContentScheduler(signal?: AbortSignal): Promise<{
+     items: [] as string[],
+   };
+ 
+-  // Process with concurrency limit
+-  const processing: Promise<void>[] = [];
++  // FIX C6: Use p-limit for proper concurrency control with error isolation
++  const limit = pLimit(MAX_CONCURRENT_PUBLISHES);
+ 
+-  for (const item of ready) {
+-    if (signal?.aborted) {
+-      logger.warn('Content scheduler aborted mid-processing', {
+-        processed: results.processed,
+-        remaining: ready.length - results.processed
+-      });
+-      break;
+-    }
+-
+-    if (processing.length >= MAX_CONCURRENT_PUBLISHES) {
+-      await Promise.race(processing);
+-    }
+-
+-    const processPromise = publishWithTimeout(item, repo, signal)
+-      .then(() => {
+-        results.processed++;
+-        results.items.push(item.id);
+-        logger.info('Content published', { contentId: item.id, title: item.title });
+-      })
+-      .catch((error) => {
+-        results.failed++;
+-        const errorToLog = error instanceof Error ? error : new Error(String(error));
+-        logger.error('Failed to publish content', errorToLog, {
+-          contentId: item.id,
+-          title: item.title,
+-        });
+-      })
+-      .finally(() => {
+-        // Remove completed promise from processing array
+-        const index = processing.indexOf(processPromise);
+-        if (index > -1) {
+-          processing.splice(index, 1);
+-        }
+-      });
++  const publishTasks = ready.map(item => 
++    limit(async () => {
++      if (signal?.aborted) {
++        return;
++      }
+ 
+-    processing.push(processPromise);
+-  }
++      try {
++        await publishWithTimeout(item, repo, signal);
++        results.processed++;
++        results.items.push(item.id);
++        logger.info('Content published', { contentId: item.id, title: item.title });
++      } catch (error) {
++        results.failed++;
++        const errorToLog = error instanceof Error ? error : new Error(String(error));
++        logger.error('Failed to publish content', errorToLog, {
++          contentId: item.id,
++          title: item.title,
++        });
++      }
++    })
++  );
+ 
+-  // Wait for all remaining processes to complete
+-  await Promise.all(processing);
++  await Promise.all(publishTasks);
+ 
+   logger.info('Content scheduler completed', {
+     processed: results.processed,
+
+diff --git a/packages/kernel/dlq.ts b/packages/kernel/dlq.ts
+index abc123..def456 100644
+--- a/packages/kernel/dlq.ts
++++ b/packages/kernel/dlq.ts
+@@ -69,6 +69,9 @@ class InMemoryDLQStorage implements DLQStorage {
+   private readonly MAX_SIZE = 10000;
+   private readonly DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+   private readonly timestamps = new Map<string, number>();
++  // FIX C7: Use single cleanup interval instead of per-item timeouts
++  private cleanupInterval: NodeJS.Timeout | null = null;
++  private cleanupScheduled = false;
+ 
+   async enqueue(message: DLQMessage): Promise<void> {
+ 
+@@ -93,13 +96,32 @@ class InMemoryDLQStorage implements DLQStorage {
+   this.messages.set(message.id, message);
+   this.timestamps.set(message.id, Date.now());
+ 
+-  setTimeout(() => {
+-    if (this.messages.has(message.id)) {
+-    this.messages.delete(message.id);
+-    this.timestamps.delete(message.id);
+-    this.retryCallbacks.delete(message.id);
+-    logger.info(`DLQ message ${message.id} expired and removed`);
+-    }
+-  }, this.DEFAULT_TTL_MS);
++  // FIX C7: Schedule cleanup instead of per-item timeout
++  this.scheduleCleanup();
++
++  logger.warn(`Message ${message.id} moved to DLQ`, {
++    originalQueue: message.originalQueue,
++    attempts: message.attempts,
++    error: message.error.message,
++  });
++  }
++
++  // FIX C7: Single cleanup method
++  private scheduleCleanup(): void {
++    if (this.cleanupScheduled) return;
++    this.cleanupScheduled = true;
++    
++    this.cleanupInterval = setTimeout(() => {
++      this.cleanupScheduled = false;
++      const now = Date.now();
++      for (const [id, timestamp] of this.timestamps.entries()) {
++        if (now - timestamp > this.DEFAULT_TTL_MS) {
++          this.messages.delete(id);
++          this.timestamps.delete(id);
++          this.retryCallbacks.delete(id);
++        }
++      }
++    }, 60000); // Check every minute
++    
++    // Don't keep process alive for cleanup
++    this.cleanupInterval.unref?.();
++  }
+ 
+   logger.warn(`Message ${message.id} moved to DLQ`, {
+     originalQueue: message.originalQueue,
+
+diff --git a/apps/api/src/jobs/domainExportJob.ts b/apps/api/src/jobs/domainExportJob.ts
+index abc123..def456 100644
+--- a/apps/api/src/jobs/domainExportJob.ts
++++ b/apps/api/src/jobs/domainExportJob.ts
+@@ -293,60 +293,72 @@ async function exportAnalytics(
+   const keywordMetricsTable = validateTableName(ALLOWED_TABLES.KEYWORD_METRICS);
+   const contentPerformanceTable = validateTableName(ALLOWED_TABLES.CONTENT_PERFORMANCE);
+ 
+-  // FIX: Use Promise.all to fetch keyword metrics and content performance in parallel
+-  const [keywordMetrics, contentPerformance] = await Promise.all([
+-    // Get keyword metrics with retry using Knex query builder
+-    withRetry(
+-      async () => {
+-        let query = db(keywordMetricsTable)
+-          .select(
+-            'keyword',
+-            'source',
+-            db.raw('AVG(volume) as avg_volume'),
+-            db.raw('AVG(position) as avg_position'),
+-            db.raw('SUM(clicks) as total_clicks'),
+-            db.raw('SUM(impressions) as total_impressions'),
+-            db.raw('AVG(ctr) as avg_ctr')
+-          )
+-          .where({ domain_id: domainId })
+-          .groupBy('keyword', 'source')
+-          .orderBy('total_clicks', 'desc')
+-          .limit(limit);
+-
+-        if (dateRange) {
+-          query = query.whereBetween('timestamp', [dateRange.start, dateRange.end]);
+-        } else {
+-          query = query.whereRaw("timestamp >= NOW() - INTERVAL '90 days'");
+-        }
+-
+-        return query;
+-      },
+-      { maxRetries: 3, initialDelayMs: 1000 }
+-    ),
+-    // Get content performance with retry using Knex query builder
+-    withRetry(
+-      async () => {
+-        let query = db(contentPerformanceTable)
+-          .select(
+-            'content_id',
+-            db.raw('SUM(page_views) as total_page_views'),
+-            db.raw('SUM(unique_visitors) as total_unique_visitors'),
+-            db.raw('AVG(avg_time_on_page) as avg_time_on_page'),
+-            db.raw('AVG(bounce_rate) as avg_bounce_rate'),
+-            db.raw('SUM(conversions) as total_conversions'),
+-            db.raw('SUM(revenue) as total_revenue')
+-          )
+-          .where({ domain_id: domainId })
+-          .groupBy('content_id')
+-          .limit(limit);
+-
+-        if (dateRange) {
+-          query = query.whereBetween('timestamp', [dateRange.start, dateRange.end]);
+--        } else {
+--          query = query.whereRaw("timestamp >= NOW() - INTERVAL '90 days'");
+--        }
+--
+--        return query;
+--      },
+--      { maxRetries: 3, initialDelayMs: 1000 }
+--    ),
+--  ]);
+-+  // FIX C5: Use Promise.allSettled for error isolation
++  const [keywordResult, contentResult] = await Promise.allSettled([
++    withRetry(
++      async () => {
++        let query = db(keywordMetricsTable)
++          .select(
++            'keyword',
++            'source',
++            db.raw('AVG(volume) as avg_volume'),
++            db.raw('AVG(position) as avg_position'),
++            db.raw('SUM(clicks) as total_clicks'),
++            db.raw('SUM(impressions) as total_impressions'),
++            db.raw('AVG(ctr) as avg_ctr')
++          )
++          .where({ domain_id: domainId })
++          .groupBy('keyword', 'source')
++          .orderBy('total_clicks', 'desc')
++          .limit(limit);
++
++        if (dateRange) {
++          query = query.whereBetween('timestamp', [dateRange.start, dateRange.end]);
++        } else {
++          query = query.whereRaw("timestamp >= NOW() - INTERVAL '90 days'");
++        }
++
++        return query;
++      },
++      { maxRetries: 3, initialDelayMs: 1000 }
++    ),
++    withRetry(
++      async () => {
++        let query = db(contentPerformanceTable)
++          .select(
++            'content_id',
++            db.raw('SUM(page_views) as total_page_views'),
++            db.raw('SUM(unique_visitors) as total_unique_visitors'),
++            db.raw('AVG(avg_time_on_page) as avg_time_on_page'),
++            db.raw('AVG(bounce_rate) as avg_bounce_rate'),
++            db.raw('SUM(conversions) as total_conversions'),
++            db.raw('SUM(revenue) as total_revenue')
++          )
++          .where({ domain_id: domainId })
++          .groupBy('content_id')
++          .limit(limit);
++
++        if (dateRange) {
++          query = query.whereBetween('timestamp', [dateRange.start, dateRange.end]);
++        } else {
++          query = query.whereRaw("timestamp >= NOW() - INTERVAL '90 days'");
++        }
++
++        return query;
++      },
++      { maxRetries: 3, initialDelayMs: 1000 }
++    ),
++  ]);
++
++  // Handle partial failures
++  if (keywordResult.status === 'rejected') {
++    logger.error('Keyword metrics query failed', keywordResult.reason);
++  }
++  if (contentResult.status === 'rejected') {
++    logger.error('Content performance query failed', contentResult.reason);
++  }
++
++  const keywordMetrics = keywordResult.status === 'fulfilled' ? keywordResult.value : [];
++  const contentPerformance = contentResult.status === 'fulfilled' ? contentResult.value : [];
+ 
+   return {
+     keywords: keywordMetrics,
+
+diff --git a/packages/kernel/retry.ts b/packages/kernel/retry.ts
+index abc123..def456 100644
+--- a/packages/kernel/retry.ts
++++ b/packages/kernel/retry.ts
+@@ -72,7 +72,9 @@ export interface CircuitBreakerOptions {
+ 
+ // P1-FIX: Maximum items to track for retry history to prevent unbounded memory growth
+ const MAX_RETRY_HISTORY = 1000;
++const MAX_RETRY_KEYS = 10000; // FIX H9: Limit total keys
+ 
+ const DEFAULT_OPTIONS: RetryOptions = {
+   maxRetries: 3,
+@@ -89,6 +91,13 @@ function trackRetryAttempt(key: string, timestamp: number): void {
+   if (history.length > MAX_RETRY_HISTORY) {
+   history.shift();
+   }
++
++  // FIX H9: Cleanup old entries if too many keys
++  if (retryHistory.size > MAX_RETRY_KEYS) {
++    cleanupRetryHistory(3600000); // Clean entries older than 1 hour
++  }
++
+   retryHistory.set(key, history);
+ }
+ 
+
+diff --git a/apps/api/src/jobs/JobScheduler.ts b/apps/api/src/jobs/JobScheduler.ts
+index abc123..def456 100644
+--- a/apps/api/src/jobs/JobScheduler.ts
++++ b/apps/api/src/jobs/JobScheduler.ts
+@@ -412,6 +412,8 @@ export class JobScheduler extends EventEmitter {
+   private async executeWithTimeout<T>(
+     promise: Promise<T>,
+     timeoutMs: number,
+     signal?: AbortSignal
+   ): Promise<T> {
+     return new Promise((resolve, reject) => {
++      // FIX H11: Track settled state to ensure cleanup
++      let settled = false;
++      
+       const timeoutId = setTimeout(() => {
++        if (!settled) {
++          settled = true;
+         reject(new Error(`Job timeout after ${timeoutMs}ms`));
++        }
+       }, timeoutMs);
+ 
+       const abortListener = () => {
+-        clearTimeout(timeoutId);
+-        reject(new Error('Job aborted'));
++        if (!settled) {
++          settled = true;
++          clearTimeout(timeoutId);
++          reject(new Error('Job aborted'));
++        }
+       };
+ 
+       if (signal) {
+-
+         if (signal.aborted) {
++          if (!settled) {
++            settled = true;
+           clearTimeout(timeoutId);
+           reject(new Error('Job aborted'));
+           return;
+         }
+-
+         signal.addEventListener('abort', abortListener, { once: true });
+       }
+ 
+       promise
+         .then(resolve)
+         .catch(reject)
+         .finally(() => {
++          if (!settled) {
++            settled = true;
+           clearTimeout(timeoutId);
+-
+           signal?.removeEventListener('abort', abortListener);
++          }
+         });
+     });
+   }
+
+diff --git a/control-plane/jobs/content-scheduler.ts b/control-plane/jobs/content-scheduler.ts
+index abc123..def456 100644
+--- a/control-plane/jobs/content-scheduler.ts
++++ b/control-plane/jobs/content-scheduler.ts
+@@ -118,6 +118,8 @@ async function publishWithTimeout(
+   signal?: AbortSignal
+ ): Promise<void> {
+   return new Promise((resolve, reject) => {
++    // FIX H12: Prevent double resolution/rejection
++    let completed = false;
++    
+     const timeoutId = setTimeout(() => {
+       reject(new Error(`Publish timeout after ${DEFAULT_TIMEOUT_MS}ms for content ${item.id}`));
+     }, DEFAULT_TIMEOUT_MS);
+@@ -130,16 +132,24 @@ async function publishWithTimeout(
+       signal.addEventListener('abort', abortHandler);
+     }
+ 
+-    const handler = new PublishContent(repo);
+-    handler.execute(item.id)
+-      .then(() => {
++    handler.execute(item.id)
++      .then(() => {
++        if (completed) return;
++        completed = true;
+         clearTimeout(timeoutId);
+         if (signal) {
+           signal.removeEventListener('abort', abortHandler);
+         }
+         resolve();
+       })
+       .catch((error) => {
++        if (completed) return;
++        completed = true;
+         clearTimeout(timeoutId);
+         if (signal) {
+           signal.removeEventListener('abort', abortHandler);
+         }
+         reject(error);
+       });
+   });
+ }

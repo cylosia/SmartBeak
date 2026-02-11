@@ -1,0 +1,43 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "paths": {
+      "@kernel/*": ["../../packages/kernel/*"],
+      "@security/*": ["../../packages/security/*"],
+      "@errors": ["../../packages/errors/index.ts"],
+      "@config": ["../../packages/config/index.ts"],
+      "@config/*": ["../../packages/config/*"],
+      "@database": ["../../packages/database/index.ts"],
+      "@database/*": ["../../packages/database/*"],
+      "@utils/*": ["../../packages/utils/*"],
+      "@types/*": ["../../packages/types/*"],
+      "@domain/*": ["../../domains/*"],
+      "@packages/*": ["../../packages/*"],
+      "@shutdown": ["../../packages/shutdown/index.ts"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/*.test.ts", "**/*.spec.ts", "dist/**/*", "node_modules/**/*"],
+  "references": [
+    { "path": "../../packages/types" },
+    { "path": "../../packages/errors" },
+    { "path": "../../packages/config" },
+    { "path": "../../packages/database" },
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/security" }
+  ]
+}

@@ -1,0 +1,6 @@
+
+ALTER TABLE publish_targets
+ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT 'us-east-1';
+
+ALTER TABLE publishing_jobs
+ADD COLUMN IF NOT EXISTS region TEXT NOT NULL DEFAULT 'us-east-1';

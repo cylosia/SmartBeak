@@ -1,0 +1,1349 @@
+﻿
+apps/api/src/adapters/ga/GaAdapter.ts(94,11): error TS4111: Property 
+'dimensions' comes from an index signature, so it must be accessed with 
+['dimensions'].
+apps/api/src/adapters/ga/GaAdapter.ts(95,26): error TS4111: Property 
+'dimensions' comes from an index signature, so it must be accessed with 
+['dimensions'].
+apps/api/src/adapters/ga/GaAdapter.ts(101,11): error TS4111: Property 
+'metrics' comes from an index signature, so it must be accessed with 
+['metrics'].
+apps/api/src/adapters/ga/GaAdapter.ts(102,26): error TS4111: Property 
+'metrics' comes from an index signature, so it must be accessed with 
+['metrics'].
+apps/api/src/adapters/ga/GaAdapter.ts(108,11): error TS4111: Property 
+'dateRanges' comes from an index signature, so it must be accessed with 
+['dateRanges'].
+apps/api/src/adapters/ga/GaAdapter.ts(109,26): error TS4111: Property 
+'dateRanges' comes from an index signature, so it must be accessed with 
+['dateRanges'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(256,57): error TS4111: Property 
+'GBP_CLIENT_ID' comes from an index signature, so it must be accessed with 
+['GBP_CLIENT_ID'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(257,65): error TS4111: Property 
+'GBP_CLIENT_SECRET' comes from an index signature, so it must be accessed with 
+['GBP_CLIENT_SECRET'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(329,43): error TS4111: Property 
+'mybusiness' comes from an index signature, so it must be accessed with 
+['mybusiness'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(403,57): error TS4111: Property 
+'GBP_CLIENT_ID' comes from an index signature, so it must be accessed with 
+['GBP_CLIENT_ID'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(404,65): error TS4111: Property 
+'GBP_CLIENT_SECRET' comes from an index signature, so it must be accessed with 
+['GBP_CLIENT_SECRET'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(407,45): error TS4111: Property 
+'GBP_REDIRECT_URI' comes from an index signature, so it must be accessed with 
+['GBP_REDIRECT_URI'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(550,14): error TS4111: Property 
+'callToAction' comes from an index signature, so it must be accessed with 
+['callToAction'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(558,14): error TS4111: Property 
+'media' comes from an index signature, so it must be accessed with ['media'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(567,14): error TS4111: Property 
+'event' comes from an index signature, so it must be accessed with ['event'].
+apps/api/src/adapters/gbp/GbpAdapter.ts(572,14): error TS4111: Property 
+'offer' comes from an index signature, so it must be accessed with ['offer'].
+apps/api/src/adapters/gsc/GscAdapter.ts(125,12): error TS4111: Property 
+'startDate' comes from an index signature, so it must be accessed with 
+['startDate'].
+apps/api/src/adapters/gsc/GscAdapter.ts(125,36): error TS4111: Property 
+'startDate' comes from an index signature, so it must be accessed with 
+['startDate'].
+apps/api/src/adapters/gsc/GscAdapter.ts(129,12): error TS4111: Property 
+'endDate' comes from an index signature, so it must be accessed with 
+['endDate'].
+apps/api/src/adapters/gsc/GscAdapter.ts(129,34): error TS4111: Property 
+'endDate' comes from an index signature, so it must be accessed with 
+['endDate'].
+apps/api/src/adapters/gsc/GscAdapter.ts(135,27): error TS4111: Property 
+'startDate' comes from an index signature, so it must be accessed with 
+['startDate'].
+apps/api/src/adapters/gsc/GscAdapter.ts(138,27): error TS4111: Property 
+'endDate' comes from an index signature, so it must be accessed with 
+['endDate'].
+apps/api/src/adapters/gsc/GscAdapter.ts(143,11): error TS4111: Property 
+'dimensions' comes from an index signature, so it must be accessed with 
+['dimensions'].
+apps/api/src/adapters/gsc/GscAdapter.ts(144,26): error TS4111: Property 
+'dimensions' comes from an index signature, so it must be accessed with 
+['dimensions'].
+apps/api/src/adapters/gsc/GscAdapter.ts(148,25): error TS4111: Property 
+'dimensions' comes from an index signature, so it must be accessed with 
+['dimensions'].
+apps/api/src/adapters/gsc/GscAdapter.ts(156,32): error TS4111: Property 
+'rowLimit' comes from an index signature, so it must be accessed with 
+['rowLimit'].
+apps/api/src/adapters/gsc/GscAdapter.ts(157,18): error TS4111: Property 
+'rowLimit' comes from an index signature, so it must be accessed with 
+['rowLimit'].
+apps/api/src/adapters/gsc/GscAdapter.ts(157,47): error TS4111: Property 
+'rowLimit' comes from an index signature, so it must be accessed with 
+['rowLimit'].
+apps/api/src/adapters/gsc/GscAdapter.ts(157,67): error TS4111: Property 
+'rowLimit' comes from an index signature, so it must be accessed with 
+['rowLimit'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(69,34): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(72,34): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(77,19): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(78,25): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(79,37): error TS4111: 
+Property 'author' comes from an index signature, so it must be accessed with 
+['author'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(79,56): error TS4111: 
+Property 'author' comes from an index signature, so it must be accessed with 
+['author'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(80,39): error TS4111: 
+Property 'category' comes from an index signature, so it must be accessed with 
+['category'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(80,60): error TS4111: 
+Property 'category' comes from an index signature, so it must be accessed with 
+['category'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(81,22): error TS4111: 
+Property 'explicit' comes from an index signature, so it must be accessed with 
+['explicit'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(82,39): error TS4111: 
+Property 'language' comes from an index signature, so it must be accessed with 
+['language'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(82,60): error TS4111: 
+Property 'language' comes from an index signature, so it must be accessed with 
+['language'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(83,33): error TS4111: 
+Property 'imageUrl' comes from an index signature, so it must be accessed with 
+['imageUrl'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(83,54): error TS4111: 
+Property 'imageUrl' comes from an index signature, so it must be accessed with 
+['imageUrl'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(84,36): error TS4111: 
+Property 'episodes' comes from an index signature, so it must be accessed with 
+['episodes'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(85,16): error TS4111: 
+Property 'episodes' comes from an index signature, so it must be accessed with 
+['episodes'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(95,33): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(101,22): error TS4111: 
+Property 'duration' comes from an index signature, so it must be accessed with 
+['duration'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(101,62): error TS4111: 
+Property 'duration' comes from an index signature, so it must be accessed with 
+['duration'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(101,83): error TS4111: 
+Property 'duration' comes from an index signature, so it must be accessed with 
+['duration'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(102,22): error TS4111: 
+Property 'duration' comes from an index signature, so it must be accessed with 
+['duration'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(107,32): error TS4111: 
+Property 'publishDate' comes from an index signature, so it must be accessed 
+with ['publishDate'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(108,39): error TS4111: 
+Property 'publishDate' comes from an index signature, so it must be accessed 
+with ['publishDate'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(115,18): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(116,41): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(116,64): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(117,32): error TS4111: 
+Property 'audioUrl' comes from an index signature, so it must be accessed with 
+['audioUrl'].
+apps/api/src/adapters/podcast/PodcastMetadataAdapter.ts(117,52): error TS4111: 
+Property 'audioUrl' comes from an index signature, so it must be accessed with 
+['audioUrl'].
+apps/api/src/billing/paddle.ts(126,19): error TS4111: Property 'id' comes from 
+an index signature, so it must be accessed with ['id'].
+apps/api/src/billing/paddle.ts(127,27): error TS4111: Property 'customer_id' 
+comes from an index signature, so it must be accessed with ['customer_id'].
+apps/api/src/billing/paddle.ts(128,17): error TS4111: Property 'status' comes 
+from an index signature, so it must be accessed with ['status'].
+apps/api/src/billing/paddle.ts(129,29): error TS4111: Property 'items' comes 
+from an index signature, so it must be accessed with ['items'].
+apps/api/src/billing/paddle.ts(130,12): error TS4111: Property 'items' comes 
+from an index signature, so it must be accessed with ['items'].
+apps/api/src/billing/paddle.ts(131,28): error TS4111: Property 'price_id' 
+comes from an index signature, so it must be accessed with ['price_id'].
+apps/api/src/billing/paddle.ts(132,29): error TS4111: Property 'quantity' 
+comes from an index signature, so it must be accessed with ['quantity'].
+apps/api/src/billing/paddle.ts(135,44): error TS4111: Property 
+'current_period_start' comes from an index signature, so it must be accessed 
+with ['current_period_start'].
+apps/api/src/billing/paddle.ts(136,42): error TS4111: Property 
+'current_period_end' comes from an index signature, so it must be accessed 
+with ['current_period_end'].
+apps/api/src/billing/paddle.ts(146,19): error TS4111: Property 'id' comes from 
+an index signature, so it must be accessed with ['id'].
+apps/api/src/billing/paddle.ts(147,31): error TS4111: Property 
+'subscription_id' comes from an index signature, so it must be accessed with 
+['subscription_id'].
+apps/api/src/billing/paddle.ts(148,27): error TS4111: Property 'customer_id' 
+comes from an index signature, so it must be accessed with ['customer_id'].
+apps/api/src/billing/paddle.ts(149,23): error TS4111: Property 'amount' comes 
+from an index signature, so it must be accessed with ['amount'].
+apps/api/src/billing/paddle.ts(150,25): error TS4111: Property 'currency' 
+comes from an index signature, so it must be accessed with ['currency'].
+apps/api/src/billing/paddle.ts(151,23): error TS4111: Property 'status' comes 
+from an index signature, so it must be accessed with ['status'].
+apps/api/src/billing/paddle.ts(152,35): error TS4111: Property 'created_at' 
+comes from an index signature, so it must be accessed with ['created_at'].
+apps/api/src/billing/paddleWebhook.ts(27,30): error TS4111: Property 
+'PADDLE_WEBHOOK_SECRET' comes from an index signature, so it must be accessed 
+with ['PADDLE_WEBHOOK_SECRET'].
+apps/api/src/billing/stripe.ts(15,37): error TS4111: Property 
+'STRIPE_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+apps/api/src/billing/stripe.ts(29,27): error TS4111: Property 'APP_URL' comes 
+from an index signature, so it must be accessed with ['APP_URL'].
+apps/api/src/billing/stripe.ts(29,50): error TS4111: Property 
+'NEXT_PUBLIC_APP_URL' comes from an index signature, so it must be accessed 
+with ['NEXT_PUBLIC_APP_URL'].
+apps/api/src/billing/stripe.ts(171,122): error TS4111: Property 'orgId' comes 
+from an index signature, so it must be accessed with ['orgId'].
+apps/api/src/billing/stripeWebhook.ts(7,31): error TS4111: Property 
+'STRIPE_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+apps/api/src/billing/stripeWebhook.ts(119,37): error TS4111: Property 
+'STRIPE_WEBHOOK_SECRET' comes from an index signature, so it must be accessed 
+with ['STRIPE_WEBHOOK_SECRET'].
+apps/api/src/billing/stripeWebhook.ts(153,37): error TS4111: Property 'orgId' 
+comes from an index signature, so it must be accessed with ['orgId'].
+apps/api/src/config/index.ts(286,39): error TS4111: Property 
+'STRIPE_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+apps/api/src/config/index.ts(287,30): error TS4111: Property 'JWT_KEY_1' comes 
+from an index signature, so it must be accessed with ['JWT_KEY_1'].
+apps/api/src/db.ts(19,38): error TS4111: Property 'CONTROL_PLANE_DB' comes 
+from an index signature, so it must be accessed with ['CONTROL_PLANE_DB'].
+apps/api/src/db.ts(49,64): error TS4111: Property 'DEBUG_DB' comes from an 
+index signature, so it must be accessed with ['DEBUG_DB'].
+apps/api/src/db.ts(204,34): error TS4111: Property 'ANALYTICS_DB_URL' comes 
+from an index signature, so it must be accessed with ['ANALYTICS_DB_URL'].
+apps/api/src/db.ts(274,34): error TS4111: Property 'ANALYTICS_DB_URL' comes 
+from an index signature, so it must be accessed with ['ANALYTICS_DB_URL'].
+apps/api/src/db.ts(285,34): error TS4111: Property 'ANALYTICS_DB_URL' comes 
+from an index signature, so it must be accessed with ['ANALYTICS_DB_URL'].
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(125,17): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(125,38): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(129,48): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(135,16): error TS4111: 
+Property 'method' comes from an index signature, so it must be accessed with 
+['method'].
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(135,68): error TS4111: 
+Property 'method' comes from an index signature, so it must be accessed with 
+['method'].
+apps/api/src/email/renderer/renderEmail.ts(44,48): error TS4111: Property 'h1' 
+comes from an index signature, so it must be accessed with ['h1'].
+apps/api/src/email/renderer/renderEmail.ts(44,75): error TS4111: Property 'h2' 
+comes from an index signature, so it must be accessed with ['h2'].
+apps/api/src/email/renderer/renderEmail.ts(44,86): error TS4111: Property 'h3' 
+comes from an index signature, so it must be accessed with ['h3'].
+apps/api/src/email/renderer/renderEmail.ts(48,31): error TS4111: Property 'p' 
+comes from an index signature, so it must be accessed with ['p'].
+apps/api/src/email/renderer/renderEmail.ts(50,89): error TS4111: Property 
+'img' comes from an index signature, so it must be accessed with ['img'].
+apps/api/src/email/renderer/renderEmail.ts(53,60): error TS4111: Property 
+'btn' comes from an index signature, so it must be accessed with ['btn'].
+apps/api/src/email/renderer/renderEmail.ts(55,32): error TS4111: Property 'hr' 
+comes from an index signature, so it must be accessed with ['hr'].
+apps/api/src/email/renderer/renderEmail.ts(60,22): error TS4111: Property 'hr' 
+comes from an index signature, so it must be accessed with ['hr'].
+apps/api/src/jobs/contentIdeaGenerationJob.ts(383,54): error TS4111: Property 
+'article' comes from an index signature, so it must be accessed with 
+['article'].
+apps/api/src/jobs/contentIdeaGenerationJob.ts(431,37): error TS4111: Property 
+'article' comes from an index signature, so it must be accessed with 
+['article'].
+apps/api/src/jobs/JobScheduler.ts(101,39): error TS4111: Property 'REDIS_URL' 
+comes from an index signature, so it must be accessed with ['REDIS_URL'].
+apps/api/src/jobs/publishExecutionJob.ts(130,19): error TS4111: Property 
+'publish' comes from an index signature, so it must be accessed with 
+['publish'].
+apps/api/src/middleware/abuseGuard.ts(279,23): error TS4111: Property 'ip' 
+comes from an index signature, so it must be accessed with ['ip'].
+apps/api/src/middleware/rateLimiter.ts(167,41): error TS4111: Property 
+'REDIS_URL' comes from an index signature, so it must be accessed with 
+['REDIS_URL'].
+apps/api/src/portfolio/heatmapKeywords.ts(15,20): error TS4111: Property 'c' 
+comes from an index signature, so it must be accessed with ['c'].
+apps/api/src/routes/adminAudit.ts(55,48): error TS4111: Property 'count' comes 
+from an index signature, so it must be accessed with ['count'].
+apps/api/src/routes/adminAudit.ts(56,49): error TS4111: Property 'count' comes 
+from an index signature, so it must be accessed with ['count'].
+apps/api/src/routes/adminAudit.ts(77,16): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/routes/adminAudit.ts(78,16): error TS4111: Property 'org_id' 
+comes from an index signature, so it must be accessed with ['org_id'].
+apps/api/src/routes/adminAudit.ts(79,16): error TS4111: Property 'actor_type' 
+comes from an index signature, so it must be accessed with ['actor_type'].
+apps/api/src/routes/adminAudit.ts(80,16): error TS4111: Property 'actor_id' 
+comes from an index signature, so it must be accessed with ['actor_id'].
+apps/api/src/routes/adminAudit.ts(81,16): error TS4111: Property 'action' 
+comes from an index signature, so it must be accessed with ['action'].
+apps/api/src/routes/adminAudit.ts(82,16): error TS4111: Property 'entity_type' 
+comes from an index signature, so it must be accessed with ['entity_type'].
+apps/api/src/routes/adminAudit.ts(83,10): error TS4111: Property 'entity_id' 
+comes from an index signature, so it must be accessed with ['entity_id'].
+apps/api/src/routes/adminAudit.ts(83,48): error TS4111: Property 'entity_id' 
+comes from an index signature, so it must be accessed with ['entity_id'].
+apps/api/src/routes/adminAudit.ts(84,10): error TS4111: Property 'metadata' 
+comes from an index signature, so it must be accessed with ['metadata'].
+apps/api/src/routes/adminAudit.ts(84,47): error TS4111: Property 'metadata' 
+comes from an index signature, so it must be accessed with ['metadata'].
+apps/api/src/routes/adminAudit.ts(85,10): error TS4111: Property 'ip_address' 
+comes from an index signature, so it must be accessed with ['ip_address'].
+apps/api/src/routes/adminAudit.ts(85,49): error TS4111: Property 'ip_address' 
+comes from an index signature, so it must be accessed with ['ip_address'].
+apps/api/src/routes/adminAudit.ts(86,9): error TS4111: Property 'created_at' 
+comes from an index signature, so it must be accessed with ['created_at'].
+apps/api/src/routes/adminAudit.ts(105,24): error TS4111: Property 
+'ADMIN_API_KEY' comes from an index signature, so it must be accessed with 
+['ADMIN_API_KEY'].
+apps/api/src/routes/adminAudit.ts(109,33): error TS4111: Property 
+'ADMIN_API_KEY' comes from an index signature, so it must be accessed with 
+['ADMIN_API_KEY'].
+apps/api/src/routes/adminAudit.ts(127,65): error TS4111: Property 'limit' 
+comes from an index signature, so it must be accessed with ['limit'].
+apps/api/src/routes/adminAudit.ts(128,66): error TS4111: Property 'offset' 
+comes from an index signature, so it must be accessed with ['offset'].
+apps/api/src/routes/adminAuditExport.ts(77,22): error TS4111: Property 
+'ADMIN_API_KEY' comes from an index signature, so it must be accessed with 
+['ADMIN_API_KEY'].
+apps/api/src/routes/adminAuditExport.ts(82,48): error TS4111: Property 
+'ADMIN_API_KEY' comes from an index signature, so it must be accessed with 
+['ADMIN_API_KEY'].
+apps/api/src/routes/adminBilling.ts(129,24): error TS4111: Property 
+'ADMIN_API_KEY' comes from an index signature, so it must be accessed with 
+['ADMIN_API_KEY'].
+apps/api/src/routes/adminBilling.ts(136,50): error TS4111: Property 
+'ADMIN_API_KEY' comes from an index signature, so it must be accessed with 
+['ADMIN_API_KEY'].
+apps/api/src/routes/billingInvoices.ts(8,31): error TS4111: Property 
+'STRIPE_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+apps/api/src/routes/bulkPublishDryRun.ts(26,32): error TS4111: Property 
+'JWT_KEY_1' comes from an index signature, so it must be accessed with 
+['JWT_KEY_1'].
+apps/api/src/routes/bulkPublishDryRun.ts(33,29): error TS4111: Property 
+'JWT_AUDIENCE' comes from an index signature, so it must be accessed with 
+['JWT_AUDIENCE'].
+apps/api/src/routes/bulkPublishDryRun.ts(34,27): error TS4111: Property 
+'JWT_ISSUER' comes from an index signature, so it must be accessed with 
+['JWT_ISSUER'].
+apps/api/src/routes/contentRoi.ts(67,32): error TS4111: Property 'JWT_KEY_1' 
+comes from an index signature, so it must be accessed with ['JWT_KEY_1'].
+apps/api/src/routes/contentRoi.ts(73,29): error TS4111: Property 
+'JWT_AUDIENCE' comes from an index signature, so it must be accessed with 
+['JWT_AUDIENCE'].
+apps/api/src/routes/contentRoi.ts(74,27): error TS4111: Property 'JWT_ISSUER' 
+comes from an index signature, so it must be accessed with ['JWT_ISSUER'].
+apps/api/src/routes/domainSaleReadiness.ts(42,32): error TS4111: Property 
+'JWT_KEY_1' comes from an index signature, so it must be accessed with 
+['JWT_KEY_1'].
+apps/api/src/routes/domainSaleReadiness.ts(49,29): error TS4111: Property 
+'JWT_AUDIENCE' comes from an index signature, so it must be accessed with 
+['JWT_AUDIENCE'].
+apps/api/src/routes/domainSaleReadiness.ts(50,27): error TS4111: Property 
+'JWT_ISSUER' comes from an index signature, so it must be accessed with 
+['JWT_ISSUER'].
+apps/api/src/routes/emailSubscribers/auth.ts(25,32): error TS4111: Property 
+'JWT_KEY_1' comes from an index signature, so it must be accessed with 
+['JWT_KEY_1'].
+apps/api/src/routes/emailSubscribers/auth.ts(32,27): error TS4111: Property 
+'JWT_AUDIENCE' comes from an index signature, so it must be accessed with 
+['JWT_AUDIENCE'].
+apps/api/src/routes/emailSubscribers/auth.ts(33,25): error TS4111: Property 
+'JWT_ISSUER' comes from an index signature, so it must be accessed with 
+['JWT_ISSUER'].
+apps/api/src/routes/emailSubscribers/index.ts(196,32): error TS4111: Property 
+'count' comes from an index signature, so it must be accessed with ['count'].
+apps/api/src/routes/experiments.ts(20,32): error TS4111: Property 'JWT_KEY_1' 
+comes from an index signature, so it must be accessed with ['JWT_KEY_1'].
+apps/api/src/routes/experiments.ts(27,29): error TS4111: Property 
+'JWT_AUDIENCE' comes from an index signature, so it must be accessed with 
+['JWT_AUDIENCE'].
+apps/api/src/routes/experiments.ts(28,27): error TS4111: Property 'JWT_ISSUER' 
+comes from an index signature, so it must be accessed with ['JWT_ISSUER'].
+apps/api/src/routes/feedback.ts(18,32): error TS4111: Property 'JWT_KEY_1' 
+comes from an index signature, so it must be accessed with ['JWT_KEY_1'].
+apps/api/src/routes/feedback.ts(25,29): error TS4111: Property 'JWT_AUDIENCE' 
+comes from an index signature, so it must be accessed with ['JWT_AUDIENCE'].
+apps/api/src/routes/feedback.ts(26,27): error TS4111: Property 'JWT_ISSUER' 
+comes from an index signature, so it must be accessed with ['JWT_ISSUER'].
+apps/api/src/seo/buyerCompleteness.ts(44,42): error TS4111: Property 
+'SEO_PAGE_WEIGHT' comes from an index signature, so it must be accessed with 
+['SEO_PAGE_WEIGHT'].
+apps/api/src/seo/buyerCompleteness.ts(45,42): error TS4111: Property 
+'SEO_PAGE_TARGET' comes from an index signature, so it must be accessed with 
+['SEO_PAGE_TARGET'].
+apps/api/src/seo/buyerCompleteness.ts(46,45): error TS4111: Property 
+'SEO_CLUSTER_WEIGHT' comes from an index signature, so it must be accessed 
+with ['SEO_CLUSTER_WEIGHT'].
+apps/api/src/seo/buyerCompleteness.ts(47,45): error TS4111: Property 
+'SEO_CLUSTER_TARGET' comes from an index signature, so it must be accessed 
+with ['SEO_CLUSTER_TARGET'].
+apps/api/src/seo/buyerCompleteness.ts(48,47): error TS4111: Property 
+'SEO_FRESHNESS_WEIGHT' comes from an index signature, so it must be accessed 
+with ['SEO_FRESHNESS_WEIGHT'].
+apps/api/src/seo/buyerCompleteness.ts(49,44): error TS4111: Property 
+'SEO_SCHEMA_WEIGHT' comes from an index signature, so it must be accessed with 
+['SEO_SCHEMA_WEIGHT'].
+apps/api/src/seo/contentLifecycle.ts(20,46): error TS4111: Property 
+'CONTENT_PRUNE_THRESHOLD' comes from an index signature, so it must be 
+accessed with ['CONTENT_PRUNE_THRESHOLD'].
+apps/api/src/seo/contentLifecycle.ts(21,46): error TS4111: Property 
+'CONTENT_MERGE_THRESHOLD' comes from an index signature, so it must be 
+accessed with ['CONTENT_MERGE_THRESHOLD'].
+apps/api/src/utils/rateLimit.ts(33,38): error TS4111: Property 
+'TRUSTED_PROXIES' comes from an index signature, so it must be accessed with 
+['TRUSTED_PROXIES'].
+apps/api/src/utils/rateLimiter.ts(74,39): error TS4111: Property 'REDIS_URL' 
+comes from an index signature, so it must be accessed with ['REDIS_URL'].
+apps/api/src/utils/validation.ts(206,11): error TS4111: Property 'error' comes 
+from an index signature, so it must be accessed with ['error'].
+apps/api/src/utils/validation.ts(206,31): error TS4111: Property 'error' comes 
+from an index signature, so it must be accessed with ['error'].
+apps/api/src/utils/validation.ts(207,23): error TS4111: Property 'error' comes 
+from an index signature, so it must be accessed with ['error'].
+apps/api/src/utils/validation.ts(208,22): error TS4111: Property 'message' 
+comes from an index signature, so it must be accessed with ['message'].
+apps/api/src/utils/validation.ts(208,59): error TS4111: Property 'status' 
+comes from an index signature, so it must be accessed with ['status'].
+apps/api/src/utils/validation.ts(212,18): error TS4111: Property 'message' 
+comes from an index signature, so it must be accessed with ['message'].
+apps/api/src/utils/validation.ts(223,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(252,12): error TS4111: Property 'errors' 
+comes from an index signature, so it must be accessed with ['errors'].
+apps/api/src/utils/validation.ts(253,26): error TS4111: Property 'errors' 
+comes from an index signature, so it must be accessed with ['errors'].
+apps/api/src/utils/validation.ts(255,14): error TS4111: Property 'errors' 
+comes from an index signature, so it must be accessed with ['errors'].
+apps/api/src/utils/validation.ts(258,19): error TS4111: Property 'error_key' 
+comes from an index signature, so it must be accessed with ['error_key'].
+apps/api/src/utils/validation.ts(258,59): error TS4111: Property 'error_key' 
+comes from an index signature, so it must be accessed with ['error_key'].
+apps/api/src/utils/validation.ts(259,16): error TS4111: Property 
+'error_message' comes from an index signature, so it must be accessed with 
+['error_message'].
+apps/api/src/utils/validation.ts(259,60): error TS4111: Property 
+'error_message' comes from an index signature, so it must be accessed with 
+['error_message'].
+apps/api/src/utils/validation.ts(269,14): error TS4111: Property 'list_id' 
+comes from an index signature, so it must be accessed with ['list_id'].
+apps/api/src/utils/validation.ts(269,50): error TS4111: Property 'list_id' 
+comes from an index signature, so it must be accessed with ['list_id'].
+apps/api/src/utils/validation.ts(297,12): error TS4111: Property 'error' comes 
+from an index signature, so it must be accessed with ['error'].
+apps/api/src/utils/validation.ts(297,32): error TS4111: Property 'error' comes 
+from an index signature, so it must be accessed with ['error'].
+apps/api/src/utils/validation.ts(298,21): error TS4111: Property 'error' comes 
+from an index signature, so it must be accessed with ['error'].
+apps/api/src/utils/validation.ts(300,23): error TS4111: Property 'message' 
+comes from an index signature, so it must be accessed with ['message'].
+apps/api/src/utils/validation.ts(301,20): error TS4111: Property 'type' comes 
+from an index signature, so it must be accessed with ['type'].
+apps/api/src/utils/validation.ts(302,20): error TS4111: Property 'code' comes 
+from an index signature, so it must be accessed with ['code'].
+apps/api/src/utils/validation.ts(311,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(330,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(350,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(369,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(389,21): error TS4111: Property 'publishId' 
+comes from an index signature, so it must be accessed with ['publishId'].
+apps/api/src/utils/validation.ts(389,58): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(414,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(423,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(423,51): error TS4111: Property 
+'email_address' comes from an index signature, so it must be accessed with 
+['email_address'].
+apps/api/src/utils/validation.ts(456,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(491,21): error TS4111: Property 'uri' comes 
+from an index signature, so it must be accessed with ['uri'].
+apps/api/src/utils/validation.ts(514,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(514,51): error TS4111: Property 'uri' comes 
+from an index signature, so it must be accessed with ['uri'].
+apps/api/src/utils/validation.ts(548,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(548,51): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(557,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/api/src/utils/validation.ts(566,21): error TS4111: Property 'id' comes 
+from an index signature, so it must be accessed with ['id'].
+apps/web/lib/api-client.ts(38,42): error TS4111: Property '__session' comes 
+from an index signature, so it must be accessed with ['__session'].
+apps/web/lib/api-client.ts(87,27): error TS4111: Property 
+'NEXT_PUBLIC_ACP_API' comes from an index signature, so it must be accessed 
+with ['NEXT_PUBLIC_ACP_API'].
+apps/web/lib/auth.ts(264,32): error TS4111: Property 'JWT_KEY_1' comes from an 
+index signature, so it must be accessed with ['JWT_KEY_1'].
+apps/web/lib/auth.ts(281,31): error TS4111: Property 'JWT_AUDIENCE' comes from 
+an index signature, so it must be accessed with ['JWT_AUDIENCE'].
+apps/web/lib/auth.ts(282,29): error TS4111: Property 'JWT_ISSUER' comes from 
+an index signature, so it must be accessed with ['JWT_ISSUER'].
+apps/web/lib/auth.ts(400,32): error TS4111: Property 'JWT_KEY_1' comes from an 
+index signature, so it must be accessed with ['JWT_KEY_1'].
+apps/web/lib/auth.ts(407,29): error TS4111: Property 'JWT_AUDIENCE' comes from 
+an index signature, so it must be accessed with ['JWT_AUDIENCE'].
+apps/web/lib/auth.ts(408,27): error TS4111: Property 'JWT_ISSUER' comes from 
+an index signature, so it must be accessed with ['JWT_ISSUER'].
+apps/web/lib/clerk.ts(32,33): error TS4111: Property 'CLERK_SECRET_KEY' comes 
+from an index signature, so it must be accessed with ['CLERK_SECRET_KEY'].
+apps/web/lib/clerk.ts(33,38): error TS4111: Property 
+'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY' comes from an index signature, so it must 
+be accessed with ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'].
+apps/web/lib/clerk.ts(131,29): error TS4111: Property 'CLERK_WEBHOOK_SECRET' 
+comes from an index signature, so it must be accessed with 
+['CLERK_WEBHOOK_SECRET'].
+apps/web/lib/stripe.ts(25,27): error TS4111: Property 'STRIPE_SECRET_KEY' 
+comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+apps/web/lib/stripe.ts(130,27): error TS4111: Property 'STRIPE_WEBHOOK_SECRET' 
+comes from an index signature, so it must be accessed with 
+['STRIPE_WEBHOOK_SECRET'].
+apps/web/lib/stripe.ts(151,50): error TS4111: Property 'STRIPE_WEBHOOK_SECRET' 
+comes from an index signature, so it must be accessed with 
+['STRIPE_WEBHOOK_SECRET'].
+apps/web/pages/api/billing/[provider]/checkout.ts(73,52): error TS4111: 
+Property 'NEXT_PUBLIC_APP_URL' comes from an index signature, so it must be 
+accessed with ['NEXT_PUBLIC_APP_URL'].
+apps/web/pages/api/billing/[provider]/checkout.ts(80,22): error TS4111: 
+Property 'STRIPE_SECRET_KEY' comes from an index signature, so it must be 
+accessed with ['STRIPE_SECRET_KEY'].
+apps/web/pages/api/billing/[provider]/checkout.ts(134,22): error TS4111: 
+Property 'PADDLE_API_KEY' comes from an index signature, so it must be 
+accessed with ['PADDLE_API_KEY'].
+apps/web/pages/api/billing/[provider]/checkout.ts(140,22): error TS4111: 
+Property 'PADDLE_VENDOR_ID' comes from an index signature, so it must be 
+accessed with ['PADDLE_VENDOR_ID'].
+apps/web/pages/api/stripe/create-checkout-session.ts(29,54): error TS4111: 
+Property 'NEXT_PUBLIC_APP_URL' comes from an index signature, so it must be 
+accessed with ['NEXT_PUBLIC_APP_URL'].
+apps/web/pages/api/stripe/portal.ts(139,54): error TS4111: Property 
+'NEXT_PUBLIC_APP_URL' comes from an index signature, so it must be accessed 
+with ['NEXT_PUBLIC_APP_URL'].
+apps/web/pages/api/webhooks/stripe.ts(78,35): error TS4111: Property 
+'REDIS_URL' comes from an index signature, so it must be accessed with 
+['REDIS_URL'].
+apps/web/pages/api/webhooks/stripe.ts(311,35): error TS4111: Property 'orgId' 
+comes from an index signature, so it must be accessed with ['orgId'].
+apps/web/pages/diligence/[token].tsx(17,29): error TS4111: Property 'token' 
+comes from an index signature, so it must be accessed with ['token'].
+apps/web/pages/diligence/[token]/index.tsx(30,29): error TS4111: Property 
+'token' comes from an index signature, so it must be accessed with ['token'].
+apps/web/pages/domains/[id].tsx(49,26): error TS4111: Property 'id' comes from 
+an index signature, so it must be accessed with ['id'].
+apps/web/pages/domains/[id]/integrations.tsx(57,28): error TS4111: Property 
+'id' comes from an index signature, so it must be accessed with ['id'].
+apps/web/pages/domains/[id]/links.tsx(45,28): error TS4111: Property 'id' 
+comes from an index signature, so it must be accessed with ['id'].
+apps/web/pages/roi-risk/[assetId].tsx(16,31): error TS4111: Property 'assetId' 
+comes from an index signature, so it must be accessed with ['assetId'].
+apps/web/pages/timeline/[domainId].tsx(22,32): error TS4111: Property 
+'domainId' comes from an index signature, so it must be accessed with 
+['domainId'].
+control-plane/adapters/affiliate/amazon.ts(37,54): error TS4111: Property 
+'AMAZON_ACCESS_KEY' comes from an index signature, so it must be accessed with 
+['AMAZON_ACCESS_KEY'].
+control-plane/adapters/affiliate/amazon.ts(38,54): error TS4111: Property 
+'AMAZON_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['AMAZON_SECRET_KEY'].
+control-plane/adapters/affiliate/amazon.ts(39,60): error TS4111: Property 
+'AMAZON_ASSOCIATE_TAG' comes from an index signature, so it must be accessed 
+with ['AMAZON_ASSOCIATE_TAG'].
+control-plane/adapters/affiliate/amazon.ts(40,58): error TS4111: Property 
+'AMAZON_MARKETPLACE' comes from an index signature, so it must be accessed 
+with ['AMAZON_MARKETPLACE'].
+control-plane/adapters/affiliate/cj.ts(51,62): error TS4111: Property 
+'CJ_PERSONAL_TOKEN' comes from an index signature, so it must be accessed with 
+['CJ_PERSONAL_TOKEN'].
+control-plane/adapters/affiliate/cj.ts(52,54): error TS4111: Property 
+'CJ_WEBSITE_ID' comes from an index signature, so it must be accessed with 
+['CJ_WEBSITE_ID'].
+control-plane/adapters/affiliate/impact.ts(62,56): error TS4111: Property 
+'IMPACT_ACCOUNT_SID' comes from an index signature, so it must be accessed 
+with ['IMPACT_ACCOUNT_SID'].
+control-plane/adapters/affiliate/impact.ts(63,54): error TS4111: Property 
+'IMPACT_AUTH_TOKEN' comes from an index signature, so it must be accessed with 
+['IMPACT_AUTH_TOKEN'].
+control-plane/adapters/affiliate/impact.ts(64,48): error TS4111: Property 
+'IMPACT_API_URL' comes from an index signature, so it must be accessed with 
+['IMPACT_API_URL'].
+control-plane/adapters/keywords/ahrefs.ts(40,43): error TS4111: Property 
+'AHREFS_API_TOKEN' comes from an index signature, so it must be accessed with 
+['AHREFS_API_TOKEN'].
+control-plane/adapters/keywords/gsc.ts(35,57): error TS4111: Property 
+'GSC_CLIENT_ID' comes from an index signature, so it must be accessed with 
+['GSC_CLIENT_ID'].
+control-plane/adapters/keywords/gsc.ts(36,65): error TS4111: Property 
+'GSC_CLIENT_SECRET' comes from an index signature, so it must be accessed with 
+['GSC_CLIENT_SECRET'].
+control-plane/adapters/keywords/gsc.ts(43,45): error TS4111: Property 
+'GSC_REDIRECT_URI' comes from an index signature, so it must be accessed with 
+['GSC_REDIRECT_URI'].
+control-plane/adapters/keywords/paa.ts(51,52): error TS4111: Property 
+'SERP_API_PROVIDER' comes from an index signature, so it must be accessed with 
+['SERP_API_PROVIDER'].
+control-plane/adapters/keywords/paa.ts(52,47): error TS4111: Property 
+'SERP_API_KEY' comes from an index signature, so it must be accessed with 
+['SERP_API_KEY'].
+control-plane/adapters/keywords/paa.ts(224,29): error TS4111: Property 
+'DATAFORSEO_LOGIN' comes from an index signature, so it must be accessed with 
+['DATAFORSEO_LOGIN'].
+control-plane/adapters/keywords/paa.ts(225,32): error TS4111: Property 
+'DATAFORSEO_PASSWORD' comes from an index signature, so it must be accessed 
+with ['DATAFORSEO_PASSWORD'].
+control-plane/adapters/keywords/paa.ts(308,38): error TS4111: Property 
+'CUSTOM_SERP_ENDPOINT' comes from an index signature, so it must be accessed 
+with ['CUSTOM_SERP_ENDPOINT'].
+control-plane/api/http.ts(69,35): error TS4111: Property 'NEXT_PUBLIC_APP_URL' 
+comes from an index signature, so it must be accessed with 
+['NEXT_PUBLIC_APP_URL'].
+control-plane/api/http.ts(133,40): error TS4111: Property 'CONTROL_PLANE_DB' 
+comes from an index signature, so it must be accessed with 
+['CONTROL_PLANE_DB'].
+control-plane/api/http.ts(296,36): error TS4111: Property 'database' comes 
+from an index signature, so it must be accessed with ['database'].
+control-plane/api/http.ts(324,37): error TS4111: Property 'PORT' comes from an 
+index signature, so it must be accessed with ['PORT'].
+control-plane/api/rate-limit-read.ts(39,32): error TS4111: Property 
+'REDIS_URL' comes from an index signature, so it must be accessed with 
+['REDIS_URL'].
+control-plane/api/routes/billing-invoices.ts(39,43): error TS4111: Property 
+'STRIPE_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+control-plane/api/routes/billing-invoices.ts(102,43): error TS4111: Property 
+'STRIPE_SECRET_KEY' comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+control-plane/api/routes/media-lifecycle.ts(59,78): error TS4111: Property 
+'page' comes from an index signature, so it must be accessed with ['page'].
+control-plane/api/routes/media-lifecycle.ts(60,93): error TS4111: Property 
+'limit' comes from an index signature, so it must be accessed with ['limit'].
+control-plane/api/routes/notifications.ts(58,78): error TS4111: Property 
+'page' comes from an index signature, so it must be accessed with ['page'].
+control-plane/api/routes/notifications.ts(59,93): error TS4111: Property 
+'limit' comes from an index signature, so it must be accessed with ['limit'].
+control-plane/services/analytics-read-model.ts(118,43): error TS4111: Property 
+'clear' comes from an index signature, so it must be accessed with ['clear'].
+control-plane/services/container.ts(93,58): error TS4111: Property 'REDIS_URL' 
+comes from an index signature, so it must be accessed with ['REDIS_URL'].
+control-plane/services/container.ts(144,17): error TS4111: Property 'REGION' 
+comes from an index signature, so it must be accessed with ['REGION'].
+control-plane/services/container.ts(222,29): error TS4111: Property 
+'FACEBOOK_PAGE_TOKEN' comes from an index signature, so it must be accessed 
+with ['FACEBOOK_PAGE_TOKEN'].
+control-plane/services/container.ts(319,14): error TS4111: Property 'database' 
+comes from an index signature, so it must be accessed with ['database'].
+control-plane/services/container.ts(321,14): error TS4111: Property 'database' 
+comes from an index signature, so it must be accessed with ['database'].
+control-plane/services/container.ts(322,13): error TS4111: Property 'database' 
+comes from an index signature, so it must be accessed with ['database'].
+control-plane/services/container.ts(328,14): error TS4111: Property 'redis' 
+comes from an index signature, so it must be accessed with ['redis'].
+control-plane/services/container.ts(330,14): error TS4111: Property 'redis' 
+comes from an index signature, so it must be accessed with ['redis'].
+control-plane/services/container.ts(331,13): error TS4111: Property 'redis' 
+comes from an index signature, so it must be accessed with ['redis'].
+control-plane/services/content-genesis-writer.ts(59,19): error TS4111: 
+Property 'domain_id' comes from an index signature, so it must be accessed 
+with ['domain_id'].
+control-plane/services/content-genesis-writer.ts(59,50): error TS4111: 
+Property 'domain_id' comes from an index signature, so it must be accessed 
+with ['domain_id'].
+control-plane/services/content-genesis-writer.ts(63,19): error TS4111: 
+Property 'content_type' comes from an index signature, so it must be accessed 
+with ['content_type'].
+control-plane/services/content-genesis-writer.ts(63,53): error TS4111: 
+Property 'content_type' comes from an index signature, so it must be accessed 
+with ['content_type'].
+control-plane/services/content-genesis-writer.ts(68,12): error TS4111: 
+Property 'content_id' comes from an index signature, so it must be accessed 
+with ['content_id'].
+control-plane/services/content-genesis-writer.ts(68,52): error TS4111: 
+Property 'content_id' comes from an index signature, so it must be accessed 
+with ['content_id'].
+control-plane/services/content-genesis-writer.ts(72,12): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+control-plane/services/content-genesis-writer.ts(72,47): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+control-plane/services/content-genesis-writer.ts(76,12): error TS4111: 
+Property 'source' comes from an index signature, so it must be accessed with 
+['source'].
+control-plane/services/content-genesis-writer.ts(76,48): error TS4111: 
+Property 'source' comes from an index signature, so it must be accessed with 
+['source'].
+control-plane/services/content-genesis-writer.ts(80,12): error TS4111: 
+Property 'created_by' comes from an index signature, so it must be accessed 
+with ['created_by'].
+control-plane/services/content-genesis-writer.ts(80,52): error TS4111: 
+Property 'created_by' comes from an index signature, so it must be accessed 
+with ['created_by'].
+control-plane/services/diligence-expiry.ts(43,16): error TS4111: Property 'id' 
+comes from an index signature, so it must be accessed with ['id'].
+control-plane/services/diligence-expiry.ts(43,37): error TS4111: Property 'id' 
+comes from an index signature, so it must be accessed with ['id'].
+control-plane/services/diligence-expiry.ts(48,9): error TS4111: Property 
+'expires_at' comes from an index signature, so it must be accessed with 
+['expires_at'].
+control-plane/services/diligence-expiry.ts(48,39): error TS4111: Property 
+'expires_at' comes from an index signature, so it must be accessed with 
+['expires_at'].
+control-plane/services/diligence-expiry.ts(49,16): error TS4111: Property 
+'expires_at' comes from an index signature, so it must be accessed with 
+['expires_at'].
+control-plane/services/diligence-expiry.ts(49,47): error TS4111: Property 
+'expires_at' comes from an index signature, so it must be accessed with 
+['expires_at'].
+control-plane/services/diligence-expiry.ts(88,103): error TS4111: Property 
+'id' comes from an index signature, so it must be accessed with ['id'].
+control-plane/services/jwt.ts(151,38): error TS4111: Property 'JWT_AUDIENCE' 
+comes from an index signature, so it must be accessed with ['JWT_AUDIENCE'].
+control-plane/services/jwt.ts(152,36): error TS4111: Property 'JWT_ISSUER' 
+comes from an index signature, so it must be accessed with ['JWT_ISSUER'].
+control-plane/services/jwt.ts(202,28): error TS4111: Property 'JWT_KEY_1' 
+comes from an index signature, so it must be accessed with ['JWT_KEY_1'].
+control-plane/services/jwt.ts(203,28): error TS4111: Property 'JWT_KEY_2' 
+comes from an index signature, so it must be accessed with ['JWT_KEY_2'].
+control-plane/services/jwt.ts(246,31): error TS4111: Property 'REDIS_URL' 
+comes from an index signature, so it must be accessed with ['REDIS_URL'].
+control-plane/services/notifications-hook.ts(20,29): error TS4111: Property 
+'ADMIN_NOTIFICATION_EMAIL' comes from an index signature, so it must be 
+accessed with ['ADMIN_NOTIFICATION_EMAIL'].
+control-plane/services/notifications-hook.ts(73,10): error TS4111: Property 
+'meta' comes from an index signature, so it must be accessed with ['meta'].
+control-plane/services/notifications-hook.ts(73,27): error TS4111: Property 
+'meta' comes from an index signature, so it must be accessed with ['meta'].
+control-plane/services/notifications-hook.ts(74,18): error TS4111: Property 
+'meta' comes from an index signature, so it must be accessed with ['meta'].
+control-plane/services/notifications-hook.ts(75,19): error TS4111: Property 
+'domainId' comes from an index signature, so it must be accessed with 
+['domainId'].
+control-plane/services/notifications-hook.ts(76,12): error TS4111: Property 
+'orgId' comes from an index signature, so it must be accessed with ['orgId'].
+control-plane/services/notifications-hook.ts(76,47): error TS4111: Property 
+'orgId' comes from an index signature, so it must be accessed with ['orgId'].
+control-plane/services/notifications-hook.ts(78,10): error TS4111: Property 
+'payload' comes from an index signature, so it must be accessed with 
+['payload'].
+control-plane/services/notifications-hook.ts(78,30): error TS4111: Property 
+'payload' comes from an index signature, so it must be accessed with 
+['payload'].
+control-plane/services/notifications-hook.ts(79,21): error TS4111: Property 
+'payload' comes from an index signature, so it must be accessed with 
+['payload'].
+control-plane/services/notifications-hook.ts(80,15): error TS4111: Property 
+'contentId' comes from an index signature, so it must be accessed with 
+['contentId'].
+control-plane/services/notifications-hook.ts(80,57): error TS4111: Property 
+'contentId' comes from an index signature, so it must be accessed with 
+['contentId'].
+control-plane/services/notifications-hook.ts(81,15): error TS4111: Property 
+'error' comes from an index signature, so it must be accessed with ['error'].
+control-plane/services/notifications-hook.ts(81,53): error TS4111: Property 
+'error' comes from an index signature, so it must be accessed with ['error'].
+control-plane/services/notifications-hook.ts(82,15): error TS4111: Property 
+'target' comes from an index signature, so it must be accessed with ['target'].
+control-plane/services/notifications-hook.ts(82,54): error TS4111: Property 
+'target' comes from an index signature, so it must be accessed with ['target'].
+control-plane/services/pricing-ux.ts(22,13): error TS4111: Property 
+'domain_count' comes from an index signature, so it must be accessed with 
+['domain_count'].
+control-plane/services/pricing-ux.ts(25,41): error TS4111: Property 
+'domain_count' comes from an index signature, so it must be accessed with 
+['domain_count'].
+control-plane/services/rate-limit.ts(38,37): error TS4111: Property 
+'TRUSTED_PROXIES' comes from an index signature, so it must be accessed with 
+['TRUSTED_PROXIES'].
+control-plane/services/rate-limiter-redis.ts(54,39): error TS4111: Property 
+'REDIS_URL' comes from an index signature, so it must be accessed with 
+['REDIS_URL'].
+control-plane/services/search-hook.ts(31,10): error TS4111: Property 'meta' 
+comes from an index signature, so it must be accessed with ['meta'].
+control-plane/services/search-hook.ts(31,27): error TS4111: Property 'meta' 
+comes from an index signature, so it must be accessed with ['meta'].
+control-plane/services/search-hook.ts(32,18): error TS4111: Property 'meta' 
+comes from an index signature, so it must be accessed with ['meta'].
+control-plane/services/search-hook.ts(33,19): error TS4111: Property 
+'domainId' comes from an index signature, so it must be accessed with 
+['domainId'].
+control-plane/services/search-hook.ts(35,10): error TS4111: Property 'payload' 
+comes from an index signature, so it must be accessed with ['payload'].
+control-plane/services/search-hook.ts(35,30): error TS4111: Property 'payload' 
+comes from an index signature, so it must be accessed with ['payload'].
+control-plane/services/search-hook.ts(36,21): error TS4111: Property 'payload' 
+comes from an index signature, so it must be accessed with ['payload'].
+control-plane/services/search-hook.ts(37,22): error TS4111: Property 
+'contentId' comes from an index signature, so it must be accessed with 
+['contentId'].
+control-plane/services/storage.ts(18,30): error TS4111: Property 
+'STORAGE_BUCKET' comes from an index signature, so it must be accessed with 
+['STORAGE_BUCKET'].
+control-plane/services/storage.ts(19,30): error TS4111: Property 
+'STORAGE_REGION' comes from an index signature, so it must be accessed with 
+['STORAGE_REGION'].
+control-plane/services/storage.ts(20,35): error TS4111: Property 
+'STORAGE_ACCESS_KEY_ID' comes from an index signature, so it must be accessed 
+with ['STORAGE_ACCESS_KEY_ID'].
+control-plane/services/storage.ts(21,39): error TS4111: Property 
+'STORAGE_SECRET_ACCESS_KEY' comes from an index signature, so it must be 
+accessed with ['STORAGE_SECRET_ACCESS_KEY'].
+control-plane/services/storage.ts(22,32): error TS4111: Property 
+'STORAGE_ENDPOINT' comes from an index signature, so it must be accessed with 
+['STORAGE_ENDPOINT'].
+control-plane/services/vercel-provisioner.ts(7,29): error TS4111: Property 
+'VERCEL_TOKEN' comes from an index signature, so it must be accessed with 
+['VERCEL_TOKEN'].
+domains/authors/application/AuthorsService.ts(307,20): error TS4111: Property 
+'id' comes from an index signature, so it must be accessed with ['id'].
+domains/authors/application/AuthorsService.ts(308,22): error TS4111: Property 
+'name' comes from an index signature, so it must be accessed with ['name'].
+domains/authors/application/AuthorsService.ts(309,23): error TS4111: Property 
+'email' comes from an index signature, so it must be accessed with ['email'].
+domains/authors/application/AuthorsService.ts(310,14): error TS4111: Property 
+'bio' comes from an index signature, so it must be accessed with ['bio'].
+domains/authors/application/AuthorsService.ts(310,31): error TS4111: Property 
+'bio' comes from an index signature, so it must be accessed with ['bio'].
+domains/authors/application/AuthorsService.ts(311,20): error TS4111: Property 
+'createdAt' comes from an index signature, so it must be accessed with 
+['createdAt'].
+domains/authors/application/AuthorsService.ts(311,52): error TS4111: Property 
+'createdAt' comes from an index signature, so it must be accessed with 
+['createdAt'].
+domains/authors/application/AuthorsService.ts(311,84): error TS4111: Property 
+'createdAt' comes from an index signature, so it must be accessed with 
+['createdAt'].
+domains/customers/application/CustomersService.ts(293,20): error TS4111: 
+Property 'id' comes from an index signature, so it must be accessed with 
+['id'].
+domains/customers/application/CustomersService.ts(294,23): error TS4111: 
+Property 'orgId' comes from an index signature, so it must be accessed with 
+['orgId'].
+domains/customers/application/CustomersService.ts(295,22): error TS4111: 
+Property 'name' comes from an index signature, so it must be accessed with 
+['name'].
+domains/customers/application/CustomersService.ts(296,23): error TS4111: 
+Property 'email' comes from an index signature, so it must be accessed with 
+['email'].
+domains/customers/application/CustomersService.ts(297,17): error TS4111: 
+Property 'status' comes from an index signature, so it must be accessed with 
+['status'].
+domains/customers/application/CustomersService.ts(298,20): error TS4111: 
+Property 'createdAt' comes from an index signature, so it must be accessed 
+with ['createdAt'].
+domains/customers/application/CustomersService.ts(298,52): error TS4111: 
+Property 'createdAt' comes from an index signature, so it must be accessed 
+with ['createdAt'].
+domains/customers/application/CustomersService.ts(298,84): error TS4111: 
+Property 'createdAt' comes from an index signature, so it must be accessed 
+with ['createdAt'].
+domains/customers/application/CustomersService.ts(299,20): error TS4111: 
+Property 'updatedAt' comes from an index signature, so it must be accessed 
+with ['updatedAt'].
+domains/customers/application/CustomersService.ts(299,52): error TS4111: 
+Property 'updatedAt' comes from an index signature, so it must be accessed 
+with ['updatedAt'].
+domains/customers/application/CustomersService.ts(299,84): error TS4111: 
+Property 'updatedAt' comes from an index signature, so it must be accessed 
+with ['updatedAt'].
+domains/search/infra/fts/PostgresFTSAdapter.ts(21,34): error TS4111: Property 
+'title' comes from an index signature, so it must be accessed with ['title'].
+domains/search/infra/fts/PostgresFTSAdapter.ts(21,62): error TS4111: Property 
+'title' comes from an index signature, so it must be accessed with ['title'].
+domains/search/infra/fts/PostgresFTSAdapter.ts(22,33): error TS4111: Property 
+'body' comes from an index signature, so it must be accessed with ['body'].
+domains/search/infra/fts/PostgresFTSAdapter.ts(22,60): error TS4111: Property 
+'body' comes from an index signature, so it must be accessed with ['body'].
+domains/shared/infra/validation/DatabaseSchemas.ts(132,9): error TS4111: 
+Property 'subject' comes from an index signature, so it must be accessed with 
+['subject'].
+domains/shared/infra/validation/DatabaseSchemas.ts(133,16): error TS4111: 
+Property 'subject' comes from an index signature, so it must be accessed with 
+['subject'].
+domains/shared/infra/validation/DatabaseSchemas.ts(134,14): error TS4111: 
+Property 'subject' comes from an index signature, so it must be accessed with 
+['subject'].
+domains/shared/infra/validation/DatabaseSchemas.ts(138,9): error TS4111: 
+Property 'body' comes from an index signature, so it must be accessed with 
+['body'].
+domains/shared/infra/validation/DatabaseSchemas.ts(139,16): error TS4111: 
+Property 'body' comes from an index signature, so it must be accessed with 
+['body'].
+domains/shared/infra/validation/DatabaseSchemas.ts(140,14): error TS4111: 
+Property 'body' comes from an index signature, so it must be accessed with 
+['body'].
+domains/shared/infra/validation/DatabaseSchemas.ts(144,9): error TS4111: 
+Property 'htmlBody' comes from an index signature, so it must be accessed with 
+['htmlBody'].
+domains/shared/infra/validation/DatabaseSchemas.ts(145,16): error TS4111: 
+Property 'htmlBody' comes from an index signature, so it must be accessed with 
+['htmlBody'].
+domains/shared/infra/validation/DatabaseSchemas.ts(146,14): error TS4111: 
+Property 'htmlBody' comes from an index signature, so it must be accessed with 
+['htmlBody'].
+domains/shared/infra/validation/DatabaseSchemas.ts(150,9): error TS4111: 
+Property 'actionUrl' comes from an index signature, so it must be accessed 
+with ['actionUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(151,16): error TS4111: 
+Property 'actionUrl' comes from an index signature, so it must be accessed 
+with ['actionUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(152,14): error TS4111: 
+Property 'actionUrl' comes from an index signature, so it must be accessed 
+with ['actionUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(153,26): error TS4111: 
+Property 'actionUrl' comes from an index signature, so it must be accessed 
+with ['actionUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(157,9): error TS4111: 
+Property 'actionText' comes from an index signature, so it must be accessed 
+with ['actionText'].
+domains/shared/infra/validation/DatabaseSchemas.ts(158,16): error TS4111: 
+Property 'actionText' comes from an index signature, so it must be accessed 
+with ['actionText'].
+domains/shared/infra/validation/DatabaseSchemas.ts(159,14): error TS4111: 
+Property 'actionText' comes from an index signature, so it must be accessed 
+with ['actionText'].
+domains/shared/infra/validation/DatabaseSchemas.ts(163,9): error TS4111: 
+Property 'priority' comes from an index signature, so it must be accessed with 
+['priority'].
+domains/shared/infra/validation/DatabaseSchemas.ts(165,35): error TS4111: 
+Property 'priority' comes from an index signature, so it must be accessed with 
+['priority'].
+domains/shared/infra/validation/DatabaseSchemas.ts(171,9): error TS4111: 
+Property 'attachments' comes from an index signature, so it must be accessed 
+with ['attachments'].
+domains/shared/infra/validation/DatabaseSchemas.ts(172,24): error TS4111: 
+Property 'attachments' comes from an index signature, so it must be accessed 
+with ['attachments'].
+domains/shared/infra/validation/DatabaseSchemas.ts(174,16): error TS4111: 
+Property 'attachments' comes from an index signature, so it must be accessed 
+with ['attachments'].
+domains/shared/infra/validation/DatabaseSchemas.ts(177,27): error TS4111: 
+Property 'attachments' comes from an index signature, so it must be accessed 
+with ['attachments'].
+domains/shared/infra/validation/DatabaseSchemas.ts(178,19): error TS4111: 
+Property 'attachments' comes from an index signature, so it must be accessed 
+with ['attachments'].
+domains/shared/infra/validation/DatabaseSchemas.ts(179,20): error TS4111: 
+Property 'filename' comes from an index signature, so it must be accessed with 
+['filename'].
+domains/shared/infra/validation/DatabaseSchemas.ts(179,49): error TS4111: 
+Property 'filename' comes from an index signature, so it must be accessed with 
+['filename'].
+domains/shared/infra/validation/DatabaseSchemas.ts(182,20): error TS4111: 
+Property 'contentType' comes from an index signature, so it must be accessed 
+with ['contentType'].
+domains/shared/infra/validation/DatabaseSchemas.ts(182,52): error TS4111: 
+Property 'contentType' comes from an index signature, so it must be accessed 
+with ['contentType'].
+domains/shared/infra/validation/DatabaseSchemas.ts(185,20): error TS4111: 
+Property 'size' comes from an index signature, so it must be accessed with 
+['size'].
+domains/shared/infra/validation/DatabaseSchemas.ts(185,45): error TS4111: 
+Property 'size' comes from an index signature, so it must be accessed with 
+['size'].
+domains/shared/infra/validation/DatabaseSchemas.ts(185,61): error TS4111: 
+Property 'size' comes from an index signature, so it must be accessed with 
+['size'].
+domains/shared/infra/validation/DatabaseSchemas.ts(188,20): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+domains/shared/infra/validation/DatabaseSchemas.ts(188,44): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+domains/shared/infra/validation/DatabaseSchemas.ts(218,16): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+domains/shared/infra/validation/DatabaseSchemas.ts(221,9): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+domains/shared/infra/validation/DatabaseSchemas.ts(222,9): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+domains/shared/infra/validation/DatabaseSchemas.ts(226,9): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+domains/shared/infra/validation/DatabaseSchemas.ts(227,16): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+domains/shared/infra/validation/DatabaseSchemas.ts(228,14): error TS4111: 
+Property 'description' comes from an index signature, so it must be accessed 
+with ['description'].
+domains/shared/infra/validation/DatabaseSchemas.ts(232,9): error TS4111: 
+Property 'content' comes from an index signature, so it must be accessed with 
+['content'].
+domains/shared/infra/validation/DatabaseSchemas.ts(233,16): error TS4111: 
+Property 'content' comes from an index signature, so it must be accessed with 
+['content'].
+domains/shared/infra/validation/DatabaseSchemas.ts(234,14): error TS4111: 
+Property 'content' comes from an index signature, so it must be accessed with 
+['content'].
+domains/shared/infra/validation/DatabaseSchemas.ts(238,9): error TS4111: 
+Property 'tags' comes from an index signature, so it must be accessed with 
+['tags'].
+domains/shared/infra/validation/DatabaseSchemas.ts(239,24): error TS4111: 
+Property 'tags' comes from an index signature, so it must be accessed with 
+['tags'].
+domains/shared/infra/validation/DatabaseSchemas.ts(241,16): error TS4111: 
+Property 'tags' comes from an index signature, so it must be accessed with 
+['tags'].
+domains/shared/infra/validation/DatabaseSchemas.ts(244,27): error TS4111: 
+Property 'tags' comes from an index signature, so it must be accessed with 
+['tags'].
+domains/shared/infra/validation/DatabaseSchemas.ts(245,19): error TS4111: 
+Property 'tags' comes from an index signature, so it must be accessed with 
+['tags'].
+domains/shared/infra/validation/DatabaseSchemas.ts(254,9): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+domains/shared/infra/validation/DatabaseSchemas.ts(255,16): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+domains/shared/infra/validation/DatabaseSchemas.ts(256,14): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+domains/shared/infra/validation/DatabaseSchemas.ts(257,26): error TS4111: 
+Property 'url' comes from an index signature, so it must be accessed with 
+['url'].
+domains/shared/infra/validation/DatabaseSchemas.ts(261,9): error TS4111: 
+Property 'imageUrl' comes from an index signature, so it must be accessed with 
+['imageUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(262,16): error TS4111: 
+Property 'imageUrl' comes from an index signature, so it must be accessed with 
+['imageUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(263,14): error TS4111: 
+Property 'imageUrl' comes from an index signature, so it must be accessed with 
+['imageUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(264,26): error TS4111: 
+Property 'imageUrl' comes from an index signature, so it must be accessed with 
+['imageUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(273,23): error TS4111: 
+Property 'title' comes from an index signature, so it must be accessed with 
+['title'].
+domains/shared/infra/validation/DatabaseSchemas.ts(299,9): error TS4111: 
+Property 'webhookUrl' comes from an index signature, so it must be accessed 
+with ['webhookUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(300,16): error TS4111: 
+Property 'webhookUrl' comes from an index signature, so it must be accessed 
+with ['webhookUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(301,14): error TS4111: 
+Property 'webhookUrl' comes from an index signature, so it must be accessed 
+with ['webhookUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(302,26): error TS4111: 
+Property 'webhookUrl' comes from an index signature, so it must be accessed 
+with ['webhookUrl'].
+domains/shared/infra/validation/DatabaseSchemas.ts(306,9): error TS4111: 
+Property 'apiEndpoint' comes from an index signature, so it must be accessed 
+with ['apiEndpoint'].
+domains/shared/infra/validation/DatabaseSchemas.ts(307,16): error TS4111: 
+Property 'apiEndpoint' comes from an index signature, so it must be accessed 
+with ['apiEndpoint'].
+domains/shared/infra/validation/DatabaseSchemas.ts(308,14): error TS4111: 
+Property 'apiEndpoint' comes from an index signature, so it must be accessed 
+with ['apiEndpoint'].
+domains/shared/infra/validation/DatabaseSchemas.ts(309,26): error TS4111: 
+Property 'apiEndpoint' comes from an index signature, so it must be accessed 
+with ['apiEndpoint'].
+domains/shared/infra/validation/DatabaseSchemas.ts(313,9): error TS4111: 
+Property 'timeout' comes from an index signature, so it must be accessed with 
+['timeout'].
+domains/shared/infra/validation/DatabaseSchemas.ts(314,16): error TS4111: 
+Property 'timeout' comes from an index signature, so it must be accessed with 
+['timeout'].
+domains/shared/infra/validation/DatabaseSchemas.ts(315,14): error TS4111: 
+Property 'timeout' comes from an index signature, so it must be accessed with 
+['timeout'].
+domains/shared/infra/validation/DatabaseSchemas.ts(315,34): error TS4111: 
+Property 'timeout' comes from an index signature, so it must be accessed with 
+['timeout'].
+domains/shared/infra/validation/DatabaseSchemas.ts(321,9): error TS4111: 
+Property 'retryPolicy' comes from an index signature, so it must be accessed 
+with ['retryPolicy'].
+domains/shared/infra/validation/DatabaseSchemas.ts(322,16): error TS4111: 
+Property 'retryPolicy' comes from an index signature, so it must be accessed 
+with ['retryPolicy'].
+domains/shared/infra/validation/DatabaseSchemas.ts(322,46): error TS4111: 
+Property 'retryPolicy' comes from an index signature, so it must be accessed 
+with ['retryPolicy'].
+domains/shared/infra/validation/DatabaseSchemas.ts(325,18): error TS4111: 
+Property 'retryPolicy' comes from an index signature, so it must be accessed 
+with ['retryPolicy'].
+domains/shared/infra/validation/DatabaseSchemas.ts(326,12): error TS4111: 
+Property 'maxRetries' comes from an index signature, so it must be accessed 
+with ['maxRetries'].
+domains/shared/infra/validation/DatabaseSchemas.ts(326,51): error TS4111: 
+Property 'maxRetries' comes from an index signature, so it must be accessed 
+with ['maxRetries'].
+domains/shared/infra/validation/DatabaseSchemas.ts(326,81): error TS4111: 
+Property 'maxRetries' comes from an index signature, so it must be accessed 
+with ['maxRetries'].
+domains/shared/infra/validation/DatabaseSchemas.ts(326,102): error TS4111: 
+Property 'maxRetries' comes from an index signature, so it must be accessed 
+with ['maxRetries'].
+domains/shared/infra/validation/DatabaseSchemas.ts(329,12): error TS4111: 
+Property 'retryDelay' comes from an index signature, so it must be accessed 
+with ['retryDelay'].
+domains/shared/infra/validation/DatabaseSchemas.ts(329,51): error TS4111: 
+Property 'retryDelay' comes from an index signature, so it must be accessed 
+with ['retryDelay'].
+domains/shared/infra/validation/DatabaseSchemas.ts(329,81): error TS4111: 
+Property 'retryDelay' comes from an index signature, so it must be accessed 
+with ['retryDelay'].
+domains/shared/infra/validation/DatabaseSchemas.ts(329,104): error TS4111: 
+Property 'retryDelay' comes from an index signature, so it must be accessed 
+with ['retryDelay'].
+domains/shared/infra/validation/DatabaseSchemas.ts(336,9): error TS4111: 
+Property 'auth' comes from an index signature, so it must be accessed with 
+['auth'].
+domains/shared/infra/validation/DatabaseSchemas.ts(337,16): error TS4111: 
+Property 'auth' comes from an index signature, so it must be accessed with 
+['auth'].
+domains/shared/infra/validation/DatabaseSchemas.ts(337,39): error TS4111: 
+Property 'auth' comes from an index signature, so it must be accessed with 
+['auth'].
+domains/shared/infra/validation/DatabaseSchemas.ts(340,20): error TS4111: 
+Property 'auth' comes from an index signature, so it must be accessed with 
+['auth'].
+domains/shared/infra/validation/DatabaseSchemas.ts(342,39): error TS4111: 
+Property 'type' comes from an index signature, so it must be accessed with 
+['type'].
+packages/config/index.ts(381,24): error TS4111: Property 'CACHE_VERSION' comes 
+from an index signature, so it must be accessed with ['CACHE_VERSION'].
+packages/config/index.ts(384,23): error TS4111: Property 'CACHE_PREFIX' comes 
+from an index signature, so it must be accessed with ['CACHE_PREFIX'].
+packages/config/index.ts(600,37): error TS4111: Property 
+'ABUSE_ALLOWED_OVERRIDE_ROLES' comes from an index signature, so it must be 
+accessed with ['ABUSE_ALLOWED_OVERRIDE_ROLES'].
+packages/config/index.ts(733,29): error TS4111: Property 'STRIPE_SECRET_KEY' 
+comes from an index signature, so it must be accessed with 
+['STRIPE_SECRET_KEY'].
+packages/config/index.ts(742,29): error TS4111: Property 'JWT_KEY_1' comes 
+from an index signature, so it must be accessed with ['JWT_KEY_1'].
+packages/config/index.ts(751,24): error TS4111: Property 'PADDLE_API_KEY' 
+comes from an index signature, so it must be accessed with ['PADDLE_API_KEY'].
+packages/config/index.ts(858,24): error TS4111: Property 'APP_VERSION' comes 
+from an index signature, so it must be accessed with ['APP_VERSION'].
+packages/config/index.ts(861,31): error TS4111: Property 'BUILD_TIMESTAMP' 
+comes from an index signature, so it must be accessed with ['BUILD_TIMESTAMP'].
+packages/config/index.ts(864,26): error TS4111: Property 'GIT_COMMIT' comes 
+from an index signature, so it must be accessed with ['GIT_COMMIT'].
+packages/database/knex/index.ts(15,40): error TS4111: Property 
+'CONTROL_PLANE_DB' comes from an index signature, so it must be accessed with 
+['CONTROL_PLANE_DB'].
+packages/database/pool/index.ts(107,40): error TS4111: Property 
+'CONTROL_PLANE_DB' comes from an index signature, so it must be accessed with 
+['CONTROL_PLANE_DB'].
+packages/errors/index.ts(525,64): error TS4111: Property 'DEBUG' comes from an 
+index signature, so it must be accessed with ['DEBUG'].
+packages/kernel/dlq.ts(320,28): error TS4111: Property 'firstFailedAt' comes 
+from an index signature, so it must be accessed with ['firstFailedAt'].
+packages/kernel/health-check.ts(198,14): error TS4111: Property 'pool' comes 
+from an index signature, so it must be accessed with ['pool'].
+packages/kernel/logger.ts(91,32): error TS4111: Property 'LOG_LEVEL' comes 
+from an index signature, so it must be accessed with ['LOG_LEVEL'].
+packages/kernel/logger.ts(197,26): error TS4111: Property 'service' comes from 
+an index signature, so it must be accessed with ['service'].
+packages/kernel/logger.ts(198,45): error TS4111: Property 'correlationId' 
+comes from an index signature, so it must be accessed with ['correlationId'].
+packages/kernel/logger.ts(199,25): error TS4111: Property 'userId' comes from 
+an index signature, so it must be accessed with ['userId'].
+packages/kernel/logger.ts(200,24): error TS4111: Property 'orgId' comes from 
+an index signature, so it must be accessed with ['orgId'].
+packages/kernel/logger.ts(201,26): error TS4111: Property 'traceId' comes from 
+an index signature, so it must be accessed with ['traceId'].
+packages/kernel/logger.ts(202,41): error TS4111: Property 'duration' comes 
+from an index signature, so it must be accessed with ['duration'].
+packages/kernel/logger.ts(203,31): error TS4111: Property 'error' comes from 
+an index signature, so it must be accessed with ['error'].
+packages/kernel/logger.ts(204,33): error TS4111: Property 'LOG_LEVEL' comes 
+from an index signature, so it must be accessed with ['LOG_LEVEL'].
+packages/kernel/logger.ts(204,66): error TS4111: Property 'stack' comes from 
+an index signature, so it must be accessed with ['stack'].
+packages/kernel/logger.ts(206,13): error TS4111: Property 'metadata' comes 
+from an index signature, so it must be accessed with ['metadata'].
+packages/kernel/logger.ts(256,24): error TS4111: Property 'SERVICE_NAME' comes 
+from an index signature, so it must be accessed with ['SERVICE_NAME'].
+packages/kernel/logger.ts(275,19): error TS4111: Property 'LOG_LEVEL' comes 
+from an index signature, so it must be accessed with ['LOG_LEVEL'].
+packages/kernel/validation/apiGuards.ts(14,11): error TS4111: Property 'error' 
+comes from an index signature, so it must be accessed with ['error'].
+packages/kernel/validation/apiGuards.ts(14,31): error TS4111: Property 'error' 
+comes from an index signature, so it must be accessed with ['error'].
+packages/kernel/validation/apiGuards.ts(15,23): error TS4111: Property 'error' 
+comes from an index signature, so it must be accessed with ['error'].
+packages/kernel/validation/apiGuards.ts(16,22): error TS4111: Property 
+'message' comes from an index signature, so it must be accessed with 
+['message'].
+packages/kernel/validation/apiGuards.ts(16,59): error TS4111: Property 
+'status' comes from an index signature, so it must be accessed with ['status'].
+packages/kernel/validation/apiGuards.ts(20,18): error TS4111: Property 
+'message' comes from an index signature, so it must be accessed with 
+['message'].
+packages/kernel/validation/apiGuards.ts(31,21): error TS4111: Property 'id' 
+comes from an index signature, so it must be accessed with ['id'].
+packages/kernel/validation/apiGuards.ts(41,12): error TS4111: Property 
+'errors' comes from an index signature, so it must be accessed with ['errors'].
+packages/kernel/validation/apiGuards.ts(42,26): error TS4111: Property 
+'errors' comes from an index signature, so it must be accessed with ['errors'].
+packages/kernel/validation/apiGuards.ts(44,14): error TS4111: Property 
+'errors' comes from an index signature, so it must be accessed with ['errors'].
+packages/kernel/validation/apiGuards.ts(47,19): error TS4111: Property 
+'error_key' comes from an index signature, so it must be accessed with 
+['error_key'].
+packages/kernel/validation/apiGuards.ts(47,59): error TS4111: Property 
+'error_key' comes from an index signature, so it must be accessed with 
+['error_key'].
+packages/kernel/validation/apiGuards.ts(48,16): error TS4111: Property 
+'error_message' comes from an index signature, so it must be accessed with 
+['error_message'].
+packages/kernel/validation/apiGuards.ts(48,60): error TS4111: Property 
+'error_message' comes from an index signature, so it must be accessed with 
+['error_message'].
+packages/kernel/validation/apiGuards.ts(58,14): error TS4111: Property 
+'list_id' comes from an index signature, so it must be accessed with 
+['list_id'].
+packages/kernel/validation/apiGuards.ts(58,50): error TS4111: Property 
+'list_id' comes from an index signature, so it must be accessed with 
+['list_id'].
+packages/kernel/validation/apiGuards.ts(69,12): error TS4111: Property 'error' 
+comes from an index signature, so it must be accessed with ['error'].
+packages/kernel/validation/apiGuards.ts(69,32): error TS4111: Property 'error' 
+comes from an index signature, so it must be accessed with ['error'].
+packages/kernel/validation/apiGuards.ts(70,21): error TS4111: Property 'error' 
+comes from an index signature, so it must be accessed with ['error'].
+packages/kernel/validation/apiGuards.ts(72,23): error TS4111: Property 
+'message' comes from an index signature, so it must be accessed with 
+['message'].
+packages/kernel/validation/apiGuards.ts(73,22): error TS4111: Property 'type' 
+comes from an index signature, so it must be accessed with ['type'].
+packages/kernel/validation/apiGuards.ts(74,22): error TS4111: Property 'code' 
+comes from an index signature, so it must be accessed with ['code'].
+packages/kernel/validation/apiGuards.ts(83,21): error TS4111: Property 'id' 
+comes from an index signature, so it must be accessed with ['id'].
+packages/monitoring/alerting.ts(311,34): error TS4111: Property 
+'SLACK_WEBHOOK_URL' comes from an index signature, so it must be accessed with 
+['SLACK_WEBHOOK_URL'].
+packages/monitoring/alerting.ts(347,34): error TS4111: Property 
+'ALERT_WEBHOOK_URL' comes from an index signature, so it must be accessed with 
+['ALERT_WEBHOOK_URL'].
+packages/security/auth.ts(232,32): error TS4111: Property 'JWT_SECRET' comes 
+from an index signature, so it must be accessed with ['JWT_SECRET'].
+packages/security/auth.ts(232,58): error TS4111: Property 'JWT_KEY_1' comes 
+from an index signature, so it must be accessed with ['JWT_KEY_1'].
+packages/security/jwt.ts(97,38): error TS4111: Property 'JWT_AUDIENCE' comes 
+from an index signature, so it must be accessed with ['JWT_AUDIENCE'].
+packages/security/jwt.ts(98,36): error TS4111: Property 'JWT_ISSUER' comes 
+from an index signature, so it must be accessed with ['JWT_ISSUER'].
+packages/security/jwt.ts(160,28): error TS4111: Property 'JWT_KEY_1' comes 
+from an index signature, so it must be accessed with ['JWT_KEY_1'].
+packages/security/jwt.ts(161,28): error TS4111: Property 'JWT_KEY_2' comes 
+from an index signature, so it must be accessed with ['JWT_KEY_2'].
+packages/security/keyRotation.ts(13,54): error TS4111: Property 
+'KEY_ENCRYPTION_SECRET' comes from an index signature, so it must be accessed 
+with ['KEY_ENCRYPTION_SECRET'].
+packages/security/logger.ts(275,11): error TS4111: Property 'data' comes from 
+an index signature, so it must be accessed with ['data'].
+packages/security/security.ts(284,52): error TS4111: Property 'ip' comes from 
+an index signature, so it must be accessed with ['ip'].
+packages/security/security.ts(285,25): error TS4111: Property 'ip' comes from 
+an index signature, so it must be accessed with ['ip'].
+packages/types/publishing.ts(38,11): error TS4111: Property 'url' comes from 
+an index signature, so it must be accessed with ['url'].
+packages/types/publishing.ts(38,43): error TS4111: Property 'url' comes from 
+an index signature, so it must be accessed with ['url'].
+packages/types/publishing.ts(41,11): error TS4111: Property 'token' comes from 
+an index signature, so it must be accessed with ['token'].
+packages/types/publishing.ts(41,45): error TS4111: Property 'token' comes from 
+an index signature, so it must be accessed with ['token'].
+packages/types/publishing.ts(44,11): error TS4111: Property 'apiKey' comes 
+from an index signature, so it must be accessed with ['apiKey'].
+packages/types/publishing.ts(44,46): error TS4111: Property 'apiKey' comes 
+from an index signature, so it must be accessed with ['apiKey'].
+packages/types/publishing.ts(47,11): error TS4111: Property 'webhook' comes 
+from an index signature, so it must be accessed with ['webhook'].
+packages/types/publishing.ts(47,47): error TS4111: Property 'webhook' comes 
+from an index signature, so it must be accessed with ['webhook'].
+plugins/notification-adapters/email-adapter.ts(270,55): error TS4111: Property 
+'name' comes from an index signature, so it must be accessed with ['name'].
+plugins/notification-adapters/email-adapter.ts(273,29): error TS4111: Property 
+'name' comes from an index signature, so it must be accessed with ['name'].
+plugins/notification-adapters/email-adapter.ts(275,35): error TS4111: Property 
+'dashboardUrl' comes from an index signature, so it must be accessed with 
+['dashboardUrl'].
+plugins/notification-adapters/email-adapter.ts(277,58): error TS4111: Property 
+'name' comes from an index signature, so it must be accessed with ['name'].
+plugins/notification-adapters/email-adapter.ts(280,52): error TS4111: Property 
+'contentTitle' comes from an index signature, so it must be accessed with 
+['contentTitle'].
+plugins/notification-adapters/email-adapter.ts(283,40): error TS4111: Property 
+'contentTitle' comes from an index signature, so it must be accessed with 
+['contentTitle'].
+plugins/notification-adapters/email-adapter.ts(284,35): error TS4111: Property 
+'contentUrl' comes from an index signature, so it must be accessed with 
+['contentUrl'].
+plugins/notification-adapters/email-adapter.ts(286,49): error TS4111: Property 
+'contentTitle' comes from an index signature, so it must be accessed with 
+['contentTitle'].
+plugins/notification-adapters/email-adapter.ts(294,46): error TS4111: Property 
+'publishedCount' comes from an index signature, so it must be accessed with 
+['publishedCount'].
+plugins/notification-adapters/email-adapter.ts(295,49): error TS4111: Property 
+'newKeywords' comes from an index signature, so it must be accessed with 
+['newKeywords'].
+plugins/notification-adapters/email-adapter.ts(296,37): error TS4111: Property 
+'revenue' comes from an index signature, so it must be accessed with 
+['revenue'].
+plugins/notification-adapters/email-adapter.ts(299,46): error TS4111: Property 
+'publishedCount' comes from an index signature, so it must be accessed with 
+['publishedCount'].
+plugins/notification-adapters/email-adapter.ts(299,93): error TS4111: Property 
+'newKeywords' comes from an index signature, so it must be accessed with 
+['newKeywords'].
+plugins/notification-adapters/email-adapter.ts(302,40): error TS4111: Property 
+'alertType' comes from an index signature, so it must be accessed with 
+['alertType'].
+plugins/notification-adapters/email-adapter.ts(304,58): error TS4111: Property 
+'alertType' comes from an index signature, so it must be accessed with 
+['alertType'].
+plugins/notification-adapters/email-adapter.ts(305,26): error TS4111: Property 
+'message' comes from an index signature, so it must be accessed with 
+['message'].
+plugins/notification-adapters/email-adapter.ts(306,53): error TS4111: Property 
+'severity' comes from an index signature, so it must be accessed with 
+['severity'].
+plugins/notification-adapters/email-adapter.ts(308,37): error TS4111: Property 
+'alertType' comes from an index signature, so it must be accessed with 
+['alertType'].
+plugins/notification-adapters/email-adapter.ts(308,64): error TS4111: Property 
+'message' comes from an index signature, so it must be accessed with 
+['message'].
+
+

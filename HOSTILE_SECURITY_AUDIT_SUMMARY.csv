@@ -1,0 +1,29 @@
+ID,Severity,Category,File,Line,Vulnerability,Exploitability,Impact
+1,P0,SQL Injection,control-plane/api/routes/timeline.ts,125,Dynamic query construction with string interpolation,High,Database compromise
+2,P0,SQL Injection,apps/api/src/jobs/domainExportJob.ts,258,Unparameterized table name in query,High,Data exfiltration
+3,P0,XSS,themes/*/templates/*.tsx,7,45+ files using dangerouslySetInnerHTML,High,Session hijacking
+4,P0,CSRF,apps/api/src/routes/*.ts,Multiple,Missing CSRF protection on state-changing routes,High,Unauthorized transactions
+5,P0,Mass Assignment,apps/api/src/routes/emailSubscribers/index.ts,13,Zod schema without strict() allows extra properties,Medium,Privilege escalation
+6,P0,Path Traversal,control-plane/services/storage.ts,36,Unvalidated storage key paths,Medium,File overwrite/RCE
+7,P0,Crypto Weakness,control-plane/api/rate-limit-read.ts,137,Math.random() used for security context,High,ID prediction/bypass
+8,P0,IDOR,control-plane/api/routes/content-revisions.ts,39,Insufficient ownership validation,Medium,Data access bypass
+9,P1,Timing Attack,apps/api/src/middleware/csrf.ts,85,Length check before comparison creates timing channel,Medium,Token guessing
+10,P1,Info Disclosure,control-plane/api/routes/content-list.ts,60,Error messages leak internal details,High,Reconnaissance
+11,P1,Mass Assignment,control-plane/api/routes/publishing.ts,12,Unstructured config record allows injection,Medium,Config tampering
+12,P1,Rate Limiting,control-plane/api/routes/notifications-admin.ts,67,Insufficient rate limiting on admin routes,High,DoS/Brute force
+13,P1,CORS,control-plane/api/http.ts,91,Dynamic origin validation may be bypassed,Medium,Credential theft
+14,P1,Session Management,apps/web/middleware.ts,Multiple,Session fixation vulnerability,Medium,Account takeover
+15,P1,Weak Auth,apps/api/src/adapters/wordpress/WordPressAdapter.ts,66,No password complexity requirements,Medium,Credential compromise
+16,P1,Secret Leakage,packages/security/logger.ts,Multiple,Inconsistent sensitive data redaction,High,Secret exposure
+17,P1,Race Condition,control-plane/services/domain-ownership.ts,32,TOCTOU in domain transfer,Low,Ownership manipulation
+18,P1,Input Validation,apps/api/src/routes/emailSubscribers/index.ts,32,z.coerce allows unexpected conversions,Medium,Validation bypass
+19,P1,Command Injection,Adapter implementations,Potential,Potential shell command injection,High,System compromise
+20,P1,JWT Weakness,Legacy JWT code,Multiple,Algorithm confusion risk,High,Auth bypass
+21,P2,Open Redirect,Payment/checkout flows,Multiple,Unvalidated return URLs,Medium,Phishing
+22,P2,Security Headers,API routes,Multiple,Inconsistent security headers,Low,Various attacks
+23,P2,Audit Logging,Critical operations,Multiple,Insufficient audit coverage,Medium,Compliance violation
+24,P2,XXE,RSS/podcast adapters,Potential,XML parsing configuration risk,Medium,Data exfiltration
+25,P2,Business Logic,Billing flows,Multiple,Webhook manipulation risk,Medium,Financial fraud
+26,P3,Info Disclosure,Error middleware,Multiple,Stack traces in production,Low,Information leak
+27,P3,Supply Chain,Frontend assets,Multiple,Missing Subresource Integrity,Low,Script injection
+28,P3,Clickjacking,Legacy pages,Multiple,Incomplete frame protection,Low,UI redressing

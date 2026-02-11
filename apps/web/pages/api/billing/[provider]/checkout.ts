@@ -1,0 +1,190 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { requireAuth, validateMethod, sendError } from '../../../../lib/auth';
+
+/**
+ * POST /api/billing/:provider/checkout
+ * Creates a checkout session for the specified billing provider
+ * Supports: stripe, paddle
+ */
+
+// Valid billing providers
+const VALID_PROVIDERS = ['stripe', 'paddle'];
+
+// UUID validation regex (for plan IDs that might be UUIDs)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// URL validation regex
+const URL_REGEX = /^https?:\/\/.+/i;
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!validateMethod(req, res, ['POST'])) return;
+
+  try {
+  // Validate auth
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+
+  const { provider } = req.query;
+  const { priceId, planId, successUrl, cancelUrl, quantity = 1 } = req.body;
+
+  // Validate provider parameter
+  if (!provider || typeof provider !== 'string') {
+    return sendError(res, 400, 'provider is required');
+  }
+
+  if (!VALID_PROVIDERS.includes(provider)) {
+    return sendError(res, 400, `Unsupported billing provider: ${provider}. Must be one of: ${VALID_PROVIDERS.join(', ')}`);
+  }
+
+  // Validate required fields - must have either priceId or planId
+  if (!priceId && !planId) {
+    return sendError(res, 400, 'priceId or planId is required');
+  }
+
+  // Validate priceId/planId format
+  const idToUse = priceId || planId;
+  if (idToUse) {
+    if (typeof idToUse !== 'string') {
+    return sendError(res, 400, 'priceId/planId must be a string');
+    }
+    if (idToUse.length < 1 || idToUse.length > 255) {
+    return sendError(res, 400, 'priceId/planId must be between 1 and 255 characters');
+    }
+  }
+
+  // Validate quantity
+  if (typeof quantity !== 'number' || quantity < 1 || quantity > 100 || !Number.isInteger(quantity)) {
+    return sendError(res, 400, 'quantity must be an integer between 1 and 100');
+  }
+
+  // Validate URLs if provided
+  if (successUrl !== undefined) {
+    if (typeof successUrl !== 'string' || !URL_REGEX.test(successUrl)) {
+    return sendError(res, 400, 'successUrl must be a valid URL');
+    }
+  }
+  if (cancelUrl !== undefined) {
+    if (typeof cancelUrl !== 'string' || !URL_REGEX.test(cancelUrl)) {
+    return sendError(res, 400, 'cancelUrl must be a valid URL');
+    }
+  }
+
+  // Get origin for default URLs
+  const origin = req.headers.origin || process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
+  const defaultSuccessUrl = `${origin}/portfolio?checkout=success`;
+  const defaultCancelUrl = `${origin}/pricing`;
+
+  switch (provider) {
+    case 'stripe': {
+    // Validate Stripe configuration
+    if (!process.env['STRIPE_SECRET_KEY']) {
+      console.error('[billing/checkout] Stripe is not configured');
+      return sendError(res, 503, 'Stripe is not configured');
+    }
+
+    // Import Stripe dynamically to avoid loading if not needed
+    const { stripe } = await import('../../../../lib/stripe');
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+        price: priceId || planId,
+        quantity: quantity
+        }
+      ],
+      success_url: successUrl || defaultSuccessUrl,
+      cancel_url: cancelUrl || defaultCancelUrl,
+      client_reference_id: auth.orgId,
+      metadata: {
+        orgId: auth.orgId,
+        userId: auth.userId,
+        planId: planId || 'pro',
+        priceId: priceId || 'none',
+      },
+      });
+
+      if (!session.url) {
+      throw new Error('Failed to create checkout session URL');
+      }
+
+      // Security audit log for checkout creation
+      console.log(`[audit:billing:checkout] Stripe checkout created: session ${session.id} by user: ${auth.userId}, org: ${auth.orgId}, priceId: ${priceId || planId}`);
+
+      return res.status(200).json({
+      url: session.url,
+      sessionId: session.id,
+      provider: 'stripe',
+      });
+    } catch (stripeError: any) {
+      console.error('[billing/checkout] Stripe error:', stripeError);
+
+      if (stripeError.type === 'StripeInvalidRequestError') {
+      return sendError(res, 400, `Invalid request to payment provider: ${stripeError.message}`);
+      }
+
+      throw stripeError;
+    }
+    }
+
+    case 'paddle': {
+    // Validate Paddle configuration
+    if (!process.env['PADDLE_API_KEY']) {
+      console.error('[billing/checkout] Paddle is not configured');
+      return sendError(res, 503, 'Paddle is not configured');
+    }
+
+    // Validate Paddle vendor ID
+    if (!process.env['PADDLE_VENDOR_ID']) {
+      console.error('[billing/checkout] Paddle vendor ID is not configured');
+      return sendError(res, 503, 'Paddle is not fully configured');
+    }
+
+    // For Paddle, we return the checkout URL configuration
+    // Actual Paddle checkout is typically handled via their SDK or redirect
+    const paddleProductId = priceId || planId;
+
+    try {
+      const paddleCheckoutUrl = new URL('https://checkout.paddle.com');
+      paddleCheckoutUrl.searchParams.set('product', paddleProductId);
+      paddleCheckoutUrl.searchParams.set('quantity', quantity.toString());
+      paddleCheckoutUrl.searchParams.set('passthrough', JSON.stringify({
+      orgId: auth.orgId,
+      userId: auth.userId,
+      planId: planId || 'pro',
+      }));
+      paddleCheckoutUrl.searchParams.set('success_url', successUrl || defaultSuccessUrl);
+      paddleCheckoutUrl.searchParams.set('cancel_url', cancelUrl || defaultCancelUrl);
+
+      // Security audit log for checkout creation
+      console.log(`[audit:billing:checkout] Paddle checkout created by user: ${auth.userId}, org: ${auth.orgId}, productId: ${paddleProductId}`);
+
+      return res.status(200).json({
+      url: paddleCheckoutUrl.toString(),
+      checkoutUrl: paddleCheckoutUrl.toString(),
+      provider: 'paddle',
+      });
+    } catch (paddleError: any) {
+      console.error('[billing/checkout] Paddle error:', paddleError);
+      throw paddleError;
+    }
+    }
+
+    default:
+    // This should never happen due to earlier validation
+    return sendError(res, 400, `Unsupported billing provider: ${provider}`);
+  }
+  } catch (error: unknown) {
+  if (error instanceof Error && error.name === 'AuthError') return;
+
+  console.error(`[billing/checkout] Error:`, error);
+
+  const errorMessage = process.env['NODE_ENV'] === 'development' && error instanceof Error
+    ? error.message
+    : 'Internal server error. Failed to create checkout session';
+
+  sendError(res, 500, errorMessage);
+  }
+}

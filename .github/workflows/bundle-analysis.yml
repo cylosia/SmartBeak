@@ -1,0 +1,129 @@
+# P2 OPTIMIZATION: Bundle Analysis CI Workflow
+# Runs bundle size analysis on every PR and reports size changes
+
+name: Bundle Analysis
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build:web
+        env:
+          CI: true
+
+      - name: Analyze bundle size
+        run: npm run analyze:bundle
+        env:
+          CI: true
+
+      - name: Upload bundle stats
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-stats
+          path: apps/web/.next/analyze/
+
+      - name: Comment PR with bundle analysis
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read bundle analysis results
+            const statsPath = 'apps/web/.next/analyze/__bundle_analysis.json';
+            let stats = { totalSize: 0, gzipSize: 0, changes: [] };
+            
+            try {
+              stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+            } catch (e) {
+              console.log('No bundle stats found');
+            }
+
+            // Format sizes
+            const formatBytes = (bytes) => {
+              if (bytes === 0) return '0 B';
+              const k = 1024;
+              const sizes = ['B', 'KB', 'MB'];
+              const i = Math.floor(Math.log(bytes) / Math.log(k));
+              return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+            };
+
+            // Build comment body
+            const body = `## 📦 Bundle Analysis
+
+### Size Summary
+| Metric | Size |
+|--------|------|
+| Total | ${formatBytes(stats.totalSize)} |
+| Gzipped | ${formatBytes(stats.gzipSize)} |
+
+${stats.changes?.length > 0 ? `
+### Changes
+| Module | Before | After | Diff |
+|--------|--------|-------|------|
+${stats.changes.map(c => `| ${c.name} | ${formatBytes(c.before)} | ${formatBytes(c.after)} | ${c.diff > 0 ? '🔴 +' : '🟢 '}${formatBytes(Math.abs(c.diff))} |`).join('\n')}
+` : '> No significant size changes detected'}
+
+${stats.totalSize > 500 * 1024 ? '⚠️ **Warning:** Bundle size exceeds 500KB recommendation' : '✅ Bundle size within recommended limits'}
+`;
+
+            // Create or update comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('## 📦 Bundle Analysis')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
+      - name: Check bundle size limits
+        run: |
+          # Check if bundle exceeds limits
+          MAX_SIZE=500000  # 500KB in bytes
+          STATS_FILE="apps/web/.next/analyze/__bundle_analysis.json"
+          
+          if [ -f "$STATS_FILE" ]; then
+            SIZE=$(cat "$STATS_FILE" | grep -o '"totalSize":[0-9]*' | cut -d':' -f2)
+            if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+              echo "::error::Bundle size ($SIZE bytes) exceeds limit ($MAX_SIZE bytes)"
+              exit 1
+            fi
+          fi

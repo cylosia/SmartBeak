@@ -1,0 +1,37 @@
+{
+  "title": "Adapter Circuit Breakers",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Circuit Open Events (last 15m)",
+      "targets": [
+        {
+          "expr": "sum by (name) (increase(circuit_open[15m]))",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Blocked Calls (last 15m)",
+      "targets": [
+        {
+          "expr": "sum by (name) (increase(circuit_open_block[15m]))",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Adapter Failures Over Time",
+      "targets": [
+        {
+          "expr": "sum by (name) (increase(circuit_failure[1m]))",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["iad1", "fra1", "sin1"],
+  "functions": {
+    "apps/web/pages/api/webhooks/**/*.ts": {
+      "maxDuration": 60
+    },
+    "apps/web/pages/api/exports/**/*.ts": {
+      "maxDuration": 60
+    },
+    "apps/web/pages/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    }
+  ]
+}

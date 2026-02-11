@@ -1,0 +1,19 @@
+{
+  "name": "@smartbeak/middleware",
+  "version": "1.0.0",
+  "private": true,
+  "main": "validation.ts",
+  "types": "validation.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smartbeak/security": "1.0.0",
+    "fastify": "^4.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.5"
+  }
+}

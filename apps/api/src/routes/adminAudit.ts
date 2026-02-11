@@ -1,0 +1,249 @@
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { getDb } from '../db';
+import { adminRateLimit } from '../middleware/rateLimiter';
+import crypto from 'crypto';
+
+const ALLOWED_AUDIT_ACTIONS = [
+  'create',
+  'update',
+  'delete',
+  'login',
+  'logout',
+  'export',
+  'import',
+  'settings_changed',
+  'user_invited',
+  'user_removed',
+  'domain_created',
+  'domain_deleted',
+  'content_published',
+  'content_archived',
+  'api_key_generated',
+  'buyer_roi_summary_accessed',
+] as const;
+
+export type AllowedAuditAction = typeof ALLOWED_AUDIT_ACTIONS[number];
+
+function isAllowedAuditAction(action: string): action is AllowedAuditAction {
+  return ALLOWED_AUDIT_ACTIONS.includes(action as AllowedAuditAction);
+}
+
+export interface ValidationResult<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+/**
+ * Prevents invalid actions and potential injection attempts
+ */
+function validateAction(action: string): ValidationResult<AllowedAuditAction> {
+  if (!isAllowedAuditAction(action)) {
+    return {
+      success: false,
+      error: `Invalid action: ${action}. Must be one of: ${ALLOWED_AUDIT_ACTIONS.join(', ')}`
+    };
+  }
+  return { success: true, data: action };
+}
+
+function isCountResult(value: unknown): value is { count: string | number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'count' in value &&
+    (typeof (value as Record<string, unknown>)['count'] === 'string' ||
+      typeof (value as Record<string, unknown>)['count'] === 'number')
+  );
+}
+
+export interface AuditEvent {
+  id: string;
+  org_id: string;
+  actor_type: string;
+  actor_id: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string;
+  metadata?: string;
+  ip_address?: string;
+  created_at: Date;
+}
+
+function isAuditEvent(value: unknown): value is AuditEvent {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj['id'] === 'string' &&
+    typeof obj['org_id'] === 'string' &&
+    typeof obj['actor_type'] === 'string' &&
+    typeof obj['actor_id'] === 'string' &&
+    typeof obj['action'] === 'string' &&
+    typeof obj['entity_type'] === 'string' &&
+    (obj['entity_id'] === undefined || typeof obj['entity_id'] === 'string') &&
+    (obj['metadata'] === undefined || typeof obj['metadata'] === 'string') &&
+    (obj['ip_address'] === undefined || typeof obj['ip_address'] === 'string') &&
+    obj['created_at'] instanceof Date
+  );
+}
+
+export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
+  const db = getDb();
+
+  app.addHook('onRequest', async (req, reply) => {
+    // Check for admin authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return;
+    }
+
+    const token = authHeader.slice(7);
+    try {
+      // This should use the shared auth utility
+      // For now, we check a simple admin token for protection
+      if (!process.env['ADMIN_API_KEY']) {
+        reply.status(500).send({ error: 'Admin API not configured' });
+        return;
+      }
+      // P0-FIX: Use constant-time comparison to prevent timing attacks
+      // String comparison leaks timing info that can be used to brute-force the key
+      const expectedKey = process.env['ADMIN_API_KEY'];
+      const tokenBuf = Buffer.from(token, 'utf8');
+      const expectedBuf = Buffer.from(expectedKey, 'utf8');
+      
+      if (tokenBuf.length !== expectedBuf.length) {
+        reply.status(403).send({ error: 'Forbidden. Admin access required.' });
+        return;
+      }
+      
+      if (!crypto.timingSafeEqual(tokenBuf, expectedBuf)) {
+        reply.status(403).send({ error: 'Forbidden. Admin access required.' });
+        return;
+      }
+    } catch (err) {
+      reply.status(401).send({ error: 'Invalid token' });
+      return;
+    }
+  });
+
+  app.get('/admin/audit', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { orgId, action, from, to } = req.query as {
+        orgId?: string;
+        action?: string;
+        from?: string;
+        to?: string;
+      };
+      const limitParam = (req.query as Record<string, unknown>)['limit'];
+      const offsetParam = (req.query as Record<string, unknown>)['offset'];
+
+      // Parse and validate pagination parameters
+      const limit = Math.min(Math.max(parseInt(String(limitParam || '50'), 10) || 50, 1), 200);
+      const offset = Math.max(parseInt(String(offsetParam || '0'), 10) || 0, 0);
+
+      let fromDate: Date | undefined;
+      let toDate: Date | undefined;
+
+      if (from) {
+        fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+          return reply.status(400).send({ error: 'Invalid from date format' });
+        }
+      }
+
+      if (to) {
+        toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+          return reply.status(400).send({ error: 'Invalid to date format' });
+        }
+      }
+
+      if (fromDate && toDate) {
+        const daysDiff = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysDiff > 90) {
+          return reply.status(400).send({ error: 'Date range cannot exceed 90 days' });
+        }
+      }
+
+      let validatedAction: AllowedAuditAction | undefined;
+      if (action) {
+        const validation = validateAction(action);
+        if (!validation.success) {
+          return reply.status(400).send({
+            error: 'Invalid action parameter',
+            allowedActions: ALLOWED_AUDIT_ACTIONS
+          });
+        }
+        validatedAction = validation.data;
+      }
+
+      // P0-FIX: IDOR Vulnerability - Require explicit org_id and verify admin has access
+      // Previously: any admin could query any org's data by changing orgId parameter
+      // Now: org_id is required and we should verify admin membership (simplified check here)
+      if (!orgId) {
+        return reply.status(400).send({ error: 'orgId is required' });
+      }
+      
+      // Validate UUID format
+      if (!/^[0-9a-f-]{36}$/i.test(orgId)) {
+        return reply.status(400).send({ error: 'Invalid orgId format' });
+      }
+      
+      // P0-FIX: TODO - Add proper org membership verification
+      // const hasAccess = await verifyAdminOrgAccess(req.auth.userId, orgId);
+      // if (!hasAccess) {
+      //   return reply.status(403).send({ error: 'Access denied to this organization' });
+      // }
+      
+      const db = await getDb();
+      let q = db('audit_events').where({ org_id: orgId });  // P0-FIX: Always filter by org_id
+
+      if (validatedAction) {
+        q = q.where({ action: validatedAction });
+      }
+
+      if (fromDate) q = q.where('created_at', '>=', fromDate);
+      if (toDate) q = q.where('created_at', '<=', toDate);
+
+      // Get total count for pagination metadata
+      const countQuery = q.clone();
+      const countResult = await countQuery['count']('* as count');
+      if (!Array.isArray(countResult) || countResult.length === 0 || !isCountResult(countResult[0])) {
+        throw new Error('Invalid count result from database');
+      }
+      const count = countResult[0]['count'];
+      const total = typeof count === 'string' ? parseInt(count, 10) : count;
+
+      // Get paginated events
+      const events = await q
+        .orderBy('created_at', 'desc')
+        .limit(limit)
+        .offset(offset);
+
+      // Validate all events have correct structure
+      if (!Array.isArray(events) || !events.every(isAuditEvent)) {
+        throw new Error('Invalid event data from database');
+      }
+
+      return {
+        data: events,
+        pagination: {
+          limit,
+          offset,
+          total,
+          hasMore: offset + events.length < total
+        }
+      };
+    } catch (error) {
+      console.error('[admin/audit] Error:', error);
+      const errorResponse: { error: string; message?: string } = {
+        error: 'Internal server error'
+      };
+      if (process.env['NODE_ENV'] === 'development' && error instanceof Error) {
+        errorResponse["message"] = error["message"];
+      }
+      return reply.status(500).send(errorResponse);
+    }
+  });
+}

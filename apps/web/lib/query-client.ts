@@ -1,0 +1,162 @@
+import { QueryClient, QueryFunctionContext } from '@tanstack/react-query';
+
+/**
+* React Query Client Configuration
+* Provides centralized data fetching and caching
+* 
+* P1-HIGH SECURITY FIXES:
+* - Issue 17: Missing request timeout in hooks
+* - Issue 18: Missing request cancellation on unmount
+* - Issue 21: HTTPS enforcement
+*/
+
+// Default request timeout: 30 seconds
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * Fetch with timeout and automatic cancellation support
+ * SECURITY FIX: Issue 17 & 18 - Request timeout and cancellation
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  signal?: AbortSignal
+): Promise<Response> {
+  // SECURITY FIX: Issue 21 - HTTPS enforcement in production
+  if (typeof window !== 'undefined' && process.env['NODE_ENV'] === 'production') {
+    const urlObj = new URL(url, window.location.origin);
+    if (urlObj.protocol !== 'https:' && urlObj.hostname !== 'localhost') {
+      throw new Error('HTTPS required in production');
+    }
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  
+  // Combine external signal with internal timeout
+  if (signal) {
+    signal.addEventListener('abort', () => controller.abort());
+  }
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${DEFAULT_REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Default query function with timeout and error handling
+ */
+const defaultQueryFn = async ({ queryKey, signal }: QueryFunctionContext) => {
+  const [url, params] = queryKey as [string, Record<string, unknown>?];
+  
+  const queryString = params 
+    ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
+    : '';
+  
+  const response = await fetchWithTimeout(`${url}${queryString}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  }, signal);
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new Error(error.message || `HTTP ${response.status}`);
+  }
+  
+  return response.json();
+};
+
+/**
+* Create a new QueryClient instance
+* Can be called on both client and server
+*/
+export function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Default stale time: 5 minutes
+        staleTime: 5 * 60 * 1000,
+        // Default cache time: 10 minutes
+        gcTime: 10 * 60 * 1000,
+        // Retry failed requests 2 times
+        retry: 2,
+        // Refetch on window focus (disable for better UX)
+        refetchOnWindowFocus: false,
+        // Refetch on reconnect
+        refetchOnReconnect: true,
+        // SECURITY FIX: Issue 18 - Ensure queries can be cancelled
+        queryFn: defaultQueryFn,
+        // SECURITY FIX: Issue 17 - Network mode
+        networkMode: 'online',
+      },
+      mutations: {
+        // Retry mutations once on failure
+        retry: 1,
+        // SECURITY FIX: Issue 18 - Ensure mutations can be cancelled
+        networkMode: 'online',
+      },
+    },
+  });
+}
+
+/**
+* Singleton query client for client-side usage
+*/
+let clientQueryClient: QueryClient | undefined;
+
+export function getQueryClient() {
+  if (typeof window === 'undefined') {
+    // Server: always create a new instance
+    return createQueryClient();
+  }
+  // Client: reuse existing instance
+  if (!clientQueryClient) {
+    clientQueryClient = createQueryClient();
+  }
+  return clientQueryClient;
+}
+
+/**
+ * Prefetch data on server
+ * Useful for SSR
+ */
+export async function prefetchQuery(
+  queryClient: QueryClient,
+  queryKey: string[],
+  fetcher: () => Promise<unknown>
+): Promise<void> {
+  await queryClient.prefetchQuery({
+    queryKey,
+    queryFn: fetcher,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Invalidate multiple queries at once
+ */
+export function invalidateQueries(
+  queryClient: QueryClient,
+  queryKeys: string[][]
+): Promise<void> {
+  const promises = queryKeys.map(key => 
+    queryClient.invalidateQueries({ queryKey: key })
+  );
+  return Promise.all(promises).then(() => undefined);
+}
+
+// Re-export fetch utility
+export { fetchWithTimeout, DEFAULT_REQUEST_TIMEOUT_MS };

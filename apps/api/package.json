@@ -1,0 +1,38 @@
+{
+  "name": "@smartbeak/api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "worker": "tsx src/jobs/worker.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.0",
+    "@google-analytics/data": "^4.0.0",
+    "abort-controller": "^3.0.0",
+    "bullmq": "^5.0.0",
+    "fastify": "^4.27.0",
+    "form-data": "^4.0.0",
+    "googleapis": "^133.0.0",
+    "ioredis": "^5.3.0",
+    "jsonwebtoken": "^9.0.0",
+    "knex": "^3.0.0",
+    "lru-cache": "^10.0.0",
+    "node-fetch": "^3.3.2",
+    "p-limit": "5.0.0",
+    "pg": "^8.11.5",
+    "stripe": "^14.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.5"
+  }
+}

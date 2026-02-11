@@ -1,0 +1,97 @@
+File,Line,Severity,Issue,Status,Notes
+control-plane/db/migrations/001_orgs.sql,9,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/001_orgs.sql,15,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/001_orgs.sql,22,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/001_orgs.sql,34,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/001_orgs.sql,35,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/003_analytics.sql,5,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/004_billing.sql,15,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/004_billing.sql,16,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/004_billing.sql,12,MEDIUM,Missing ON DELETE CASCADE on FK,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+control-plane/db/migrations/005_usage.sql,8,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/006_onboarding.sql,8,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/007_guardrails.sql,5,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/007_guardrails.sql,14,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/007_guardrails.sql,10,MEDIUM,Missing ON DELETE CASCADE on FK,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+control-plane/db/migrations/008_queues.sql,7,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/009_cost_optimization.sql,10,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/009_cost_optimization.sql,11,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/009_cost_optimization.sql,12,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/010_org_integrations.sql,10,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/010_org_integrations.sql,11,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/011_domain_settings.sql,35,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/011_domain_settings.sql,36,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/013_sequence_monitoring.sql,64,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+control-plane/db/migrations/013_sequence_monitoring.sql,65,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/001_init.sql,12,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/001_init.sql,13,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/001_init.sql,14,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/001_init.sql,15,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/002_domain_scoped.sql,5,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/002_domain_scoped.sql,6,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/002_domain_scoped.sql,7,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/002_domain_scoped.sql,17,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/002_domain_scoped.sql,20,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/002_domain_scoped.sql,32,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/004_scheduling.sql,3,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/005_revisions.sql,7,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/content/db/migrations/005_revisions.sql,4,MEDIUM,Missing ON DELETE CASCADE on FK,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+domains/customers/db/migrations/001_init.sql,17,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/customers/db/migrations/001_init.sql,18,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/customers/db/migrations/002_customers_table.sql,10,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/customers/db/migrations/002_customers_table.sql,11,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,7,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,8,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,9,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,25,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,26,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,27,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,37,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/domains/db/migrations/001_init.sql,38,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/diligence/db/migrations/001_init.sql,7,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/diligence/db/migrations/001_init.sql,8,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/diligence/db/migrations/001_init.sql,9,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/authors/db/migrations/001_init.sql,19,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/authors/db/migrations/001_init.sql,20,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/search/db/migrations/001_init.sql,8,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/search/db/migrations/001_init.sql,16,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/search/db/migrations/001_init.sql,26,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/search/db/migrations/001_init.sql,11,MEDIUM,Missing ON DELETE CASCADE on FK,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+domains/search/db/migrations/001_init.sql,19,MEDIUM,Missing ON DELETE CASCADE on FK,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+domains/notifications/db/migrations/001_init.sql,10,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/notifications/db/migrations/001_init.sql,19,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/notifications/db/migrations/001_init.sql,28,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/notifications/db/migrations/001_init.sql,2-29,MEDIUM,Missing ON DELETE CASCADE on FKs,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+domains/notifications/db/migrations/002_dlq.sql,7,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/publishing/db/migrations/001_init.sql,8,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/publishing/db/migrations/001_init.sql,17,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/publishing/db/migrations/001_init.sql,18,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/publishing/db/migrations/001_init.sql,27,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/publishing/db/migrations/001_init.sql,2-27,MEDIUM,Missing ON DELETE CASCADE on FKs,UNFIXED (immutable),Fix exists in 20260210_fix_foreign_key_cascade.sql
+domains/activity/db/migrations/001_init.sql,11,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+domains/media/db/migrations/003_storage_lifecycle.sql,3,MEDIUM,TIMESTAMP without timezone,UNFIXED (immutable),Fix exists in MIGRATION_FIX_TIMESTAMPTZ.sql
+MIGRATION_FIX_TIMESTAMPTZ.sql,N/A,INFO,Fix migration for TIMESTAMP→TIMESTAMPTZ,FIXED,Converts 50+ columns
+infra/migrations/20260210_fix_all_p0_critical.sql,N/A,INFO,Fix migration for TIMESTAMP→TIMESTAMPTZ,FIXED,Converts 20 columns
+infra/migrations/20260210_fix_all_p0_critical.sql,N/A,INFO,Fix migration for ON DELETE CASCADE,FIXED,Fixes 8 FKs
+infra/migrations/20260210_fix_all_p0_critical.sql,N/A,INFO,Fix migration for GIN indexes,FIXED,Creates 15 GIN indexes
+packages/db/migrations/20260210_fix_foreign_key_cascade.sql,N/A,INFO,Fix migration for ON DELETE CASCADE,FIXED,Fixes 25+ FKs
+packages/db/migrations/20260210_add_jsonb_gin_indexes.sql,N/A,INFO,Fix migration for GIN indexes,FIXED,Creates 35+ GIN indexes
+packages/db/migrations/20260210_fix_analytics_timestamp_timezone.sql,N/A,INFO,Fix migration for TIMESTAMP→TIMESTAMPTZ,FIXED,Fixes 8 tables
+packages/db/migrations/20260228_fix_content_archive_timestamps.sql,N/A,INFO,Fix migration for TIMESTAMP→TIMESTAMPTZ,FIXED,Fixes content_archive tables
+packages/db/migrations/20260228_fix_content_archive_transaction.sql,N/A,INFO,Has proper transaction boundaries,FIXED,Has BEGIN/COMMIT
+packages/db/migrations/20260228_add_rls_policies.sql,N/A,INFO,Has proper transaction boundaries,FIXED,Has BEGIN/COMMIT
+packages/db/migrations/20260228_add_analytics_tables.sql,N/A,INFO,Uses TIMESTAMPTZ correctly,FIXED,New migration - correct
+packages/db/migrations/20260301_publish_intents.sql,N/A,INFO,Uses TIMESTAMPTZ correctly,FIXED,New migration - correct
+packages/db/migrations/20260301_publish_intents.sql,N/A,LOW,Missing transaction boundaries,UNFIXED,No BEGIN/COMMIT
+packages/db/migrations/20260310_job_executions.sql,N/A,INFO,Uses TIMESTAMPTZ correctly,FIXED,New migration - correct
+packages/db/migrations/20260310_job_executions.sql,N/A,LOW,Missing transaction boundaries,UNFIXED,No BEGIN/COMMIT
+packages/db/migrations/20260311_publish_executions.sql,N/A,INFO,Uses TIMESTAMPTZ correctly,FIXED,New migration - correct
+packages/db/migrations/20260311_publish_executions.sql,N/A,LOW,Missing transaction boundaries,UNFIXED,No BEGIN/COMMIT
+packages/db/migrations/20260506_double_optin.sql,N/A,INFO,Uses TIMESTAMPTZ correctly,FIXED,New migration - correct
+packages/db/migrations/20260506_double_optin.sql,N/A,LOW,Missing transaction boundaries,UNFIXED,No BEGIN/COMMIT
+packages/db/migrations/20260610_keywords.sql,N/A,INFO,Uses TIMESTAMPTZ correctly,FIXED,New migration - correct
+packages/db/migrations/20260610_keywords.sql,N/A,LOW,Missing transaction boundaries,UNFIXED,No BEGIN/COMMIT
+control-plane/jobs/media-cleanup.ts,4,INFO,p-limit correctly imported,FIXED,Proper bounded concurrency
+control-plane/jobs/media-cleanup.ts,88,INFO,p-limit correctly used,FIXED,MAX_CONCURRENT_OPERATIONS = 10
+control-plane/jobs/content-scheduler.ts,2,INFO,p-limit correctly imported,FIXED,Proper bounded concurrency
+control-plane/jobs/content-scheduler.ts,70,INFO,p-limit correctly used,FIXED,MAX_CONCURRENT_PUBLISHES = 5

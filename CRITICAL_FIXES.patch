@@ -1,0 +1,148 @@
+--- a/packages/ml/predictions.ts
++++ b/packages/ml/predictions.ts
+@@ -1,6 +1,7 @@
+ /**
+  * ML-Based Predictions & Anomaly Detection
+  */
++import crypto from 'crypto';
+ import { Pool } from 'pg';
+ import { EventEmitter } from 'events';
+ 
+--- a/apps/web/pages/api/webhooks/stripe.ts
++++ b/apps/web/pages/api/webhooks/stripe.ts
+@@ -127,7 +127,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
+     throw new Error('Checkout session missing orgId metadata');
+   }
+ 
+-  const client = await db.connect();
++  const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+ 
+@@ -187,7 +187,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
+   console.log(`[stripe/webhook] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+   
+-  const client = await db.connect();
++  const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+ 
+@@ -230,7 +230,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
+   console.log(`[stripe/webhook] Subscription cancelled: ${subscription.id}`);
+   
+-  const client = await db.connect();
++  const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+ 
+@@ -269,7 +269,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+   console.log(`[stripe/webhook] Payment failed for invoice: ${invoice.id}`);
+   
+-  const client = await db.connect();
++  const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+ 
+@@ -326,7 +326,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
+   console.log(`[stripe/webhook] Payment succeeded for invoice: ${invoice.id}`);
+   
+-  const client = await db.connect();
++  const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+ 
+--- a/apps/api/src/utils/moduleCache.ts
++++ b/apps/api/src/utils/moduleCache.ts
+@@ -15,17 +15,37 @@ export class ModuleCache<T> {
+   async get(): Promise<T> {
+-    // FIX: Race condition prevention - return existing promise if loading
++    // CRITICAL FIX: Atomic check-and-set to prevent race condition
+     if (this.promise) {
+       return this.promise;
+     }
+ 
+-    // FIX: Use isLoading flag to prevent multiple concurrent loader calls
+-    if (!this.isLoading) {
++    // CRITICAL FIX: Double-checked locking pattern
++    if (!this.promise && !this.isLoading) {
+       this.isLoading = true;
+       this.promise = this.loader().catch((err) => {
+         // Clear cache on error to allow retry
+         this.promise = null;
+         this.isLoading = false;
+         throw err;
+       });
+     }
+ 
+-    return this.promise!;
++    // Wait for the promise to be set (handles concurrent access)
++    while (!this.promise && this.isLoading) {
++      await new Promise(resolve => setTimeout(resolve, 10));
++    }
++    
++    if (!this.promise) {
++      throw new Error('ModuleCache: Promise not initialized after loading');
++    }
++    
++    return this.promise;
+   }
+ 
+--- a/apps/api/src/utils/moduleCache.ts
++++ b/apps/api/src/utils/moduleCache.ts
+@@ -63,11 +63,20 @@ export class ThreadSafeModuleCache<T> {
+ 
+     // Check if currently loading (prevent race condition)
+     if (this.locks.get(key)) {
+-      // Wait for the existing promise
+-      const existing = this.cache.get(key);
+-      if (existing) return existing;
+-      // If not in cache yet, retry
+-      return this.get(key);
++      // CRITICAL FIX: Add timeout to prevent infinite recursion
++      const maxRetries = 100;
++      let retries = 0;
++      
++      while (this.locks.get(key) && retries < maxRetries) {
++        await new Promise(resolve => setTimeout(resolve, 10));
++        const existing = this.cache.get(key);
++        if (existing) return existing;
++        retries++;
++      }
++      
++      if (retries >= maxRetries) {
++        throw new Error(`ThreadSafeModuleCache: Timeout waiting for lock on key "${key}"`);
++      }
++      
++      return this.get(key);
+     }
+ 
+     // Acquire lock
+--- a/packages/kernel/logger.ts
++++ b/packages/kernel/logger.ts
+@@ -274,7 +274,7 @@ function createLogEntry(
+  * @param metadata - Additional metadata
+  */
+ export function debug(message: string, metadata?: Record<string, any>): void {
+-  if (process.env.LOG_LEVEL === 'debug') {
++  if (shouldLog('debug')) {
+     const entry = createLogEntry('debug', message, metadata);
+     getHandlers().forEach(h => h(entry));
+   }
+--- a/packages/analytics/pipeline.ts
++++ b/packages/analytics/pipeline.ts
+@@ -136,6 +136,16 @@ export class AnalyticsPipeline {
+     if (this.buffer.keywords.length === 0) return;
+ 
+     const items = this.buffer.keywords.splice(0, this.batchSize);
++    
++    // CRITICAL FIX: Check if re-adding items would exceed buffer limit
++    const MAX_BUFFER_SIZE = this.batchSize * 5;
++    if (this.buffer.keywords.length + items.length > MAX_BUFFER_SIZE) {
++      // Drop oldest items to prevent unbounded growth
++      const overflow = (this.buffer.keywords.length + items.length) - MAX_BUFFER_SIZE;
++      this.buffer.keywords.splice(0, overflow);
++      console.warn(`[AnalyticsPipeline] Buffer overflow: dropped ${overflow} oldest items`);
++    }
+ 
+     try {
+       // Use unnest for efficient batch insert

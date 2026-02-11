@@ -1,0 +1,21 @@
+{
+  "name": "@smartbeak/database",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@config/index": "file:../config",
+    "@kernel/logger": "file:../kernel",
+    "@utils/index": "file:../utils",
+    "knex": "^3.0.0",
+    "pg": "^8.11.5",
+    "lru-cache": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.4.5"
+  }
+}

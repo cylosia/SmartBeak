@@ -1,0 +1,140 @@
+
+
+import { Pool } from 'pg';
+import { randomUUID } from 'crypto';
+
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('notification:dlq:repository');
+
+// Maximum limit constant
+const MAX_LIMIT = 1000;
+
+/**
+* Repository implementation for Notification DLQ (Dead Letter Queue) using PostgreSQL
+* */
+export class PostgresNotificationDLQRepository {
+  constructor(private pool: Pool) {}
+
+  /**
+  * Record a notification in the DLQ
+  */
+  async record(notificationId: string, channel: string, reason: string): Promise<void> {
+  // Validate input parameters
+  if (!notificationId || typeof notificationId !== 'string') {
+    throw new Error('notificationId must be a non-empty string');
+  }
+  if (!channel || typeof channel !== 'string') {
+    throw new Error('channel must be a non-empty string');
+  }
+  if (!reason || typeof reason !== 'string') {
+    throw new Error('reason must be a non-empty string');
+  }
+
+  try {
+    await this.pool.query(
+    `INSERT INTO notification_dlq (id, notification_id, channel, reason)
+    VALUES ($1, $2, $3, $4)`,
+    [randomUUID(), notificationId, channel, reason]
+    );
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to record DLQ entry', err, {
+    notificationId, channel, reason
+    });
+    throw error;
+  }
+  }
+
+  /**
+  * List DLQ entries
+  */
+  async list(limit = 50): Promise<Array<{
+  id: string;
+  notificationId: string;
+  channel: string;
+  reason: string;
+  createdAt: Date;
+  }>> {
+  // Validate limit
+  const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+
+  try {
+    const { rows } = await this.pool.query(
+    `SELECT id, notification_id, channel, reason, created_at
+    FROM notification_dlq
+    ORDER BY created_at DESC
+    LIMIT $1`,
+    [safeLimit]
+    );
+
+    return rows.map(r => ({
+    id: r["id"],
+    notificationId: r.notification_id,
+    channel: r.channel,
+    reason: r.reason,
+    createdAt: r.created_at,
+    }));
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to list DLQ entries', err);
+    throw error;
+  }
+  }
+
+  /**
+  * Delete DLQ entry by ID
+  */
+  async delete(id: string): Promise<void> {
+  if (!id || typeof id !== 'string') {
+    throw new Error('id must be a non-empty string');
+  }
+  try {
+    await this.pool.query(
+    'DELETE FROM notification_dlq WHERE id = $1',
+    [id]
+    );
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to delete DLQ entry', err, { id });
+    throw error;
+  }
+  }
+
+  /**
+  * Get DLQ entry by ID
+  */
+  async getById(id: string): Promise<{
+  id: string;
+  notificationId: string;
+  channel: string;
+  reason: string;
+  createdAt: Date;
+  } | null> {
+  if (!id || typeof id !== 'string') {
+    throw new Error('id must be a non-empty string');
+  }
+  try {
+    const { rows } = await this.pool.query(
+    `SELECT id, notification_id, channel, reason, created_at
+    FROM notification_dlq
+    WHERE id = $1`,
+    [id]
+    );
+
+    if (!rows[0]) return null;
+
+    return {
+    id: rows[0]["id"],
+    notificationId: rows[0].notification_id,
+    channel: rows[0].channel,
+    reason: rows[0].reason,
+    createdAt: rows[0].created_at,
+    };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to get DLQ entry by ID', err, { id });
+    throw error;
+  }
+  }
+}

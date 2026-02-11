@@ -1,0 +1,20 @@
+groups:
+- name: circuit_breaker_escalation
+  rules:
+  - alert: CircuitBreakerOpenWarning
+    expr: increase(circuit_open[5m]) > 0 and increase(circuit_closed[5m]) == 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Circuit breaker open (warning)"
+      description: "Adapter {{ $labels.name }} breaker open for 5 minutes."
+
+  - alert: CircuitBreakerOpenCritical
+    expr: increase(circuit_open[15m]) > 0 and increase(circuit_closed[15m]) == 0
+    for: 15m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Circuit breaker open (critical)"
+      description: "Adapter {{ $labels.name }} breaker open for 15 minutes. Immediate action required."

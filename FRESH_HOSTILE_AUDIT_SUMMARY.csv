@@ -1,0 +1,35 @@
+File,Line,Severity,Issue,Status,Category,SQL_Fix_Required
+packages/db/migrations/20260214_add_affiliate_links.sql,4,P0-Critical,Missing ON DELETE CASCADE on foreign key,NEW,SQL/Migration,Yes
+packages/db/migrations/20260227_add_content_archive_tables.sql,9,P0-Critical,TIMESTAMP without timezone (requested_at),NEW,SQL/Migration,Yes
+packages/db/migrations/20260227_add_content_archive_tables.sql,12,P0-Critical,TIMESTAMP without timezone (approved_at),NEW,SQL/Migration,Yes
+packages/db/migrations/20260227_add_content_archive_tables.sql,28,P0-Critical,TIMESTAMP without timezone (performed_at),NEW,SQL/Migration,Yes
+domains/content/infra/persistence/PostgresContentRepository.ts,215,P0-Critical,Unbounded OFFSET pagination,UNFIXED,Transaction,No
+domains/content/infra/persistence/PostgresContentRepository.ts,227,P0-Critical,Unbounded OFFSET pagination,UNFIXED,Transaction,No
+domains/content/infra/persistence/PostgresContentRepository.ts,299,P0-Critical,Unbounded OFFSET pagination,UNFIXED,Transaction,No
+domains/notifications/infra/persistence/PostgresNotificationRepository.ts,142,P0-Critical,Unbounded OFFSET pagination,UNFIXED,Transaction,No
+domains/notifications/infra/persistence/PostgresNotificationRepository.ts,205,P0-Critical,Unbounded OFFSET pagination,UNFIXED,Transaction,No
+domains/search/application/SearchIndexingWorker.ts,192,P0-Critical,N+1 query pattern in batch processing,NEW,Transaction,No
+domains/search/application/SearchIndexingWorker.ts,72,P0-Critical,Transaction boundary violation - uses different connections,NEW,Transaction,No
+apps/web/lib/db.ts,51,P0-Critical,Connection pool without lock_timeout,UNFIXED,Transaction,No
+apps/web/lib/db.ts,275,P0-Critical,Missing lock_timeout in withTransaction,UNFIXED,Transaction,No
+packages/db/seeds/20260210_backfill_human_intents.sql,1,P0-Critical,Seed file without transaction safety or idempotency,UNFIXED,Migration,Yes
+packages/db/migrations/20260214_add_affiliate_offers.sql,10,P0-Critical,Missing NOT NULL on financial field (commission_rate),NEW,SQL/Migration,Yes
+packages/db/migrations/20260212_add_content_genesis.sql,4,P1-High,Missing index on high-cardinality FK (ai_advisory_artifact_id),NEW,Index,Yes
+packages/db/migrations/20260228_add_analytics_tables.sql,97,P1-High,Missing size limits on JSONB columns,UNFIXED,SQL,Yes
+domains/content/infra/persistence/PostgresContentRevisionRepository.ts,18,P1-High,Repository uses pool instead of client parameter,NEW,Transaction,No
+domains/content/infra/persistence/PostgresContentRepository.ts,400,P1-High,Batch save no partial success recovery,NEW,Transaction,No
+packages/db/migrations/20260515_domain_sale_readiness.sql,1,P1-High,Missing index on domain_id,NEW,Index,Yes
+apps/api/src/db.ts,310,P1-High,Missing read replica lag validation,UNFIXED,Transaction,No
+apps/web/lib/db.ts,51,P1-High,Missing connection validation before use,UNFIXED,Transaction,No
+apps/api/src/db.ts,387,P1-High,Analytics DB fallback silent in production,UNFIXED,Transaction,No
+apps/web/lib/db.ts,354,P1-High,No query plan capture for slow queries,UNFIXED,Transaction,No
+packages/db/migrations/20260227_add_content_archive_tables.sql,39,P1-High,Irreversible migration pattern - no transaction wrapper,NEW,Migration,Yes
+packages/db/migrations/20260213_add_llm_task_preferences.sql,1,P2-Medium,Missing ON DELETE for llm_model_id,NEW,SQL/Migration,Yes
+packages/db/migrations/20260310_job_executions.sql,4,P2-Medium,Nullable entity_id without partial index,NEW,Index,Yes
+Multiple tables,,P2-Medium,Missing Row-Level Security policies,UNFIXED,Security,Yes
+packages/db/migrations/20260621_advisor_snapshots.sql,1,P2-Medium,Missing compression settings for large JSONB,UNFIXED,SQL,Yes
+packages/db/migrations/20260228_add_analytics_tables.sql,6,P2-Medium,BIGINT PK without sequence monitoring,UNFIXED,SQL,Yes
+control-plane/db/migrations/002_domains_org.sql,1,P2-Medium,Missing foreign key constraints,UNFIXED,SQL/Migration,Yes
+Multiple files,,P3-Low,Table names inconsistent (snake_case vs camelCase),UNFIXED,Naming,No
+Multiple files,,P3-Low,No BRIN indexes for time-series data,UNFIXED,Index,Yes
+Multiple files,,P3-Low,Missing fillfactor tuning for update-heavy tables,UNFIXED,SQL,Yes

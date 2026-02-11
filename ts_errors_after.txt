@@ -1,0 +1,16 @@
+﻿
+> build
+> tsc -p tsconfig.json
+
+apps/api/src/advisor/keywordCoverage.ts(30,42): error TS1005: ':' expected.
+apps/api/src/advisor/keywordCoverage.ts(31,46): error TS1005: ':' expected.
+apps/api/src/portfolio/heatmapKeywords.ts(15,29): error TS1005: ':' expected.
+apps/api/src/routes/emailSubscribers/index.ts(205,47): error TS1005: ':' expected.
+apps/web/lib/theme.tsx(2,2): error TS1109: Expression expected.
+apps/web/lib/theme.tsx(2,10): error TS1005: ';' expected.
+apps/web/lib/theme.tsx(2,18): error TS1434: Unexpected keyword or identifier.
+apps/web/lib/theme.tsx(3,13): error TS1005: ';' expected.
+apps/web/lib/theme.tsx(3,24): error TS1005: ';' expected.
+apps/web/lib/theme.tsx(3,34): error TS1005: '(' expected.
+apps/web/lib/theme.tsx(3,41): error TS1005: ')' expected.
+apps/web/lib/theme.tsx(4,3): error TS1161: Unterminated regular expression literal.

@@ -1,0 +1,91 @@
+File,Line,Severity,Category,Issue,Fix,Est_Hours
+control-plane/db/migrations/001_orgs.sql,9,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ NOT NULL,0.5
+control-plane/db/migrations/001_orgs.sql,15,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ NOT NULL,0.5
+control-plane/db/migrations/001_orgs.sql,22,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ NOT NULL,0.5
+control-plane/db/migrations/001_orgs.sql,34,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ NULLABLE,0.5
+domains/content/db/migrations/001_init.sql,12-15,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/content/db/migrations/002_domain_scoped.sql,5-7,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/content/db/migrations/002_domain_scoped.sql,17,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/content/db/migrations/002_domain_scoped.sql,32,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/content/db/migrations/005_revisions.sql,7,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/authors/db/migrations/001_init.sql,18-19,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/customers/db/migrations/001_init.sql,17-18,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/domains/db/migrations/001_init.sql,7-9,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/domains/db/migrations/001_init.sql,25-27,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/domains/db/migrations/001_init.sql,37-38,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/media/db/migrations/003_storage_lifecycle.sql,3,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/diligence/db/migrations/001_init.sql,7-9,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/notifications/db/migrations/001_init.sql,10,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/notifications/db/migrations/001_init.sql,19,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/notifications/db/migrations/001_init.sql,28,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/notifications/db/migrations/002_dlq.sql,7,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/publishing/db/migrations/001_init.sql,8,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/publishing/db/migrations/001_init.sql,17,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/publishing/db/migrations/001_init.sql,27,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/search/db/migrations/001_init.sql,8,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/search/db/migrations/001_init.sql,16,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/search/db/migrations/001_init.sql,26,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+domains/activity/db/migrations/001_init.sql,11,CRITICAL,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+control-plane/db/migrations/004_billing.sql,12,CRITICAL,FOREIGN_KEY,Missing ON DELETE CASCADE,Add ON DELETE CASCADE,0.5
+control-plane/db/migrations/004_billing.sql,13,CRITICAL,FOREIGN_KEY,Missing ON DELETE action,Add ON DELETE SET NULL,0.5
+control-plane/db/migrations/005_usage.sql,3,CRITICAL,FOREIGN_KEY,Missing ON DELETE CASCADE,Add ON DELETE CASCADE,0.5
+control-plane/db/migrations/006_onboarding.sql,3,CRITICAL,FOREIGN_KEY,Missing ON DELETE CASCADE,Add ON DELETE CASCADE,0.5
+control-plane/db/migrations/007_guardrails.sql,10,CRITICAL,FOREIGN_KEY,Missing ON DELETE CASCADE,Add ON DELETE CASCADE,0.5
+packages/db/migrations/20260210_add_domain_transfer_log.sql,6,CRITICAL,FOREIGN_KEY,Missing ON DELETE CASCADE,Add ON DELETE CASCADE,0.5
+packages/db/migrations/20260210_add_domain_transfer_log.sql,10,SEVERE,FOREIGN_KEY,Missing ON DELETE action,Add ON DELETE SET NULL,0.5
+domains/activity/db/migrations/001_init.sql,10,CRITICAL,JSONB,JSONB column without GIN index,Add GIN index on metadata,1
+domains/notifications/db/migrations/001_init.sql,8,CRITICAL,JSONB,JSONB column without GIN index,Add GIN index on payload,1
+domains/publishing/db/migrations/001_init.sql,6,CRITICAL,JSONB,JSONB column without GIN index,Add GIN index on config,1
+domains/search/db/migrations/001_init.sql,14,CRITICAL,JSONB,JSONB column without GIN index,Add GIN index on fields,1
+domains/domains/db/migrations/002_registry_fields.sql,4,CRITICAL,JSONB,JSONB column without GIN index,Add GIN index on custom_config,1
+packages/db/migrations/20260210_add_human_intents.sql,6,CRITICAL,JSONB,JSONB without GIN index,Add GIN indexes,1
+packages/db/migrations/20260210_add_human_intents.sql,16-17,CRITICAL,JSONB,JSONB without GIN index,Add GIN indexes,1
+packages/db/migrations/20260210_add_idempotency_keys.sql,7-9,CRITICAL,JSONB,JSONB without GIN index,Add GIN indexes,1
+packages/db/migrations/20260210_add_risk_surfaces.sql,9,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on risk_flags,1
+packages/db/migrations/20260211_add_ai_advisory_artifacts.sql,21,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on parameters,1
+packages/db/migrations/20260212_add_content_genesis.sql,9,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on llm_parameters,1
+packages/db/migrations/20260213_add_llm_models.sql,6,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on capabilities,1
+packages/db/migrations/20260221_add_keyword_ingestion_schema.sql,29,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on metrics,1
+packages/db/migrations/20260224_add_activity_reflection_objections.sql,8,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on metadata,1
+packages/db/migrations/20260301_publish_intents.sql,7,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on target_config,1
+packages/db/migrations/20260303_feedback.sql,10,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on metrics,1
+packages/db/migrations/20260304_abuse_audit.sql,7,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on metadata,1
+packages/db/migrations/20260305_exports.sql,5,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on export_scope,1
+packages/db/migrations/20260410_email_domain.sql,6,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on content,1
+packages/db/migrations/20260430_image_assets.sql,8,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on usage_rights,1
+packages/db/migrations/20260510_content_roi.sql,12,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on assumptions,1
+packages/db/migrations/20260515_domain_sale_readiness.sql,10,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on rationale,1
+packages/db/migrations/20260621_advisor_snapshots.sql,4,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on snapshot,1
+packages/db/migrations/20260623_domain_metrics_snapshots.sql,4,CRITICAL,JSONB,JSONB without GIN index,Add GIN index on metrics,1
+domains/content/db/migrations/001_init.sql,19-23,SEVERE,INDEX,Missing composite index,Add (domain_id status publish_at),0.5
+domains/content/db/migrations/001_init.sql,23,SEVERE,INDEX,Single column index on updated_at,Use BRIN or remove,0.5
+domains/content/db/migrations/005_revisions.sql,10,SEVERE,INDEX,Missing composite index,Add (content_id created_at DESC),0.5
+domains/notifications/db/migrations/001_init.sql,N/A,SEVERE,INDEX,Missing composite for listPending,Add (status created_at),0.5
+domains/publishing/db/migrations/001_init.sql,N/A,SEVERE,INDEX,Missing composite for listPending,Add (status created_at),0.5
+domains/search/db/migrations/001_init.sql,14,SEVERE,INDEX,JSONB fields without GIN,Add GIN index,0.5
+domains/authors/db/migrations/001_init.sql,2-20,SEVERE,CONSTRAINT,Missing unique on (domain_id name),Add UNIQUE constraint,0.5
+domains/customers/db/migrations/001_init.sql,2-19,SEVERE,CONSTRAINT,Missing unique on (domain_id name),Add UNIQUE constraint,0.5
+PostgresContentRepository.ts,192-238,SEVERE,PAGINATION,OFFSET pagination used,Consider cursor-based pagination,2
+PostgresContentRepository.ts,368-403,CRITICAL,TRANSACTION,Late transaction start,Begin transaction immediately after connect,1
+PostgresContentRevisionRepository.ts,63-110,SEVERE,PAGINATION,OFFSET pagination used,Consider cursor-based pagination,2
+PostgresNotificationRepository.ts,127-176,SEVERE,PAGINATION,OFFSET pagination used,Consider cursor-based pagination,2
+PostgresNotificationRepository.ts,248-290,CRITICAL,TRANSACTION,No isolation level specified,Use appropriate isolation level,1
+PostgresPublishingJobRepository.ts,149-173,SEVERE,INDEX,No status index hint,Add index hint or composite index,0.5
+PostgresSearchDocumentRepository.ts,142-220,SEVERE,DEADLOCK,Batch upsert deadlock risk,Add advisory lock or order rows,2
+PostgresIndexingJobRepository.ts,100-143,SEVERE,PAGINATION,OFFSET pagination used,Consider cursor-based pagination,2
+PostgresSearchIndexRepository.ts,132-173,SEVERE,PAGINATION,OFFSET pagination used,Consider cursor-based pagination,2
+PostgresNotificationDLQRepository.ts,27-38,SEVERE,TIMEOUT,No query timeout,Add statement_timeout,0.5
+PostgresNotificationAttemptRepository.ts,17-48,SEVERE,TIMEOUT,No query timeout,Add statement_timeout,0.5
+PostgresPublishAttemptRepository.ts,27-58,SEVERE,TIMEOUT,No query timeout,Add statement_timeout,0.5
+apps/api/src/db.ts,121-132,SEVERE,POOL,Pool max too high,Reduce max to 10-15,0.5
+apps/web/lib/db.ts,52-63,SEVERE,POOL,Pool sizing issues,Add connection limits,0.5
+apps/web/lib/db.ts,612-618,SEVERE,SQL_INJECTION,String concatenation in SQL,Use full parameterization,1
+packages/database/index.ts,295-370,SEVERE,TRANSACTION,Transaction boundary issues,Fix error handling,1
+control-plane/db/migrations/012_brin_indexes.sql,1-74,MODERATE,INDEX,BRIN on small tables,Remove BRIN for tables <10M rows,1
+control-plane/db/migrations/013_sequence_monitoring.sql,64-65,MODERATE,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,0.5
+packages/db/migrations/20260228_add_analytics_tables.sql,81-134,MODERATE,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,1
+packages/db/migrations/20260229_add_monitoring_security_tables.sql,16-120,MODERATE,TIMESTAMP,TIMESTAMP without timezone,Change to TIMESTAMPTZ,1
+domains/seo/db/migrations/001_init.sql,2-6,MODERATE,SCHEMA,Minimal schema definition,Add proper constraints,0.5
+packages/db/migrations/20260210_fix_foreign_key_cascade.sql,1-262,LOW,REFERENCE,Cascade fix migration,Verify all FKs covered,0.5
+packages/db/migrations/20260210_add_jsonb_gin_indexes.sql,1-147,LOW,REFERENCE,GIN index migration,Verify all JSONB covered,0.5
+packages/db/migrations/20260210_fix_analytics_timestamp_timezone.sql,1-28,LOW,REFERENCE,Timezone fix migration,Verify complete coverage,0.5

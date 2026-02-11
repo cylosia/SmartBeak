@@ -1,0 +1,39 @@
+/**
+ * Strict TypeScript Configuration
+ * 
+ * Enhanced strict mode configuration for maximum type safety.
+ * This config extends the base and adds additional strictness checks.
+ * 
+ * @see https://www.typescriptlang.org/tsconfig#strict
+ */
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    /* Strict Type Checking - Additional beyond base */
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    
+    /* Additional Safety Checks */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    
+    /* Error Reporting */
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    
+    /* Module Resolution */
+    "resolveJsonModule": true,
+    "moduleDetection": "force"
+  }
+}

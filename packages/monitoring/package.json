@@ -1,0 +1,32 @@
+{
+  "name": "@smartbeak/monitoring",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smartbeak/kernel": "1.0.0",
+    "@smartbeak/utils": "1.0.0",
+    "@opentelemetry/api": "^1.8.0",
+    "@opentelemetry/core": "^1.22.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.49.0",
+    "@opentelemetry/instrumentation": "^0.49.0",
+    "@opentelemetry/instrumentation-express": "^0.35.0",
+    "@opentelemetry/instrumentation-http": "^0.49.0",
+    "@opentelemetry/instrumentation-pg": "^0.39.0",
+    "@opentelemetry/instrumentation-redis": "^0.38.0",
+    "@opentelemetry/resources": "^1.22.0",
+    "@opentelemetry/sdk-trace-base": "^1.22.0",
+    "@opentelemetry/sdk-trace-node": "^1.22.0",
+    "@opentelemetry/semantic-conventions": "^1.22.0",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.5"
+  }
+}

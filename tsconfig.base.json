@@ -1,0 +1,75 @@
+/**
+ * TypeScript Base Configuration
+ * 
+ * Root configuration for project references (composite projects).
+ * Each package has its own tsconfig.json that extends this base.
+ * 
+ * @see https://www.typescriptlang.org/docs/handbook/project-references.html
+ */
+{
+  "compilerOptions": {
+    /* Language and Environment */
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+
+    /* Strict Type Checking */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+
+    /* Declaration Settings for Composite Projects */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    /* Library Checking - Security: Don't skip lib check */
+    "skipLibCheck": true,
+
+    /* Output */
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+
+    /* Path Mapping */
+    "paths": {
+      "@kernel/*": ["packages/kernel/*"],
+      "@security/*": ["packages/security/*"],
+      "@errors": ["packages/errors/index.ts"],
+      "@config": ["packages/config/index.ts"],
+      "@config/*": ["packages/config/*"],
+      "@database": ["packages/database/index.ts"],
+      "@database/*": ["packages/database/*"],
+      "@utils/*": ["packages/utils/*"],
+      "@types/*": ["packages/types/*"],
+      "@domain/*": ["domains/*"],
+      "@packages/*": ["packages/*"],
+      "@shutdown": ["packages/shutdown/index.ts"]
+    }
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "control-plane/**/*.ts", "domains/**/*.ts", "packages/**/*.ts", "plugins/**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/__mocks__/**", "**/node_modules/**", "**/dist/**"],
+  "references": [
+    { "path": "./packages/types" },
+    { "path": "./packages/errors" },
+    { "path": "./packages/config" },
+    { "path": "./packages/database" },
+    { "path": "./packages/kernel" },
+    { "path": "./packages/middleware" },
+    { "path": "./packages/security" },
+    { "path": "./packages/monitoring" },
+    { "path": "./packages/analytics" },
+    { "path": "./packages/utils" },
+    { "path": "./packages/shutdown" },
+    { "path": "./packages/ml" },
+    { "path": "./packages/db" }
+  ]
+}

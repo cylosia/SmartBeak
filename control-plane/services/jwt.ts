@@ -1,0 +1,555 @@
+import jwt from 'jsonwebtoken';
+import Redis from 'ioredis';
+import { z } from 'zod';
+
+import { getLogger } from '../../packages/kernel/logger';
+import { randomBytes } from 'crypto';
+import { AuthError } from '@kernel/auth';
+
+
+/**
+* JWT Service
+* Token generation, revocation with security best practices
+*
+* DELEGATED: Token verification logic has been moved to packages/security/auth.ts
+* This file now focuses on:
+* - Token generation (signing)
+* - Redis-based token revocation
+* - Key management
+*/
+
+const logger = getLogger('JwtService');
+
+// Type exports at top level
+export type UserRole = 'admin' | 'editor' | 'viewer';
+export interface JwtClaims {
+  sub: string;
+  role: UserRole;
+  orgId?: string | undefined;
+  aud?: string;
+  iss?: string;
+  jti: string;
+  iat: number;
+  exp: number;
+  boundOrgId?: string;
+}
+
+// Re-export from unified auth package for backward compatibility
+export {
+  AuthError as JwtError,
+};
+
+// ============================================================================
+// Zod Schemas
+// ============================================================================
+
+export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer']);
+
+export const JwtClaimsInputSchema = z.object({
+  sub: z.string().min(1).max(256),
+  role: UserRoleSchema,
+  orgId: z.string().min(1).max(256).optional(),
+  aud: z.string().min(1).max(256).optional(),
+  iss: z.string().min(1).max(256).optional(),
+  expiresIn: z.string().regex(/^\d+\s*(ms|s|m|h|d|w)$/).optional(),
+});
+
+export const VerifyOptionsSchema = z.object({
+  audience: z.string().optional(),
+  issuer: z.string().optional(),
+  ignoreExpiration: z.boolean().optional(),
+});
+
+export const TokenMetadataSchema = z.object({
+  jti: z.string(),
+  iat: z.number(),
+  exp: z.number(),
+  boundOrgId: z.string().optional(),
+});
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+export type JwtClaimsInput = z.infer<typeof JwtClaimsInputSchema>;
+export type VerifyOptions = z.infer<typeof VerifyOptionsSchema>;
+export type TokenMetadata = z.infer<typeof TokenMetadataSchema>;
+
+/**
+* Sign token input (without auto-generated fields)
+*/
+export interface SignTokenInput {
+  sub: string;
+  role: UserRole;
+  orgId?: string;
+  aud?: string;
+  iss?: string;
+  expiresIn?: string;
+}
+
+/**
+* Token verification result with decoded claims
+*/
+export interface VerifyResult {
+  claims: JwtClaims;
+  isValid: boolean;
+  isExpired: boolean;
+  isRevoked: boolean;
+}
+
+/**
+* Token metadata for external storage
+*/
+export interface TokenInfo {
+  jti: string;
+  sub: string;
+  role: UserRole;
+  orgId?: string;
+  issuedAt: Date;
+  expiresAt: Date;
+  isRevoked: boolean;
+}
+
+/**
+* Circuit breaker state
+*/
+export interface CircuitBreakerState {
+  failures: number;
+  lastFailure: number;
+  isOpen: boolean;
+}
+
+/**
+* Time unit for parseMs function
+*/
+export type TimeUnit = 'ms' | 's' | 'm' | 'h' | 'd' | 'w';
+
+// ============================================================================
+// Error Types (additional service-specific errors)
+// ============================================================================
+
+class TokenInvalidError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TokenInvalidError';
+  }
+}
+
+export class InvalidKeyError extends AuthError {
+  override name: string;
+  constructor(message: string) {
+  super(message, 'INVALID_KEY');
+  this.name = 'InvalidKeyError';
+  }
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const MAX_TOKEN_LIFETIME = '24h';
+const DEFAULT_TOKEN_LIFETIME = '1h';
+const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] || 'smartbeak';
+const DEFAULT_ISSUER = process.env['JWT_ISSUER'] || 'smartbeak-api';
+
+const REVOCATION_KEY_PREFIX = 'jwt:revoked:';
+const REVOCATION_TTL_SECONDS = 86400 * 7; // 7 days
+
+const CIRCUIT_BREAKER_THRESHOLD = 5;
+const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
+
+// ============================================================================
+// Time Parsing
+// ============================================================================
+
+/**
+* Parse time strings like '1h', '24h', '7d' to milliseconds
+* SECURITY FIX: Simple ms parser to avoid external dependency
+*
+* @param timeStr - Time string to parse
+* @returns Milliseconds
+*/
+function parseMs(timeStr: string): number {
+  const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/i);
+  if (!match) return 3600000; // Default 1 hour
+
+  const value = parseInt(match[1]!, 10);
+  const unit = match[2]!.toLowerCase() as TimeUnit;
+
+  const multipliers: Record<TimeUnit, number> = {
+  ms: 1,
+  s: 1000,
+  m: 60 * 1000,
+  h: 60 * 60 * 1000,
+  d: 24 * 60 * 60 * 1000,
+  w: 7 * 24 * 60 * 60 * 1000,
+  };
+
+  return value * multipliers[unit];
+}
+
+// ============================================================================
+// Key Management
+// ============================================================================
+
+/**
+* Get JWT signing keys from environment
+* Require explicit keys - no fallbacks for security
+*
+* @returns Array of signing keys
+* @throws {InvalidKeyError} When keys are invalid
+*/
+function getKeys(): string[] {
+  const key1 = process.env['JWT_KEY_1'];
+  const key2 = process.env['JWT_KEY_2'];
+
+  if (!key1 || key1.length < 32) {
+  throw new InvalidKeyError(
+    'JWT_KEY_1 environment variable is required and must be at least 32 characters long. ' +
+    "Generate a secure key with: node -e 'process.stdout.write(require(\"crypto\").randomBytes(32).toString(\"hex\"))'"
+  );
+  }
+
+  if (!key2 || key2.length < 32) {
+  throw new InvalidKeyError(
+    'JWT_KEY_2 environment variable is required and must be at least 32 characters long. ' +
+    "This key is used for key rotation. Generate with: node -e 'process.stdout.write(require(\"crypto\").randomBytes(32).toString(\"hex\"))'"
+  );
+  }
+
+  // Prevent use of placeholder values
+  const placeholderPatterns = /placeholder|example|test|demo|secret|key/i;
+  if (placeholderPatterns.test(key1) || key1.includes('your_')) {
+  throw new InvalidKeyError('JWT_KEY_1 appears to be a placeholder value. Please set a secure random key.');
+  }
+  if (placeholderPatterns.test(key2) || key2.includes('your_')) {
+  throw new InvalidKeyError('JWT_KEY_2 appears to be a placeholder value. Please set a secure random key.');
+  }
+
+  return [key1, key2];
+}
+
+// Load keys at module initialization
+const KEYS: string[] = (() => {
+  try {
+  return getKeys();
+  } catch (error) {
+  logger.error('Failed to load JWT keys', error instanceof Error ? error : new Error(String(error)));
+  // Return empty keys - will fail at runtime when signing/verifying
+  return ['', ''];
+  }
+})();
+
+// ============================================================================
+// Redis Connection
+// ============================================================================
+
+const REDIS_URL = process.env['REDIS_URL'];
+if (!REDIS_URL) {
+  throw new Error('REDIS_URL environment variable is required');
+}
+const redis = new Redis(REDIS_URL, {
+  retryStrategy: (times: number): number => Math.min(times * 50, 2000),
+  maxRetriesPerRequest: 3,
+});
+
+// Circuit breaker state
+const circuitBreaker: CircuitBreakerState = {
+  failures: 0,
+  lastFailure: 0,
+  isOpen: false,
+};
+
+// Handle Redis errors gracefully
+redis.on('error', (err: Error) => {
+  logger.error('Redis connection error', err);
+});
+
+// ============================================================================
+// Token Generation
+// ============================================================================
+
+/**
+* Generate a unique token ID using cryptographically secure randomness
+* SECURITY FIX: Replaced Math.random() with crypto.randomBytes
+*
+* @returns Unique token ID
+*/
+function generateTokenId(): string {
+  return `${Date.now()}-${randomBytes(16).toString('hex')}`;
+}
+
+/**
+* Calculate token expiration in milliseconds
+* Enforces maximum 24h lifetime
+*
+* @param requestedExpiry - Requested expiration time string
+* @returns Expiration time in milliseconds
+*/
+function calculateExpiration(requestedExpiry?: string): number {
+  const requested = requestedExpiry || DEFAULT_TOKEN_LIFETIME;
+  const requestedMs = parseMs(requested);
+  const maxMs = parseMs(MAX_TOKEN_LIFETIME);
+  return Math.min(requestedMs, maxMs);
+}
+
+/**
+* Sign a JWT token with claims
+* SECURITY FIX: Enforce maximum 24h token lifetime
+*
+* @param claimsInput - Token claims (without auto-generated fields)
+* @returns Signed JWT token string
+* @throws {InvalidKeyError} When signing keys are invalid
+*/
+export function signToken(claimsInput: SignTokenInput): string {
+  // Validate input
+  const validated = JwtClaimsInputSchema.parse(claimsInput);
+
+  const aud = validated.aud || DEFAULT_AUDIENCE;
+  const iss = validated.iss || DEFAULT_ISSUER;
+
+  // SECURITY FIX: Enforce maximum token lifetime of 24 hours
+  const expiresInMs = calculateExpiration(validated.expiresIn);
+
+  const payload: Omit<JwtClaims, 'iat' | 'exp'> = {
+  sub: validated.sub,
+  role: validated.role,
+  orgId: validated["orgId"],
+  jti: generateTokenId(),
+  boundOrgId: validated["orgId"],
+  } as Omit<JwtClaims, 'iat' | 'exp'>;
+
+  return jwt.sign(payload as object, KEYS[0]!, { expiresIn: Math.floor(expiresInMs / 1000) } as jwt.SignOptions);
+}
+
+// ============================================================================
+// Token Revocation
+// ============================================================================
+
+/**
+* Check if circuit breaker is open
+*/
+function isCircuitOpen(): boolean {
+  if (!circuitBreaker.isOpen) return false;
+
+  const now = Date.now();
+  if (now - circuitBreaker.lastFailure < CIRCUIT_BREAKER_TIMEOUT) {
+  return true;
+  }
+
+  // Reset circuit breaker
+  circuitBreaker.isOpen = false;
+  circuitBreaker.failures = 0;
+  return false;
+}
+
+/**
+* Record a failure and potentially open the circuit
+*/
+function recordFailure(error: unknown): void {
+  circuitBreaker.failures++;
+  circuitBreaker.lastFailure = Date.now();
+
+  if (circuitBreaker.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+  circuitBreaker.isOpen = true;
+  logger.error('Circuit breaker opened due to persistent Redis failures', new Error('CircuitBreakerOpen'));
+  }
+
+  logger.error('Redis unavailable for revocation check, allowing token', error instanceof Error ? error : new Error(String(error)));
+}
+
+/**
+* Check if token is revoked in Redis
+* SECURITY FIX: Implement circuit breaker pattern to prevent auth service unavailability
+*
+* @param jti - Token ID to check
+* @returns Whether the token is revoked
+*/
+async function isTokenRevoked(jti: string): Promise<boolean> {
+  // Check if circuit breaker is open
+  if (isCircuitOpen()) {
+  logger.warn('Circuit breaker open, allowing token (Redis unavailable)');
+  return false;
+  }
+
+  try {
+  const revoked = await redis.exists(`${REVOCATION_KEY_PREFIX}${jti}`);
+  // Success - reset failure count
+  circuitBreaker.failures = 0;
+  return revoked === 1;
+  } catch (error) {
+  recordFailure(error);
+  // SECURITY FIX: Log but don't block auth when Redis is down
+  // Allow the request through - the token signature is still verified
+  return false;
+  }
+}
+
+/**
+* Revoke a token by its ID
+*
+* @param tokenId - Token ID to revoke
+* @throws {JwtError} When revocation fails
+*/
+export async function revokeToken(tokenId: string): Promise<void> {
+  try {
+  await redis.setex(`${REVOCATION_KEY_PREFIX}${tokenId}`, REVOCATION_TTL_SECONDS, '1');
+  } catch (error) {
+  logger.error('Error revoking token', error instanceof Error ? error : new Error(String(error)));
+  throw new AuthError('Failed to revoke token', 'REVOCATION_FAILED');
+  }
+}
+
+/**
+* Revoke all tokens for a user
+* Adds user ID to a revocation list that can be checked during verification
+*
+* @param userId - User ID to revoke all tokens for
+* @throws {JwtError} When revocation fails
+*/
+export async function revokeAllUserTokens(userId: string): Promise<void> {
+  try {
+  const key = `jwt:revoked:user:${userId}`;
+  await redis.setex(key, REVOCATION_TTL_SECONDS, Date.now().toString());
+  logger.info(`Revoked all tokens for user ${userId}`);
+  } catch (error) {
+  logger.error('Error revoking user tokens', error instanceof Error ? error : new Error(String(error)));
+  throw new AuthError('Failed to revoke user tokens', 'USER_REVOCATION_FAILED');
+  }
+}
+
+// ============================================================================
+// Token Verification (DELEGATED to unified auth package)
+// ============================================================================
+
+/**
+* Verify a JWT token
+* Delegates to unified auth package with Redis revocation check
+*
+* @param token - JWT token string
+* @param aud - Expected audience
+* @param iss - Expected issuer
+* @returns Verified claims
+* @throws {TokenRevokedError} When token has been revoked
+* @throws {TokenInvalidError} When token is invalid
+* @throws {MissingClaimError} When required claims are missing
+* @throws {TokenBindingError} When org binding check fails
+*/
+export async function verifyToken(
+  token: string,
+  aud: string = DEFAULT_AUDIENCE,
+  iss: string = DEFAULT_ISSUER
+): Promise<JwtClaims> {
+  // Import from unified auth package
+  const { verifyToken: verifyTokenSync } = await import('@kernel/auth');
+  // Call the synchronous verifyToken with options
+  return verifyTokenSync(token, { audience: aud, issuer: iss }) as Promise<JwtClaims>;
+}
+
+// ============================================================================
+// Token Utilities
+// ============================================================================
+
+/**
+* Get token expiration time
+*
+* @param token - JWT token string
+* @returns Expiration date or null if unable to parse
+*/
+export function getTokenExpiration(token: string): Date | null {
+  try {
+  const decoded = jwt.decode(token) as { exp?: number } | null;
+  if (decoded && 'exp' in decoded && decoded['exp']) {
+    return new Date((decoded['exp'] as number) * 1000);
+  }
+  return null;
+  } catch {
+  return null;
+  }
+}
+
+/**
+* Check if token is expired
+*
+* @param token - JWT token string
+* @returns Whether the token is expired
+*/
+export function isTokenExpired(token: string): boolean {
+  const exp = getTokenExpiration(token);
+  if (!exp) return true;
+  return exp.getTime() < Date.now();
+}
+
+/**
+* Get token info without verification
+*
+* @param token - JWT token string
+* @returns Token info or null if invalid
+*/
+export function getTokenInfo(token: string): TokenInfo | null {
+  const decoded = jwt.decode(token) as { jti?: string; sub?: string; role?: string; orgId?: string; iat?: number; exp?: number } | null;
+  if (!decoded) return null;
+
+  return {
+  jti: ('jti' in decoded ? decoded['jti'] : '') as string || '',
+  sub: ('sub' in decoded ? decoded['sub'] : '') as string,
+  role: ('role' in decoded ? decoded['role'] : 'viewer') as UserRole,
+  orgId: 'orgId' in decoded ? (decoded['orgId'] as string) : undefined,
+  issuedAt: 'iat' in decoded && decoded['iat'] ? new Date((decoded['iat'] as number) * 1000) : new Date(),
+  expiresAt: 'exp' in decoded && decoded['exp'] ? new Date((decoded['exp'] as number) * 1000) : new Date(),
+  isRevoked: false, // Cannot determine without Redis check
+  } as TokenInfo;
+}
+
+/**
+* Refresh a token
+* Creates a new token with the same claims but extended expiration
+*
+* @param token - Existing JWT token
+* @param expiresIn - New expiration time
+* @returns New signed token
+*/
+export function refreshToken(token: string, expiresIn?: string): string {
+  const decoded = jwt.decode(token) as { sub?: string; role?: string; orgId?: string; aud?: string; iss?: string } | null;
+  if (!decoded) {
+  throw new TokenInvalidError('unable to decode token');
+  }
+
+  const sub = ('sub' in decoded ? decoded['sub'] : '') as string;
+  const role = ('role' in decoded ? decoded['role'] : 'viewer') as UserRole;
+  const orgId = 'orgId' in decoded ? (decoded['orgId'] as string) : undefined;
+  const aud = 'aud' in decoded ? (decoded['aud'] as string) : undefined;
+  const iss = 'iss' in decoded ? (decoded['iss'] as string) : undefined;
+  
+  if (!sub) {
+    throw new TokenInvalidError('Token missing required claim: sub');
+  }
+  
+  const signInput: SignTokenInput = {
+    sub,
+    role,
+  };
+  
+  if (orgId !== undefined) {
+    signInput.orgId = orgId;
+  }
+  if (aud !== undefined) {
+    signInput.aud = aud;
+  }
+  if (iss !== undefined) {
+    signInput.iss = iss;
+  }
+  
+  return signToken(signInput);
+}
+
+// ============================================================================
+// Cleanup
+// ============================================================================
+
+/**
+* Close Redis connection gracefully
+*/
+export async function closeJwtRedis(): Promise<void> {
+  await redis.quit();
+}

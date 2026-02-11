@@ -1,0 +1,99 @@
+
+import { z } from 'zod';
+
+import { getLogger } from '@kernel/logger';
+const logger = getLogger('job-guards');
+
+const CountResultSchema = z.object({
+  count: z.union([z.string(), z.number()]),
+});
+
+function validateCountResult(row: unknown): { count: string | number } {
+  const result = CountResultSchema.safeParse(row);
+  if (!result.success) {
+  throw new Error(`Invalid count result: ${result.error["message"]}`);
+  }
+  return result.data;
+}
+
+const MAX_ACTIVE_JOBS_PER_ORG = 10;
+
+// Type definitions for database - using Knex-like interface
+export interface JobExecution {
+  id: string;
+  status: string;
+  entity_id: string;
+}
+
+export interface CountResult {
+  count: string | number;
+}
+
+/**
+ * Database interface compatible with Knex query builder
+ * Uses generic typing to allow flexible query building
+ */
+export interface Database {
+  <T = Record<string, unknown>>(tableName: string): KnexQueryBuilder<T>;
+}
+
+/**
+ * Simplified Knex query builder interface
+ */
+export interface KnexQueryBuilder<T> {
+  where: (conditions: Partial<T>) => KnexQueryBuilder<T>;
+  andWhere: (conditions: Partial<T>) => KnexQueryBuilder<T>;
+  count: () => Promise<Array<{ count: string | number }>>;
+}
+
+/**
+* Assert organization has capacity for new jobs
+* MEDIUM FIX M1: Added proper types
+* MEDIUM FIX M2: Added structured logging
+*/
+export async function assertOrgCapacity(db: Database, orgId: string): Promise<void> {
+  logger.debug('Checking org capacity', { orgId, maxActiveJobs: MAX_ACTIVE_JOBS_PER_ORG });
+
+  const countResult = await db('job_executions')
+  .where({ status: 'started' })
+  .andWhere({ entity_id: orgId })
+  ["count"]();
+  const result = validateCountResult(countResult[0]);
+
+  const count = typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
+
+  logger.debug('Org job count', { orgId, activeJobs: count });
+
+  if (count >= MAX_ACTIVE_JOBS_PER_ORG) {
+  logger.warn('Org concurrency limit reached', {
+    activeJobs: count,
+    limit: MAX_ACTIVE_JOBS_PER_ORG
+  });
+  throw new Error('Org concurrency limit reached');
+  }
+}
+
+/**
+* Check if org has capacity without throwing
+*/
+export async function checkOrgCapacity(db: Database, orgId: string): Promise<boolean> {
+  try {
+  await assertOrgCapacity(db, orgId);
+  return true;
+  } catch {
+  return false;
+  }
+}
+
+/**
+* Get current active job count for org
+*/
+export async function getOrgActiveJobCount(db: Database, orgId: string): Promise<number> {
+  const countResult = await db('job_executions')
+  .where({ status: 'started' })
+  .andWhere({ entity_id: orgId })
+  ["count"]();
+  const result = validateCountResult(countResult[0]);
+
+  return typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
+}
