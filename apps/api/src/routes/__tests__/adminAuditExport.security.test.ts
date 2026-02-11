@@ -2,28 +2,28 @@
  * Security Tests for Admin Audit Export
  * Tests P1 Fix: Admin audit export missing org filtering
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import Fastify from 'fastify';
 import { adminAuditExportRoutes } from '../adminAuditExport';
 import { getDb } from '../../db';
 
 // Mock the database
-jest.mock('../../db');
-jest.mock('../../middleware/rateLimiter', () => ({
+vi.mock('../../db');
+vi.mock('../../middleware/rateLimiter', () => ({
   adminRateLimit: () => (req: unknown, reply: unknown, done: () => void) => done()
 }));
 
 describe('Admin Audit Export Security Tests', () => {
   let app: ReturnType<typeof Fastify>;
-  const mockDb = jest.fn();
-  const mockWhere = jest.fn();
-  const mockOrderBy = jest.fn();
-  const mockLimit = jest.fn();
-  const mockOffset = jest.fn();
+  const mockDb = vi.fn();
+  const mockWhere = vi.fn();
+  const mockOrderBy = vi.fn();
+  const mockLimit = vi.fn();
+  const mockOffset = vi.fn();
 
   beforeEach(() => {
     app = Fastify();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Setup mock chain
     mockWhere.mockReturnValue({ orderBy: mockOrderBy });
@@ -38,7 +38,7 @@ describe('Admin Audit Export Security Tests', () => {
       offset: mockOffset,
     });
     
-    (getDb as jest.Mock).mockResolvedValue(mockDb);
+    (getDb as Mock).mockResolvedValue(mockDb);
     
     process.env.ADMIN_API_KEY = 'test-admin-api-key-32-chars-long';
   });
@@ -95,7 +95,7 @@ describe('Admin Audit Export Security Tests', () => {
 
   describe('P1-FIX: Org Membership Verification', () => {
     it('should verify admin membership before org-filtered export', async () => {
-      const mockMembership = jest.fn().mockResolvedValue({ id: 'membership-1' });
+      const mockMembership = vi.fn().mockResolvedValue({ id: 'membership-1' });
       mockDb.mockReturnValue({
         where: mockMembership,
       });
@@ -123,7 +123,7 @@ describe('Admin Audit Export Security Tests', () => {
 
     it('should reject export when admin is not a member of the org', async () => {
       mockDb.mockReturnValue({
-        where: jest.fn().mockReturnValue({ first: jest.fn().mockResolvedValue(null) }),
+        where: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null) }),
       });
 
       await app.register(adminAuditExportRoutes);

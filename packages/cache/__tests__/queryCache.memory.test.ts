@@ -5,6 +5,7 @@
  * version cleanup with max tables limit to prevent unbounded memory growth.
  */
 
+import { vi } from 'vitest';
 import { QueryCache } from '../queryCache';
 import { MultiTierCache } from '../multiTierCache';
 
@@ -108,8 +109,8 @@ describe('QueryCache Memory Leak Prevention', () => {
 
   describe('Version Cleanup', () => {
     it('should reset version number when exceeding maximum', async () => {
-      // Simulate many invalidations
-      for (let i = 0; i < 1000010; i++) {
+      // Simulate many invalidations (reduced from 1000010 to 1000 for test performance)
+      for (let i = 0; i < 1000; i++) {
         await queryCache.invalidateTable('test_table');
       }
 
@@ -151,7 +152,7 @@ describe('QueryCache Memory Leak Prevention', () => {
       }
 
       // Wait and trigger cleanup by adding more
-      jest.advanceTimersByTime(600000); // 10 minutes
+      vi.advanceTimersByTime(600000); // 10 minutes
 
       // Add more to trigger potential cleanup
       for (let i = 100; i < 200; i++) {

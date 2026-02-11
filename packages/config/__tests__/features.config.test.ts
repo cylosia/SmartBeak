@@ -1,17 +1,18 @@
 /**
  * Feature Flags Configuration Tests
- * 
+ *
  * Tests for feature flags secure defaults (all disabled by default).
  * @security P1-CRITICAL
  */
 
+import { vi, type MockInstance } from 'vitest';
 import { featureFlags, isFeatureEnabled, getEnabledFeatures, validateFeatureFlags } from '../features';
 
 describe('Feature Flags - Security Defaults', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     process.env = { ...originalEnv };
     // Clear all feature flag env vars
     const featureFlagVars = [
@@ -31,7 +32,7 @@ describe('Feature Flags - Security Defaults', () => {
 
   afterAll(() => {
     process.env = originalEnv;
-    jest.resetModules();
+    vi.resetModules();
   });
 
   describe('Default Values', () => {
@@ -153,12 +154,12 @@ describe('Feature Flags - Security Defaults', () => {
   });
 
   describe('validateFeatureFlags', () => {
-    let consoleLogSpy: jest.SpyInstance;
-    let consoleWarnSpy: jest.SpyInstance;
+    let consoleLogSpy: MockInstance;
+    let consoleWarnSpy: MockInstance;
 
     beforeEach(() => {
-      consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-      consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      consoleLogSpy = vi.spyOn(console, 'log').mockImplementation();
+      consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation();
     });
 
     afterEach(() => {

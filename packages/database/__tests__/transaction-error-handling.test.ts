@@ -5,30 +5,31 @@
  * Ensures original errors are preserved when rollback fails.
  */
 
+import { vi, type Mocked } from 'vitest';
 import { Pool, PoolClient } from 'pg';
 import { withTransaction, TransactionError } from '../transactions';
 import { withPgBouncerTransaction } from '../pgbouncer';
 
 // Mock the logger
-jest.mock('@kernel/logger', () => ({
-  getLogger: jest.fn(() => ({
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+vi.mock('@kernel/logger', () => ({
+  getLogger: vi.fn(() => ({
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   })),
 }));
 
 // Mock the pool
-const mockQuery = jest.fn();
-const mockRelease = jest.fn();
-const mockConnect = jest.fn();
+const mockQuery = vi.fn();
+const mockRelease = vi.fn();
+const mockConnect = vi.fn();
 
-jest.mock('../pool', () => ({
-  getPool: jest.fn(() => ({
+vi.mock('../pool', () => ({
+  getPool: vi.fn(() => ({
     connect: mockConnect,
   })),
-  getConnectionMetrics: jest.fn(() => ({
+  getConnectionMetrics: vi.fn(() => ({
     totalConnections: 10,
     idleConnections: 5,
     waitingClients: 0,
@@ -39,7 +40,7 @@ describe('Transaction Error Handling', () => {
   let mockClient: Partial<PoolClient>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     mockClient = {
       query: mockQuery,
@@ -62,7 +63,7 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackError); // ROLLBACK also fails
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as Mocked<any>;
 
       await expect(
         withTransaction(async () => {
@@ -88,7 +89,7 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as Mocked<any>;
 
       try {
         await withTransaction(async () => {
@@ -226,7 +227,7 @@ describe('Transaction Error Handling', () => {
         .mockResolvedValueOnce({}); // COMMIT
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as Mocked<any>;
 
       await withTransaction(async () => {
         return 'success';
@@ -256,8 +257,8 @@ describe('Transaction Error Handling', () => {
 
       // Get logger for verification
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:pgbouncer') as jest.Mocked<any>;
-      const loggerSpy = jest.spyOn(mockLogger, 'error').mockImplementation();
+      const mockLogger = getLogger('database:pgbouncer') as Mocked<any>;
+      const loggerSpy = vi.spyOn(mockLogger, 'error').mockImplementation();
 
       await expect(
         withPgBouncerTransaction(mockPool, async () => {
@@ -307,7 +308,7 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails with string
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as Mocked<any>;
 
       await expect(
         withTransaction(async () => {
@@ -361,7 +362,7 @@ describe('Transaction Error Handling', () => {
       });
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as Mocked<any>;
 
       await expect(
         withTransaction(async () => {

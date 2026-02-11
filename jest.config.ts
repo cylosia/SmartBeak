@@ -32,6 +32,10 @@ const config: Config = {
     '^@database/(.*)$': '<rootDir>/packages/database/$1',
     '^@config$': '<rootDir>/packages/config/index.ts',
     '^@errors$': '<rootDir>/packages/errors/index.ts',
+    '^@domain/(.*)$': '<rootDir>/domains/$1',
+    '^@types/(.*)$': '<rootDir>/packages/types/$1',
+    '^@packages/(.*)$': '<rootDir>/packages/$1',
+    '^@utils/(.*)$': '<rootDir>/packages/utils/$1',
   },
   
   // Setup files

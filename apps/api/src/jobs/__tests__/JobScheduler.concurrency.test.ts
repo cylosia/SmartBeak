@@ -9,6 +9,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// Mock ioredis before importing it
+vi.mock('ioredis', () => {
+  const MockRedis = vi.fn();
+  return { default: MockRedis, __esModule: true };
+});
+
 import { JobScheduler, HandlerConfig } from '../JobScheduler';
 import { Job } from 'bullmq';
 import Redis from 'ioredis';

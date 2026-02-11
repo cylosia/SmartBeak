@@ -2,7 +2,7 @@
  * Security Tests for Billing Routes
  * Tests P1 Fix: Billing routes missing org membership verification
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import Fastify from 'fastify';
 import { billingInvoiceRoutes } from '../billingInvoices';
 import { billingInvoiceExportRoutes } from '../billingInvoiceExport';
@@ -11,53 +11,53 @@ import { billingStripeRoutes } from '../billingStripe';
 import { getDb } from '../../db';
 
 // Mock dependencies
-jest.mock('../../db');
-jest.mock('@security/jwt');
-jest.mock('@config', () => ({
+vi.mock('../../db');
+vi.mock('@security/jwt');
+vi.mock('@config', () => ({
   getBillingConfig: () => ({
     stripeSecretKey: 'sk_test_xxx',
     jwtKey: 'test-jwt-key-32-chars-long'
   })
 }));
-jest.mock('../../middleware/rateLimiter', () => ({
+vi.mock('../../middleware/rateLimiter', () => ({
   apiRateLimit: () => (req: unknown, reply: unknown, done: () => void) => done(),
   rateLimitMiddleware: () => (req: unknown, reply: unknown, done: () => void) => done()
 }));
-jest.mock('../billing/paddle', () => ({
-  createPaddleCheckout: jest.fn().mockResolvedValue({ url: 'https://checkout.paddle.com/test' })
+vi.mock('../billing/paddle', () => ({
+  createPaddleCheckout: vi.fn().mockResolvedValue({ url: 'https://checkout.paddle.com/test' })
 }));
-jest.mock('../billing/stripe', () => ({
-  createStripeCheckoutSession: jest.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/test' })
+vi.mock('../billing/stripe', () => ({
+  createStripeCheckoutSession: vi.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/test' })
 }));
-jest.mock('@kernel/redis', () => ({
-  getRedis: jest.fn().mockResolvedValue({
-    get: jest.fn(),
-    setex: jest.fn(),
-    del: jest.fn()
+vi.mock('@kernel/redis', () => ({
+  getRedis: vi.fn().mockResolvedValue({
+    get: vi.fn(),
+    setex: vi.fn(),
+    del: vi.fn()
   })
 }));
-jest.mock('../../middleware/csrf', () => ({
-  generateCsrfToken: jest.fn().mockResolvedValue('csrf-token'),
-  validateCsrfToken: jest.fn().mockResolvedValue(true),
-  clearCsrfToken: jest.fn()
+vi.mock('../../middleware/csrf', () => ({
+  generateCsrfToken: vi.fn().mockResolvedValue('csrf-token'),
+  validateCsrfToken: vi.fn().mockResolvedValue(true),
+  clearCsrfToken: vi.fn()
 }));
 
 import { verifyToken, extractAndVerifyToken, extractBearerToken } from '@security/jwt';
 
 describe('Billing Routes Security Tests', () => {
   let app: ReturnType<typeof Fastify>;
-  const mockMembershipDb = jest.fn();
+  const mockMembershipDb = vi.fn();
 
   beforeEach(() => {
     app = Fastify();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Setup membership mock
     mockMembershipDb.mockReturnValue({
-      where: jest.fn().mockReturnValue({ first: jest.fn().mockResolvedValue({ id: 'membership-1' }) })
+      where: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue({ id: 'membership-1' }) })
     });
     
-    (getDb as jest.Mock).mockResolvedValue(mockMembershipDb);
+    (getDb as Mock).mockResolvedValue(mockMembershipDb);
     
     process.env.STRIPE_SECRET_KEY = 'sk_test_xxx';
   });
@@ -65,12 +65,12 @@ describe('Billing Routes Security Tests', () => {
   describe('P1-FIX: Org Membership Verification - billingInvoices', () => {
     beforeEach(() => {
       // Mock successful JWT verification with org context
-      (verifyToken as jest.Mock).mockReturnValue({
+      (verifyToken as Mock).mockReturnValue({
         sub: 'user-123',
         orgId: 'org-456',
         stripeCustomerId: 'cus_test'
       });
-      (extractBearerToken as jest.Mock).mockReturnValue('valid-token');
+      (extractBearerToken as Mock).mockReturnValue('valid-token');
     });
 
     it('should allow access when user is org member', async () => {
@@ -92,7 +92,7 @@ describe('Billing Routes Security Tests', () => {
     it('should reject access when user is not org member', async () => {
       // Mock no membership found
       mockMembershipDb.mockReturnValue({
-        where: jest.fn().mockReturnValue({ first: jest.fn().mockResolvedValue(null) })
+        where: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null) })
       });
 
       await app.register(billingInvoiceRoutes);
@@ -111,7 +111,7 @@ describe('Billing Routes Security Tests', () => {
     });
 
     it('should skip membership check for user-level billing (no org)', async () => {
-      (verifyToken as jest.Mock).mockReturnValue({
+      (verifyToken as Mock).mockReturnValue({
         sub: 'user-123',
         stripeCustomerId: 'cus_test'
         // No orgId
@@ -135,7 +135,7 @@ describe('Billing Routes Security Tests', () => {
   describe('P1-FIX: Org Membership Verification - billingInvoiceExport', () => {
     beforeEach(() => {
       // Mock JWT verification
-      jest.spyOn(require('jsonwebtoken'), 'verify').mockReturnValue({
+      vi.spyOn(require('jsonwebtoken'), 'verify').mockReturnValue({
         sub: 'user-123',
         orgId: 'org-456',
         stripeCustomerId: 'cus_test'
@@ -159,7 +159,7 @@ describe('Billing Routes Security Tests', () => {
 
     it('should reject export for non-members', async () => {
       mockMembershipDb.mockReturnValue({
-        where: jest.fn().mockReturnValue({ first: jest.fn().mockResolvedValue(null) })
+        where: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null) })
       });
 
       await app.register(billingInvoiceExportRoutes);
@@ -178,7 +178,7 @@ describe('Billing Routes Security Tests', () => {
 
   describe('P1-FIX: Org Membership Verification - billingPaddle', () => {
     beforeEach(() => {
-      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+      (extractAndVerifyToken as Mock).mockReturnValue({
         valid: true,
         claims: {
           sub: 'user-123',
@@ -208,7 +208,7 @@ describe('Billing Routes Security Tests', () => {
 
     it('should reject checkout for non-members', async () => {
       mockMembershipDb.mockReturnValue({
-        where: jest.fn().mockReturnValue({ first: jest.fn().mockResolvedValue(null) })
+        where: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null) })
       });
 
       await app.register(billingPaddleRoutes);
@@ -231,7 +231,7 @@ describe('Billing Routes Security Tests', () => {
     });
 
     it('should reject when userId is missing', async () => {
-      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+      (extractAndVerifyToken as Mock).mockReturnValue({
         valid: true,
         claims: {
           // No sub
@@ -259,7 +259,7 @@ describe('Billing Routes Security Tests', () => {
 
   describe('P1-FIX: Org Membership Verification - billingStripe', () => {
     beforeEach(() => {
-      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+      (extractAndVerifyToken as Mock).mockReturnValue({
         valid: true,
         claims: {
           sub: 'user-123',
@@ -290,7 +290,7 @@ describe('Billing Routes Security Tests', () => {
 
     it('should reject stripe checkout for non-members', async () => {
       mockMembershipDb.mockReturnValue({
-        where: jest.fn().mockReturnValue({ first: jest.fn().mockResolvedValue(null) })
+        where: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue(null) })
       });
 
       await app.register(billingStripeRoutes);
@@ -331,7 +331,7 @@ describe('Billing Routes Security Tests', () => {
 
   describe('Input Validation Security', () => {
     beforeEach(() => {
-      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+      (extractAndVerifyToken as Mock).mockReturnValue({
         valid: true,
         claims: {
           sub: 'user-123',
@@ -397,7 +397,7 @@ describe('Billing Routes Security Tests', () => {
     });
 
     it('should reject invalid orgId format', async () => {
-      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+      (extractAndVerifyToken as Mock).mockReturnValue({
         valid: true,
         claims: {
           sub: 'user-123',
@@ -425,7 +425,7 @@ describe('Billing Routes Security Tests', () => {
 
   describe('Mass Assignment Protection', () => {
     beforeEach(() => {
-      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+      (extractAndVerifyToken as Mock).mockReturnValue({
         valid: true,
         claims: {
           sub: 'user-123',

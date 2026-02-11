@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { VercelAdapter } from '../../src/adapters/vercel/VercelAdapter';
 
-global.fetch = jest.fn().mockResolvedValue({
+global.fetch = vi.fn().mockResolvedValue({
   ok: true,
   json: async () => ({ id: 'deploy_1' })
 }) as any;

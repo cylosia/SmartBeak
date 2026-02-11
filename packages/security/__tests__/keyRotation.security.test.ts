@@ -2,29 +2,29 @@
  * Security Tests for Key Rotation System
  * Tests P1 Fix: Weak PBKDF2 salt derivation
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { KeyRotationManager } from '../keyRotation';
 import { Pool } from 'pg';
 
 // Mock logger
-jest.mock('@kernel/logger', () => ({
+vi.mock('@kernel/logger', () => ({
   getLogger: () => ({
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn()
   })
 }));
 
 describe('Key Rotation Security Tests', () => {
   let manager: KeyRotationManager;
   let mockPool: Partial<Pool>;
-  let mockQuery: jest.Mock;
+  let mockQuery: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
-    mockQuery = jest.fn();
+    mockQuery = vi.fn();
     mockPool = {
       query: mockQuery
     };
@@ -160,7 +160,7 @@ describe('Key Rotation Security Tests', () => {
       // Verify the iteration count constant
       // This is validated by checking the code - in real tests we'd spy on pbkdf2Sync
       const crypto = require('crypto');
-      const pbkdf2Spy = jest.spyOn(crypto, 'pbkdf2Sync');
+      const pbkdf2Spy = vi.spyOn(crypto, 'pbkdf2Sync');
       
       // Pre-populate salt to ensure deriveKey is called
       (manager as any).providerSalts.set('test-provider', Buffer.alloc(32, 0x42));
@@ -184,7 +184,7 @@ describe('Key Rotation Security Tests', () => {
   describe('Encryption Security', () => {
     it('should use AES-256-GCM for encryption', async () => {
       const crypto = require('crypto');
-      const createCipherSpy = jest.spyOn(crypto, 'createCipheriv');
+      const createCipherSpy = vi.spyOn(crypto, 'createCipheriv');
       
       // Pre-populate salt
       (manager as any).providerSalts.set('test-provider', Buffer.alloc(32, 0x42));
@@ -205,13 +205,13 @@ describe('Key Rotation Security Tests', () => {
     it('should generate unique IVs for each encryption', async () => {
       const crypto = require('crypto');
       const ivs: string[] = [];
-      const createCipherSpy = jest.spyOn(crypto, 'createCipheriv')
+      const createCipherSpy = vi.spyOn(crypto, 'createCipheriv')
         .mockImplementation((algorithm: string, key: Buffer, iv: Buffer) => {
           ivs.push(iv.toString('hex'));
           return {
-            update: jest.fn().mockReturnValue(''),
-            final: jest.fn().mockReturnValue(''),
-            getAuthTag: jest.fn().mockReturnValue(Buffer.alloc(16))
+            update: vi.fn().mockReturnValue(''),
+            final: vi.fn().mockReturnValue(''),
+            getAuthTag: vi.fn().mockReturnValue(Buffer.alloc(16))
           };
         });
 

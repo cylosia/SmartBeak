@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { FacebookAdapter } from '../../src/adapters/facebook/FacebookAdapter';
 
-global.fetch = jest.fn().mockResolvedValue({
+global.fetch = vi.fn().mockResolvedValue({
   ok: true,
   json: async () => ({ id: 'fb_post_1' })
 }) as any;

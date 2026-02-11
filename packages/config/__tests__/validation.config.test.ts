@@ -5,6 +5,7 @@
  * @security P1-CRITICAL
  */
 
+import { vi, type MockInstance } from 'vitest';
 import {
   validateConfig,
   validateEnv,
@@ -16,13 +17,13 @@ describe('Configuration Validation', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     process.env = { ...originalEnv };
   });
 
   afterAll(() => {
     process.env = originalEnv;
-    jest.resetModules();
+    vi.resetModules();
   });
 
   describe('REQUIRED_ENV_VARS', () => {
@@ -261,10 +262,10 @@ describe('Configuration Validation', () => {
   });
 
   describe('validateStartup', () => {
-    let consoleLogSpy: jest.SpyInstance;
+    let consoleLogSpy: MockInstance;
 
     beforeEach(() => {
-      consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+      consoleLogSpy = vi.spyOn(console, 'log').mockImplementation();
     });
 
     afterEach(() => {

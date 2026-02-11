@@ -5,19 +5,20 @@
  * @security P1-CRITICAL
  */
 
+import { vi } from 'vitest';
 import { validateStartup } from '../validation';
 
 describe('Startup Validation - Integration', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     process.env = { ...originalEnv };
   });
 
   afterAll(() => {
     process.env = originalEnv;
-    jest.resetModules();
+    vi.resetModules();
   });
 
   /**
@@ -71,7 +72,7 @@ describe('Startup Validation - Integration', () => {
 
     it('should log success message', () => {
       setValidEnvironment();
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation();
       
       validateStartup();
       

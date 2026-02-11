@@ -1,9 +1,10 @@
 
+import { vi } from 'vitest';
 import { GaAdapter } from '../../src/adapters/ga/GaAdapter';
 
-jest.mock('@google-analytics/data', () => ({
-  BetaAnalyticsDataClient: jest.fn().mockImplementation(() => ({
-  runReport: jest.fn().mockResolvedValue([
+vi.mock('@google-analytics/data', () => ({
+  BetaAnalyticsDataClient: vi.fn().mockImplementation(() => ({
+  runReport: vi.fn().mockResolvedValue([
     { rows: [{ metricValues: [{ value: '10' }] }] }
   ])
   }))

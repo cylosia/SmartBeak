@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CircuitBreaker, CircuitState } from '../retry';
 
 describe('Circuit Breaker Error Classification (P1-FIX)', () => {
@@ -14,7 +14,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
 
   describe('4xx errors should NOT count toward circuit breaker', () => {
     it('should not count 400 Bad Request errors', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 400, message: 'Bad Request' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 400, message: 'Bad Request' });
       
       // Execute multiple times - all should throw but not open circuit
       for (let i = 0; i < 5; i++) {
@@ -31,7 +31,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
     });
 
     it('should not count 401 Unauthorized errors', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 401, message: 'Unauthorized' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 401, message: 'Unauthorized' });
       
       for (let i = 0; i < 5; i++) {
         try {
@@ -45,7 +45,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
     });
 
     it('should not count 403 Forbidden errors', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 403, message: 'Forbidden' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 403, message: 'Forbidden' });
       
       for (let i = 0; i < 5; i++) {
         try {
@@ -59,7 +59,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
     });
 
     it('should not count 404 Not Found errors', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 404, message: 'Not Found' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 404, message: 'Not Found' });
       
       for (let i = 0; i < 5; i++) {
         try {
@@ -73,7 +73,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
     });
 
     it('should not count 422 Validation Error', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 422, message: 'Validation Failed' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 422, message: 'Validation Failed' });
       
       for (let i = 0; i < 5; i++) {
         try {
@@ -101,7 +101,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
           halfOpenMaxCalls: 1,
         });
         
-        const fn = jest.fn().mockRejectedValue(errorCode);
+        const fn = vi.fn().mockRejectedValue(errorCode);
         
         for (let i = 0; i < 5; i++) {
           try {
@@ -131,7 +131,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
           halfOpenMaxCalls: 1,
         });
         
-        const fn = jest.fn().mockRejectedValue(new Error(message));
+        const fn = vi.fn().mockRejectedValue(new Error(message));
         
         for (let i = 0; i < 5; i++) {
           try {
@@ -148,7 +148,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
 
   describe('5xx and service errors SHOULD count toward circuit breaker', () => {
     it('should count 500 Internal Server Error', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 500, message: 'Internal Server Error' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 500, message: 'Internal Server Error' });
       
       for (let i = 0; i < 3; i++) {
         try {
@@ -163,7 +163,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
     });
 
     it('should count 502 Bad Gateway', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 502, message: 'Bad Gateway' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 502, message: 'Bad Gateway' });
       
       for (let i = 0; i < 3; i++) {
         try {
@@ -177,7 +177,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
     });
 
     it('should count 503 Service Unavailable', async () => {
-      const fn = jest.fn().mockRejectedValue({ statusCode: 503, message: 'Service Unavailable' });
+      const fn = vi.fn().mockRejectedValue({ statusCode: 503, message: 'Service Unavailable' });
       
       for (let i = 0; i < 3; i++) {
         try {
@@ -192,7 +192,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
 
     it('should count network errors (ECONNREFUSED)', async () => {
       const error = new Error('ECONNREFUSED');
-      const fn = jest.fn().mockRejectedValue(error);
+      const fn = vi.fn().mockRejectedValue(error);
       
       for (let i = 0; i < 3; i++) {
         try {
@@ -207,7 +207,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
 
     it('should count timeout errors', async () => {
       const error = new Error('Request timeout');
-      const fn = jest.fn().mockRejectedValue(error);
+      const fn = vi.fn().mockRejectedValue(error);
       
       for (let i = 0; i < 3; i++) {
         try {
@@ -234,7 +234,7 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
       ];
       
       let callIndex = 0;
-      const fn = jest.fn().mockImplementation(() => {
+      const fn = vi.fn().mockImplementation(() => {
         return Promise.reject(errors[callIndex++]);
       });
       
@@ -254,14 +254,14 @@ describe('Circuit Breaker Error Classification (P1-FIX)', () => {
   describe('Error propagation', () => {
     it('should still propagate client errors to caller', async () => {
       const clientError = { statusCode: 400, message: 'Bad Request' };
-      const fn = jest.fn().mockRejectedValue(clientError);
+      const fn = vi.fn().mockRejectedValue(clientError);
       
       await expect(circuitBreaker.execute(fn)).rejects.toEqual(clientError);
     });
 
     it('should still propagate server errors to caller', async () => {
       const serverError = { statusCode: 500, message: 'Server Error' };
-      const fn = jest.fn().mockRejectedValue(serverError);
+      const fn = vi.fn().mockRejectedValue(serverError);
       
       await expect(circuitBreaker.execute(fn)).rejects.toEqual(serverError);
     });

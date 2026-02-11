@@ -1,11 +1,12 @@
 
+import { vi } from 'vitest';
 import { GscAdapter } from '../../src/adapters/gsc/GscAdapter';
 
-jest.mock('googleapis', () => ({
+vi.mock('googleapis', () => ({
   google: {
-  searchconsole: jest.fn().mockReturnValue({
+  searchconsole: vi.fn().mockReturnValue({
     searchanalytics: {
-    query: jest.fn().mockResolvedValue({
+    query: vi.fn().mockResolvedValue({
     data: { rows: [{ clicks: 5 }] }
     })
     }

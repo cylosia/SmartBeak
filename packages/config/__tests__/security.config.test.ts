@@ -1,22 +1,24 @@
 /**
  * Security Configuration Tests
- * 
+ *
  * Tests for security configuration fail-fast behavior.
  * @security P1-CRITICAL
  */
+
+import { vi } from 'vitest';
 
 describe('Security Configuration - Fail Fast', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     // Reset module cache to re-evaluate module-level validation
-    jest.resetModules();
+    vi.resetModules();
     process.env = { ...originalEnv };
   });
 
   afterAll(() => {
     process.env = originalEnv;
-    jest.resetModules();
+    vi.resetModules();
   });
 
   describe('BCRYPT_ROUNDS', () => {

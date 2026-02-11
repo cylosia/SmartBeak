@@ -1,10 +1,11 @@
 
+import { vi, Mock } from 'vitest';
 import { Pool } from 'pg';
 import { DomainOwnershipService } from './domain-ownership';
 
-// P0-FIX: Type-safe mock using jest.Mocked utility type
+// P0-FIX: Type-safe mock using vitest Mock utility type
 // This approach avoids 'as unknown as' by using TypeScript's utility types
-type MockedFunction<T extends (...args: unknown[]) => unknown> = jest.Mock<ReturnType<T>, Parameters<T>>;
+type MockedFunction<T extends (...args: unknown[]) => unknown> = Mock<ReturnType<T>, Parameters<T>>;
 
 interface MockPool extends Pool {
   query: MockedFunction<Pool['query']>;
@@ -17,11 +18,11 @@ interface MockPool extends Pool {
 /** Mock PostgreSQL pool for testing - P0-FIX: Type-safe mock without 'as unknown as' */
 function createMockPool(): MockPool {
   return {
-    query: jest.fn().mockResolvedValue({ rows: [] }),
-    connect: jest.fn(),
-    end: jest.fn(),
-    on: jest.fn().mockReturnThis(),
-    removeListener: jest.fn().mockReturnThis(),
+    query: vi.fn().mockResolvedValue({ rows: [] }),
+    connect: vi.fn(),
+    end: vi.fn(),
+    on: vi.fn().mockReturnThis(),
+    removeListener: vi.fn().mockReturnThis(),
   } as MockPool;
 }
 

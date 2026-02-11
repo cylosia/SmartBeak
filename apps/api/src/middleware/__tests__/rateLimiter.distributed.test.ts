@@ -31,22 +31,22 @@
  * 3. Multiple instances share rate limit state
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
 // Mock dependencies
-const mockRedisGet = jest.fn();
-const mockRedisSet = jest.fn();
-const mockRedisExpire = jest.fn();
-const mockRedisIncr = jest.fn();
-const mockRedisTtl = jest.fn();
-const mockRedisDel = jest.fn();
-const mockRedisEval = jest.fn();
-const mockRedisEvalsha = jest.fn();
-const mockRedisScript = jest.fn();
+const mockRedisGet = vi.fn();
+const mockRedisSet = vi.fn();
+const mockRedisExpire = vi.fn();
+const mockRedisIncr = vi.fn();
+const mockRedisTtl = vi.fn();
+const mockRedisDel = vi.fn();
+const mockRedisEval = vi.fn();
+const mockRedisEvalsha = vi.fn();
+const mockRedisScript = vi.fn();
 
-jest.mock('ioredis', () => {
-  return jest.fn().mockImplementation(() => ({
+vi.mock('ioredis', () => {
+  return vi.fn().mockImplementation(() => ({
     get: mockRedisGet,
     set: mockRedisSet,
     expire: mockRedisExpire,
@@ -56,21 +56,21 @@ jest.mock('ioredis', () => {
     eval: mockRedisEval,
     evalsha: mockRedisEvalsha,
     script: mockRedisScript,
-    on: jest.fn(),
-    quit: jest.fn(),
-    ping: jest.fn().mockResolvedValue('PONG'),
+    on: vi.fn(),
+    quit: vi.fn(),
+    ping: vi.fn().mockResolvedValue('PONG'),
   }));
 });
 
-jest.mock('../ops/metrics', () => ({
-  emitMetric: jest.fn(),
+vi.mock('../ops/metrics', () => ({
+  emitMetric: vi.fn(),
 }));
 
-jest.mock('@kernel/logger', () => ({
-  getLogger: jest.fn().mockReturnValue({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+vi.mock('@kernel/logger', () => ({
+  getLogger: vi.fn().mockReturnValue({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   }),
 }));
 
@@ -86,9 +86,9 @@ import {
 } from '../rateLimiter';
 
 // Mock the distributed rate limiter
-const mockCheckRateLimitRedis = jest.fn();
+const mockCheckRateLimitRedis = vi.fn();
 
-jest.mock('@kernel/rateLimiterRedis', () => ({
+vi.mock('@kernel/rateLimiterRedis', () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimitRedis(...args),
 }));
 
@@ -99,7 +99,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
   let sentPayload: unknown;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     mockRequest = {
       ip: '192.168.1.100',
@@ -114,11 +114,11 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
     sentPayload = undefined;
 
     mockReply = {
-      status: jest.fn().mockImplementation((code: number) => {
+      status: vi.fn().mockImplementation((code: number) => {
         sentStatus = code;
         return mockReply;
       }),
-      send: jest.fn().mockImplementation((payload: unknown) => {
+      send: vi.fn().mockImplementation((payload: unknown) => {
         sentPayload = payload;
         return mockReply;
       }),
@@ -126,7 +126,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('VULNERABILITY FIX: rateLimitMiddleware uses distributed check', () => {
@@ -135,7 +135,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockResolvedValueOnce({ allowed: true });
 
       const middleware = rateLimitMiddleware('standard');
-      const done = jest.fn();
+      const done = vi.fn();
 
       // Act
       await middleware(
@@ -162,7 +162,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockResolvedValueOnce({ allowed: false });
 
       const middleware = rateLimitMiddleware('standard');
-      const done = jest.fn();
+      const done = vi.fn();
 
       // Act
       await middleware(
@@ -186,8 +186,8 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
 
       const middleware1 = rateLimitMiddleware('strict');
       const middleware2 = rateLimitMiddleware('strict');
-      const done1 = jest.fn();
-      const done2 = jest.fn();
+      const done1 = vi.fn();
+      const done2 = vi.fn();
 
       // Same IP hitting two different "instances"
       const request1 = { ...mockRequest, ip: '10.0.0.1' };
@@ -217,7 +217,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockResolvedValue({ allowed: true });
 
       const middleware = rateLimitMiddleware('standard');
-      const done = jest.fn();
+      const done = vi.fn();
 
       // Request with orgId
       const requestWithOrg = {
@@ -247,7 +247,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockRejectedValueOnce(new Error('Redis connection lost'));
 
       const middleware = rateLimitMiddleware('standard');
-      const done = jest.fn();
+      const done = vi.fn();
 
       // Act
       await middleware(
@@ -269,7 +269,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockRejectedValueOnce(timeoutError);
 
       const middleware = rateLimitMiddleware('strict');
-      const done = jest.fn();
+      const done = vi.fn();
 
       // Act
       await middleware(
@@ -289,7 +289,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockRejectedValueOnce(oomError);
 
       const middleware = rateLimitMiddleware('lenient');
-      const done = jest.fn();
+      const done = vi.fn();
 
       // Act
       await middleware(
@@ -314,7 +314,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       await middleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
 
       // Assert: Security metric should be emitted
@@ -348,7 +348,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       // Act: Send 10 requests as if from different instances
       const results: boolean[] = [];
       for (let i = 0; i < 10; i++) {
-        const done = jest.fn();
+        const done = vi.fn();
         await middleware(
           mockRequest as FastifyRequest,
           mockReply as FastifyReply,
@@ -374,17 +374,17 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       await strictMiddleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
       await standardMiddleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
       await lenientMiddleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
 
       // Assert: Each tier should have its own rate limit key
@@ -400,7 +400,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockResolvedValueOnce({ allowed: true });
 
       const middleware = adminRateLimit();
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         mockRequest as FastifyRequest,
@@ -422,7 +422,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockRejectedValueOnce(new Error('Redis down'));
 
       const middleware = adminRateLimit();
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         mockRequest as FastifyRequest,
@@ -440,7 +440,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockResolvedValueOnce({ allowed: true });
 
       const middleware = apiRateLimit();
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         mockRequest as FastifyRequest,
@@ -462,7 +462,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockRejectedValueOnce(new Error('Redis unavailable'));
 
       const middleware = apiRateLimit();
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         mockRequest as FastifyRequest,
@@ -483,7 +483,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       await middleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
 
       expect(mockCheckRateLimitRedis).toHaveBeenCalledWith(
@@ -502,7 +502,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       await middleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
 
       expect(mockCheckRateLimitRedis).toHaveBeenCalledWith(
@@ -521,7 +521,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       await middleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
 
       expect(mockCheckRateLimitRedis).toHaveBeenCalledWith(
@@ -543,7 +543,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       await middleware(
         mockRequest as FastifyRequest,
         mockReply as FastifyReply,
-        jest.fn()
+        vi.fn()
       );
 
       expect(mockCheckRateLimitRedis).toHaveBeenCalledWith(
@@ -567,7 +567,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       };
 
       const middleware = rateLimitMiddleware('standard', {}, { detectBots: true });
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         botRequest as FastifyRequest,
@@ -592,7 +592,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       };
 
       const middleware = rateLimitMiddleware('standard', {}, { detectBots: false });
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         botRequest as FastifyRequest,
@@ -617,7 +617,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       };
 
       const middleware = rateLimitMiddleware('standard', {}, { detectBots: true });
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         legitimateRequest as FastifyRequest,
@@ -670,7 +670,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       };
 
       const middleware = rateLimitMiddleware('standard');
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         requestWithoutIP as FastifyRequest,
@@ -689,7 +689,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
 
       // @ts-expect-error Testing invalid tier
       const middleware = rateLimitMiddleware('nonexistent');
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         mockRequest as FastifyRequest,
@@ -710,7 +710,7 @@ describe('CRITICAL SECURITY: Distributed Rate Limiting', () => {
       mockCheckRateLimitRedis.mockResolvedValueOnce({ allowed: true });
 
       const middleware = rateLimitMiddleware('standard');
-      const done = jest.fn();
+      const done = vi.fn();
 
       await middleware(
         mockRequest as FastifyRequest,
@@ -727,7 +727,7 @@ describe('RateLimiter class integration', () => {
   let rateLimiter: RateLimiter;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Reset Redis mock implementations
     mockRedisGet.mockResolvedValue(null);

@@ -139,7 +139,7 @@ describe('Session Binding Tests', () => {
       );
 
       expect(result.valid).toBe(false);
-      expect(result.reason).toBe('User agent mismatch');
+      expect(result.reason).toBe('Session binding mismatch');
     });
 
     it('should reject mismatched IP in strict mode', () => {
@@ -357,7 +357,7 @@ describe('Session Binding Tests', () => {
       const updated = detectSuspiciousActivity(monitor, binding, attempts);
 
       expect(updated.suspiciousEvents).toHaveLength(1);
-      expect(updated.suspiciousEvents[0]!.reason).toBe('User agent mismatch');
+      expect(updated.suspiciousEvents[0]!.reason).toBe('Session binding mismatch');
     });
   });
 });

@@ -47,6 +47,9 @@ export function requireIntEnv(name: string): number {
   if (isNaN(parsed)) {
     throw new Error(`Environment variable ${name} must be a valid integer`);
   }
+  if (String(parsed) !== value.trim()) {
+    throw new Error(`Environment variable ${name} must be a valid integer`);
+  }
   return parsed;
 }
 

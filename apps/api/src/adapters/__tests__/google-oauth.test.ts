@@ -10,11 +10,14 @@ import { GBP_OAUTH_SCOPES, getGbpAuthUrl } from '../../auth/oauth/gbp';
 import { getLinkedInAuthUrl } from '../../auth/oauth/linkedin';
 
 describe('Google OAuth Adapter Tests', () => {
+  // P1-FIX: validateState() now requires state >= 32 chars, alphanumeric + _ -
+  const validState = 'abcdefghijklmnopqrstuvwxyz012345';  // exactly 32 chars
+
   describe('GBP OAuth Authorization URL', () => {
     it('should generate valid authorization URL', () => {
       const clientId = 'test-client-id';
       const redirectUri = 'https://example.com/callback';
-      const state = 'random-state-token';
+      const state = validState;
 
       const authUrl = getGbpAuthUrl(clientId, redirectUri, state);
 
@@ -27,7 +30,7 @@ describe('Google OAuth Adapter Tests', () => {
     });
 
     it('should include required GBP scopes', () => {
-      const authUrl = getGbpAuthUrl('client-id', 'https://example.com/callback', 'state');
+      const authUrl = getGbpAuthUrl('client-id', 'https://example.com/callback', validState);
       
       GBP_OAUTH_SCOPES.forEach(scope => {
         expect(authUrl).toContain(encodeURIComponent(scope));
@@ -36,13 +39,13 @@ describe('Google OAuth Adapter Tests', () => {
 
     it('should validate clientId format', () => {
       expect(() => {
-        getGbpAuthUrl('invalid;client;id', 'https://example.com/callback', 'state');
+        getGbpAuthUrl('invalid;client;id', 'https://example.com/callback', validState);
       }).toThrow('Invalid clientId');
     });
 
     it('should require HTTPS redirect URI', () => {
       expect(() => {
-        getGbpAuthUrl('valid-client-id', 'http://example.com/callback', 'state');
+        getGbpAuthUrl('valid-client-id', 'http://example.com/callback', validState);
       }).toThrow('Invalid redirectUri');
     });
 
@@ -55,7 +58,7 @@ describe('Google OAuth Adapter Tests', () => {
     it('should properly URL encode parameters', () => {
       const clientId = 'test-client-123';
       const redirectUri = 'https://example.com/callback?param=value';
-      const state = 'abc123XYZ';
+      const state = validState;
 
       const authUrl = getGbpAuthUrl(clientId, redirectUri, state);
 
@@ -69,7 +72,7 @@ describe('Google OAuth Adapter Tests', () => {
     it('should generate valid LinkedIn authorization URL', () => {
       const clientId = 'test-client-id';
       const redirectUri = 'https://example.com/callback';
-      const state = 'random-state-token';
+      const state = validState;
 
       const authUrl = getLinkedInAuthUrl(clientId, redirectUri, state);
 
@@ -81,20 +84,20 @@ describe('Google OAuth Adapter Tests', () => {
     });
 
     it('should include LinkedIn required scopes', () => {
-      const authUrl = getLinkedInAuthUrl('client-id', 'https://example.com/callback', 'state');
-      
+      const authUrl = getLinkedInAuthUrl('client-id', 'https://example.com/callback', validState);
+
       expect(authUrl).toContain('scope=');
-      expect(authUrl).toContain('r_liteprofile');
-      expect(authUrl).toContain('r_emailaddress');
+      expect(authUrl).toContain('w_organization_social');
+      expect(authUrl).toContain('r_organization_social');
     });
 
     it('should validate LinkedIn OAuth parameters', () => {
       expect(() => {
-        getLinkedInAuthUrl('', 'https://example.com/callback', 'state');
+        getLinkedInAuthUrl('', 'https://example.com/callback', validState);
       }).toThrow();
 
       expect(() => {
-        getLinkedInAuthUrl('client-id', 'http://insecure.com/callback', 'state');
+        getLinkedInAuthUrl('client-id', 'http://insecure.com/callback', validState);
       }).toThrow();
     });
   });

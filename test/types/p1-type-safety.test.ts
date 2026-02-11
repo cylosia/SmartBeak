@@ -5,7 +5,7 @@
  * Run with: npx tsc --noEmit test/types/p1-type-safety.test.ts
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { encodeCursor, decodeCursor, CursorPaginator, CursorPaginationParams } from '../../packages/database/query-optimization/pagination';
 import { withTransaction, query, withLock, IsolationLevel } from '../../packages/database/transactions';
 import { fetchWithRetry, RetryableError, RetryOptions } from '../../packages/utils/fetchWithRetry';

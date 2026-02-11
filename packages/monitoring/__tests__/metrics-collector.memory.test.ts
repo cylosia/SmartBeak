@@ -5,6 +5,7 @@
  * LRU eviction to prevent unbounded memory growth.
  */
 
+import { vi } from 'vitest';
 import { MetricsCollector, AggregationConfig } from '../metrics-collector';
 
 describe('MetricsCollector Memory Leak Prevention', () => {
@@ -71,25 +72,31 @@ describe('MetricsCollector Memory Leak Prevention', () => {
       expect(aggregation?.count).toBe(2);
     });
 
-    it('should emit keysEvicted event when evicting', (done) => {
-      collector.on('keysEvicted', (data) => {
-        expect(data.evicted).toBeGreaterThan(0);
-        expect(data.totalEvicted).toBeGreaterThan(0);
-        done();
+    it('should emit keysEvicted event when evicting', async () => {
+      const evictedPromise = new Promise<void>((resolve) => {
+        collector.on('keysEvicted', (data) => {
+          expect(data.evicted).toBeGreaterThan(0);
+          expect(data.totalEvicted).toBeGreaterThan(0);
+          resolve();
+        });
       });
 
       // Add keys to trigger eviction
       for (let i = 0; i < 150; i++) {
         collector.counter('test_metric', 1, { id: `label_${i}` });
       }
+
+      await evictedPromise;
     });
 
-    it('should handle high key count alert', (done) => {
-      collector.on('highKeyCount', (data) => {
-        expect(data.keyCount).toBeGreaterThan(0);
-        expect(data.maxKeys).toBe(100);
-        expect(data.utilization).toBeGreaterThan(0);
-        done();
+    it('should handle high key count alert', async () => {
+      const highKeyCountPromise = new Promise<void>((resolve) => {
+        collector.on('highKeyCount', (data) => {
+          expect(data.keyCount).toBeGreaterThan(0);
+          expect(data.maxKeys).toBe(100);
+          expect(data.utilization).toBeGreaterThan(0);
+          resolve();
+        });
       });
 
       collector.start();
@@ -100,9 +107,14 @@ describe('MetricsCollector Memory Leak Prevention', () => {
       }
 
       // Wait for monitoring interval
-      setTimeout(() => {
-        collector.stop();
-      }, 100);
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          collector.stop();
+          resolve();
+        }, 100);
+      });
+
+      await highKeyCountPromise;
     });
   });
 
@@ -117,7 +129,7 @@ describe('MetricsCollector Memory Leak Prevention', () => {
       shortRetentionCollector.counter('test_metric', 1);
       
       // Wait for retention period to pass
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
 
       // Add another metric to trigger cleanup
       shortRetentionCollector.counter('test_metric', 1);

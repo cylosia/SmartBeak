@@ -5,6 +5,7 @@
  * TTL-based cleanup for in-flight requests to prevent unbounded memory growth.
  */
 
+import { vi } from 'vitest';
 import { MultiTierCache } from '../multiTierCache';
 
 describe('MultiTierCache Memory Leak Prevention', () => {
@@ -128,7 +129,7 @@ describe('MultiTierCache Memory Leak Prevention', () => {
       expect(cacheWithShortCleanup.getInFlightCount()).toBe(10);
 
       // Wait for cleanup interval (10 seconds in production, but we'll simulate)
-      jest.advanceTimersByTime(11000);
+      vi.advanceTimersByTime(11000);
 
       // Manually trigger cleanup for test
       await new Promise(resolve => setTimeout(resolve, 100));

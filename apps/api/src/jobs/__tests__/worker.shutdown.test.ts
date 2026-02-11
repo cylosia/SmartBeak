@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi, type SpyInstance } from 'vitest';
 
 describe('Worker Shutdown Handler (P1-FIX)', () => {
-  let processOnSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
-  let setTimeoutSpy: jest.SpyInstance;
+  let processOnSpy: SpyInstance;
+  let processExitSpy: SpyInstance;
+  let setTimeoutSpy: SpyInstance;
   let originalProcess: NodeJS.Process;
 
   beforeEach(() => {
@@ -11,17 +11,17 @@ describe('Worker Shutdown Handler (P1-FIX)', () => {
     originalProcess = global.process;
     
     // Mock process.exit
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
+    processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit called');
     });
     
     // Track process.on handlers
-    processOnSpy = jest.spyOn(process, 'on');
-    setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+    processOnSpy = vi.spyOn(process, 'on');
+    setTimeoutSpy = vi.spyOn(global, 'setTimeout');
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Uncaught Exception Handler', () => {
@@ -33,7 +33,7 @@ describe('Worker Shutdown Handler (P1-FIX)', () => {
 
     it('should use Promise.race for shutdown timeout', async () => {
       // Create mock scheduler
-      const mockStop = jest.fn().mockResolvedValue(undefined);
+      const mockStop = vi.fn().mockResolvedValue(undefined);
       const mockScheduler = { stop: mockStop };
       
       // Simulate the shutdown logic from worker.ts
@@ -52,7 +52,7 @@ describe('Worker Shutdown Handler (P1-FIX)', () => {
 
     it('should handle shutdown timeout gracefully', async () => {
       // Create mock scheduler that never resolves
-      const mockStop = jest.fn().mockReturnValue(new Promise(() => {}));
+      const mockStop = vi.fn().mockReturnValue(new Promise(() => {}));
       const mockScheduler = { stop: mockStop };
       
       const SHUTDOWN_TIMEOUT_MS = 100;
@@ -85,7 +85,7 @@ describe('Worker Shutdown Handler (P1-FIX)', () => {
     });
 
     it('should attempt graceful shutdown on unhandled rejection', async () => {
-      const mockStop = jest.fn().mockResolvedValue(undefined);
+      const mockStop = vi.fn().mockResolvedValue(undefined);
       const mockScheduler = { stop: mockStop };
       
       // Simulate the shutdown logic

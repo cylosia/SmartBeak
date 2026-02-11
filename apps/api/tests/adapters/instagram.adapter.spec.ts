@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { InstagramAdapter } from '../../src/adapters/instagram/InstagramAdapter';
 
-global.fetch = jest.fn()
+global.fetch = vi.fn()
   .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'c1' }) })
   .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'p1' }) }) as any;
 

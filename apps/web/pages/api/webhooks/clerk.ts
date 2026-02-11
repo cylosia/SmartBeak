@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '../../../../../packages/kernel/logger';
 import { requireEnv } from '../../../lib/env';
 
 const logger = getLogger('ClerkWebhook');

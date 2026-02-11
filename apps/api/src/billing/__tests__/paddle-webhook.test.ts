@@ -44,7 +44,7 @@ describe('Paddle Webhook Tests', () => {
   describe('Signature Verification', () => {
     it('should verify valid webhook signature', () => {
       const secret = 'test-secret';
-      const payload = JSON.stringify({ event_type: 'subscription.created', org_id: 'org-123' });
+      const payload = JSON.stringify({ event_type: 'subscription.created', org_id: 'org-123', occurred_at: new Date().toISOString() });
       const rawBody = Buffer.from(payload);
       
       // Calculate expected signature
@@ -65,6 +65,7 @@ describe('Paddle Webhook Tests', () => {
       const payload = JSON.stringify({
         event_type: 'subscription.created',
         org_id: 'org-123',
+        occurred_at: new Date().toISOString(),
       });
       const rawBody = Buffer.from(payload);
       const invalidSignature = 'invalid-signature';
@@ -75,7 +76,7 @@ describe('Paddle Webhook Tests', () => {
     });
 
     it('should reject webhook with missing signature', async () => {
-      const payload = JSON.stringify({ org_id: 'org-123' });
+      const payload = JSON.stringify({ org_id: 'org-123', occurred_at: new Date().toISOString() });
       const rawBody = Buffer.from(payload);
 
       await expect(
@@ -90,6 +91,7 @@ describe('Paddle Webhook Tests', () => {
       org_id: 'org-123',
       subscription_id: 'sub-456',
       customer: { id: 'cus-789', email: 'test@example.com' },
+      occurred_at: new Date().toISOString(),
       ...extraData,
     });
 
@@ -202,7 +204,7 @@ describe('Paddle Webhook Tests', () => {
       };
       (getRedis as any).mockResolvedValue(mockRedis);
 
-      const payload = { event_type: 'subscription.created', org_id: 'org-123' };
+      const payload = { event_type: 'subscription.created', org_id: 'org-123', occurred_at: new Date().toISOString() };
       const rawBody = Buffer.from(JSON.stringify(payload));
       
       await handlePaddleWebhook(rawBody, 'any-signature', 'duplicate-event-id');
@@ -219,22 +221,30 @@ describe('Paddle Webhook Tests', () => {
       };
       (getRedis as any).mockResolvedValue(mockRedis);
 
-      const payload = { event_type: 'subscription.created', org_id: 'org-123' };
+      const payload = { event_type: 'subscription.created', org_id: 'org-123', occurred_at: new Date().toISOString() };
       const rawBody = Buffer.from(JSON.stringify(payload));
 
-      // Mock signature verification to pass
-      vi.spyOn(crypto, 'createHmac').mockReturnValue({
-        update: () => ({ digest: () => 'valid-signature' }),
-      } as any);
+      // Calculate a valid signature so the webhook handler proceeds to Redis check
+      const crypto = require('crypto');
+      const secret = process.env.PADDLE_WEBHOOK_SECRET!;
+      const validSignature = crypto
+        .createHmac('sha256', secret)
+        .update(rawBody)
+        .digest('hex');
 
-      // Skip actual signature verification for this test
-      // In real implementation, we'd mock crypto properly
+      await handlePaddleWebhook(rawBody, validSignature, 'new-event-id');
+
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'webhook:paddle:event:new-event-id',
+        86400,
+        '1',
+      );
     });
   });
 
   describe('Security Validation', () => {
     it('should reject events without org_id', async () => {
-      const payload = { event_type: 'subscription.created' };
+      const payload = { event_type: 'subscription.created', occurred_at: new Date().toISOString() };
       const rawBody = Buffer.from(JSON.stringify(payload));
 
       await expect(
@@ -253,7 +263,7 @@ describe('Paddle Webhook Tests', () => {
     it('should require webhook secret configuration', async () => {
       delete process.env.PADDLE_WEBHOOK_SECRET;
 
-      const payload = { event_type: 'subscription.created', org_id: 'org-123' };
+      const payload = { event_type: 'subscription.created', org_id: 'org-123', occurred_at: new Date().toISOString() };
       const rawBody = Buffer.from(JSON.stringify(payload));
 
       await expect(

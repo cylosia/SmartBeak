@@ -2,21 +2,21 @@
  * Security Tests for Clerk Webhook Handler
  * Tests P1 Fix: Clerk webhook Redis fallback to localhost removed
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import handler from '../clerk';
 import { NextApiRequest, NextApiResponse } from 'next';
 
 // Mock ioredis
-jest.mock('ioredis', () => {
-  return jest.fn().mockImplementation((url: string) => ({
-    get: jest.fn(),
-    setex: jest.fn(),
+vi.mock('ioredis', () => {
+  return vi.fn().mockImplementation((url: string) => ({
+    get: vi.fn(),
+    setex: vi.fn(),
     options: { host: url }
   }));
 });
 
 // Mock env
-jest.mock('../../../lib/env', () => ({
+vi.mock('../../../../lib/env', () => ({
   requireEnv: (name: string) => {
     if (name === 'CLERK_WEBHOOK_SECRET') {
       return 'whsec_test_secret_key_for_testing_only';
@@ -28,18 +28,18 @@ jest.mock('../../../lib/env', () => ({
 describe('Clerk Webhook Security Tests', () => {
   let mockReq: Partial<NextApiRequest>;
   let mockRes: Partial<NextApiResponse>;
-  let jsonMock: jest.Mock;
-  let statusMock: jest.Mock;
+  let jsonMock: Mock;
+  let statusMock: Mock;
 
   beforeEach(() => {
-    jsonMock = jest.fn();
-    statusMock = jest.fn().mockReturnValue({ json: jsonMock });
+    jsonMock = vi.fn();
+    statusMock = vi.fn().mockReturnValue({ json: jsonMock });
     mockRes = {
       status: statusMock,
       json: jsonMock,
     };
     
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('P1-FIX: Redis Configuration Security', () => {
@@ -49,7 +49,7 @@ describe('Clerk Webhook Security Tests', () => {
       mockReq = {
         method: 'POST',
         headers: {},
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' }, type: 'user.created' })));
           }
@@ -78,7 +78,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': String(Math.floor(Date.now() / 1000)),
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ 
               data: { id: 'test' }, 
@@ -113,7 +113,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': String(Math.floor(Date.now() / 1000)),
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ 
               data: { id: 'test' }, 
@@ -146,7 +146,7 @@ describe('Clerk Webhook Security Tests', () => {
       mockReq = {
         method: 'POST',
         headers: {},
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' } })));
           }
@@ -172,7 +172,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': oldTimestamp,
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' } })));
           }
@@ -197,7 +197,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': futureTimestamp,
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' } })));
           }
@@ -219,12 +219,12 @@ describe('Clerk Webhook Security Tests', () => {
     });
 
     it('should reject payloads exceeding 10MB', async () => {
-      const destroyMock = jest.fn();
+      const destroyMock = vi.fn();
       mockReq = {
         method: 'POST',
         headers: {},
         destroy: destroyMock,
-        on: jest.fn((event: string, callback: Function) => {
+        on: vi.fn((event: string, callback: Function) => {
           if (event === 'data') {
             // Simulate large payload
             const largeChunk = Buffer.alloc(11 * 1024 * 1024); // 11MB

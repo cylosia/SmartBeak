@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ThreadSafeModuleCache, ModuleCache } from '../moduleCache';
 import { CircuitState } from '@kernel/retry';
 
 describe('ModuleCache Circuit Breaker (P1-FIX)', () => {
   describe('ThreadSafeModuleCache', () => {
     let cache: ThreadSafeModuleCache<string>;
-    let loader: jest.Mock<Promise<string>, [string]>;
+    let loader: Mock<Promise<string>, [string]>;
 
     beforeEach(() => {
-      loader = jest.fn();
+      loader = vi.fn();
       cache = new ThreadSafeModuleCache(loader);
     });
 
@@ -70,7 +70,7 @@ describe('ModuleCache Circuit Breaker (P1-FIX)', () => {
     });
 
     it('should log errors when loader fails', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const error = new Error('Module load failed');
       loader.mockRejectedValue(error);
       
@@ -116,10 +116,10 @@ describe('ModuleCache Circuit Breaker (P1-FIX)', () => {
 
   describe('ModuleCache (non-thread-safe)', () => {
     let cache: ModuleCache<string>;
-    let loader: jest.Mock<Promise<string>, []>;
+    let loader: Mock<Promise<string>, []>;
 
     beforeEach(() => {
-      loader = jest.fn();
+      loader = vi.fn();
       cache = new ModuleCache(loader);
     });
 

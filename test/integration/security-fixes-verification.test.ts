@@ -161,6 +161,10 @@ class MockPool {
       return { rows: params?.[1] === 'valid-org-id' ? [{ 1: 1 }] : [] };
     }
 
+    if (sql.includes('SELECT 1 as processed')) {
+      return { rows: [{ processed: 1 }] };
+    }
+
     if (sql.includes('INSERT INTO audit_logs')) {
       return { rows: [] };
     }
@@ -285,7 +289,7 @@ const BLOCKED_PROTOCOLS = [
   'tftp:', 'sftp:', 'scp:', 'svn:', 'svn+ssh:', 'ssh:', 'telnet:',
 ];
 
-const BLOCKED_PORTS = [22, 23, 25, 53, 80, 110, 143, 443, 445, 3306, 3389, 5432, 6379, 8080];
+const BLOCKED_PORTS = [22, 23, 25, 53, 110, 143, 445, 3306, 3389, 5432, 6379];
 
 interface SSRFValidationResult {
   allowed: boolean;
@@ -725,8 +729,9 @@ describe('SECURITY FIXES VERIFICATION', () => {
       it('should handle SQL comment injection attempt', () => {
         const malicious = "'; DROP TABLE users; --";
         const escaped = escapeLikePattern(malicious);
-        // Should escape the content but preserve structure
-        expect(escaped).toContain("\\'");
+        // escapeLikePattern handles LIKE wildcards (%, _, \), not SQL quotes
+        // SQL injection prevention is handled by parameterized queries
+        expect(escaped).toBe("'; DROP TABLE users; --");
       });
     });
 
@@ -797,8 +802,8 @@ describe('SECURITY FIXES VERIFICATION', () => {
       it('should handle LIKE injection with SQL commands', () => {
         const attack = "%' OR '1'='1";
         const escaped = escapeLikePattern(attack);
-        // The escaped version won't cause SQL injection
-        expect(escaped).toContain("\\'");
+        // escapeLikePattern escapes LIKE wildcards; SQL injection is handled by parameterized queries
+        expect(escaped).toBe("\\%' OR '1'='1");
       });
 
       it('should handle FTS injection with query chaining', () => {

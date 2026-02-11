@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { PinterestAdapter } from '../../src/adapters/pinterest/PinterestAdapter';
 
-global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'pin1' }) }) as any;
+global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'pin1' }) }) as any;
 
 test('Pinterest pin creation succeeds', async () => {
   const adapter = new PinterestAdapter('token');

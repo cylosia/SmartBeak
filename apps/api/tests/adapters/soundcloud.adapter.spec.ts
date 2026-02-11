@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { SoundCloudAdapter } from '../../src/adapters/soundcloud/SoundCloudAdapter';
 
-global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'track1' }) }) as any;
+global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'track1' }) }) as any;
 
 test('SoundCloud upload succeeds', async () => {
   const adapter = new SoundCloudAdapter('token');

@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { createWordPressPost } from '../../src/adapters/wordpress/WordPressAdapter';
 
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 test('creates post successfully', async () => {
   (fetch as any).mockResolvedValue({

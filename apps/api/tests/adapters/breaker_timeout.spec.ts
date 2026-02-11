@@ -17,5 +17,5 @@ test('circuit breaker opens after failures', async () => {
 
   await expect(wrapped()).rejects.toThrow();
   await expect(wrapped()).rejects.toThrow();
-  await expect(wrapped()).rejects.toThrow('Circuit open');
+  await expect(wrapped()).rejects.toThrow('Circuit breaker open for test_adapter');
 });

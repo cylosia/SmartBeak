@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Redis from 'ioredis';
 import { getRedis, closeRedis } from '../redis';
-import { createRedisCluster, checkRedisClusterHealth } from '../redis-cluster';
+import { createRedisCluster, checkRedisClusterHealth } from '../../database/redis-cluster';
 
 // Mock ioredis
 vi.mock('ioredis', () => {

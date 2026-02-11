@@ -33,6 +33,21 @@ beforeAll(() => {
   process.env.REDIS_URL = 'redis://localhost:6379/1'; // Use DB 1 for tests
   process.env.PADDLE_WEBHOOK_SECRET = 'test-paddle-secret';
   process.env.CLERK_WEBHOOK_SECRET = 'whsec_test_clerk_secret';
+
+  // Security config env vars (required by packages/config/security.ts)
+  process.env.BCRYPT_ROUNDS = '12';
+  process.env.JWT_EXPIRY_SECONDS = '3600';
+  process.env.JWT_CLOCK_TOLERANCE_SECONDS = '30';
+  process.env.JWT_MAX_AGE_SECONDS = '604800';
+  process.env.MAX_FAILED_LOGINS = '5';
+  process.env.LOCKOUT_DURATION_MINUTES = '30';
+  process.env.RATE_LIMIT_MAX_REQUESTS = '100';
+  process.env.RATE_LIMIT_WINDOW_MS = '60000';
+  process.env.MAX_RATE_LIMIT_STORE_SIZE = '100000';
+  process.env.RATE_LIMIT_CLEANUP_INTERVAL_MS = '300000';
+
+  // Billing config env vars
+  process.env.STRIPE_SECRET_KEY = 'sk_test_dummy_stripe_key_for_testing';
 });
 
 // P1-FIX: Clean up before each test

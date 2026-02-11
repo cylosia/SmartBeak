@@ -21,6 +21,10 @@ export default defineConfig({
       '@database': path.resolve(__dirname, 'packages/database'),
       '@config': path.resolve(__dirname, 'packages/config'),
       '@errors': path.resolve(__dirname, 'packages/errors'),
+      '@domain': path.resolve(__dirname, 'domains'),
+      '@types': path.resolve(__dirname, 'packages/types'),
+      '@packages': path.resolve(__dirname, 'packages'),
+      '@utils': path.resolve(__dirname, 'packages/utils'),
     },
   },
 });

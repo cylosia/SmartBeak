@@ -55,11 +55,12 @@ describe('SQL Injection Security Tests', () => {
       expect(escaped).toBe('\\\\');
     });
 
-    test('should neutralize SQL comment injection attempts', () => {
+    test('should pass through strings without LIKE wildcards', () => {
       const malicious = "'; DROP TABLE users; --";
       const escaped = escapeLikePattern(malicious);
-      expect(escaped).toContain("'");
-      expect(escaped).not.toBe(malicious);
+      // escapeLikePattern only handles LIKE wildcards (%, _, \)
+      // SQL injection is prevented by parameterized queries, not LIKE escaping
+      expect(escaped).toBe(malicious);
     });
 
     test('should handle complex wildcard injection attempts', () => {
@@ -223,8 +224,8 @@ describe('SQL Injection Security Tests', () => {
   describe('Edge Cases and Combined Attacks', () => {
     
     test('should handle null/undefined inputs gracefully', () => {
-      expect(escapeLikePattern(null as unknown as string)).toBe(null);
-      expect(escapeLikePattern(undefined as unknown as string)).toBe(undefined);
+      expect(escapeLikePattern(null as unknown as string)).toBeNull();
+      expect(escapeLikePattern(undefined as unknown as string)).toBeUndefined();
       expect(sanitizeFtsQuery('')).toBe('');
     });
 

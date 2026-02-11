@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { analyticsDb, getAnalyticsDbSync, isAnalyticsDbHealthy } from '../db';
 
 describe('Analytics DB Error Handling (P1-FIX)', () => {
@@ -16,7 +16,7 @@ describe('Analytics DB Error Handling (P1-FIX)', () => {
     } else {
       delete process.env['ANALYTICS_DB_URL'];
     }
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Error Logging', () => {
@@ -25,7 +25,7 @@ describe('Analytics DB Error Handling (P1-FIX)', () => {
       process.env['ANALYTICS_DB_URL'] = 'postgresql://invalid:5432/db';
       
       // Mock logger to capture error logs
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       
       try {
         await analyticsDb();
@@ -62,7 +62,7 @@ describe('Analytics DB Error Handling (P1-FIX)', () => {
       process.env['ANALYTICS_DB_URL'] = 'postgresql://invalid:5432/db';
       
       // Mock metrics emission
-      const emitCounterMock = jest.fn();
+      const emitCounterMock = vi.fn();
       
       // The P1-FIX should emit these metrics on failure
       const expectedMetrics = [
@@ -91,7 +91,7 @@ describe('Analytics DB Error Handling (P1-FIX)', () => {
     it('should log errors instead of swallowing in getAnalyticsDbSync', () => {
       process.env['ANALYTICS_DB_URL'] = 'postgresql://invalid:5432/db';
       
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       
       // This triggers the async init that was previously swallowing errors
       getAnalyticsDbSync();

@@ -8,7 +8,7 @@
 
 import { getLogger } from '../kernel/logger';
 
-const logger = getLogger('SecurityLogger');
+const securityLogger = getLogger('SecurityLogger');
 
 // Patterns for detecting sensitive fields
 const SENSITIVE_FIELD_PATTERNS = [
@@ -457,16 +457,16 @@ export class SecureLogger {
     // Use structured logger based on level
     switch (level) {
       case 'debug':
-        logger.debug(message, entry);
+        securityLogger.debug(message, entry);
         break;
       case 'info':
-        logger.info(message, entry);
+        securityLogger.info(message, entry);
         break;
       case 'warn':
-        logger.warn(message, entry);
+        securityLogger.warn(message, entry);
         break;
       case 'error':
-        logger.error(message, undefined, entry);
+        securityLogger.error(message, undefined, entry);
         break;
     }
   }

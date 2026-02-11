@@ -1,7 +1,8 @@
 
+import { vi } from 'vitest';
 import { YouTubeAdapter } from '../../src/adapters/youtube/YouTubeAdapter';
 
-global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as any;
+global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as any;
 
 test('YouTube metadata update succeeds', async () => {
   const adapter = new YouTubeAdapter('token');

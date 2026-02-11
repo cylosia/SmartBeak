@@ -40,6 +40,7 @@ describe('Rate Limiting Tests', () => {
       pipeline: vi.fn().mockReturnValue(mockPipeline),
       zremrangebyscore: vi.fn().mockResolvedValue(0),
       zcard: vi.fn().mockResolvedValue(0),
+      zrange: vi.fn().mockResolvedValue([]),
       del: vi.fn().mockResolvedValue(1),
     };
 
