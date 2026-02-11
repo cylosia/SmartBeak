@@ -1,10 +1,13 @@
 
 import { vi } from 'vitest';
-import { InstagramAdapter } from '../../src/adapters/instagram/InstagramAdapter';
 
-global.fetch = vi.fn()
-  .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'c1' }) })
-  .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'p1' }) }) as any;
+vi.mock('node-fetch', () => ({
+  default: vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'c1' }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'p1' }) }),
+}));
+
+import { InstagramAdapter } from '../../src/adapters/instagram/InstagramAdapter';
 
 test('Instagram image publish succeeds', async () => {
   const adapter = new InstagramAdapter('token', 'user1');

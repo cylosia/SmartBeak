@@ -1,11 +1,14 @@
 
 import { vi } from 'vitest';
-import { FacebookAdapter } from '../../src/adapters/facebook/FacebookAdapter';
 
-global.fetch = vi.fn().mockResolvedValue({
-  ok: true,
-  json: async () => ({ id: 'fb_post_1' })
-}) as any;
+vi.mock('node-fetch', () => ({
+  default: vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ id: 'fb_post_1' }),
+  }),
+}));
+
+import { FacebookAdapter } from '../../src/adapters/facebook/FacebookAdapter';
 
 test('Facebook adapter publishes a post', async () => {
   const adapter = new FacebookAdapter('token');

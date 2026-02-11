@@ -8,6 +8,39 @@
  * - Console error tracking
  */
 
+// Set test environment variables at module level (before any module imports)
+// This must be at the top level, NOT inside beforeAll(), because some modules
+// validate env vars at import time (e.g., packages/config/security.ts)
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = 'test-secret-minimum-32-characters-long';
+process.env.JWT_KEY_1 = 'test-secret-key-minimum-32-characters-long';
+process.env.JWT_KEY_2 = 'secondary-key-also-32-chars-minimum';
+process.env.CONTROL_PLANE_DB = 'postgresql://test:test@localhost:5432/test';
+process.env.REDIS_URL = 'redis://localhost:6379/1'; // Use DB 1 for tests
+process.env.PADDLE_WEBHOOK_SECRET = 'pdl-whsec-abcdefghijklmnopqrstuv';
+process.env.CLERK_WEBHOOK_SECRET = 'whsec_abcdefghijklmnopqrstuvwxyz';
+
+// Security config env vars (required by packages/config/security.ts)
+process.env.BCRYPT_ROUNDS = '12';
+process.env.JWT_EXPIRY_SECONDS = '3600';
+process.env.JWT_CLOCK_TOLERANCE_SECONDS = '30';
+process.env.JWT_MAX_AGE_SECONDS = '604800';
+process.env.MAX_FAILED_LOGINS = '5';
+process.env.LOCKOUT_DURATION_MINUTES = '30';
+process.env.RATE_LIMIT_MAX_REQUESTS = '100';
+process.env.RATE_LIMIT_WINDOW_MS = '60000';
+process.env.MAX_RATE_LIMIT_STORE_SIZE = '100000';
+process.env.RATE_LIMIT_CLEANUP_INTERVAL_MS = '300000';
+
+// Abuse guard config env vars
+process.env.ABUSE_MAX_REQUESTS_PER_MINUTE = '100';
+process.env.ABUSE_BLOCK_DURATION_MINUTES = '60';
+process.env.ABUSE_SUSPICIOUS_THRESHOLD = '80';
+process.env.ABUSE_GUARD_ENABLED = 'true';
+
+// Billing config env vars
+process.env.STRIPE_SECRET_KEY = 'DUMMY_STRIPE_KEY_FOR_UNIT_TESTS_ONLY';
+
 import { beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { getLogger } from '../packages/kernel/logger';
 
@@ -21,34 +54,6 @@ console.error = (...args: unknown[]) => {
   consoleErrors.push(args.map(String).join(' '));
   originalError.apply(console, args);
 };
-
-// Environment setup
-beforeAll(() => {
-  // Set test environment variables
-  process.env.NODE_ENV = 'test';
-  process.env.JWT_SECRET = 'test-secret-minimum-32-characters-long';
-  process.env.JWT_KEY_1 = 'test-secret-key-minimum-32-characters-long';
-  process.env.JWT_KEY_2 = 'secondary-key-also-32-chars-minimum';
-  process.env.CONTROL_PLANE_DB = 'postgresql://test:test@localhost:5432/test';
-  process.env.REDIS_URL = 'redis://localhost:6379/1'; // Use DB 1 for tests
-  process.env.PADDLE_WEBHOOK_SECRET = 'test-paddle-secret';
-  process.env.CLERK_WEBHOOK_SECRET = 'whsec_test_clerk_secret';
-
-  // Security config env vars (required by packages/config/security.ts)
-  process.env.BCRYPT_ROUNDS = '12';
-  process.env.JWT_EXPIRY_SECONDS = '3600';
-  process.env.JWT_CLOCK_TOLERANCE_SECONDS = '30';
-  process.env.JWT_MAX_AGE_SECONDS = '604800';
-  process.env.MAX_FAILED_LOGINS = '5';
-  process.env.LOCKOUT_DURATION_MINUTES = '30';
-  process.env.RATE_LIMIT_MAX_REQUESTS = '100';
-  process.env.RATE_LIMIT_WINDOW_MS = '60000';
-  process.env.MAX_RATE_LIMIT_STORE_SIZE = '100000';
-  process.env.RATE_LIMIT_CLEANUP_INTERVAL_MS = '300000';
-
-  // Billing config env vars
-  process.env.STRIPE_SECRET_KEY = 'sk_test_dummy_stripe_key_for_testing';
-});
 
 // P1-FIX: Clean up before each test
 beforeEach(async () => {

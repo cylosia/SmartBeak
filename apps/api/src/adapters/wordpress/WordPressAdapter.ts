@@ -1,4 +1,4 @@
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { MetricsCollector, createRequestContext } from '../../utils/request';
 import { withRetry } from '../../utils/retry';
 

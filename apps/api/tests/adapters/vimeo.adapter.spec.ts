@@ -1,8 +1,11 @@
 
 import { vi } from 'vitest';
-import { VimeoAdapter } from '../../src/adapters/vimeo/VimeoAdapter';
 
-global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as any;
+vi.mock('node-fetch', () => ({
+  default: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+}));
+
+import { VimeoAdapter } from '../../src/adapters/vimeo/VimeoAdapter';
 
 test('Vimeo metadata update succeeds', async () => {
   const adapter = new VimeoAdapter('token');

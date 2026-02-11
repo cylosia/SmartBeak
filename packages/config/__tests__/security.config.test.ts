@@ -22,7 +22,7 @@ describe('Security Configuration - Fail Fast', () => {
   });
 
   describe('BCRYPT_ROUNDS', () => {
-    it('should throw when BCRYPT_ROUNDS is not set', () => {
+    it('should throw when BCRYPT_ROUNDS is not set', async () => {
       // Clear all required security env vars
       const requiredVars = [
         'BCRYPT_ROUNDS',
@@ -40,7 +40,7 @@ describe('Security Configuration - Fail Fast', () => {
         'ABUSE_SUSPICIOUS_THRESHOLD',
         'ABUSE_GUARD_ENABLED',
       ];
-      
+
       for (const key of requiredVars) {
         delete process.env[key];
       }
@@ -60,11 +60,12 @@ describe('Security Configuration - Fail Fast', () => {
       process.env['ABUSE_SUSPICIOUS_THRESHOLD'] = '80';
       process.env['ABUSE_GUARD_ENABLED'] = 'true';
 
-      expect(() => require('../security')).toThrow('SECURITY_CONFIG_MISSING');
-      expect(() => require('../security')).toThrow('BCRYPT_ROUNDS');
+      await expect(import('../security')).rejects.toThrow('SECURITY_CONFIG_MISSING');
+      vi.resetModules();
+      await expect(import('../security')).rejects.toThrow('BCRYPT_ROUNDS');
     });
 
-    it('should load successfully when all required vars are set', () => {
+    it('should load successfully when all required vars are set', async () => {
       // Set all required security env vars
       process.env['BCRYPT_ROUNDS'] = '12';
       process.env['JWT_EXPIRY_SECONDS'] = '3600';
@@ -81,8 +82,8 @@ describe('Security Configuration - Fail Fast', () => {
       process.env['ABUSE_SUSPICIOUS_THRESHOLD'] = '80';
       process.env['ABUSE_GUARD_ENABLED'] = 'true';
 
-      const { securityConfig } = require('../security');
-      
+      const { securityConfig } = await import('../security');
+
       expect(securityConfig.bcryptRounds).toBe(12);
       expect(securityConfig.jwtExpirySeconds).toBe(3600);
     });
@@ -107,34 +108,34 @@ describe('Security Configuration - Fail Fast', () => {
       process.env['ABUSE_GUARD_ENABLED'] = 'true';
     });
 
-    it('should parse bcrypt rounds as integer', () => {
+    it('should parse bcrypt rounds as integer', async () => {
       process.env['BCRYPT_ROUNDS'] = '14';
-      
-      const { securityConfig } = require('../security');
-      
+
+      const { securityConfig } = await import('../security');
+
       expect(securityConfig.bcryptRounds).toBe(14);
     });
 
-    it('should parse JWT expiry as integer', () => {
+    it('should parse JWT expiry as integer', async () => {
       process.env['JWT_EXPIRY_SECONDS'] = '7200';
-      
-      const { securityConfig } = require('../security');
-      
+
+      const { securityConfig } = await import('../security');
+
       expect(securityConfig.jwtExpirySeconds).toBe(7200);
     });
 
-    it('should parse max failed logins as integer', () => {
+    it('should parse max failed logins as integer', async () => {
       process.env['MAX_FAILED_LOGINS'] = '3';
-      
-      const { securityConfig } = require('../security');
-      
+
+      const { securityConfig } = await import('../security');
+
       expect(securityConfig.maxFailedLogins).toBe(3);
     });
 
-    it('should throw for invalid bcrypt rounds', () => {
+    it('should throw for invalid bcrypt rounds', async () => {
       process.env['BCRYPT_ROUNDS'] = 'invalid';
-      
-      expect(() => require('../security')).toThrow();
+
+      await expect(import('../security')).rejects.toThrow();
     });
   });
 
@@ -157,43 +158,43 @@ describe('Security Configuration - Fail Fast', () => {
       process.env['ABUSE_GUARD_ENABLED'] = 'true';
     });
 
-    it('should require ABUSE_MAX_REQUESTS_PER_MINUTE', () => {
+    it('should require ABUSE_MAX_REQUESTS_PER_MINUTE', async () => {
       delete process.env['ABUSE_MAX_REQUESTS_PER_MINUTE'];
-      
-      expect(() => require('../security')).toThrow('ABUSE_GUARD_CONFIG_MISSING');
+
+      await expect(import('../security')).rejects.toThrow('ABUSE_GUARD_CONFIG_MISSING');
     });
 
-    it('should require ABUSE_BLOCK_DURATION_MINUTES', () => {
+    it('should require ABUSE_BLOCK_DURATION_MINUTES', async () => {
       delete process.env['ABUSE_BLOCK_DURATION_MINUTES'];
-      
-      expect(() => require('../security')).toThrow('ABUSE_GUARD_CONFIG_MISSING');
+
+      await expect(import('../security')).rejects.toThrow('ABUSE_GUARD_CONFIG_MISSING');
     });
 
-    it('should require ABUSE_SUSPICIOUS_THRESHOLD', () => {
+    it('should require ABUSE_SUSPICIOUS_THRESHOLD', async () => {
       delete process.env['ABUSE_SUSPICIOUS_THRESHOLD'];
-      
-      expect(() => require('../security')).toThrow('ABUSE_GUARD_CONFIG_MISSING');
+
+      await expect(import('../security')).rejects.toThrow('ABUSE_GUARD_CONFIG_MISSING');
     });
 
-    it('should require ABUSE_GUARD_ENABLED', () => {
+    it('should require ABUSE_GUARD_ENABLED', async () => {
       delete process.env['ABUSE_GUARD_ENABLED'];
-      
-      expect(() => require('../security')).toThrow('ABUSE_GUARD_CONFIG_MISSING');
+
+      await expect(import('../security')).rejects.toThrow('ABUSE_GUARD_CONFIG_MISSING');
     });
 
-    it('should enable abuse guard when ABUSE_GUARD_ENABLED is "true"', () => {
+    it('should enable abuse guard when ABUSE_GUARD_ENABLED is "true"', async () => {
       process.env['ABUSE_GUARD_ENABLED'] = 'true';
-      
-      const { abuseGuardConfig } = require('../security');
-      
+
+      const { abuseGuardConfig } = await import('../security');
+
       expect(abuseGuardConfig.enabled).toBe(true);
     });
 
-    it('should disable abuse guard when ABUSE_GUARD_ENABLED is not "true"', () => {
+    it('should disable abuse guard when ABUSE_GUARD_ENABLED is not "true"', async () => {
       process.env['ABUSE_GUARD_ENABLED'] = 'false';
-      
-      const { abuseGuardConfig } = require('../security');
-      
+
+      const { abuseGuardConfig } = await import('../security');
+
       expect(abuseGuardConfig.enabled).toBe(false);
     });
   });

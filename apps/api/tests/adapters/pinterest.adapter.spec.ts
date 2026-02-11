@@ -1,8 +1,11 @@
 
 import { vi } from 'vitest';
-import { PinterestAdapter } from '../../src/adapters/pinterest/PinterestAdapter';
 
-global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'pin1' }) }) as any;
+vi.mock('node-fetch', () => ({
+  default: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'pin1' }) }),
+}));
+
+import { PinterestAdapter } from '../../src/adapters/pinterest/PinterestAdapter';
 
 test('Pinterest pin creation succeeds', async () => {
   const adapter = new PinterestAdapter('token');

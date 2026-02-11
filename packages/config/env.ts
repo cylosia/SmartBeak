@@ -5,7 +5,7 @@
  */
 
 // Placeholder detection regex - comprehensive pattern matching
-const PLACEHOLDER_PATTERN = /placeholder|your_|xxx|example|test|demo|fake|mock|invalid|null|^\s*$/i;
+const PLACEHOLDER_PATTERN = /^placeholder$|^your_|^xxx|^example_|^test$|^demo$|^fake_|^mock_|^invalid$|^null$|^\s*$/i;
 
 /**
  * Get environment variable value

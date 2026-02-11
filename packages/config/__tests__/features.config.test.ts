@@ -36,8 +36,8 @@ describe('Feature Flags - Security Defaults', () => {
   });
 
   describe('Default Values', () => {
-    it('should have all features disabled by default', () => {
-      const { featureFlags: flags } = require('../features');
+    it('should have all features disabled by default', async () => {
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableAI).toBe(false);
       expect(flags.enableSocialPublishing).toBe(false);
@@ -49,84 +49,84 @@ describe('Feature Flags - Security Defaults', () => {
       expect(flags.enableRateLimiting).toBe(false);
     });
 
-    it('should enable AI when ENABLE_AI=true', () => {
+    it('should enable AI when ENABLE_AI=true', async () => {
       process.env['ENABLE_AI'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableAI).toBe(true);
     });
 
-    it('should enable social publishing when ENABLE_SOCIAL_PUBLISHING=true', () => {
+    it('should enable social publishing when ENABLE_SOCIAL_PUBLISHING=true', async () => {
       process.env['ENABLE_SOCIAL_PUBLISHING'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableSocialPublishing).toBe(true);
     });
 
-    it('should enable email marketing when ENABLE_EMAIL_MARKETING=true', () => {
+    it('should enable email marketing when ENABLE_EMAIL_MARKETING=true', async () => {
       process.env['ENABLE_EMAIL_MARKETING'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableEmailMarketing).toBe(true);
     });
 
-    it('should enable analytics when ENABLE_ANALYTICS=true', () => {
+    it('should enable analytics when ENABLE_ANALYTICS=true', async () => {
       process.env['ENABLE_ANALYTICS'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableAnalytics).toBe(true);
     });
 
-    it('should enable affiliate when ENABLE_AFFILIATE=true', () => {
+    it('should enable affiliate when ENABLE_AFFILIATE=true', async () => {
       process.env['ENABLE_AFFILIATE'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableAffiliate).toBe(true);
     });
 
-    it('should enable experimental when ENABLE_EXPERIMENTAL=true', () => {
+    it('should enable experimental when ENABLE_EXPERIMENTAL=true', async () => {
       process.env['ENABLE_EXPERIMENTAL'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableExperimental).toBe(true);
     });
 
-    it('should enable circuit breaker when ENABLE_CIRCUIT_BREAKER=true', () => {
+    it('should enable circuit breaker when ENABLE_CIRCUIT_BREAKER=true', async () => {
       process.env['ENABLE_CIRCUIT_BREAKER'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableCircuitBreaker).toBe(true);
     });
 
-    it('should enable rate limiting when ENABLE_RATE_LIMITING=true', () => {
+    it('should enable rate limiting when ENABLE_RATE_LIMITING=true', async () => {
       process.env['ENABLE_RATE_LIMITING'] = 'true';
-      
-      const { featureFlags: flags } = require('../features');
+
+      const { featureFlags: flags } = await import('../features');
       
       expect(flags.enableRateLimiting).toBe(true);
     });
   });
 
   describe('isFeatureEnabled', () => {
-    it('should return false for disabled features', () => {
-      const { isFeatureEnabled } = require('../features');
+    it('should return false for disabled features', async () => {
+      const { isFeatureEnabled } = await import('../features');
       
       expect(isFeatureEnabled('enableAI')).toBe(false);
       expect(isFeatureEnabled('enableSocialPublishing')).toBe(false);
     });
 
-    it('should return true for enabled features', () => {
+    it('should return true for enabled features', async () => {
       process.env['ENABLE_AI'] = 'true';
       process.env['ENABLE_SOCIAL_PUBLISHING'] = 'true';
-      
-      const { isFeatureEnabled } = require('../features');
+
+      const { isFeatureEnabled } = await import('../features');
       
       expect(isFeatureEnabled('enableAI')).toBe(true);
       expect(isFeatureEnabled('enableSocialPublishing')).toBe(true);
@@ -134,17 +134,17 @@ describe('Feature Flags - Security Defaults', () => {
   });
 
   describe('getEnabledFeatures', () => {
-    it('should return empty array when no features are enabled', () => {
-      const { getEnabledFeatures } = require('../features');
+    it('should return empty array when no features are enabled', async () => {
+      const { getEnabledFeatures } = await import('../features');
       
       expect(getEnabledFeatures()).toEqual([]);
     });
 
-    it('should return array of enabled feature names', () => {
+    it('should return array of enabled feature names', async () => {
       process.env['ENABLE_AI'] = 'true';
       process.env['ENABLE_ANALYTICS'] = 'true';
-      
-      const { getEnabledFeatures } = require('../features');
+
+      const { getEnabledFeatures } = await import('../features');
       
       const enabled = getEnabledFeatures();
       expect(enabled).toContain('enableAI');
@@ -167,8 +167,8 @@ describe('Feature Flags - Security Defaults', () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it('should log message when all features are disabled', () => {
-      const { validateFeatureFlags } = require('../features');
+    it('should log message when all features are disabled', async () => {
+      const { validateFeatureFlags } = await import('../features');
       
       validateFeatureFlags();
       
@@ -177,11 +177,11 @@ describe('Feature Flags - Security Defaults', () => {
       );
     });
 
-    it('should log enabled features', () => {
+    it('should log enabled features', async () => {
       process.env['ENABLE_AI'] = 'true';
       process.env['ENABLE_ANALYTICS'] = 'true';
-      
-      const { validateFeatureFlags } = require('../features');
+
+      const { validateFeatureFlags } = await import('../features');
       
       validateFeatureFlags();
       
@@ -193,11 +193,11 @@ describe('Feature Flags - Security Defaults', () => {
       );
     });
 
-    it('should warn about experimental features in production', () => {
+    it('should warn about experimental features in production', async () => {
       process.env['NODE_ENV'] = 'production';
       process.env['ENABLE_EXPERIMENTAL'] = 'true';
-      
-      const { validateFeatureFlags } = require('../features');
+
+      const { validateFeatureFlags } = await import('../features');
       
       validateFeatureFlags();
       
@@ -206,11 +206,11 @@ describe('Feature Flags - Security Defaults', () => {
       );
     });
 
-    it('should not warn about experimental features in development', () => {
+    it('should not warn about experimental features in development', async () => {
       process.env['NODE_ENV'] = 'development';
       process.env['ENABLE_EXPERIMENTAL'] = 'true';
-      
-      const { validateFeatureFlags } = require('../features');
+
+      const { validateFeatureFlags } = await import('../features');
       
       validateFeatureFlags();
       
@@ -221,19 +221,19 @@ describe('Feature Flags - Security Defaults', () => {
   });
 
   describe('Security Assertions', () => {
-    it('should not allow features to be enabled by default (previous vulnerability)', () => {
+    it('should not allow features to be enabled by default (previous vulnerability)', async () => {
       // This test documents the security fix
       // Previously, features like enableAI defaulted to true
-      const { featureFlags: flags } = require('../features');
+      const { featureFlags: flags } = await import('../features');
       
       // All features should be disabled without explicit env vars
       const allDisabled = Object.values(flags).every(enabled => enabled === false);
       expect(allDisabled).toBe(true);
     });
 
-    it('should require explicit opt-in for all features', () => {
+    it('should require explicit opt-in for all features', async () => {
       // Verify that no feature is accidentally enabled
-      const { featureFlags: flags } = require('../features');
+      const { featureFlags: flags } = await import('../features');
       
       Object.entries(flags).forEach(([name, enabled]) => {
         expect(enabled).toBe(false);

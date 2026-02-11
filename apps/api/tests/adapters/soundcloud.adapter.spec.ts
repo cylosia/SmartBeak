@@ -1,8 +1,11 @@
 
 import { vi } from 'vitest';
-import { SoundCloudAdapter } from '../../src/adapters/soundcloud/SoundCloudAdapter';
 
-global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'track1' }) }) as any;
+vi.mock('node-fetch', () => ({
+  default: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'track1' }) }),
+}));
+
+import { SoundCloudAdapter } from '../../src/adapters/soundcloud/SoundCloudAdapter';
 
 test('SoundCloud upload succeeds', async () => {
   const adapter = new SoundCloudAdapter('token');

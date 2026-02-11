@@ -8,7 +8,7 @@
 import { vi, type Mocked } from 'vitest';
 import { Pool, PoolClient } from 'pg';
 import { withTransaction, TransactionError } from '../transactions';
-import { withPgBouncerTransaction } from '../pgbouncer';
+import { transactionWithPgBouncer } from '../pgbouncer';
 
 // Mock the logger
 vi.mock('@kernel/logger', () => ({
@@ -55,12 +55,11 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('Original transaction error');
       const rollbackError = new Error('Rollback failed: connection terminated');
 
-      // Setup query mock to fail on ROLLBACK
+      // Setup query mock: fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
-        .mockRejectedValueOnce(rollbackError); // ROLLBACK also fails
+        .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       const { getLogger } = await import('@kernel/logger');
       const mockLogger = getLogger('database:transactions') as Mocked<any>;
@@ -69,12 +68,15 @@ describe('Transaction Error Handling', () => {
         withTransaction(async () => {
           throw originalError;
         })
-      ).rejects.toThrow(originalError);
+      ).rejects.toThrow(TransactionError);
 
       // Verify rollback error was logged with original error context
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Rollback failed',
-        rollbackError
+        'Rollback failed - transaction may be in inconsistent state',
+        expect.any(Error),
+        expect.objectContaining({
+          originalError: originalError.message,
+        })
       );
     });
 
@@ -101,10 +103,11 @@ describe('Transaction Error Handling', () => {
 
       // Verify the rollback failure was logged
       const rollbackLogCall = mockLogger.error.mock.calls.find(
-        (call: any[]) => call[0] === 'Rollback failed'
+        (call: any[]) => call[0] === 'Rollback failed - transaction may be in inconsistent state'
       );
       expect(rollbackLogCall).toBeDefined();
-      expect(rollbackLogCall[1]).toBe(rollbackError);
+      expect(rollbackLogCall![1]).toBeInstanceOf(Error);
+      expect(rollbackLogCall![1].message).toBe(rollbackError.message);
     });
   });
 
@@ -125,7 +128,7 @@ describe('Transaction Error Handling', () => {
       ).rejects.toBe(originalError);
     });
 
-    it('should throw original error when rollback fails', async () => {
+    it('should throw TransactionError when rollback fails, preserving original error', async () => {
       const originalError = new Error('Unique constraint violation');
       const rollbackError = new Error('Rollback connection lost');
 
@@ -135,22 +138,23 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
-      await expect(
-        withTransaction(async () => {
+      try {
+        await withTransaction(async () => {
           throw originalError;
-        })
-      ).rejects.toBe(originalError);
+        });
+        // Should not reach here
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(TransactionError);
+        const txError = e as InstanceType<typeof TransactionError>;
+        expect(txError.originalError.message).toBe(originalError.message);
+        expect(txError.rollbackError?.message).toBe(rollbackError.message);
+      }
     });
 
-    it('should attach rollback error as cause when available', async () => {
+    it('should preserve chained error context in TransactionError when rollback fails', async () => {
       const originalError = new Error('Transaction failed');
       const rollbackError = new Error('Rollback failed');
-
-      mockQuery
-        .mockResolvedValueOnce({}) // SET statement_timeout
-        .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
-        .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       // Test with chained error
       class ChainedError extends Error {
@@ -160,19 +164,25 @@ describe('Transaction Error Handling', () => {
       }
 
       const chainedError = new ChainedError('Operation failed', originalError);
-      
-      mockQuery.mockReset();
+
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
         .mockRejectedValueOnce(chainedError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
-      await expect(
-        withTransaction(async () => {
+      try {
+        await withTransaction(async () => {
           throw chainedError;
-        })
-      ).rejects.toBe(chainedError);
+        });
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(TransactionError);
+        const txError = e as InstanceType<typeof TransactionError>;
+        // The original error is preserved as originalError
+        expect(txError.originalError).toBe(chainedError);
+        expect(txError.rollbackError?.message).toBe(rollbackError.message);
+      }
     });
   });
 
@@ -249,10 +259,11 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('PgBouncer transaction failed');
       const rollbackError = new Error('PgBouncer rollback failed');
 
+      // PgBouncer transaction order: BEGIN, SET LOCAL, then fn runs (throws),
+      // then ROLLBACK in catch block
       mockQuery
-        .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
+        .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       // Get logger for verification
@@ -260,16 +271,17 @@ describe('Transaction Error Handling', () => {
       const mockLogger = getLogger('database:pgbouncer') as Mocked<any>;
       const loggerSpy = vi.spyOn(mockLogger, 'error').mockImplementation();
 
+      // transactionWithPgBouncer throws a new combined Error when rollback fails
       await expect(
-        withPgBouncerTransaction(mockPool, async () => {
+        transactionWithPgBouncer(mockPool, async () => {
           throw originalError;
         })
-      ).rejects.toBe(originalError);
+      ).rejects.toThrow('Transaction failed');
 
       // Verify rollback error was logged
       expect(loggerSpy).toHaveBeenCalledWith(
         '[PgBouncer] Rollback failed',
-        rollbackError
+        expect.objectContaining({ message: rollbackError.message })
       );
 
       loggerSpy.mockRestore();
@@ -282,14 +294,15 @@ describe('Transaction Error Handling', () => {
 
       const originalError = new Error('Business error in PgBouncer context');
 
+      // PgBouncer transaction order: BEGIN, SET LOCAL, then fn runs (throws),
+      // then ROLLBACK in catch block
       mockQuery
-        .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
+        .mockResolvedValueOnce({}) // SET LOCAL statement_timeout
         .mockResolvedValueOnce({}); // ROLLBACK succeeds
 
       await expect(
-        withPgBouncerTransaction(mockPool, async () => {
+        transactionWithPgBouncer(mockPool, async () => {
           throw originalError;
         })
       ).rejects.toBe(originalError);
@@ -310,16 +323,20 @@ describe('Transaction Error Handling', () => {
       const { getLogger } = await import('@kernel/logger');
       const mockLogger = getLogger('database:transactions') as Mocked<any>;
 
+      // When rollback fails, a TransactionError is thrown
       await expect(
         withTransaction(async () => {
           throw originalError;
         })
-      ).rejects.toBe(originalError);
+      ).rejects.toThrow(TransactionError);
 
-      // Verify rollback error was logged even as string
+      // Verify rollback error was logged (string is wrapped in Error)
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Rollback failed',
-        rollbackError
+        'Rollback failed - transaction may be in inconsistent state',
+        expect.objectContaining({ message: rollbackError }),
+        expect.objectContaining({
+          originalError: originalError.message,
+        })
       );
     });
 
@@ -339,7 +356,7 @@ describe('Transaction Error Handling', () => {
         withTransaction(async () => {
           throw originalError;
         })
-      ).rejects.toBe(originalError);
+      ).rejects.toThrow(TransactionError);
 
       const duration = Date.now() - startTime;
       // Should not take significant time since we're mocking
@@ -368,7 +385,7 @@ describe('Transaction Error Handling', () => {
         withTransaction(async () => {
           throw originalError;
         })
-      ).rejects.toBe(originalError);
+      ).rejects.toThrow(TransactionError);
 
       // Verify release error was logged
       expect(mockLogger.error).toHaveBeenCalledWith(
@@ -392,7 +409,9 @@ describe('Transaction Error Handling', () => {
       expect(transactionError.message).toBe('Transaction failed');
       expect(transactionError.originalError).toBe(originalError);
       expect(transactionError.rollbackError).toBe(rollbackError);
-      expect(transactionError.cause).toBe(originalError);
+      expect(transactionError.name).toBe('TransactionError');
+      expect(transactionError.rootCause).toBe(originalError);
+      expect(transactionError.hasRollbackFailure).toBe(true);
     });
 
     it('should serialize TransactionError to JSON properly', () => {

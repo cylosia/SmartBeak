@@ -6,18 +6,18 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { withTransaction, query } from '../../../../packages/database/transactions';
-import { getRedis } from '../../../../packages/kernel/redis';
-import { checkRateLimit } from '../../../../packages/kernel/rateLimiterRedis';
-import { getAuthContext } from '../../../../packages/security/jwt';
+import { withTransaction, query } from '@database/transactions';
+import { getRedis } from '@kernel/redis';
+import { checkRateLimit } from '@kernel/rateLimiterRedis';
+import { getAuthContext } from '@security/jwt';
 import jwt from 'jsonwebtoken';
 
 // Mock dependencies
-vi.mock('../../../../packages/database/pool', () => ({
+vi.mock('@database/pool', () => ({
   getPool: vi.fn(),
 }));
 
-vi.mock('../../../../packages/kernel/redis', () => ({
+vi.mock('@kernel/redis', () => ({
   getRedis: vi.fn(),
 }));
 
@@ -52,7 +52,7 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
       on: vi.fn(),
     };
 
-    const { getPool } = require('../../../../packages/database/pool');
+    const { getPool } = require('@database/pool');
     (getPool as any).mockResolvedValue(mockPool);
 
     // Setup mock Redis with tenant isolation

@@ -1,8 +1,11 @@
 
 import { vi } from 'vitest';
-import { YouTubeAdapter } from '../../src/adapters/youtube/YouTubeAdapter';
 
-global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as any;
+vi.mock('node-fetch', () => ({
+  default: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+}));
+
+import { YouTubeAdapter } from '../../src/adapters/youtube/YouTubeAdapter';
 
 test('YouTube metadata update succeeds', async () => {
   const adapter = new YouTubeAdapter('token');

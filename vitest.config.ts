@@ -25,6 +25,11 @@ export default defineConfig({
       '@types': path.resolve(__dirname, 'packages/types'),
       '@packages': path.resolve(__dirname, 'packages'),
       '@utils': path.resolve(__dirname, 'packages/utils'),
+      '@shutdown': path.resolve(__dirname, 'packages/shutdown'),
+      '@middleware': path.resolve(__dirname, 'packages/middleware'),
+      '@monitoring': path.resolve(__dirname, 'packages/monitoring'),
+      '@cache': path.resolve(__dirname, 'packages/cache'),
+      '@analytics': path.resolve(__dirname, 'packages/analytics'),
     },
   },
 });
