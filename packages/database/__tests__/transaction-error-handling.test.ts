@@ -84,10 +84,10 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('Database constraint violation');
       const rollbackError = new Error('Network error during rollback');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       const { getLogger } = await import('@kernel/logger');
@@ -115,10 +115,10 @@ describe('Transaction Error Handling', () => {
     it('should throw original error even when rollback succeeds', async () => {
       const originalError = new Error('Business logic error');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockResolvedValueOnce({}); // ROLLBACK succeeds
 
       await expect(
@@ -132,10 +132,10 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('Unique constraint violation');
       const rollbackError = new Error('Rollback connection lost');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       try {
@@ -165,10 +165,10 @@ describe('Transaction Error Handling', () => {
 
       const chainedError = new ChainedError('Operation failed', originalError);
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(chainedError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       try {
@@ -191,10 +191,10 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('Transaction error');
       const rollbackError = new Error('Rollback failed');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       try {
@@ -212,10 +212,10 @@ describe('Transaction Error Handling', () => {
     it('should release client normally when rollback succeeds', async () => {
       const originalError = new Error('Transaction error');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockResolvedValueOnce({}); // ROLLBACK succeeds
 
       try {
@@ -314,10 +314,10 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('Transaction error');
       const rollbackError = 'String error from database';
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails with string
 
       const { getLogger } = await import('@kernel/logger');
@@ -344,10 +344,10 @@ describe('Transaction Error Handling', () => {
       const originalError = new Error('Transaction timeout');
       const rollbackTimeoutError = new Error('Rollback timed out after 30s');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackTimeoutError); // ROLLBACK times out
 
       const startTime = Date.now();
@@ -368,10 +368,10 @@ describe('Transaction Error Handling', () => {
       const rollbackError = new Error('Rollback failed');
       const releaseError = new Error('Release failed');
 
+      // fn throws directly (no query), so ROLLBACK is 3rd query
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
-        .mockRejectedValueOnce(originalError) // Transaction fails
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       mockRelease.mockImplementation(() => {
