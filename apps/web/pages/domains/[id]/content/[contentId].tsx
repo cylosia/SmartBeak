@@ -1,4 +1,5 @@
 import type { GetServerSidePropsContext } from 'next';
+
 import { AppShell } from '../../../../components/AppShell';
 import { DomainTabs } from '../../../../components/DomainTabs';
 import { AudioEditor } from '../../../../components/editors/AudioEditor';
@@ -6,20 +7,19 @@ import { ImageEditor } from '../../../../components/editors/ImageEditor';
 import { SocialEditor } from '../../../../components/editors/SocialEditor';
 import { VideoEditor } from '../../../../components/editors/VideoEditor';
 import { WebEditor } from '../../../../components/editors/WebEditor';
+import { authFetch, apiUrl } from '../../../../lib/api-client';
 
 interface ContentDetailProps {
   domainId: string;
   contentId: string;
-  type: string;
+  contentType: string;
 }
 
-export default function ContentDetail({ domainId, contentId, type }: ContentDetailProps) {
+export default function ContentDetail({ domainId, contentId, contentType }: ContentDetailProps) {
   const renderEditor = () => {
-    switch (type) {
+    switch (contentType) {
       case 'image': return <ImageEditor />;
       case 'video': return <VideoEditor />;
-      case 'audio': return <AudioEditor />;
-      case 'social': return <SocialEditor />;
       default: return <WebEditor />;
     }
   };
@@ -35,18 +35,32 @@ export default function ContentDetail({ domainId, contentId, type }: ContentDeta
         <p>
           Derivations are drafts only and require explicit approval to publish.
         </p>
-        <button>➕ Derive Email Draft</button>
-        <button style={{ marginLeft: 8 }}>➕ Derive Social Post</button>
+        <button>Derive Email Draft</button>
+        <button style={{ marginLeft: 8 }}>Derive Social Post</button>
       </section>
     </AppShell>
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
+// H6-FIX: Fetch actual content from API to get real contentType instead of hardcoding 'blog'
+export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   const id = params?.['id'];
   const contentId = params?.['contentId'];
   if (typeof id !== 'string' || typeof contentId !== 'string') {
     return { notFound: true };
   }
-  return { props: { domainId: id, contentId, type: 'blog' } };
+
+  try {
+    const res = await authFetch(apiUrl(`content/${contentId}`), { ctx: { req } });
+    const { item } = await res.json();
+    return {
+      props: {
+        domainId: id,
+        contentId,
+        contentType: item?.contentType || 'article',
+      },
+    };
+  } catch {
+    return { props: { domainId: id, contentId, contentType: 'article' } };
+  }
 }

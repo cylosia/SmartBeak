@@ -18,7 +18,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
   await rateLimit('billing:invoices', 50);
   const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+  // M3-FIX: Restrict invoice access to owner/admin only (was allowing viewers to see financial data)
+  requireRole(ctx, ['owner', 'admin']);
 
   try {
     // Fetch the organization's Stripe customer ID
@@ -56,11 +57,12 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     status: inv.status,
     hostedInvoiceUrl: inv.hosted_invoice_url,
     invoicePdf: inv.invoice_pdf,
-    createdAt: inv.created,
-    dueDate: inv.due_date,
+    // M5-FIX: Convert Stripe Unix timestamps (seconds) to ISO strings for frontend display
+    createdAt: inv.created ? new Date(inv.created * 1000).toISOString() : null,
+    dueDate: inv.due_date ? new Date(inv.due_date * 1000).toISOString() : null,
     description: inv.description,
-    periodStart: inv.period_start,
-    periodEnd: inv.period_end,
+    periodStart: inv.period_start ? new Date(inv.period_start * 1000).toISOString() : null,
+    periodEnd: inv.period_end ? new Date(inv.period_end * 1000).toISOString() : null,
     }));
 
     return { invoices: formattedInvoices };

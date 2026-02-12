@@ -1,10 +1,12 @@
 
 import { GetServerSideProps } from 'next';
 
+import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
+// M1-FIX: Wrapped in AppShell for consistent navigation
 export default function AffiliateOffers({ offers }: any) {
   return (
-  <main>
+  <AppShell>
     <h1>Affiliate Offers</h1>
     <table>
     <thead>
@@ -24,13 +26,14 @@ export default function AffiliateOffers({ offers }: any) {
       ))}
     </tbody>
     </table>
-  </main>
+  </AppShell>
   );
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const res = await authFetch(apiUrl('affiliates/offers'), { ctx });
-  const offers = await res.json();
+  // C10-FIX: Destructure offers array from response (was passing full object including pagination)
+  const { offers } = await res.json();
 
-  return { props: { offers } };
+  return { props: { offers: offers || [] } };
 };
