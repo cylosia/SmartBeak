@@ -32,8 +32,8 @@ export function BillingInvoices() {
   <div>
     <h2>Invoices & Receipts</h2>
     <ul>
-    {invoices.map((inv: any) => (
-      <li key={inv["id"]}>
+    {invoices.map((inv: { id: string; number: string; hostedInvoiceUrl: string; amountPaid: number }) => (
+      <li key={inv.id}>
       <a
         href={inv.hostedInvoiceUrl}
         target='_blank'

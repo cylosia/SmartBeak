@@ -1,6 +1,18 @@
 
 import React from 'react';
-export function BulkPublishConfirm({ summary, onConfirm }: any) {
+
+interface BulkPublishSummary {
+  drafts: number;
+  targets: number;
+  totalCombinations: number;
+}
+
+interface BulkPublishConfirmProps {
+  summary: BulkPublishSummary;
+  onConfirm: () => void;
+}
+
+export function BulkPublishConfirm({ summary, onConfirm }: BulkPublishConfirmProps) {
   return (
   <div>
     <h3>Confirm Bulk Publish</h3>
