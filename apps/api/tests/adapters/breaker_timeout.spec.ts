@@ -7,9 +7,9 @@ test('withTimeout rejects slow promise', async () => {
 });
 
 test('circuit breaker opens after failures', async () => {
-  let _calls = 0;
+  let calls = 0;
   const fn = async () => {
-  _calls++;
+  calls++;
   throw new Error('fail');
   };
 
@@ -18,4 +18,5 @@ test('circuit breaker opens after failures', async () => {
   await expect(wrapped()).rejects.toThrow();
   await expect(wrapped()).rejects.toThrow();
   await expect(wrapped()).rejects.toThrow('Circuit open');
+  expect(calls).toBe(2);
 });

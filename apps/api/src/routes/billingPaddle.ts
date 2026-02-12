@@ -10,7 +10,7 @@ import { createPaddleCheckout } from '../billing/paddle';
 import { extractAndVerifyToken } from '@security/jwt';
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { getLogger } from '@kernel/logger';
-import { getDb } from '../db';
+import { verifyOrgMembership } from '../auth/verifyOrgMembership';
 
 const billingPaddleLogger = getLogger('billingPaddle');
 
@@ -65,18 +65,6 @@ type AuthenticatedRequest = FastifyRequest & {
   stripeCustomerId?: string | undefined;
   };
 };
-
-/**
- * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
-}
 
 export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
   // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing (5 req/min)

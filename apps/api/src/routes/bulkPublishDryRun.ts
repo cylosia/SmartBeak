@@ -129,7 +129,7 @@ export async function bulkPublishDryRunRoutes(app: FastifyInstance): Promise<voi
         });
       }
       // FIX: Use optimized batch processing instead of nested map (O(n*m) complexity)
-      const summary = await generateSummaryBatched(drafts, targets);
+      const summary = generateSummaryBatched(drafts, targets);
 
       await recordAuditEvent({
         orgId: auth.orgId,
@@ -170,13 +170,12 @@ export async function bulkPublishDryRunRoutes(app: FastifyInstance): Promise<voi
  * - Uses flat array operations instead of nested structures
  * - Prevents O(n*m) complexity memory explosion
  */
-async function generateSummaryBatched(drafts: string[], targets: string[]): Promise<Array<{ draftId: string; intents: Array<{ target: string; status: string }> }>> {
+function generateSummaryBatched(drafts: string[], targets: string[]): Array<{ draftId: string; intents: Array<{ target: string; status: string }> }> {
   const summary: Array<{ draftId: string; intents: Array<{ target: string; status: string }> }> = [];
   // FIX: Process drafts in batches to control memory usage
   for (let i = 0; i < drafts.length; i += BATCH_SIZE) {
     const draftBatch = drafts.slice(i, i + BATCH_SIZE);
-    // FIX: Process each batch with Promise.all for parallel processing
-    const batchResults = await Promise.all(draftBatch.map(draftId => processDraftBatch(draftId, targets)));
+    const batchResults = draftBatch.map(draftId => processDraftBatch(draftId, targets));
     summary.push(...batchResults);
   }
   return summary;
@@ -201,66 +200,6 @@ function processDraftBatch(draftId: string, targets: string[]): { draftId: strin
     intents,
   };
 }
-/**
- * FIX: Alternative implementation with pagination support
- * Use this if you need to paginate results for very large datasets
- */
-async function _generateSummaryPaginated(drafts: string[], targets: string[], page = 1, pageSize = 100): Promise<{
-  data: Array<{ draftId: string; intents: Array<{ target: string; status: string }> }>;
-  pagination: { page: number; pageSize: number; total: number; totalPages: number };
-}> {
-  const totalCombinations = drafts.length * targets.length;
-  const totalPages = Math.ceil(totalCombinations / pageSize);
-  // Calculate which draft/target combinations to include in this page
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalCombinations);
-  const data: Array<{ draftId: string; intents: Array<{ target: string; status: string }> }> = [];
-  // Generate only the combinations needed for this page
-  for (let idx = startIndex; idx < endIndex; idx++) {
-    const draftIndex = Math.floor(idx / targets.length);
-    const targetIndex = idx % targets.length;
-    const draftId = drafts[draftIndex]!;
-    const target = targets[targetIndex]!;
-    // Find or create draft entry
-    let draftEntry = data.find(d => d.draftId === draftId);
-    if (!draftEntry) {
-      draftEntry = { draftId, intents: [] };
-      data.push(draftEntry);
-    }
-    draftEntry.intents.push({
-      target,
-      status: 'will_create',
-    });
-  }
-  return {
-    data,
-    pagination: {
-      page,
-      pageSize,
-      total: totalCombinations,
-      totalPages,
-    },
-  };
-}
-/**
- * FIX: Memory-efficient streaming implementation
- * Use this for very large datasets that need to be streamed
- */
-async function* _generateSummaryStream(drafts: string[], targets: string[]): AsyncGenerator<{ draftId: string; intent: { target: string; status: string } }> {
-  // FIX: Yield results one at a time to minimize memory usage
-  for (const draftId of drafts) {
-    for (const target of targets) {
-      yield {
-        draftId,
-        intent: {
-          target,
-          status: 'will_create',
-        },
-      };
-    }
-  }
-}
-
 
 export interface BulkPublishDryRunResponse {
   drafts: number;

@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { adminRateLimit } from '../middleware/rateLimiter';
 import { getDb } from '../db';
+import { verifyOrgMembership } from '../auth/verifyOrgMembership';
 
 const ExportQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(1000).default(1000),
@@ -61,18 +62,6 @@ function secureCompareToken(token: string, expectedToken: string): boolean {
   const equal = crypto.timingSafeEqual(tokenPadded, expectedPadded);
   const sameLength = token.length === expectedToken.length;
   return equal && sameLength;
-}
-
-/**
- * Verify admin has membership in the organization
- * P1-FIX: Added org membership verification for audit exports
- */
-async function verifyOrgMembership(adminId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: adminId, org_id: orgId })
-    .first();
-  return !!membership;
 }
 
 export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void> {

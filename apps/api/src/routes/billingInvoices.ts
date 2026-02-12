@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { verifyToken, extractBearerToken as extractTokenFromHeader, TokenExpiredError, TokenInvalidError, } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
 import { getDb } from '../db';
+import { verifyOrgMembership } from '../auth/verifyOrgMembership';
 
 const billingInvoicesLogger = getLogger('billingInvoices');
 
@@ -50,18 +51,6 @@ export interface InvoiceResponse {
 export interface ErrorResponse {
   error: string;
   code: string;
-}
-
-/**
- * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
 }
 
 export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> {

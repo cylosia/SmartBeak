@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { getLogger } from '@kernel/logger';
 import { getRedis } from '@kernel/redis';
 
+import { AppError, ValidationError, NotFoundError, ConflictError, ErrorCodes } from '@packages/errors';
 import { StripeAdapter } from './stripe';
 
 const logger = getLogger('billing');
@@ -74,7 +75,7 @@ export class BillingService {
     private stripe = new StripeAdapter()
   ) {
     if (!pool) {
-    throw new Error('Database pool is required');
+    throw new ValidationError('Database pool is required');
     }
   }
 
@@ -137,10 +138,10 @@ export class BillingService {
 
   async assignPlan(orgId: string, planId: string, idempotencyKey?: string): Promise<void> {
     if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId (string) is required');
+    throw new ValidationError('Valid orgId (string) is required');
     }
     if (!planId || typeof planId !== 'string') {
-    throw new Error('Valid planId (string) is required');
+    throw new ValidationError('Valid planId (string) is required');
     }
 
     const key = idempotencyKey || this.generateIdempotencyKey(orgId, `assignPlan:${planId}`);
@@ -148,7 +149,7 @@ export class BillingService {
     const idempotencyCheck = await this.checkIdempotency(key);
     if (idempotencyCheck.exists) {
     if (idempotencyCheck["error"]) {
-        throw new Error(idempotencyCheck["error"]);
+        throw new AppError(idempotencyCheck["error"]!, ErrorCodes.BILLING_ERROR);
     }
     logger.info('Idempotent retry detected', { orgId });
     return;
@@ -170,7 +171,7 @@ export class BillingService {
     );
 
     if (planResult.rows.length === 0) {
-        throw new Error(`Plan not found: ${planId}`);
+        throw new NotFoundError('Plan');
     }
 
     const existingSub = await client.query(
@@ -179,7 +180,7 @@ export class BillingService {
     );
 
     if (existingSub.rows.length > 0) {
-        throw new Error('Organization already has an active subscription');
+        throw new ConflictError('Organization already has an active subscription');
     }
 
     const { customerId } = await this.stripe.createCustomer(orgId);
@@ -210,7 +211,7 @@ export class BillingService {
     await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
 
     logger["error"]('Error assigning plan', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to assign plan: ${errorMessage}`);
+    throw new AppError(`Failed to assign plan: ${errorMessage}`, ErrorCodes.BILLING_ERROR);
     } finally {
     client.release();
     }
@@ -218,7 +219,7 @@ export class BillingService {
 
   async getActivePlan(orgId: string): Promise<ActivePlanResult | null> {
     if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId (string) is required');
+    throw new ValidationError('Valid orgId (string) is required');
     }
 
     try {
@@ -236,16 +237,16 @@ export class BillingService {
     return rows[0] || null;
     } catch (error) {
     logger["error"]('Error fetching active plan', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to fetch active plan: ${error instanceof Error ? error.message : String(error)}`);
+    throw new AppError(`Failed to fetch active plan`, ErrorCodes.BILLING_ERROR);
     }
   }
 
   async enterGrace(orgId: string, days = 7): Promise<void> {
     if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId (string) is required');
+    throw new ValidationError('Valid orgId (string) is required');
     }
     if (typeof days !== 'number' || !Number.isInteger(days) || days < 1) {
-    throw new Error('days must be a positive integer');
+    throw new ValidationError('days must be a positive integer');
     }
 
     const client = await this.pool.connect();
@@ -263,7 +264,7 @@ export class BillingService {
     );
 
     if (result.rowCount === 0) {
-        throw new Error('No active subscription found');
+        throw new NotFoundError('Subscription');
     }
 
     await this.auditLog('grace_period_entered', orgId, { days });
@@ -274,7 +275,7 @@ export class BillingService {
     } catch (error) {
     await client.query('ROLLBACK');
     logger["error"]('Error entering grace period', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to enter grace period: ${error instanceof Error ? error.message : String(error)}`);
+    throw new AppError('Failed to enter grace period', ErrorCodes.BILLING_ERROR);
     } finally {
     client.release();
     }
@@ -282,7 +283,7 @@ export class BillingService {
 
   async cancelSubscription(orgId: string): Promise<void> {
     if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId (string) is required');
+    throw new ValidationError('Valid orgId (string) is required');
     }
 
     const client = await this.pool.connect();
@@ -300,12 +301,12 @@ export class BillingService {
     );
 
     if (rows.length === 0) {
-        throw new Error('No active subscription found');
+        throw new NotFoundError('Subscription');
     }
 
     const subscription = rows[0];
     if (!subscription) {
-        throw new Error('No active subscription found');
+        throw new NotFoundError('Subscription');
     }
 
     if (subscription['stripe_subscription_id']) {
@@ -329,7 +330,7 @@ export class BillingService {
     } catch (error) {
     await client.query('ROLLBACK');
     logger["error"]('Error cancelling subscription', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to cancel subscription: ${error instanceof Error ? error.message : String(error)}`);
+    throw new AppError('Failed to cancel subscription', ErrorCodes.BILLING_ERROR);
     } finally {
     client.release();
     }
@@ -337,15 +338,15 @@ export class BillingService {
 
   async updateSubscriptionStatus(subscriptionId: string, status: string): Promise<void> {
     if (!subscriptionId || typeof subscriptionId !== 'string') {
-    throw new Error('Valid subscriptionId (string) is required');
+    throw new ValidationError('Valid subscriptionId (string) is required');
     }
     if (!status || typeof status !== 'string') {
-    throw new Error('Valid status (string) is required');
+    throw new ValidationError('Valid status (string) is required');
     }
 
     const validStatuses = ['active', 'cancelled', 'past_due', 'unpaid', 'trialing', 'paused'];
     if (!validStatuses.includes(status)) {
-    throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+    throw new ValidationError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
 
     const client = await this.pool.connect();
@@ -362,7 +363,7 @@ export class BillingService {
     );
 
     if (result.rowCount === 0) {
-        throw new Error('Subscription not found');
+        throw new NotFoundError('Subscription');
     }
 
     await this.auditLog('subscription_status_updated', subscriptionId, { status });
@@ -373,7 +374,7 @@ export class BillingService {
     } catch (error) {
     await client.query('ROLLBACK');
     logger["error"]('Error updating subscription status', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to update subscription status: ${error instanceof Error ? error.message : String(error)}`);
+    throw new AppError('Failed to update subscription status', ErrorCodes.BILLING_ERROR);
     } finally {
     client.release();
     }
@@ -381,7 +382,7 @@ export class BillingService {
 
   async getSubscriptions(orgId: string): Promise<Subscription[]> {
     if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId (string) is required');
+    throw new ValidationError('Valid orgId (string) is required');
     }
 
     try {
@@ -395,11 +396,20 @@ export class BillingService {
     return rows;
     } catch (error) {
     logger["error"]('Error fetching subscriptions', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to fetch subscriptions: ${error instanceof Error ? error.message : String(error)}`);
+    throw new AppError('Failed to fetch subscriptions', ErrorCodes.BILLING_ERROR);
     }
   }
 
-  private async auditLog(action: string, entityId: string, details: Record<string, unknown>): Promise<void> {
-    logger.info(`[AUDIT][billing] ${action}`, { entityId, ...details, timestamp: new Date().toISOString() });
+  private async auditLog(action: string, entityId: string, details: Record<string, unknown>, actorId?: string): Promise<void> {
+    logger.info(`[AUDIT][billing] ${action}`, { entityId, actorId, ...details, timestamp: new Date().toISOString() });
+    try {
+      await this.pool.query(
+        `INSERT INTO audit_events (org_id, actor_type, actor_id, action, entity_type, entity_id, metadata, created_at)
+         VALUES ($1, 'user', $2, $3, 'billing', $4, $5, NOW())`,
+        [entityId, actorId ?? null, action, entityId, JSON.stringify(details)]
+      );
+    } catch (err) {
+      logger.error('Failed to persist audit event', err instanceof Error ? err : new Error(String(err)));
+    }
   }
 }

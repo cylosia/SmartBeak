@@ -22,6 +22,9 @@ import { ValidationError, ErrorCodes } from './types-base';
 /** Branded type helper */
 export type Branded<T, B> = T & { readonly __brand: B };
 
+/** Alias for Branded — matches the naming in packages/kernel/branded.ts */
+export type Brand<T, B> = Branded<T, B>;
+
 /** User ID branded type */
 export type UserId = Branded<string, 'UserId'>;
 

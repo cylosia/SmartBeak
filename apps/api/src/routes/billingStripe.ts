@@ -15,6 +15,7 @@ const billingStripeLogger = getLogger('billingStripe');
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { getRedis } from '@kernel/redis';
 import { getDb } from '../db';
+import { verifyOrgMembership } from '../auth/verifyOrgMembership';
 
 const ALLOWED_STRIPE_FIELDS = ['priceId', 'csrfToken'] as const;
 const ALLOWED_PRICE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -130,18 +131,6 @@ const CheckoutBodySchema = z.object({
   ),
   csrfToken: z.string().min(64).max(64), // CSRF token is 64 hex chars
 }).strict();
-
-/**
- * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
-}
 
 export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
   // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing (5 req/min)

@@ -1,18 +1,14 @@
 /**
  * Branded Types for Type-Safe Identifiers
- * 
- * Architecture Improvement #9: Use branded types to prevent ID confusion
- * at compile time. This ensures UserId cannot be accidentally passed
- * where OrgId is expected.
- * 
- * @example
- * type UserId = Brand<string, 'UserId'>;
- * const userId = createUserId('uuid-string'); // Returns UserId type
- * 
- * function getUser(id: UserId) { ... }
- * getUser(userId); // ✓ OK
- * getUser(orgId); // ✗ Compile error!
+ *
+ * @deprecated Prefer importing from '@kernel/validation/branded' which is the
+ * canonical implementation. This file uses `Brand<T, B>` while the validation
+ * module uses `Branded<T, B>` — these are structurally identical but nominally
+ * different types. New code should use the validation module to avoid type
+ * incompatibilities.
  */
+
+import { ValidationError, ErrorCodes } from './validation/types-base';
 
 /**
  * Brand type for nominal typing
@@ -155,10 +151,10 @@ function isValidUuid(value: string): boolean {
  */
 export function createOrgId(value: string): OrgId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('OrgId must be a non-empty string');
+    throw new ValidationError('OrgId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`OrgId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`OrgId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as OrgId;
 }
@@ -168,10 +164,10 @@ export function createOrgId(value: string): OrgId {
  */
 export function createUserId(value: string): UserId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('UserId must be a non-empty string');
+    throw new ValidationError('UserId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`UserId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`UserId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as UserId;
 }
@@ -181,10 +177,10 @@ export function createUserId(value: string): UserId {
  */
 export function createDomainId(value: string): DomainId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('DomainId must be a non-empty string');
+    throw new ValidationError('DomainId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`DomainId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`DomainId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as DomainId;
 }
@@ -194,10 +190,10 @@ export function createDomainId(value: string): DomainId {
  */
 export function createContentId(value: string): ContentId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('ContentId must be a non-empty string');
+    throw new ValidationError('ContentId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`ContentId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`ContentId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as ContentId;
 }
@@ -207,10 +203,10 @@ export function createContentId(value: string): ContentId {
  */
 export function createEmailSubscriberId(value: string): EmailSubscriberId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('EmailSubscriberId must be a non-empty string');
+    throw new ValidationError('EmailSubscriberId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`EmailSubscriberId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`EmailSubscriberId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as EmailSubscriberId;
 }
@@ -220,10 +216,10 @@ export function createEmailSubscriberId(value: string): EmailSubscriberId {
  */
 export function createJobId(value: string): JobId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('JobId must be a non-empty string');
+    throw new ValidationError('JobId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`JobId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`JobId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as JobId;
 }
@@ -233,10 +229,10 @@ export function createJobId(value: string): JobId {
  */
 export function createPaymentId(value: string): PaymentId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('PaymentId must be a non-empty string');
+    throw new ValidationError('PaymentId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`PaymentId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`PaymentId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as PaymentId;
 }
@@ -246,10 +242,10 @@ export function createPaymentId(value: string): PaymentId {
  */
 export function createSubscriptionId(value: string): SubscriptionId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('SubscriptionId must be a non-empty string');
+    throw new ValidationError('SubscriptionId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`SubscriptionId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`SubscriptionId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as SubscriptionId;
 }
@@ -259,10 +255,10 @@ export function createSubscriptionId(value: string): SubscriptionId {
  */
 export function createMediaAssetId(value: string): MediaAssetId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('MediaAssetId must be a non-empty string');
+    throw new ValidationError('MediaAssetId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`MediaAssetId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`MediaAssetId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as MediaAssetId;
 }
@@ -272,10 +268,10 @@ export function createMediaAssetId(value: string): MediaAssetId {
  */
 export function createAuditEventId(value: string): AuditEventId {
   if (!value || typeof value !== 'string') {
-    throw new TypeError('AuditEventId must be a non-empty string');
+    throw new ValidationError('AuditEventId must be a non-empty string', 'id', ErrorCodes.VALIDATION_ERROR);
   }
   if (!isValidUuid(value)) {
-    throw new TypeError(`AuditEventId must be a valid UUID, got: ${value}`);
+    throw new ValidationError(`AuditEventId must be a valid UUID, got: ${value}`, 'id', ErrorCodes.INVALID_UUID);
   }
   return value as AuditEventId;
 }

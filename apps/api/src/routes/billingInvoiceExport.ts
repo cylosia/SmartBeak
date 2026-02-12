@@ -9,6 +9,7 @@ import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
 import { getBillingConfig } from '@config';
 import { getDb } from '../db';
+import { verifyOrgMembership } from '../auth/verifyOrgMembership';
 
 const billingInvoiceExportLogger = getLogger('billingInvoiceExport');
 
@@ -74,18 +75,6 @@ function extractBearerToken(req: FastifyRequest): string | null {
   // Extract token without early returns that could leak timing information
   const token = authHeader.slice(7);
   return token || null;
-}
-
-/**
- * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
 }
 
 export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<void> {

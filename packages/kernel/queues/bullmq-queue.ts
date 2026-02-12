@@ -41,3 +41,7 @@ export const eventQueue = new Queue('events', {
 export async function enqueueEvent(event: DomainEventEnvelope<unknown>) {
   await eventQueue.add(event.name, event, { attempts: 3 });
 }
+
+export async function closeQueue(): Promise<void> {
+  await eventQueue.close();
+}
