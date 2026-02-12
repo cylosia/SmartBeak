@@ -8,6 +8,7 @@
  */
 
 import { getLogger } from '@kernel/logger';
+import { emitCounter } from '@kernel/metrics';
 import { getRedis } from '@kernel/redis';
 
 const logger = getLogger('email:fallback');
@@ -35,6 +36,61 @@ function maskSingleEmail(email: string): string {
     ? maskedFirstPart + '.' + domainParts.slice(1).join('.')
     : maskedFirstPart;
   return `${maskedLocal}@${maskedDomain}`;
+}
+
+/**
+ * AUDIT FIX (Finding 3.1): Error classification to prevent blind fallback.
+ * Only infrastructure errors should trigger fallback to avoid spreading
+ * reputation damage across providers on hard bounces or validation failures.
+ */
+type EmailErrorCategory = 'infrastructure' | 'validation' | 'reputation';
+
+const VALIDATION_ERROR_PATTERNS = [
+  'does not exist',
+  'invalid recipient',
+  'invalid email',
+  'mailbox not found',
+  'user unknown',
+  'no such user',
+  'recipient rejected',
+  'address rejected',
+  'undeliverable',
+  '550',  // SMTP permanent failure
+  '553',  // Mailbox name not allowed
+  '556',  // Domain not found
+];
+
+const REPUTATION_ERROR_PATTERNS = [
+  'spam',
+  'blocked',
+  'blacklisted',
+  'blocklisted',
+  'reputation',
+  'policy rejection',
+  'message rejected',
+  'dkim',
+  'dmarc',
+  'spf fail',
+  '554',  // Transaction failed / spam
+];
+
+function classifyEmailError(error: Error): EmailErrorCategory {
+  const message = error.message.toLowerCase();
+
+  for (const pattern of REPUTATION_ERROR_PATTERNS) {
+    if (message.includes(pattern)) {
+      return 'reputation';
+    }
+  }
+
+  for (const pattern of VALIDATION_ERROR_PATTERNS) {
+    if (message.includes(pattern)) {
+      return 'validation';
+    }
+  }
+
+  // Infrastructure errors: timeouts, connection failures, 5xx, circuit open
+  return 'infrastructure';
 }
 
 export interface EmailMessage {
@@ -191,30 +247,84 @@ export class FallbackEmailSender {
 
   /**
    * Send email with automatic fallback
+   *
+   * AUDIT FIX (Finding 3.1): Only falls back on infrastructure errors.
+   * Validation/reputation errors are thrown immediately to avoid spreading
+   * reputation damage across backup providers.
+   *
+   * AUDIT FIX (Finding 3.2): Emits email.fallback_triggered metric and
+   * logs at WARN level when a fallback provider is used.
    */
   async send(message: EmailMessage): Promise<{
     id: string;
     provider: string;
     attempts: number;
+    usedFallback: boolean;
   }> {
     const errors: Error[] = [];
 
-    for (const provider of this.providers) {
+    for (let i = 0; i < this.providers.length; i++) {
+      const provider = this.providers[i];
       try {
         const result = await provider.send(message);
-        // SECURITY FIX (Finding 14): Mask PII in logs
-        logger.info(`Email sent via ${provider.name}`, {
-          to: maskEmail(message.to),
-          subject: message.subject,
-        });
+
+        const usedFallback = i > 0;
+
+        if (usedFallback) {
+          // AUDIT FIX (Finding 3.2): Emit metric and WARN on fallback usage
+          emitCounter('email.fallback_triggered', 1, {
+            failed_provider: this.providers[0].name,
+            fallback_provider: provider.name,
+          });
+          logger.warn(`Email sent via fallback provider ${provider.name} (primary ${this.providers[0].name} was unavailable)`, {
+            to: maskEmail(message.to),
+            subject: message.subject,
+            failedProviders: errors.map((_, idx) => this.providers[idx].name),
+          });
+        } else {
+          // SECURITY FIX (Finding 14): Mask PII in logs
+          logger.info(`Email sent via ${provider.name}`, {
+            to: maskEmail(message.to),
+            subject: message.subject,
+          });
+        }
+
         return {
           ...result,
           attempts: errors.length + 1,
+          usedFallback,
         };
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        logger.warn(`Provider ${provider.name} failed, trying next`, { error: err.message });
         errors.push(err);
+
+        // AUDIT FIX (Finding 3.1): Classify the error. Only infrastructure
+        // errors should trigger fallback. Validation errors (bad address) or
+        // reputation errors (spam/block) must NOT cascade to other providers.
+        const errorCategory = classifyEmailError(err);
+
+        if (errorCategory === 'validation') {
+          logger.warn(`Provider ${provider.name} rejected email due to validation error, not falling back`, {
+            error: err.message,
+            to: maskEmail(message.to),
+          });
+          emitCounter('email.validation_rejection', 1, { provider: provider.name });
+          throw err;
+        }
+
+        if (errorCategory === 'reputation') {
+          logger.error(`Provider ${provider.name} rejected email due to reputation/spam issue, not falling back`, {
+            error: err.message,
+            to: maskEmail(message.to),
+          });
+          emitCounter('email.reputation_rejection', 1, { provider: provider.name });
+          throw err;
+        }
+
+        // Infrastructure error — safe to try next provider
+        logger.warn(`Provider ${provider.name} failed with infrastructure error, trying next`, {
+          error: err.message,
+        });
       }
     }
 
