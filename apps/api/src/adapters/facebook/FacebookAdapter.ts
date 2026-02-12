@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import fetch, { Response as NodeFetchResponse } from 'node-fetch';
 
 /**
  * Facebook Publishing Adapter
@@ -7,7 +7,20 @@ import fetch from 'node-fetch';
  * LOW FIX L5: Added proper types
  * MEDIUM FIX M17: Added timeout handling
  * MEDIUM FIX M7: Added health check
+ * AUDIT FIX (Finding 4.1): Token redaction in error paths
+ * AUDIT FIX (Finding 4.2): Pagination support for Graph API
  */
+
+/**
+ * AUDIT FIX (Finding 4.1): Redact access tokens from URLs and error messages
+ * to prevent credential leakage in logs, stack traces, or error reporting.
+ */
+function redactToken(text: string): string {
+  return text.replace(/access_token=[^&\s]+/gi, 'access_token=[REDACTED]');
+}
+
+/** Maximum pages to fetch to prevent infinite loops on malformed paging data */
+const MAX_PAGINATION_PAGES = 100;
 
 /**
  * API Error with status code and retry information
@@ -118,6 +131,24 @@ export interface PublishPagePostInput {
   message: string;
 }
 
+/**
+ * AUDIT FIX (Finding 4.2): Facebook paginated response structure
+ */
+export interface FacebookPaginatedResponse<T> {
+  data: T[];
+  paging?: {
+    cursors?: { before?: string; after?: string };
+    next?: string;
+    previous?: string;
+  };
+}
+
+function isFacebookPaginatedResponse(data: unknown): data is FacebookPaginatedResponse<unknown> {
+  if (typeof data !== 'object' || data === null) return false;
+  const record = data as Record<string, unknown>;
+  return Array.isArray(record['data']);
+}
+
 export class FacebookAdapter {
   private readonly accessToken: string;
   private readonly baseUrl = 'https://graph.facebook.com/v19.0';
@@ -168,10 +199,10 @@ export class FacebookAdapter {
           }
         }
         catch {
-          // Use status-based error message if parsing fails
-          errorMessage = `Facebook publish failed: ${res.status} - ${errorBody}`;
+          // AUDIT FIX (Finding 4.1): Redact tokens from error body before including in message
+          errorMessage = `Facebook publish failed: ${res.status} - ${redactToken(errorBody)}`;
         }
-        throw new Error(errorMessage);
+        throw new Error(redactToken(errorMessage));
       }
       const rawData = await res.json() as unknown;
       if (!rawData || typeof rawData !== 'object' || !isFacebookPostResponse(rawData)) {
@@ -191,6 +222,10 @@ export class FacebookAdapter {
         // Re-throw abort error as timeout error
         if (error.name === 'AbortError') {
           throw new Error('Facebook publish request timed out');
+        }
+        // AUDIT FIX (Finding 4.1): Ensure no token leakage in re-thrown errors
+        if (error.message.includes('access_token')) {
+          throw new Error(redactToken(error.message));
         }
         throw error;
       }
@@ -232,7 +267,8 @@ export class FacebookAdapter {
       const result: FacebookHealthStatus = {
         healthy: false,
         latency: Date.now() - start,
-        error: error instanceof Error ? error["message"] : 'Unknown error',
+        // AUDIT FIX (Finding 4.1): Redact tokens from health check errors
+        error: error instanceof Error ? redactToken(error.message) : 'Unknown error',
       };
       return result;
     }
@@ -261,6 +297,7 @@ export class FacebookAdapter {
         signal: controller.signal,
       });
       if (!res.ok) {
+        // AUDIT FIX (Finding 4.1): Status-only error, no URL/token leakage
         throw new Error(`Failed to get page info: ${res.status}`);
       }
       const rawData = await res.json() as unknown;
@@ -281,5 +318,69 @@ export class FacebookAdapter {
     finally {
       clearTimeout(timeout);
     }
+  }
+
+  /**
+   * AUDIT FIX (Finding 4.2): Fetch all pages of a paginated Graph API endpoint.
+   *
+   * Facebook API returns data in pages (default ~25 items). Without consuming
+   * all pages, callers silently drop data beyond the first page.
+   *
+   * @param endpoint - Graph API endpoint path (e.g., `${pageId}/feed`)
+   * @param fields - Comma-separated fields to request
+   * @param limit - Per-page limit (max 100 per Facebook docs)
+   * @returns All items across all pages
+   */
+  async fetchAllPages<T>(
+    endpoint: string,
+    fields?: string,
+    limit = 100,
+  ): Promise<T[]> {
+    const allItems: T[] = [];
+    let url: string | undefined =
+      `${this.baseUrl}/${endpoint}?limit=${limit}${fields ? `&fields=${fields}` : ''}`;
+    let pageCount = 0;
+
+    while (url && pageCount < MAX_PAGINATION_PAGES) {
+      pageCount++;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      try {
+        const res: NodeFetchResponse = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          throw new Error(`Facebook API request failed: ${res.status}`);
+        }
+
+        const rawData = await res.json() as unknown;
+        if (!isFacebookPaginatedResponse(rawData)) {
+          throw new ApiError('Invalid paginated response format from Facebook API', 500);
+        }
+
+        allItems.push(...(rawData.data as T[]));
+
+        // Follow next page link if available
+        url = rawData.paging?.next;
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Facebook paginated fetch request timed out');
+        }
+        // AUDIT FIX (Finding 4.1): Redact tokens from pagination errors
+        if (error instanceof Error && error.message.includes('access_token')) {
+          throw new Error(redactToken(error.message));
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    return allItems;
   }
 }
