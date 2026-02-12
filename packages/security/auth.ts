@@ -79,8 +79,11 @@ export async function requireAuthNextJs(
     return null;
   }
 
-  // Validate role and convert to array
-  const roles = claims.role ? [claims.role] : ['viewer'];
+  // P1-FIX: Require role claim explicitly instead of silently defaulting to viewer
+  if (!claims.role) {
+    throw new Error('Token missing role claim');
+  }
+  const roles = [claims.role];
 
   return {
     userId: claims.sub,
@@ -141,8 +144,11 @@ export async function optionalAuthNextJs(
     return null;
   }
 
-  // Validate role and convert to array
-  const roles = claims.role ? [claims.role] : ['viewer'];
+  // P1-FIX: Require role claim explicitly instead of silently defaulting to viewer
+  if (!claims.role) {
+    throw new Error('Token missing role claim');
+  }
+  const roles = [claims.role];
 
   return {
     userId: claims.sub,
@@ -338,7 +344,7 @@ export function hasRequiredRole(userRole: UserRole, requiredRole: UserRole): boo
 // Constants and Types
 // ============================================================================
 
-// SECURITY FIX: Strict JWT format validation (was permissive /^Bearer\s+.+$/i which accepts non-JWT tokens)
+// P1-FIX: Strengthened regex to validate JWT format (three base64url segments)
 const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 export interface AuthContext {

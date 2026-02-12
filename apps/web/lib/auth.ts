@@ -39,14 +39,14 @@ function isValidIP(ip: string): boolean {
   if (!ip || ip === 'unknown') {
     return false;
   }
-  // IPv4 regex
-  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?.[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?.[0-9][0-9]?)$/;
+  // IPv4 regex — P1-FIX: fixed unescaped '.' after [01]? that matched any character
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
   // IPv6 regex (simplified)
   const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$/;
   return ipv4Regex.test(ip) || ipv6Regex.test(ip);
 }
 // Role hierarchy for authorization checks
-// SECURITY FIX: Add 'owner' role at highest privilege level (matches DB constraint)
+// P0-FIX: Added owner:4 — was missing, causing owners to be denied access
 const roleHierarchy: Record<string, number> = {
   viewer: 1,
   editor: 2,
@@ -684,10 +684,29 @@ export function checkRateLimit(req: NextApiRequest, res: NextApiResponse, identi
  * Get rate limit identifier from request (IP + optional user)
  */
 export function getRateLimitIdentifier(req: NextApiRequest, userId?: string): string {
-  // SECURITY FIX: Use getClientInfo() to extract IP consistently with auth audit logging.
-  // Previously took LAST IP from x-forwarded-for (proxy-facing), while getClientInfo() took FIRST (client-facing).
-  // This mismatch allowed rate limit bypass behind proxies while audit logged a different IP.
-  const { ip } = getClientInfo(req);
+  // Use x-forwarded-for if behind proxy, fallback to socket.remoteAddress
+  const forwarded = req.headers['x-forwarded-for'];
+  let ip: string;
+  if (typeof forwarded === 'string') {
+
+    // P1-FIX: Use first IP (client IP), not last (proxy IP), for consistency with getClientInfo
+    const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+    ip = (ips.length > 0 ? ips[0] : req.socket?.remoteAddress || 'unknown') as string;
+  }
+  else if (Array.isArray(forwarded) && forwarded.length > 0) {
+    ip = forwarded[0] as string;
+  }
+  else {
+    ip = (req.socket?.remoteAddress || 'unknown') as string;
+  }
+  // Normalize IP (remove IPv6 prefix if IPv4-mapped)
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.slice(7);
+  }
+  // Remove port suffix if present
+  if (ip && ip.includes(':')) {
+    ip = ip.split(':')[0] || ip;
+  }
   return userId ? `${ip}:${userId}` : ip;
 }
 

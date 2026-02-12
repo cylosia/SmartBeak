@@ -5,7 +5,7 @@ import { getLogger } from '@kernel/logger';
 
 import { getRequestContext } from '../kernel/request-context';
 
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 
 
 /**
@@ -347,9 +347,11 @@ export class AuditLogger extends EventEmitter {
     this.emit('eventsLost', events);
 
     // Write to stderr as last resort with structured format
+    // P1-FIX: Include event data — previously only wrote timestamp, losing the audit event
     for (const event of events) {
     process.stderr.write(`[AUDIT_FALLBACK] ${JSON.stringify({
     timestamp: new Date().toISOString(),
+    event,
 })}\n`);
     }
     }
@@ -361,7 +363,7 @@ export class AuditLogger extends EventEmitter {
   */
   async query(query: AuditQuery): Promise<{ events: AuditEvent[]; total: number }> {
   const conditions: string[] = ['1=1'];
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (query.startDate) {
     params.push(query.startDate);
@@ -401,8 +403,11 @@ export class AuditLogger extends EventEmitter {
   const whereClause = conditions.join(' AND ');
 
   // Get total count
+  // P0-FIX: Pass params array — previously missing, causing runtime errors
+  const countParamsCopy = [...params];
   const countResult = await this.db.query(
     `SELECT COUNT(*) as total FROM audit_logs WHERE ${whereClause}`,
+    countParamsCopy,
   );
   const total = parseInt(countResult.rows[0].total);
 
@@ -461,7 +466,7 @@ export class AuditLogger extends EventEmitter {
   invalidCount: number;
   }> {
   let query = 'SELECT * FROM audit_logs ORDER BY timestamp';
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (since) {
     query = 'SELECT * FROM audit_logs WHERE timestamp >= $1 ORDER BY timestamp';
@@ -476,6 +481,8 @@ export class AuditLogger extends EventEmitter {
   let lastValid: AuditEvent | undefined;
 
   for (const row of rows) {
+    // P0-FIX: Reconstruct full event including ALL fields used by calculateHash
+    // Previously missing: severity, sessionId, requestId, changes, actor.email/ip/userAgent, resource.name
     const event: AuditEvent = {
     id: row.id,
     timestamp: row.timestamp,
@@ -484,14 +491,21 @@ export class AuditLogger extends EventEmitter {
     actor: {
     type: row.actor_type,
     id: row.actor_id,
+    email: row.actor_email,
+    ip: row.actor_ip,
+    userAgent: row.actor_user_agent,
     },
     resource: {
     type: row.resource_type,
     id: row.resource_id,
+    name: row.resource_name,
     },
     action: row.action,
     result: row.result,
     details: row.details,
+    changes: row.changes,
+    sessionId: row.session_id,
+    requestId: row.request_id,
     previousHash: row.previous_hash,
     hash: row.hash,
     };

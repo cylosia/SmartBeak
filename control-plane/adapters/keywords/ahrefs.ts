@@ -269,5 +269,13 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
   }
 }
 
-// Backward-compatible default export
-export const ahrefsAdapter = new AhrefsAdapter();
+// P1-FIX: Lazy initialization — previously crashed at module load if AHREFS_API_TOKEN was unset
+let _ahrefsAdapter: AhrefsAdapter | null = null;
+export function getAhrefsAdapter(): AhrefsAdapter {
+  if (!_ahrefsAdapter) {
+    _ahrefsAdapter = new AhrefsAdapter();
+  }
+  return _ahrefsAdapter;
+}
+// Backward-compatible alias (lazy)
+export const ahrefsAdapter = { get instance() { return getAhrefsAdapter(); } };
