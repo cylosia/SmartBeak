@@ -1,7 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 
-﻿
+
 
 /**
 * Publish target record

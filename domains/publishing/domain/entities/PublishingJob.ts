@@ -117,7 +117,7 @@ export class PublishingJob {
   /**
   * Mark as failed with error context
   */
-  fail(errorMessage: string): PublishingJob {
+  fail(_errorMessage: string): PublishingJob {
   this.validateTransition('failed');
 
   return new PublishingJob({

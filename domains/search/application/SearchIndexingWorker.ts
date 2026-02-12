@@ -236,7 +236,8 @@ export class SearchIndexingWorker {
     await client.query('BEGIN');
 
     // P1-FIX: Fetch all jobs in a single query if repository supports it
-    let jobs: Array<{ id: string; job: any }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobs: Array<{ id: string; job: any }> = [];
 
     if (this.jobs.getByIds) {
     // Use batch fetch if available
@@ -289,6 +290,7 @@ export class SearchIndexingWorker {
     await client.query('COMMIT');
 
     // Process indexing outside transaction (may call external services)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const completedJobs: Array<{ id: string; job: any; success: boolean; error?: string }> = [];
 
     for (const { id, job: originalJob } of pendingJobs) {

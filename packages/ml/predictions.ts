@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { Pool } from 'pg';
 
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 
 /**
 * ML-Based Predictions & Anomaly Detection

@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import fetch from 'node-fetch';
 
-import { timeoutConfig, circuitBreakerConfig } from '@config';
 import { API_VERSIONS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '../../utils/config';
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
@@ -210,7 +209,7 @@ export class MailchimpAdapter implements EmailProviderAdapter {
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
     // P1-HIGH FIX: Generate unsubscribe URL for CAN-SPAM compliance
-    const unsubscribeUrl = `${this.baseUrl}/lists/${encodeURIComponent(listId)}/members/${crypto.createHash('md5').update(email.toLowerCase()).digest('hex')}`;
+    const _unsubscribeUrl = `${this.baseUrl}/lists/${encodeURIComponent(listId)}/members/${crypto.createHash('md5').update(email.toLowerCase()).digest('hex')}`;
 
     try {
       const res = await fetch(

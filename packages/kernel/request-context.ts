@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-﻿import { AsyncLocalStorage } from 'async_hooks';
+import { AsyncLocalStorage } from 'async_hooks';
 
 /**
 * Request Context Module

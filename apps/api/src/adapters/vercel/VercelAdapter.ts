@@ -5,7 +5,7 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '../../
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 
-﻿import { AbortController } from 'abort-controller';
+import { AbortController } from 'abort-controller';
 
 
 /**
@@ -103,7 +103,7 @@ export class VercelAdapter {
     );
 
     if (!response.ok) {
-    const errorBody = await response.text();
+    const _errorBody = await response.text();
 
     if (response.status === 429) {
     const retryAfter = response.headers.get('retry-after') || undefined;
@@ -211,7 +211,7 @@ export class VercelAdapter {
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
 
   try {
-    const res = await withRetry(async () => {
+    const _res = await withRetry(async () => {
     const response = await fetch(`${this.baseUrl}/deployments/${deploymentId}/cancel`, {
     method: 'PATCH',
     headers: {

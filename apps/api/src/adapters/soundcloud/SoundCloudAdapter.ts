@@ -6,7 +6,7 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '../../
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 
-﻿import { AbortController } from 'abort-controller';
+import { AbortController } from 'abort-controller';
 
 
 /**
@@ -125,7 +125,7 @@ export class SoundCloudAdapter {
     });
 
     if (!response.ok) {
-    const errorBody = await response.text();
+    const _errorBody = await response.text();
 
     if (response.status === 429) {
     const retryAfter = response.headers.get('retry-after') || undefined;

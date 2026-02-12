@@ -14,7 +14,7 @@ interface FacebookPublishInput extends PublishInput {
 }
 
 export class FacebookPublishAdapter implements PublishAdapter {
-  async publish({ domainId, contentId, targetConfig }: FacebookPublishInput): Promise<void> {
+  async publish({ domainId: _domainId, contentId: _contentId, targetConfig }: FacebookPublishInput): Promise<void> {
     validateFacebookConfig(targetConfig);
 
     // NOTE: Content/SEO/media are resolved by the worker context in real impl.

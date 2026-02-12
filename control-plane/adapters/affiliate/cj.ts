@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
 
-﻿
+
 
 
 /**

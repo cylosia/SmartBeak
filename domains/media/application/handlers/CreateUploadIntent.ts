@@ -3,9 +3,9 @@ import { getLogger } from '@kernel/logger';
 import { MediaAsset } from '../../domain/entities/MediaAsset';
 import { MediaRepository } from '../ports/MediaRepository';
 
-const logger = getLogger('CreateUploadIntent');
+const _logger = getLogger('CreateUploadIntent');
 
-﻿
+
 
 /**
 * Result type for CreateUploadIntent command

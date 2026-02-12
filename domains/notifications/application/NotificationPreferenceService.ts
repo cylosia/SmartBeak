@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { NotificationPreference } from '../domain/entities/NotificationPreference';
 import { NotificationPreferenceRepository } from './ports/NotificationPreferenceRepository';
 
-﻿
+
 // ============================================================================
 // Type Definitions
 // ============================================================================

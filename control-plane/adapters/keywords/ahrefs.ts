@@ -7,7 +7,7 @@ import { withRetry } from '@kernel/retry';
 
 import { KeywordIngestionAdapter, KeywordSuggestion } from './types';
 
-﻿import { AbortController } from 'abort-controller';
+import { AbortController } from 'abort-controller';
 
 
 /**
@@ -156,7 +156,7 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
   validateNonEmptyString(seedKeyword, 'seedKeyword');
   validateNonEmptyString(country, 'country');
 
-  const startTime = Date.now();
+  const _startTime = Date.now();
 
   try {
     const url = new URL(`${this.baseUrl}/keywords-explorer/ideas`);

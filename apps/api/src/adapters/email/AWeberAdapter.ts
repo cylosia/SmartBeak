@@ -1,6 +1,4 @@
-import { timeoutConfig, circuitBreakerConfig } from '@config';
 import { API_VERSIONS, API_BASE_URLS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '../../utils/config';
-import { LRUCache } from 'lru-cache';
 import { AbortController } from 'abort-controller';
 import { withCircuitBreaker, withTimeout } from '../../utils/resilience';
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';

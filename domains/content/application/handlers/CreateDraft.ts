@@ -3,9 +3,9 @@ import { getLogger } from '@kernel/logger';
 import { ContentItem, ContentType } from '../../domain/entities/ContentItem';
 import { ContentRepository } from '../ports/ContentRepository';
 
-const logger = getLogger('CreateDraft');
+const _logger = getLogger('CreateDraft');
 
-﻿
+
 
 /**
 * Result type for CreateDraft command

@@ -4,9 +4,9 @@ import { MediaAsset } from '../../domain/entities/MediaAsset';
 import { MediaRepository } from '../ports/MediaRepository';
 import { MediaUploaded } from '../../domain/events/MediaUploaded';
 
-const logger = getLogger('UploadMedia');
+const _logger = getLogger('UploadMedia');
 
-﻿
+
 
 /**
 * Result type for UploadMedia command
@@ -151,10 +151,10 @@ export class UploadMedia {
   }
 
   // Remove leading slashes for security
-  sanitized = sanitized.replace(/^[\/]+/, '');
+  sanitized = sanitized.replace(/^[/]+/, '');
 
   // Security: Only allow safe characters
-  const safePattern = /^[a-zA-Z0-9_\-\.\/]+$/;
+  const safePattern = /^[a-zA-Z0-9_\-./]+$/;
   if (!safePattern.test(sanitized)) {
     return null;
   }

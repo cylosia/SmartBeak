@@ -8,7 +8,7 @@ import { getLogger } from '@kernel/logger';
 
 import { DeliveryAdapter } from './ports/DeliveryAdapter';
 import { NotificationFailed } from '../domain/events/NotificationFailed';
-import { NotificationPayload, Notification } from '../domain/entities/Notification';
+import { NotificationPayload } from '../domain/entities/Notification';
 import { NotificationPreferenceRepository } from './ports/NotificationPreferenceRepository';
 import { NotificationRepository } from './ports/NotificationRepository';
 import { NotificationSent } from '../domain/events/NotificationSent';

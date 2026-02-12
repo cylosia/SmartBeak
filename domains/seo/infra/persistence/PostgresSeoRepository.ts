@@ -163,7 +163,7 @@ export class PostgresSeoRepository implements SeoRepository {
     const { rows } = await this.pool.query(
     `SELECT id, title, description, updated_at as 'updatedAt'
     FROM seo_documents
-    WHERE title ILIKE $1 ESCAPE '\'
+    WHERE title ILIKE $1 ESCAPE ''''
     ORDER BY updated_at DESC
     LIMIT $2`,
     [`%${sanitizedQuery}%`, safeLimit]

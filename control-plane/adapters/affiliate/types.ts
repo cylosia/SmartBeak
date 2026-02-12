@@ -18,4 +18,4 @@ export interface AffiliateRevenueAdapter {
   endDate: Date;
   credentialsRef: string;
   }): Promise<AffiliateRevenueReport[]>;
-};
+}

@@ -1,4 +1,3 @@
-import { timeoutConfig } from '@config';
 import fetch from 'node-fetch';
 
 /**

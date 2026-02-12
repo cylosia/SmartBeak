@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 
-﻿import { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 
 
 /**
@@ -69,7 +69,7 @@ export function clearRegisteredRoutes(): void {
 * The apps/api application should call registerRouteModule() for each of its routes
 * during its initialization, before control-plane starts.
 */
-export async function registerAppsApiRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
+export async function registerAppsApiRoutes(app: FastifyInstance, _pool: Pool): Promise<void> {
   if (routeRegistry.length === 0) {
   logger.warn('No apps/api routes registered. If apps/api is enabled, routes should be registered at startup.');
   return;

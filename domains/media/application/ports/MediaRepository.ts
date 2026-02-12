@@ -1,6 +1,4 @@
 
-import { PoolClient } from 'pg';
-
 import { MediaAsset } from '../../domain/entities/MediaAsset';
 
 /**

@@ -1,6 +1,4 @@
 
-import { PoolClient } from 'pg';
-
 import { PublishTarget } from '../../domain/entities/PublishTarget';
 
 /**

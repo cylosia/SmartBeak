@@ -14,7 +14,7 @@ const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
 });
 
-export async function affiliateRoutes(app: FastifyInstance, pool: Pool) {
+export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
   // GET /affiliates/offers - List available affiliate offers
   app.get('/affiliates/offers', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS

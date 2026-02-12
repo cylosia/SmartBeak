@@ -1,6 +1,6 @@
 import { getRequestContext } from './request-context';
 
-﻿import { getLogger } from '@kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Enhanced safe handler with validation and error handling
