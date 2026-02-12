@@ -466,10 +466,11 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
 
-    // Soft delete
+    // SECURITY FIX (Finding 6): Include org_id in WHERE clause for defense-in-depth
+    // Prevents cross-tenant deletion even if ownership check has a TOCTOU race
     await pool.query(
-    'UPDATE content SET status = $1, deleted_at = NOW(), updated_at = NOW() WHERE id = $2',
-    ['archived', params["id"]]
+    'UPDATE content SET status = $1, deleted_at = NOW(), updated_at = NOW() WHERE id = $2 AND org_id = $3',
+    ['archived', params["id"], ctx["orgId"]]
     );
 
     return { success: true, id: params["id"], deleted: true };

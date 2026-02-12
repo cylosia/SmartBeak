@@ -131,20 +131,30 @@ function verifyClerkWebhook(
   .digest('base64');
 
   // Parse signature header (format: 'v1,<signature>[,v1,<signature...]')
+  // SECURITY FIX: P0-CRITICAL - Use constant-time comparison to prevent timing attacks
+  const expectedSigBuffer = Buffer.from(expectedSignature, 'base64');
   const signatures = signature.split(' ');
+  let matched = false;
+
   for (const sig of signatures) {
   const [version, sigValue] = sig.split(',');
-  if (version === 'v1' && sigValue === expectedSignature) {
-    return true;
-  }
-  // Also try without version prefix (some Clerk versions)
-  if (sig === expectedSignature) {
-    return true;
+  if (version === 'v1' && sigValue) {
+    try {
+    const actualSigBuffer = Buffer.from(sigValue, 'base64');
+    if (actualSigBuffer.length === expectedSigBuffer.length &&
+        crypto.timingSafeEqual(actualSigBuffer, expectedSigBuffer)) {
+      matched = true;
+    }
+    } catch {
+    // Invalid base64 - continue to next signature
+    }
   }
   }
 
+  if (!matched) {
   logger.warn('Signature mismatch');
-  return false;
+  }
+  return matched;
 }
 
 export interface ClerkWebhookEvent {
@@ -309,35 +319,84 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     case 'user.deleted': {
     const userId = event.data["id"];
     logger.info('Deleting user', { userId });
-    
-    // P0-FIX: GDPR compliance - actually delete user data
+
+    // SECURITY FIX (Finding 15): GDPR Article 17 - Comprehensive data erasure
+    // Must delete ALL personal data across all tables, not just soft-delete the user record
     try {
       const { withTransaction } = await import('../../../lib/db');
       await withTransaction(async (client) => {
-        // Soft delete user
+        // 1. Get internal user ID for cascading deletes
+        const { rows: userRows } = await client.query(
+          'SELECT id FROM users WHERE clerk_id = $1',
+          [userId]
+        );
+        const internalUserId = userRows[0]?.id;
+
+        if (internalUserId) {
+          // 2. Delete org memberships (user removed from all orgs)
+          await client.query(
+            'DELETE FROM org_memberships WHERE user_id = $1',
+            [userId]
+          );
+
+          // 3. Delete user sessions
+          await client.query(
+            'DELETE FROM user_sessions WHERE user_id = $1',
+            [userId]
+          );
+
+          // 4. Delete refresh tokens
+          await client.query(
+            'DELETE FROM refresh_tokens WHERE user_id = $1',
+            [userId]
+          );
+
+          // 5. Delete API keys
+          await client.query(
+            'DELETE FROM api_keys WHERE user_id = $1',
+            [userId]
+          );
+
+          // 6. Anonymize audit logs (keep structure, remove PII)
+          await client.query(
+            `UPDATE audit_logs SET
+               actor_email = 'deleted_user',
+               actor_name = 'Deleted User',
+               actor_ip = NULL
+             WHERE actor_id = $1`,
+            [userId]
+          );
+
+          // 7. Delete email subscriptions
+          await client.query(
+            'DELETE FROM email_subscriptions WHERE user_id = $1',
+            [userId]
+          );
+
+          // 8. Delete notification preferences
+          await client.query(
+            'DELETE FROM notification_preferences WHERE user_id = $1',
+            [userId]
+          );
+        }
+
+        // 9. Hard-anonymize user record (GDPR: right to erasure)
         await client.query(
-          `UPDATE users 
+          `UPDATE users
            SET deleted_at = NOW(),
                email = $1,
                email_verified = false,
                encrypted_password = null,
                first_name = null,
-               last_name = null
+               last_name = null,
+               phone = null,
+               avatar_url = null,
+               metadata = '{}'::jsonb
            WHERE clerk_id = $2`,
           [`deleted_${userId}@anonymized.local`, userId]
         );
-        
-        // Delete related sessions
-        await client.query(
-          'DELETE FROM user_sessions WHERE user_id = $1',
-          [userId]
-        );
-        
-        // Delete refresh tokens
-        await client.query(
-          'DELETE FROM refresh_tokens WHERE user_id = $1',
-          [userId]
-        );
+
+        logger.info('GDPR deletion completed', { userId, tablesCleared: 9 });
       });
     } catch (err) {
       logger.error('Failed to delete user', err instanceof Error ? err : new Error(String(err)));

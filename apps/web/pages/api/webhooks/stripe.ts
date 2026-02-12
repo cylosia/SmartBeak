@@ -233,13 +233,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // SECURITY FIX: Issue 16 - Validate event type against allowlist
+  // SECURITY FIX (Finding 12): Return 200 for unknown event types to prevent Stripe
+  // from disabling the webhook endpoint. Stripe interprets 4xx as permanent failure
+  // and will eventually disable the endpoint after repeated failures.
   if (!isAllowedEventType(event.type)) {
-    logger.warn('Rejected disallowed event type', { eventType: event.type });
-    return res.status(400).json({ 
-      error: 'Invalid event type',
-      code: 'EVENT_TYPE_NOT_ALLOWED'
-    });
+    logger.info('Ignoring unhandled event type', { eventType: event.type });
+    return res.json({ received: true, ignored: true, eventType: event.type });
   }
 
   // P1-HIGH FIX: Validate Stripe API version for compatibility

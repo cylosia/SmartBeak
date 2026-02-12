@@ -4,10 +4,10 @@
 
 import cors from '@fastify/cors';
 import Fastify, { FastifyRequest } from 'fastify';
-import { Pool } from 'pg';
 import { validateEnv } from '@config';
 
 import { getLogger } from '@kernel/logger';
+import { getPoolInstance } from '@database/pool';
 
 import { affiliateRoutes } from './routes/affiliates';
 import { analyticsRoutes } from './routes/analytics';
@@ -27,7 +27,6 @@ import { guardrailRoutes } from './routes/guardrails';
 import { initializeContainer } from '../services/container';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
-import Redis from 'ioredis';
 import { llmRoutes } from './routes/llm';
 import { mediaLifecycleRoutes } from './routes/media-lifecycle';
 import { mediaRoutes } from './routes/media';
@@ -76,17 +75,16 @@ if (!allowedOrigin) {
   throw new Error('NEXT_PUBLIC_APP_URL environment variable is required');
 }
 
-// SECURITY FIX: Validate origin format (must be a valid URL, not wildcard when credentials=true)
+// SECURITY FIX (Finding 21): Check for wildcard BEFORE parsing as URL
 function validateOrigin(origin: string): string {
+  // P0-FIX: Check for wildcard first - new URL('*') would throw, making the check unreachable
+  if (origin === '*') {
+    throw new Error('Wildcard origin not allowed when credentials=true');
+  }
   try {
-    const url = new URL(origin);
-    // SECURITY FIX: Don't allow wildcard origins with credentials
-    if (origin === '*') {
-      throw new Error('Wildcard origin not allowed when credentials=true');
-    }
+    new URL(origin);
     return origin;
   } catch {
-    // P0-FIX: Throw error instead of returning invalid origin
     throw new Error(`Invalid origin format: ${origin}`);
   }
 }
@@ -134,19 +132,10 @@ app.addHook('onSend', async (request, reply, payload) => {
   return payload;
 });
 
-// Validate database connection string
-const dbConnectionString = process.env['CONTROL_PLANE_DB'];
-if (!dbConnectionString) {
-  throw new Error('CONTROL_PLANE_DB environment variable is required');
-}
-
-const pool = new Pool({
-  connectionString: dbConnectionString,
-  max: 20,
-  min: 2,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+// SECURITY FIX (Finding 5): Use shared pool from @database/pool instead of creating a duplicate
+// Previously: new Pool({ max: 20 }) - created a second pool alongside the shared pool (max: 10)
+// Combined: up to 30 connections per function * 100+ Vercel functions = connection storm
+const pool = await getPoolInstance();
 
 // Initialize DI container
 const container = initializeContainer({ dbPool: pool });
@@ -165,26 +154,53 @@ try {
 const AUTH_RATE_LIMIT_MAX = 5; // 5 attempts
 const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
+// SECURITY FIX (Finding 4): In-memory fallback rate limiter for when Redis is unavailable
+// Prevents brute force attacks even during Redis outages
+const inMemoryRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
+  const now = Date.now();
+  const entry = inMemoryRateLimitMap.get(key);
+
+  // Periodic cleanup of expired entries (every 100 checks)
+  if (inMemoryRateLimitMap.size > 1000) {
+    for (const [k, v] of inMemoryRateLimitMap) {
+      if (v.resetAt < now) inMemoryRateLimitMap.delete(k);
+    }
+  }
+
+  if (!entry || entry.resetAt < now) {
+    inMemoryRateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  entry.count++;
+  if (entry.count > max) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { allowed: true, retryAfter: 0 };
+}
+
 app.addHook('onRequest', async (req, reply) => {
   // Check if this is an auth endpoint that needs stricter rate limiting
-  const isAuthEndpoint = req.url?.startsWith('/login') || 
+  const isAuthEndpoint = req.url?.startsWith('/login') ||
                          req.url?.startsWith('/auth') ||
                          req.url?.match(/\/(login|signin|signup|password-reset)$/);
-  
+
   if (isAuthEndpoint) {
     const clientIp = req.ip || 'unknown';
     const windowSeconds = Math.ceil(AUTH_RATE_LIMIT_WINDOW / 1000);
     const key = `ratelimit:auth:${clientIp}`;
-    
+
     try {
       const redis = await getRedis();
       const current = await redis.incr(key);
-      
+
       if (current === 1) {
         // Set TTL on first request
         await redis.expire(key, windowSeconds);
       }
-      
+
       if (current > AUTH_RATE_LIMIT_MAX) {
         const ttl = await redis.ttl(key);
         return reply.status(429).send({
@@ -194,23 +210,30 @@ app.addHook('onRequest', async (req, reply) => {
         });
       }
     } catch (error) {
-      // P0-FIX: Fail open on Redis error - don't block auth
-      logger.error('Redis rate limiting error', error as Error);
-      // Continue without rate limiting rather than blocking all auth
+      // SECURITY FIX (Finding 4): Fall back to in-memory rate limiter instead of failing open
+      logger.error('Redis rate limiting error, falling back to in-memory', error as Error);
+      const result = inMemoryRateLimit(key, AUTH_RATE_LIMIT_MAX, AUTH_RATE_LIMIT_WINDOW);
+      if (!result.allowed) {
+        return reply.status(429).send({
+          error: 'Too Many Requests',
+          message: 'Too many authentication attempts. Please try again later.',
+          retryAfter: result.retryAfter
+        });
+      }
     }
   }
-  
+
   // P0-FIX: Auth middleware - rejects invalid auth by default (secure-by-default)
   // Previously: set auth = null and continued, relying on route-level checks (bypass vulnerability)
   // Now: rejects requests with invalid auth unless explicitly marked as public
   try {
     const authHeader = req.headers.authorization;
-    
+
     // Check if route is marked as public (via route config or path pattern)
     const isPublicRoute = (req.routeOptions?.config as { public?: boolean })?.public === true ||
                          req.url?.startsWith('/health') ||
                          req.url?.startsWith('/webhooks/');
-    
+
     if (!authHeader) {
       if (isPublicRoute) {
         (req as { auth: unknown }).auth = null;
@@ -222,7 +245,7 @@ app.addHook('onRequest', async (req, reply) => {
         message: 'Authentication required'
       });
     }
-    
+
     (req as { auth: unknown }).auth = await authFromHeader(authHeader);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unauthorized';
@@ -235,40 +258,55 @@ app.addHook('onRequest', async (req, reply) => {
 
 // P1-HIGH FIX: BigInt serialization helper for JSON.stringify
 function serializeBigInt(obj: unknown): string {
-  return JSON.stringify(obj, (_, v) => 
+  return JSON.stringify(obj, (_, v) =>
     typeof v === 'bigint' ? v.toString() : v
   );
 }
 
-// P2-MEDIUM FIX: Enhanced error handler with NODE_ENV check for error details
+// SECURITY FIX (Finding 8): Error handler using error properties instead of fragile string matching
 app.setErrorHandler((error: unknown, request, reply) => {
   app.log["error"](error);
 
-  // Determine appropriate status code
+  // Determine appropriate status code using error properties, not string matching
   let statusCode = 500;
   let errorCode = 'INTERNAL_ERROR';
-  const errorMessage = (error as Error).message ?? '';
 
-  // P1-HIGH FIX: Add explicit check for Fastify validation errors
-  if (error && typeof error === 'object' && 'code' in error && 
-      (error as { code: string }).code === 'FST_ERR_VALIDATION') {
+  const err = error as { code?: string; statusCode?: number; status?: number; name?: string; message?: string };
+
+  // Check for explicit status code on the error object (Fastify/custom errors)
+  if (err.statusCode && err.statusCode >= 400 && err.statusCode < 600) {
+    statusCode = err.statusCode;
+  } else if (err.status && err.status >= 400 && err.status < 600) {
+    statusCode = err.status;
+  }
+
+  // Check for Fastify validation errors
+  if (err.code === 'FST_ERR_VALIDATION') {
     statusCode = 400;
     errorCode = 'VALIDATION_ERROR';
-  } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('Invalid token')) {
-  statusCode = 401;
-  errorCode = 'AUTH_ERROR';
-  } else if (errorMessage.includes('Forbidden')) {
-  statusCode = 403;
-  errorCode = 'FORBIDDEN';
-  } else if (errorMessage.includes('not found')) {
-  statusCode = 404;
-  errorCode = 'NOT_FOUND';
-  } else if (errorMessage.includes('validation') || errorMessage.includes('invalid')) {
-  statusCode = 400;
-  errorCode = 'VALIDATION_ERROR';
-  } else if (errorMessage.includes('conflict') || errorMessage.includes('duplicate')) {
-  statusCode = 409;
-  errorCode = 'CONFLICT';
+  } else if (err.name === 'TokenExpiredError' || err.name === 'TokenInvalidError' || err.name === 'AuthError') {
+    statusCode = statusCode === 500 ? 401 : statusCode;
+    errorCode = 'AUTH_ERROR';
+  } else if (err.name === 'ZodError') {
+    statusCode = 400;
+    errorCode = 'VALIDATION_ERROR';
+  } else if (err.code === 'NOT_FOUND' || err.code === 'CONTENT_NOT_FOUND') {
+    statusCode = 404;
+    errorCode = 'NOT_FOUND';
+  } else if (err.code === 'FORBIDDEN' || err.code === 'DOMAIN_NOT_OWNED') {
+    statusCode = 403;
+    errorCode = 'FORBIDDEN';
+  } else if (err.code === 'CONFLICT') {
+    statusCode = 409;
+    errorCode = 'CONFLICT';
+  } else if (statusCode !== 500) {
+    // Status was set from error object properties above
+    errorCode = statusCode === 400 ? 'VALIDATION_ERROR' :
+                statusCode === 401 ? 'AUTH_ERROR' :
+                statusCode === 403 ? 'FORBIDDEN' :
+                statusCode === 404 ? 'NOT_FOUND' :
+                statusCode === 409 ? 'CONFLICT' :
+                statusCode === 429 ? 'RATE_LIMITED' : 'INTERNAL_ERROR';
   }
 
   // P2-MEDIUM FIX: Only expose error details in development
@@ -281,13 +319,13 @@ app.setErrorHandler((error: unknown, request, reply) => {
   stack?: string | undefined;
   details?: unknown | undefined;
   } = {
-  error: statusCode === 500 ? 'Internal server error' : (error as Error).message || 'An error occurred',
+  error: statusCode === 500 ? 'Internal server error' : (err.message || 'An error occurred'),
   code: errorCode,
   };
 
   // Only include detailed error info in development
   if (isDevelopment) {
-  response.message = (error as Error).message;
+  response.message = err.message;
   response.stack = (error as Error).stack;
   response.details = error;
   }
@@ -352,19 +390,19 @@ async function registerRoutes(): Promise<void> {
 // P1-CRITICAL FIX: Deep health check with comprehensive dependency verification
 app.get('/health', async (request, reply) => {
   const startTime = Date.now();
-  
+
   // Run all health checks in parallel for faster response
   const checks = await Promise.allSettled([
     // Database health check
-    checkDatabase(pool),
+    checkDatabase(),
     // Redis health check
-    checkRedis(),
+    checkRedisHealth(),
     // Queue health check (check for stalled/failed jobs)
-    checkQueues(pool),
+    checkQueues(),
   ]);
-  
+
   const [dbCheck, redisCheck, queueCheck] = checks;
-  
+
   // Build detailed health report
   const health: HealthStatus = {
     status: 'healthy',
@@ -376,17 +414,17 @@ app.get('/health', async (request, reply) => {
       queues: queueCheck.status === 'fulfilled' ? { status: 'ok', ...queueCheck.value } : { status: 'error', error: String((queueCheck as PromiseRejectedResult).reason) },
     }
   };
-  
+
   // Determine overall status
   const allHealthy = Object.values(health.checks).every(check => check.status === 'ok');
   const anyCriticalFailed = health.checks.database.status !== 'ok' || health.checks.redis.status !== 'ok';
-  
+
   if (anyCriticalFailed) {
     health.status = 'unhealthy';
   } else if (!allHealthy) {
     health.status = 'degraded';
   }
-  
+
   // Return 503 if unhealthy, 200 if healthy or degraded
   const statusCode = health.status === 'unhealthy' ? 503 : 200;
   return reply.status(statusCode).send(health);
@@ -405,17 +443,17 @@ interface HealthStatus {
   responseTime: number;
   checks: {
     database: HealthCheckResult & { latency?: number };
-    redis: HealthCheckResult & { latency?: number };
+    redis: HealthCheckResult & { latency?: number; mode?: string };
     queues: HealthCheckResult & { stalledJobs?: number; failedJobs?: number; pendingJobs?: number };
   };
 }
 
 /**
  * Check database connectivity and performance
+ * SECURITY FIX (Finding 5): Uses the shared pool instance
  */
-async function checkDatabase(pool: Pool): Promise<{ latency: number }> {
+async function checkDatabase(): Promise<{ latency: number }> {
   const start = Date.now();
-  // Use a slightly more meaningful query that tests actual table access
   const client = await pool.connect();
   try {
     await client.query('SELECT 1');
@@ -427,66 +465,62 @@ async function checkDatabase(pool: Pool): Promise<{ latency: number }> {
 
 /**
  * Check Redis connectivity and performance
+ * SECURITY FIX (Finding 3): Reuse the shared Redis client instead of creating new connections
  */
-async function checkRedis(): Promise<{ latency: number; mode: string }> {
+async function checkRedisHealth(): Promise<{ latency: number; mode: string }> {
   const redisUrl = process.env['REDIS_URL'];
   if (!redisUrl) {
     // Redis is optional - return healthy if not configured
     return { latency: 0, mode: 'not_configured' };
   }
-  
-  const redis = new Redis(redisUrl, {
-    connectTimeout: 5000,
-    commandTimeout: 5000,
-    lazyConnect: true,
-    retryStrategy: () => null, // Disable retries for health check
-  });
-  
+
   const start = Date.now();
   try {
-    await redis.connect();
+    // Reuse the shared Redis connection from @kernel/redis
+    const redis = await getRedis();
     await redis.ping();
     const info = await redis.info('server');
     const mode = info.includes('redis_mode:cluster') ? 'cluster' : 'standalone';
     return { latency: Date.now() - start, mode };
-  } finally {
-    await redis.quit();
+  } catch (error) {
+    // If the shared client fails, report the error without creating a new connection
+    throw error;
   }
 }
 
 /**
  * Check queue health - look for stalled and failed jobs
  */
-async function checkQueues(pool: Pool): Promise<{ stalledJobs: number; failedJobs: number; pendingJobs: number }> {
+async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number; pendingJobs: number }> {
   // Check for stalled jobs (running for too long)
   const stalledResult = await pool.query(
-    `SELECT COUNT(*) as count FROM publishing_jobs 
-     WHERE status = 'processing' 
+    `SELECT COUNT(*) as count FROM publishing_jobs
+     WHERE status = 'processing'
      AND updated_at < NOW() - INTERVAL '30 minutes'`
   );
-  
+
   // Check for failed jobs in the last hour
   const failedResult = await pool.query(
-    `SELECT COUNT(*) as count FROM publishing_jobs 
-     WHERE status = 'failed' 
+    `SELECT COUNT(*) as count FROM publishing_jobs
+     WHERE status = 'failed'
      AND updated_at > NOW() - INTERVAL '1 hour'`
   );
-  
+
   // Check pending jobs (backlog)
   const pendingResult = await pool.query(
-    `SELECT COUNT(*) as count FROM publishing_jobs 
+    `SELECT COUNT(*) as count FROM publishing_jobs
      WHERE status IN ('pending', 'scheduled')`
   );
-  
+
   const stalledJobs = parseInt(stalledResult.rows[0]?.count || '0', 10);
   const failedJobs = parseInt(failedResult.rows[0]?.count || '0', 10);
   const pendingJobs = parseInt(pendingResult.rows[0]?.count || '0', 10);
-  
+
   // Alert if there are too many stalled jobs
   if (stalledJobs > 10) {
     throw new Error(`${stalledJobs} stalled jobs detected`);
   }
-  
+
   return { stalledJobs, failedJobs, pendingJobs };
 }
 

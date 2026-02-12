@@ -16,22 +16,28 @@ import { emitCounter } from '@kernel/metrics';
  */
 // Note: In production, these imports should use the package name: @kernel/logger
 const logger = getLogger('database');
-// Validate database URL
-const connectionString = process.env['CONTROL_PLANE_DB'];
-if (!connectionString) {
-  throw new Error('CONTROL_PLANE_DB environment variable is required. ' +
-    'Please set it to your PostgreSQL connection string.');
-}
-// Check for placeholder values
-if (/placeholder|example|user:password/i.test(connectionString)) {
-  throw new Error('CONTROL_PLANE_DB contains placeholder values. ' +
-    'Please set your actual database connection string.');
-}
+
+// SECURITY FIX (Finding 18): Move env validation to lazy init to prevent import-time crashes
+// Previously: module-level throw on missing CONTROL_PLANE_DB broke test imports and transitive deps
 const isServerless = process.env['VERCEL'] || process.env['AWS_LAMBDA_FUNCTION_NAME'];
+
+function getConnectionString(): string {
+  const connectionString = process.env['CONTROL_PLANE_DB'];
+  if (!connectionString) {
+    throw new Error('CONTROL_PLANE_DB environment variable is required. ' +
+      'Please set it to your PostgreSQL connection string.');
+  }
+  // Check for placeholder values
+  if (/placeholder|example|user:password/i.test(connectionString)) {
+    throw new Error('CONTROL_PLANE_DB contains placeholder values. ' +
+      'Please set your actual database connection string.');
+  }
+  return connectionString;
+}
 
 const config = {
   client: 'postgresql',
-  connection: connectionString,
+  get connection() { return getConnectionString(); },
   pool: {
     min: isServerless ? 0 : 2,  // P0-FIX: Start with 0 for serverless
     max: isServerless ? 5 : 20,  // P0-FIX: Limit to 5 for serverless
