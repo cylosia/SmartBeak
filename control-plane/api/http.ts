@@ -5,6 +5,7 @@
 import cors from '@fastify/cors';
 import Fastify, { FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
+import { getPoolInstance } from '@database/pool';
 import { validateEnv } from '@config';
 
 import { getLogger } from '@kernel/logger';
@@ -52,9 +53,9 @@ import { usageRoutes } from './routes/usage';
 
 try {
   validateEnv();
-  console.log('[startup] Environment variables validated successfully');
 } catch (error) {
-  console["error"]('[startup] Environment validation failed:', error instanceof Error ? error.message : error);
+  // Logger not available yet at this point - stderr is acceptable for startup failure
+  process.stderr.write(`[startup] Environment validation failed: ${error instanceof Error ? error.message : error}\n`);
   process.exit(1);
 }
 
@@ -134,19 +135,11 @@ app.addHook('onSend', async (request, reply, payload) => {
   return payload;
 });
 
-// Validate database connection string
-const dbConnectionString = process.env['CONTROL_PLANE_DB'];
-if (!dbConnectionString) {
-  throw new Error('CONTROL_PLANE_DB environment variable is required');
-}
-
-const pool = new Pool({
-  connectionString: dbConnectionString,
-  max: 20,
-  min: 2,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+// P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a
+// duplicate Pool here. The managed pool has exhaustion monitoring, statement_timeout,
+// idle_in_transaction_session_timeout, and proper metrics - this standalone pool had none.
+// Previously this created a second pool with max:20, doubling total connections to 30/process.
+const pool = await getPoolInstance();
 
 // Initialize DI container
 const container = initializeContainer({ dbPool: pool });
@@ -194,9 +187,16 @@ app.addHook('onRequest', async (req, reply) => {
         });
       }
     } catch (error) {
-      // P0-FIX: Fail open on Redis error - don't block auth
-      logger.error('Redis rate limiting error', error as Error);
-      // Continue without rate limiting rather than blocking all auth
+      // P0-FIX #1: Fail CLOSED on Redis error for auth endpoints.
+      // Auth rate limiting is a security-critical control. If Redis is unavailable,
+      // we must deny auth attempts rather than allow unlimited brute-force.
+      // This matches the fail-closed policy in rateLimiter.ts middleware.
+      logger.error('Redis rate limiting error - denying auth request (fail-closed)', error as Error);
+      return reply.status(429).send({
+        error: 'Too Many Requests',
+        message: 'Rate limiting service unavailable. Please try again later.',
+        retryAfter: 60
+      });
     }
   }
   
@@ -240,35 +240,31 @@ function serializeBigInt(obj: unknown): string {
   );
 }
 
-// P2-MEDIUM FIX: Enhanced error handler with NODE_ENV check for error details
+// P2-FIX #19: Enhanced error handler using Fastify's native statusCode property
+// instead of fragile string matching on error.message (which misclassifies errors
+// whose messages incidentally contain 'not found', 'invalid', etc.)
 app.setErrorHandler((error: unknown, request, reply) => {
   app.log["error"](error);
 
-  // Determine appropriate status code
-  let statusCode = 500;
+  // Determine appropriate status code - prefer explicit statusCode on the error object
+  const errObj = error as { statusCode?: number; code?: string; message?: string };
+  let statusCode = errObj.statusCode ?? 500;
   let errorCode = 'INTERNAL_ERROR';
-  const errorMessage = (error as Error).message ?? '';
 
-  // P1-HIGH FIX: Add explicit check for Fastify validation errors
-  if (error && typeof error === 'object' && 'code' in error && 
-      (error as { code: string }).code === 'FST_ERR_VALIDATION') {
+  // Check Fastify validation errors first (they have a code property)
+  if (errObj.code === 'FST_ERR_VALIDATION') {
     statusCode = 400;
     errorCode = 'VALIDATION_ERROR';
-  } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('Invalid token')) {
-  statusCode = 401;
-  errorCode = 'AUTH_ERROR';
-  } else if (errorMessage.includes('Forbidden')) {
-  statusCode = 403;
-  errorCode = 'FORBIDDEN';
-  } else if (errorMessage.includes('not found')) {
-  statusCode = 404;
-  errorCode = 'NOT_FOUND';
-  } else if (errorMessage.includes('validation') || errorMessage.includes('invalid')) {
-  statusCode = 400;
-  errorCode = 'VALIDATION_ERROR';
-  } else if (errorMessage.includes('conflict') || errorMessage.includes('duplicate')) {
-  statusCode = 409;
-  errorCode = 'CONFLICT';
+  } else if (statusCode === 401) {
+    errorCode = 'AUTH_ERROR';
+  } else if (statusCode === 403) {
+    errorCode = 'FORBIDDEN';
+  } else if (statusCode === 404) {
+    errorCode = 'NOT_FOUND';
+  } else if (statusCode === 400) {
+    errorCode = 'VALIDATION_ERROR';
+  } else if (statusCode === 409) {
+    errorCode = 'CONFLICT';
   }
 
   // P2-MEDIUM FIX: Only expose error details in development
@@ -428,6 +424,9 @@ async function checkDatabase(pool: Pool): Promise<{ latency: number }> {
 
 /**
  * Check Redis connectivity and performance
+ * P0-FIX #5: Reuse existing Redis connection instead of creating a new one per health check.
+ * Previously created a new Redis connection on every /health request, causing connection churn
+ * (8,640+ connections/day/pod with 10s probe interval).
  */
 async function checkRedis(): Promise<{ latency: number; mode: string }> {
   const redisUrl = process.env['REDIS_URL'];
@@ -435,23 +434,14 @@ async function checkRedis(): Promise<{ latency: number; mode: string }> {
     // Redis is optional - return healthy if not configured
     return { latency: 0, mode: 'not_configured' };
   }
-  
-  const redis = new Redis(redisUrl, {
-    connectTimeout: 5000,
-    commandTimeout: 5000,
-    lazyConnect: true,
-    retryStrategy: () => null, // Disable retries for health check
-  });
-  
+
   const start = Date.now();
   try {
-    await redis.connect();
+    const redis = await getRedis();
     await redis.ping();
-    const info = await redis.info('server');
-    const mode = info.includes('redis_mode:cluster') ? 'cluster' : 'standalone';
-    return { latency: Date.now() - start, mode };
-  } finally {
-    await redis.quit();
+    return { latency: Date.now() - start, mode: 'connected' };
+  } catch (error) {
+    throw new Error(`Redis health check failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

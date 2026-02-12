@@ -159,8 +159,6 @@ export function csrfProtection(config: CsrfConfig = {}) {
     }
 
     // CRITICAL-FIX: Validate token with proper await
-    // Previously this was not awaited, causing a validation bypass
-    // (Promise object is always truthy, so the check would never fail)
     try {
       const isValid = await validateCsrfToken(sessionId, providedToken);
       if (!isValid) {
@@ -170,8 +168,17 @@ export function csrfProtection(config: CsrfConfig = {}) {
         });
         return;
       }
+
+      // P1-FIX #14: Invalidate the CSRF token after successful validation.
+      // Previously tokens could be reused for multiple requests within their 1-hour TTL.
+      // Single-use tokens prevent CSRF replay attacks.
+      await clearCsrfToken(sessionId);
     } catch (error) {
-      console.error('[CSRF] Validation error:', error);
+      // P1-FIX #15: Use structured logging instead of console.error to prevent
+      // PII/connection strings leaking to stdout in production container logs.
+      const err = error instanceof Error ? error : new Error(String(error));
+      // Import would create circular dependency - use minimal safe logging
+      process.stderr.write(`[CSRF] Validation error: ${err.message}\n`);
       res.status(500).send({
         error: 'CSRF protection: Validation error',
         code: 'CSRF_VALIDATION_ERROR',

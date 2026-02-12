@@ -868,7 +868,9 @@ export function rateLimitMiddleware(
     // Bot detection
     if (options.detectBots) {
       const botResult = detectBot(request.headers as Record<string, string | string[]>);
-      if (botResult.isBot && botResult.confidence > 0.7) {
+      // P0-FIX #8: confidence is 0-100 (integer), not 0-1 (float).
+      // Previously compared > 0.7, which matched ANY non-zero score, blocking legitimate users.
+      if (botResult.isBot && botResult.confidence > 70) {
         reply.status(403).send({ error: 'Bot detected' });
         return;
       }

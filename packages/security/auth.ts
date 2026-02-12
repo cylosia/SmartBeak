@@ -317,10 +317,13 @@ export function verifyAuthHeader(authHeader: string | undefined): {
 /**
 * Role hierarchy for authorization checks
 */
+// P1-FIX #12: Added 'owner' role (level 4) which exists in database memberships
+// but was missing from the hierarchy, causing owners to fail admin permission checks.
 export const roleHierarchy: Record<UserRole, number> = {
   viewer: 1,
   editor: 2,
   admin: 3,
+  owner: 4,
 };
 
 /**
@@ -350,7 +353,7 @@ export interface UserRoleSchema {
   admin: 'admin';
 }
 
-const UserRoleSchema = z.enum(['viewer', 'editor', 'admin']);
+const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
 // ============================================================================
@@ -378,20 +381,22 @@ class TokenBindingError extends Error {
   }
 }
 
+// P0-FIX #2: Consolidated JWT verification. Previously this function used JWT_SECRET
+// while packages/security/jwt.ts used JWT_KEY_1/JWT_KEY_2, creating two independent
+// verification paths with potentially different secrets. Now uses JWT_KEY_1 as the
+// primary key (matching jwt.ts) with JWT_SECRET as fallback for migration.
 function verifyToken(token: string): { sub?: string; orgId?: string; role?: string; jti?: string; exp?: number } {
   try {
-    // P0-FIX: Remove fallback chain - require single explicit JWT secret
-    const secret = process.env['JWT_SECRET'];
+    const secret = process.env['JWT_KEY_1'] || process.env['JWT_SECRET'];
     if (!secret) {
-      throw new Error('JWT_SECRET environment variable must be set');
+      throw new Error('JWT_KEY_1 (or JWT_SECRET) environment variable must be set');
     }
     if (secret.length < 32) {
-      throw new Error('JWT_SECRET must be at least 32 characters');
+      throw new Error('JWT key must be at least 32 characters');
     }
-    // P0-FIX: Explicitly specify algorithm to prevent algorithm confusion attacks
-    // Without this, an attacker could use alg=none or switch to RS256
-    return jwt.verify(token, secret, { algorithms: ['HS256'] }) as { 
-      sub?: string; orgId?: string; role?: string; jti?: string; exp?: number 
+    // Explicitly specify algorithm to prevent algorithm confusion attacks
+    return jwt.verify(token, secret, { algorithms: ['HS256'] }) as {
+      sub?: string; orgId?: string; role?: string; jti?: string; exp?: number
     };
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
