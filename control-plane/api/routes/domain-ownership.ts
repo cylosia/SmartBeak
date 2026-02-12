@@ -55,7 +55,19 @@ export async function domainOwnershipRoutes(app: FastifyInstance, pool: Pool) {
     });
   }
 
-  await svc.transferDomain(id, fromOrg, toOrg);
-  return { ok: true, transferred: true };
+  // P2-11 FIX: Add error handling to prevent internal details leaking via Fastify default handler
+  try {
+    await svc.transferDomain(id, fromOrg, toOrg);
+    return { ok: true, transferred: true };
+  } catch (error) {
+    const domainError = error as { code?: string; message?: string };
+    if (domainError.code === 'DOMAIN_NOT_FOUND') {
+    return res.status(404).send({ error: 'Domain not found', code: 'DOMAIN_NOT_FOUND' });
+    }
+    if (domainError.code === 'DOMAIN_NOT_OWNED') {
+    return res.status(403).send({ error: 'Domain not owned by source organization', code: 'DOMAIN_NOT_OWNED' });
+    }
+    return res.status(500).send({ error: 'Failed to transfer domain', code: 'TRANSFER_FAILED' });
+  }
   });
 }

@@ -76,8 +76,8 @@ export class NotificationWorker {
     // P1-FIX: Begin transaction BEFORE any reads to ensure consistent snapshot
     await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
 
-    // P1-FIX: Read notification WITHIN transaction for proper isolation
-    const notification = await this.notifications.getById(notificationId);
+    // P0-FIX: Pass client to repository so reads happen WITHIN the transaction
+    const notification = await this.notifications.getById(notificationId, client);
 
     // Handle not found case
     if (!notification) {
@@ -94,7 +94,7 @@ export class NotificationWorker {
     if (pref && !pref.isEnabled()) {
     // Skip delivery based on user preference
     const skippedNotification = notification.succeed();
-    await this.notifications.save(skippedNotification);
+    await this.notifications.save(skippedNotification, client);
     await client.query('COMMIT');
 
     await this.auditLog('notification_skipped', notification["orgId"], {
@@ -106,7 +106,7 @@ export class NotificationWorker {
 
     // Start sending (immutable - returns new instance)
     const sendingNotification = notification.start();
-    await this.notifications.save(sendingNotification);
+    await this.notifications.save(sendingNotification, client);
 
     await client.query('COMMIT');
 
@@ -126,12 +126,12 @@ export class NotificationWorker {
     // Attempt delivery
     await adapter.send(message);
 
-    // Success
+    // Success — P0-FIX: Use client for notification save within transaction
     await client.query('BEGIN');
     await this.attempts.record(notification["id"], attempt, 'success');
 
     const deliveredNotification = sendingNotification.succeed();
-    await this.notifications.save(deliveredNotification);
+    await this.notifications.save(deliveredNotification, client);
 
     await client.query('COMMIT');
     await this.eventBus.publish(new NotificationSent().toEnvelope(notification["id"]));
@@ -153,11 +153,12 @@ export class NotificationWorker {
 
     const errorMessage = err instanceof Error ? err.message : String(err);
 
+    // P0-FIX: Use client for notification save within transaction
     await client.query('BEGIN');
     await this.attempts.record(notification["id"], attempt, 'failure', errorMessage);
 
     const failedNotification = sendingNotification.fail();
-    await this.notifications.save(failedNotification);
+    await this.notifications.save(failedNotification, client);
 
     await this.dlq.record(notification["id"], notification.channel, errorMessage);
     await client.query('COMMIT');
@@ -207,15 +208,13 @@ export class NotificationWorker {
   }
   const results = new Map<string, ProcessResult>();
 
-    const client = await this.pool.connect();
-  try {
-    await client.query('BEGIN');
+  // P0-FIX: Removed outer pool.connect() that held a wasted connection and caused
+  // deadlock in serverless (pool max=5). Each process() call manages its own
+  // transaction, so no outer transaction wrapper is needed.
+  const CONCURRENCY = 5;
+  const chunks = this.chunkArray(notificationIds, CONCURRENCY);
 
-    // Process with concurrency limit
-    const CONCURRENCY = 5;
-    const chunks = this.chunkArray(notificationIds, CONCURRENCY);
-
-    for (const chunk of chunks) {
+  for (const chunk of chunks) {
     const chunkResults = await Promise.all(
     chunk.map(async (id) => {
     const result = await this.process(id);
@@ -226,19 +225,6 @@ export class NotificationWorker {
     for (const { id, result } of chunkResults) {
     results.set(id, result);
     }
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    try {
-    await client.query('ROLLBACK');
-    } catch (rollbackError) {
-      const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-      logger.error(`Batch rollback failed: ${rollbackErrorMessage}`);
-    }
-    throw error;
-  } finally {
-    client.release();
   }
 
   return results;

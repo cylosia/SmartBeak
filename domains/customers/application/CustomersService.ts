@@ -78,8 +78,8 @@ export class CustomersService {
 
   try {
     const { rows } = await this.pool.query(
-    `SELECT id, org_id as 'orgId', name, email, status,
-        created_at as 'createdAt', updated_at as 'updatedAt'
+    `SELECT id, org_id as "orgId", name, email, status,
+        created_at as "createdAt", updated_at as "updatedAt"
     FROM customers
     WHERE id = $1`,
     [id]
@@ -130,8 +130,8 @@ export class CustomersService {
   try {
     // Use pagination to limit results
     const { rows } = await this.pool.query(
-    `SELECT id, org_id as 'orgId', name, email, status,
-        created_at as 'createdAt', updated_at as 'updatedAt'
+    `SELECT id, org_id as "orgId", name, email, status,
+        created_at as "createdAt", updated_at as "updatedAt"
     FROM customers
     WHERE org_id = $1
     ORDER BY created_at DESC
@@ -186,8 +186,8 @@ export class CustomersService {
     const { rows } = await this.pool.query(
     `INSERT INTO customers (id, org_id, name, email, status, created_at, updated_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id, org_id as 'orgId', name, email, status,
-        created_at as 'createdAt', updated_at as 'updatedAt'`,
+    RETURNING id, org_id as "orgId", name, email, status,
+        created_at as "createdAt", updated_at as "updatedAt"`,
     [crypto.randomUUID(), orgId, sanitizedName, sanitizedEmail, 'active', now, now]
     );
 
@@ -230,8 +230,8 @@ export class CustomersService {
     `UPDATE customers
     SET status = $1, updated_at = $2
     WHERE id = $3
-    RETURNING id, org_id as 'orgId', name, email, status,
-        created_at as 'createdAt', updated_at as 'updatedAt'`,
+    RETURNING id, org_id as "orgId", name, email, status,
+        created_at as "createdAt", updated_at as "updatedAt"`,
     [status, new Date(), id]
     );
 

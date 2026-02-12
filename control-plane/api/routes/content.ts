@@ -93,12 +93,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   // GET /content - List content with filtering
   app.get('/content', async (req: FastifyRequest, res: FastifyReply) => {
   try {
+    // P1-11 FIX: Rate limit BEFORE auth to prevent CPU exhaustion via JWT verification DDoS.
+    // Previously auth (expensive JWT verify) ran before rate limit.
+    await rateLimit('content', 50, req, res);
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx as AuthContext, ['admin', 'editor', 'viewer']);
-    await rateLimit('content', 50, req, res);
 
     // Validate orgId
     if (!ctx?.["orgId"]) {

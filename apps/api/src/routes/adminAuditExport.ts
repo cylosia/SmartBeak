@@ -142,12 +142,20 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
       });
     }
 
-    // P0-FIX: Always verify org membership regardless of x-admin-id header
+    // P1-FIX: x-admin-id header is user-controlled. Validate UUID format to limit
+    // abuse surface. NOTE: This should be replaced with JWT-derived admin identity
+    // in a future iteration to eliminate user-controlled identity headers entirely.
     const adminId = req.headers['x-admin-id'] as string | undefined;
     if (!adminId) {
       return reply.status(400).send({
         error: 'x-admin-id header is required',
         code: 'MISSING_ADMIN_ID'
+      });
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminId)) {
+      return reply.status(400).send({
+        error: 'Invalid x-admin-id format. Expected UUID.',
+        code: 'INVALID_ADMIN_ID'
       });
     }
 

@@ -704,33 +704,16 @@ interface RateLimitMiddlewareOptions {
   detectBots?: boolean;
 }
 
-// P0-FIX: In-memory store replaced with Redis-based distributed rate limiting
-// See checkRateLimitRedis() below for distributed implementation
-const rateLimitStore = new Map<string, { tokens: number; lastReset: number }>();
-
 // P0-FIX: Import distributed rate limiter
 import { checkRateLimit as checkRateLimitRedis, RateLimitConfig as RedisRateLimitConfig } from '@kernel/rateLimiterRedis';
 
+// P1-FIX: Removed dead in-memory rateLimitStore Map and checkRateLimit() function.
+// They were replaced by checkRateLimitDistributed() (Redis-based) but never deleted,
+// creating a security footgun: any code importing checkRateLimit() directly would
+// bypass distributed rate limiting, allowing per-instance limits in scaled deployments.
+
 function getClientIP(request: FastifyRequest): string {
   return (request as unknown as { ip?: string }).ip || 'unknown';
-}
-
-function checkRateLimit(key: string, config: RateLimitConfig): boolean {
-  const now = Date.now();
-  const intervalMs = (config.intervalSeconds ?? 60) * 1000;
-  const entry = rateLimitStore.get(key);
-  
-  if (!entry || now - entry.lastReset > intervalMs) {
-    rateLimitStore.set(key, { tokens: (config.tokensPerInterval ?? 10) - 1, lastReset: now });
-    return true;
-  }
-  
-  if (entry.tokens > 0) {
-    entry.tokens--;
-    return true;
-  }
-  
-  return false;
 }
 
 /**

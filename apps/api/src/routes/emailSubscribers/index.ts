@@ -55,6 +55,16 @@ interface AuthenticatedRequest extends FastifyRequest {
   auth?: AuthContext;
 }
 
+// P1-SECURITY FIX: Validate domainId from URL params as UUID instead of unsafe cast
+const DomainIdParamsSchema = z.object({
+  domainId: z.string().uuid('Domain ID must be a valid UUID'),
+});
+
+const SubscriberIdParamsSchema = z.object({
+  domainId: z.string().uuid('Domain ID must be a valid UUID'),
+  subscriberId: z.string().uuid('Subscriber ID must be a valid UUID'),
+});
+
 // Check if user can access domain
 async function canAccessDomain(userId: string, domainId: string, orgId: string): Promise<boolean> {
   const db = await getDb();
@@ -75,7 +85,12 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
   // GET /api/v1/domains/:domainId/subscribers - List subscribers for a domain
   app.get('/api/v1/domains/:domainId/subscribers', async (req, reply) => {
     try {
-      const { domainId } = req.params as { domainId: string };
+      // P1-SECURITY FIX: Validate domainId as UUID instead of unsafe cast
+      const paramsResult = DomainIdParamsSchema.safeParse(req.params);
+      if (!paramsResult.success) {
+        return reply.status(400).send({ error: 'Invalid domain ID', details: paramsResult.error.issues });
+      }
+      const { domainId } = paramsResult.data;
       const auth = await authenticate(req);
       if (!auth) {
         return reply.status(401).send({ error: 'Unauthorized' });
@@ -168,7 +183,11 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
   // POST /api/v1/domains/:domainId/subscribers - Create a new subscriber
   app.post('/api/v1/domains/:domainId/subscribers', async (req, reply) => {
     try {
-      const { domainId } = req.params as { domainId: string };
+      const paramsResult = DomainIdParamsSchema.safeParse(req.params);
+      if (!paramsResult.success) {
+        return reply.status(400).send({ error: 'Invalid domain ID', details: paramsResult.error.issues });
+      }
+      const { domainId } = paramsResult.data;
       const auth = await authenticate(req);
       if (!auth) {
         return reply.status(401).send({ error: 'Unauthorized' });
@@ -241,7 +260,11 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
   // GET /api/v1/domains/:domainId/subscribers/:subscriberId - Get a specific subscriber
   app.get('/api/v1/domains/:domainId/subscribers/:subscriberId', async (req, reply) => {
     try {
-      const { domainId, subscriberId } = req.params as { domainId: string; subscriberId: string };
+      const paramsResult = SubscriberIdParamsSchema.safeParse(req.params);
+      if (!paramsResult.success) {
+        return reply.status(400).send({ error: 'Invalid parameters', details: paramsResult.error.issues });
+      }
+      const { domainId, subscriberId } = paramsResult.data;
       const auth = await authenticate(req);
       if (!auth) {
         return reply.status(401).send({ error: 'Unauthorized' });
@@ -275,7 +298,11 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
   // PATCH /api/v1/domains/:domainId/subscribers/:subscriberId - Update a subscriber
   app.patch('/api/v1/domains/:domainId/subscribers/:subscriberId', async (req, reply) => {
     try {
-      const { domainId, subscriberId } = req.params as { domainId: string; subscriberId: string };
+      const paramsResult = SubscriberIdParamsSchema.safeParse(req.params);
+      if (!paramsResult.success) {
+        return reply.status(400).send({ error: 'Invalid parameters', details: paramsResult.error.issues });
+      }
+      const { domainId, subscriberId } = paramsResult.data;
       const auth = await authenticate(req);
       if (!auth) {
         return reply.status(401).send({ error: 'Unauthorized' });
@@ -343,7 +370,11 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
   // DELETE /api/v1/domains/:domainId/subscribers/:subscriberId - Delete a subscriber
   app.delete('/api/v1/domains/:domainId/subscribers/:subscriberId', async (req, reply) => {
     try {
-      const { domainId, subscriberId } = req.params as { domainId: string; subscriberId: string };
+      const paramsResult = SubscriberIdParamsSchema.safeParse(req.params);
+      if (!paramsResult.success) {
+        return reply.status(400).send({ error: 'Invalid parameters', details: paramsResult.error.issues });
+      }
+      const { domainId, subscriberId } = paramsResult.data;
       const auth = await authenticate(req);
       if (!auth) {
         return reply.status(401).send({ error: 'Unauthorized' });

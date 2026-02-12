@@ -20,10 +20,11 @@ const ExperimentVariantSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 }).strict();
 
+// P1-SECURITY FIX: Add .strict() to match codebase convention and reject extra fields
 const ExperimentBodySchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID'),
   variants: z.array(ExperimentVariantSchema).min(1, 'At least one variant is required').max(20),
-});
+}).strict();
 // P1-SECURITY FIX: Use centralized @security/jwt instead of raw jwt.verify
 // Ensures consistent key rotation, clockTolerance, and timing-safe token comparison
 async function verifyAuth(req: FastifyRequest) {

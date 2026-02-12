@@ -1,6 +1,7 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
 
 import { getLogger } from '@kernel/logger';
+import { csrfProtection } from '../../middleware/csrf';
 import { addSecurityHeaders, whitelistFields } from './utils';
 
 const logger = getLogger('EmailService');
@@ -28,6 +29,9 @@ interface AuthContext {
 }
 
 export async function emailRoutes(app: FastifyInstance): Promise<void> {
+  // P2-SECURITY FIX: Add CSRF protection for state-changing POST endpoints
+  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+
   // POST /email/lead-magnets - Create lead magnet
   app.post('/email/lead-magnets', async (req, reply) => {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
@@ -131,7 +135,8 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const total = await query.clone().count('id as count').first();
-    const items = await query.limit(limit).offset(offset);
+    // P1-SQL FIX: Explicit column selection to prevent leaking internal DB fields
+    const items = await query.select(RESPONSE_LEAD_MAGNET_FIELDS as unknown as string[]).limit(limit).offset(offset);
 
     addSecurityHeaders(reply);
     return reply.send({
@@ -251,7 +256,8 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const total = await query.clone().count('id as count').first();
-    const items = await query.limit(limit).offset(offset);
+    // P1-SQL FIX: Explicit column selection to prevent leaking internal DB fields
+    const items = await query.select(RESPONSE_SEQUENCE_FIELDS as unknown as string[]).limit(limit).offset(offset);
 
     addSecurityHeaders(reply);
     return reply.send({
@@ -371,7 +377,8 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const total = await query.clone().count('id as count').first();
-    const items = await query.limit(limit).offset(offset);
+    // P1-SQL FIX: Explicit column selection to prevent leaking internal DB fields
+    const items = await query.select(RESPONSE_FORM_FIELDS as unknown as string[]).limit(limit).offset(offset);
 
     addSecurityHeaders(reply);
     return reply.send({

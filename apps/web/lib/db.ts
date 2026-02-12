@@ -8,13 +8,8 @@
  */
 
 import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
-// import { getLogger } from '@kernel/logger';
-const getLogger = (name: string) => ({
-  debug: (..._args: unknown[]) => {},
-  info: (..._args: unknown[]) => {},
-  warn: (..._args: unknown[]) => {},
-  error: (..._args: unknown[]) => {},
-});
+// P1-10 FIX: Restored real logger (was replaced with no-op stubs, swallowing all DB errors silently)
+import { getLogger } from '@kernel/logger';
 import type { Pool, PoolClient } from 'pg';
 import type { Knex } from 'knex';
 

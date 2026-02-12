@@ -33,6 +33,8 @@ async function getRawBody(req: NextApiRequest, res: NextApiResponse): Promise<st
     if (totalSize > MAX_PAYLOAD_SIZE) {
       res.status(413).json({ error: 'Payload too large' });
       req.destroy();
+      // P1-2 FIX: Reject the promise so the caller doesn't hang indefinitely
+      reject(new Error('Payload too large'));
       return;
     }
     chunks.push(chunk);
@@ -175,9 +177,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Get raw body for signature verification
   const rawBody = await getRawBody(req, res);
 
-  // Parse the body after getting raw bytes for signature verification
-  const event = JSON.parse(rawBody) as ClerkWebhookEvent;
-
   // Extract and validate headers
   const svixId = req.headers['svix-id'];
   const svixTimestamp = req.headers['svix-timestamp'];
@@ -187,7 +186,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing required Svix headers' });
   }
 
-  // Verify webhook signature
+  // P1-1 FIX: Verify webhook signature BEFORE parsing JSON.
+  // Previously JSON.parse ran before verification, allowing crafted payloads
+  // to exploit parser bugs or cause memory allocation before auth check.
   const isValid = verifyClerkWebhook(rawBody, {
     'svix-id': svixId,
     'svix-timestamp': svixTimestamp,
@@ -197,6 +198,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!isValid) {
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
+
+  // Parse body only after signature is verified
+  const event = JSON.parse(rawBody) as ClerkWebhookEvent;
 
   // Validate event structure
   if (!event.type || !event.data?.["id"]) {

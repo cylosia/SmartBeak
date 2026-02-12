@@ -87,7 +87,7 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
 
   // SECURITY FIX: Add authentication - this route was previously unauthenticated
   app.addHook('preHandler', async (req, res) => {
-    await requireAuthFastify(req, res, () => {});
+    await requireAuthFastify(req, res);
   });
 
   app.post('/publish/intents', async (req, res) => {

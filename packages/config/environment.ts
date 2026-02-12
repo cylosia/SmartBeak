@@ -16,25 +16,28 @@ export function isTest(): boolean {
   return process.env['NODE_ENV'] === 'test';
 }
 
+// P1-ARCHITECTURE FIX: Use getter properties instead of eagerly-evaluated snapshot.
+// Previously, isProduction/isDevelopment/isTest were computed once at module load
+// and became stale if NODE_ENV changed (e.g., between test suites).
 export const envConfig = {
   /** Current environment */
-  nodeEnv: process.env['NODE_ENV'] || 'development',
+  get nodeEnv() { return process.env['NODE_ENV'] || 'development'; },
 
   /** Is production environment */
-  isProduction: isProduction(),
+  get isProduction() { return isProduction(); },
 
   /** Is development environment */
-  isDevelopment: isDevelopment(),
+  get isDevelopment() { return isDevelopment(); },
 
   /** Is test environment */
-  isTest: isTest(),
+  get isTest() { return isTest(); },
 
   /** Application version */
-  version: process.env['APP_VERSION'] || '1.0.0',
+  get version() { return process.env['APP_VERSION'] || '1.0.0'; },
 
   /** Build timestamp */
-  buildTimestamp: process.env['BUILD_TIMESTAMP'] || new Date().toISOString(),
+  get buildTimestamp() { return process.env['BUILD_TIMESTAMP'] || new Date().toISOString(); },
 
   /** Git commit SHA */
-  gitCommit: process.env['GIT_COMMIT'] || 'unknown',
+  get gitCommit() { return process.env['GIT_COMMIT'] || 'unknown'; },
 } as const;

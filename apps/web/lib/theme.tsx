@@ -159,7 +159,13 @@ export function ThemeSelector() {
   return (
     <select
       value={theme}
-      onChange={(e) => setTheme((e.target as HTMLSelectElement).value as Theme)}
+      onChange={(e) => {
+        // P2-12 FIX: Validate value before casting to Theme
+        const val = (e.target as HTMLSelectElement).value;
+        if (val === 'light' || val === 'dark' || val === 'system') {
+          setTheme(val);
+        }
+      }}
       style={{
         padding: '8px 12px',
         borderRadius: '6px',

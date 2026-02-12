@@ -14,13 +14,12 @@ import { FastifyReply } from 'fastify';
 */
 export function whitelistFields<T extends Record<string, unknown>>(
   obj: T,
-  allowedFields: readonly string[]
+  allowedFields: readonly (keyof T)[]
 ): Partial<T> {
   const result: Partial<T> = {};
   for (const key of allowedFields) {
     if (key in obj) {
-    const k = key as keyof T;
-    result[k] = obj[k];
+    result[key] = obj[key];
     }
   }
   return result;
@@ -38,8 +37,9 @@ export function addSecurityHeaders(reply: FastifyReply): void {
   reply.header('X-Frame-Options', 'DENY');
   // Prevent MIME type sniffing
   reply.header('X-Content-Type-Options', 'nosniff');
-  // XSS Protection
-  reply.header('X-XSS-Protection', '1; mode=block');
+  // P2-FIX: X-XSS-Protection '1; mode=block' is deprecated and can introduce
+  // vulnerabilities in older browsers. Disable it and rely on CSP instead.
+  reply.header('X-XSS-Protection', '0');
   // Referrer Policy
   reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
 }

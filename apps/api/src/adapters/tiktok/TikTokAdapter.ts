@@ -28,16 +28,18 @@ class ApiError extends Error {
   }
 }
 
+// P3-8 FIX: Use optional properties (?) instead of T | undefined
+// to avoid requiring callers to explicitly pass undefined for unused fields
 export interface TikTokVideo {
   title: string;
-  description: string | undefined;
+  description?: string;
   videoFile: Buffer | string;
-  privacyLevel: 'PUBLIC' | 'FOLLOWERS_OF_CREATOR' | 'MENTIONED_ONLY' | undefined;
-  disableDuet: boolean | undefined;
-  disableStitch: boolean | undefined;
-  disableComment: boolean | undefined;
-  brandOrganicType: 'AUTHORED_BY_BRAND' | 'AUTHORED_BY_CREATOR' | undefined;
-  isAigc: boolean | undefined;
+  privacyLevel?: 'PUBLIC' | 'FOLLOWERS_OF_CREATOR' | 'MENTIONED_ONLY';
+  disableDuet?: boolean;
+  disableStitch?: boolean;
+  disableComment?: boolean;
+  brandOrganicType?: 'AUTHORED_BY_BRAND' | 'AUTHORED_BY_CREATOR';
+  isAigc?: boolean;
 }
 
 export interface TikTokUploadSession {
@@ -259,15 +261,20 @@ export class TikTokAdapter {
         throw new Error(`TikTok error: ${data.error.code} - ${data.error["message"]}`);
       }
 
+      // P1-4 FIX: Validate required fields instead of using empty string fallbacks
+      if (!data.data?.publish_id) {
+        throw new ApiError('Missing publish_id in TikTok API response', 500);
+      }
+
       const latency = Date.now() - startTime;
       this.metrics.recordLatency('publishVideoDirect', latency, true);
       this.metrics.recordSuccess('publishVideoDirect');
       this.logger.info('Successfully published TikTok video', context, {
-        publishId: data.data?.publish_id
+        publishId: data.data.publish_id
       });
 
       const result: TikTokPostResponse = {
-        publishId: data.data?.publish_id || '',
+        publishId: data.data.publish_id,
         shareId: undefined,
         createTime: undefined,
         status: 'processing',
@@ -350,7 +357,12 @@ export class TikTokAdapter {
         return response;
       }, { maxRetries: 3 });
 
-      const data = await res.json() as {
+      // P1-6 FIX: Add runtime response validation (matching getCreatorInfo pattern)
+      const rawData = await res.json() as unknown;
+      if (!rawData || typeof rawData !== 'object') {
+        throw new ApiError('Invalid response format from TikTok upload init API', 500);
+      }
+      const data = rawData as {
         data: { publish_id: string; upload_url: string } | undefined;
         error: { code: string; message: string } | undefined;
       };
@@ -359,9 +371,14 @@ export class TikTokAdapter {
         throw new Error(`TikTok error: ${data.error.code} - ${data.error["message"]}`);
       }
 
+      // P1-4 FIX: Validate required response fields
+      if (!data.data?.publish_id || !data.data?.upload_url) {
+        throw new ApiError('Missing publish_id or upload_url in TikTok upload init response', 500);
+      }
+
       return {
-        publishId: data.data?.publish_id || '',
-        uploadUrl: data.data?.upload_url || '',
+        publishId: data.data.publish_id,
+        uploadUrl: data.data.upload_url,
       };
     } finally {
       clearTimeout(timeoutId);
@@ -403,18 +420,29 @@ export class TikTokAdapter {
    */
   async healthCheck(): Promise<TikTokHealthStatus> {
     const start = Date.now();
+    // P1-5 FIX: Use a dedicated lightweight fetch with the short timeout
+    // instead of calling getCreatorInfo() which uses its own extended timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.short);
 
     try {
-      // Try to get creator info as health check
-      await this.getCreatorInfo();
+      const response = await fetch(`${this.baseUrl}/user/info/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fields: ['open_id'],
+        }),
+        signal: controller.signal as AbortSignal,
+      });
 
-      // SECURITY FIX: Only healthy if getCreatorInfo succeeds (returns 200)
+      // SECURITY FIX: Only healthy if API responds with 200
       const result: TikTokHealthStatus = {
-        healthy: true,
+        healthy: response.ok,
         latency: Date.now() - start,
-        error: undefined,
+        error: response.ok ? undefined : `HTTP ${response.status}`,
       };
       return result;
     } catch (error) {

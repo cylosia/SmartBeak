@@ -53,6 +53,9 @@ const config = {
     // packages/database/pool sets this, but this Knex pool didn't, allowing
     // abandoned transactions to hold locks indefinitely.
     idle_in_transaction_session_timeout: 60000,
+    // P1-9 FIX: Add statement_timeout for ALL environments (was only set for serverless).
+    // Without this, non-serverless standalone queries can run indefinitely, exhausting the pool.
+    statement_timeout: isServerless ? 3000 : 30000,
   },
   pool: {
     min: isServerless ? 0 : 2,  // P0-FIX: Start with 0 for serverless
@@ -293,6 +296,9 @@ export async function analyticsDb(): Promise<Knex> {
     // P1-FIX #13: Set analyticsDbUrl synchronously BEFORE the async reset to prevent
     // concurrent calls from both entering this block and creating duplicate connections.
     analyticsDbUrl = replicaUrl;
+    // P1-12 FIX: Also null out instance synchronously to prevent concurrent calls from
+    // returning the stale instance while resetAnalyticsDb() is awaiting async destruction.
+    analyticsDbInstance = null;
     await resetAnalyticsDb();
   }
   // Return existing instance if available

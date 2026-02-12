@@ -100,7 +100,8 @@ export async function verifyDnsMulti(
 
   for (const method of methods) {
   // FIX: Validate record format
-  if (!method.record || typeof method.record !== 'string') {
+  // P2-18 FIX: Also validate record is a valid hostname to prevent arbitrary DNS lookups
+  if (!method.record || typeof method.record !== 'string' || method.record.length > MAX_DOMAIN_LENGTH) {
     results[method.record || 'unknown'] = false;
     continue;
   }

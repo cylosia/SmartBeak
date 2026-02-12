@@ -47,25 +47,32 @@ export class PostgresNotificationDLQRepository {
   }
 
   /**
-  * List DLQ entries
+  * List DLQ entries scoped by organization
+  * P1-FIX: Added orgId parameter to prevent cross-org data leakage.
+  * Previously accepted only `limit` and returned all orgs' DLQ entries.
   */
-  async list(limit = 50): Promise<Array<{
+  async list(orgId: string, limit = 50): Promise<Array<{
   id: string;
   notificationId: string;
   channel: string;
   reason: string;
   createdAt: Date;
   }>> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId must be a non-empty string');
+  }
   // Validate limit
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
   try {
     const { rows } = await this.pool.query(
-    `SELECT id, notification_id, channel, reason, created_at
-    FROM notification_dlq
-    ORDER BY created_at DESC
-    LIMIT $1`,
-    [safeLimit]
+    `SELECT d.id, d.notification_id, d.channel, d.reason, d.created_at
+    FROM notification_dlq d
+    INNER JOIN notifications n ON d.notification_id = n.id
+    WHERE n.org_id = $1
+    ORDER BY d.created_at DESC
+    LIMIT $2`,
+    [orgId, safeLimit]
     );
 
     return rows.map(r => ({

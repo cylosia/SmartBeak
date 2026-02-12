@@ -119,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         [stripeCustomerId, auth["orgId"]]
       );
       if (rows.length === 0) {
-        logger.warn({ userId: auth.userId, stripeCustomerId }, 'User attempted to access Stripe portal for invalid customer');
+        logger.warn('User attempted to access Stripe portal for invalid customer', { userId: auth.userId, stripeCustomerId });
         return res.status(404).json({ 
           error: 'Not Found',
           code: 'CUSTOMER_NOT_FOUND',
@@ -199,7 +199,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // SECURITY FIX: Issue 22 - Sanitize error messages
     const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : String(error));
-    logger.error({ error: sanitizedError }, 'Portal session creation failed');
+    logger.error('Portal session creation failed', error instanceof Error ? error : undefined, { error: sanitizedError });
 
     const stripeError = error as { type?: string; code?: string; message?: string };
     if (stripeError.type === 'StripeInvalidRequestError') {

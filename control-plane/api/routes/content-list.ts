@@ -41,14 +41,20 @@ export async function contentListRoutes(app: FastifyInstance) {
     const repo = getContentRepository('content');
     const handler = new ListContent(repo);
 
+    // P0-4 FIX: Pass orgId to enforce multi-tenant isolation
+    // Also pass domainId if provided for additional filtering
     const items = await handler.byStatus(
     status as ContentStatus,
     Number(limit),
     Number(offset),
+    ctx.orgId,
+    domainId,
     );
 
+    // P0-6 FIX: Include items array in response (was previously discarded)
     return {
     success: true,
+    items,
     pagination: {
     limit: Number(limit),
     offset: Number(offset),

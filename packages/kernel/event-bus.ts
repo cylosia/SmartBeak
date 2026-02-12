@@ -20,8 +20,9 @@ export type SafeHandler<T> = {
 * with safe handler execution and error isolation.
 */
 export class EventBus {
+  // P2-TYPE FIX: Replace `any` with `unknown` to enforce type safety on event handlers
   /** Map of event names to their handlers */
-  private readonly handlers = new Map<string, SafeHandler<any>[]>();
+  private readonly handlers = new Map<string, SafeHandler<unknown>[]>();
   /** Logger instance for event bus operations */
   private readonly logger: Console;
   /** Circuit breaker for event publishing protection */
@@ -90,8 +91,9 @@ export class EventBus {
   * Get all registered handlers
   * @returns Copy of the handlers map
   */
-  getHandlers(): Map<string, SafeHandler<any>[]> {
-  return new Map(this.handlers);
+  // P2-CONCURRENCY FIX: Deep copy to prevent callers from mutating internal handler arrays
+  getHandlers(): Map<string, SafeHandler<unknown>[]> {
+  return new Map([...this.handlers].map(([k, v]) => [k, [...v]]));
   }
 
   /**

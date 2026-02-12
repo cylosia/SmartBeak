@@ -1,9 +1,11 @@
-import * as jwt from 'jsonwebtoken';
+// P1-FIX: Replaced raw jsonwebtoken with centralized @security/jwt to ensure
+// token revocation checks, session binding, and algorithm pinning are applied.
 import Stripe from 'stripe';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { apiRateLimit } from '../middleware/rateLimiter';
+import { extractAndVerifyToken } from '@security/jwt';
 import { getBillingConfig } from '@config';
 import { getDb } from '../db';
 
@@ -87,25 +89,20 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
 
   app.addHook('onRequest', apiRateLimit());
 
+  // P1-FIX: Use centralized @security/jwt instead of raw jsonwebtoken.
+  // This ensures token revocation, session binding, algorithm pinning, and clock tolerance.
   app.addHook('onRequest', async (req, reply) => {
   const token = extractBearerToken(req);
   if (!token) {
     return reply.status(401).send({ error: 'Unauthorized' });
   }
   try {
-    // MEDIUM FIX C2: Use validated config
-    const jwtKey = billingConfig.jwtKey;
-    if (!jwtKey) {
-    return reply.status(500).send({ error: 'Server configuration error' });
+    const result = extractAndVerifyToken(token);
+    if (!result.valid || !result.claims) {
+      return reply.status(401).send({ error: 'Invalid token' });
     }
-    // P1-FIX: Use type guard instead of double assertion
-    const decoded = jwt.verify(token, jwtKey, { algorithms: ['HS256'] });
-    if (typeof decoded !== 'object' || decoded === null) {
-      return reply.status(401).send({ error: 'Invalid token format' });
-    }
-    const claims = decoded as { stripeCustomerId?: string; sub?: string; orgId?: string };
-    
-    // P1-FIX: Store user info for membership verification
+    const claims = result.claims as { stripeCustomerId?: string; sub?: string; orgId?: string };
+
     (req as AuthenticatedRequest).user = {
       id: claims.sub,
       orgId: claims.orgId,
@@ -195,8 +192,8 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     const errorResponse: ErrorResponse = {
     error: 'Internal server error',
     };
-    // MEDIUM FIX C2: Use centralized env check
-    if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+    // P1-FIX: Standardize dev error exposure with double-guard pattern
+    if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
     errorResponse["message"] = error["message"];
     }
     return reply.status(500).send(errorResponse);
