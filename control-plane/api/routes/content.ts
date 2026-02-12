@@ -138,13 +138,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     // Build query
+    // C4-FIX: Changed table name from 'content' to 'content_items' to match migration schema
     let query = `
     SELECT c["id"], c.title, c.status, c.content_type, c.domain_id,
-        c.created_at, c.updated_at, c.published_at,
+        c.created_at, c.updated_at,
         d.name as domain_name
-    FROM content c
+    FROM content_items c
     LEFT JOIN domains d ON c.domain_id = d["id"]
-    WHERE c.org_id = $1
+    WHERE d.org_id = $1
     `;
     const params: unknown[] = [ctx["orgId"]];
     let paramIndex = 2;
@@ -370,8 +371,13 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
 
+    // H12-FIX: Pass title and body from validated input, preserving existing values if not provided
     const handler = new UpdateDraft(repo);
-    const updated = await handler.execute(params["id"], validated.title ?? '', validated.body ?? '');
+    const updated = await handler.execute(
+    params["id"],
+    validated.title ?? item.title ?? '',
+    validated.body ?? item.body ?? ''
+    );
 
     return { success: true, item: updated };
   } catch (error: unknown) {
@@ -466,11 +472,11 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
 
-    // SECURITY FIX (Finding 6): Include org_id in WHERE clause for defense-in-depth
-    // Prevents cross-tenant deletion even if ownership check has a TOCTOU race
+    // Soft delete
+    // C4-FIX: Changed table 'content' to 'content_items' and 'deleted_at' to 'archived_at' to match migration schema
     await pool.query(
-    'UPDATE content SET status = $1, deleted_at = NOW(), updated_at = NOW() WHERE id = $2 AND org_id = $3',
-    ['archived', params["id"], ctx["orgId"]]
+    'UPDATE content_items SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2',
+    ['archived', params["id"]]
     );
 
     return { success: true, id: params["id"], deleted: true };

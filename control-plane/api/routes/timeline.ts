@@ -93,7 +93,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     FROM activity_log al
     LEFT JOIN domains d ON al.domain_id = d["id"]
     WHERE al.org_id = $1
-    AND al.deleted_at IS NULL
+    -- H3-FIX: Removed deleted_at filter (column does not exist in activity_log table)
     `;
     const params: unknown[] = [orgId];
     let paramIndex = 2;
@@ -203,7 +203,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     al.metadata, al.created_at
     FROM activity_log al
     WHERE al.domain_id = $1
-    AND al.deleted_at IS NULL
+    -- H3-FIX: Removed deleted_at filter (column does not exist in activity_log table)
     `;
     const params: unknown[] = [domainId];
     let paramIndex = 2;

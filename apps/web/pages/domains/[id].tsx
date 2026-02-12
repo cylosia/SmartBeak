@@ -36,8 +36,8 @@ export default function DomainDetail({ domain, themes }: any) {
 
     <section>
     <h2>Buyer & Exit</h2>
+    {/* H1-FIX: Removed broken buyerToken link — field not returned by GET /domains/:id */}
     <ul>
-      <li><a href={`/diligence/${domain.buyerToken}`}>View buyer diligence</a></li>
       <li><a href='/sell-ready'>Sell readiness</a></li>
     </ul>
     </section>

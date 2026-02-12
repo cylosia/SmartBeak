@@ -33,36 +33,23 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     await rateLimit('analytics', 50);
     const { orgId } = ctx;
 
-    // Calculate revenue confidence across portfolio from database
+    // H2-FIX: Query only domains table (domain_confidence table does not exist yet)
+    // TODO: Create domain_confidence migration and populate real data
     const { rows: domainRows } = await pool.query(
-    `SELECT d["id"] as 'domainId', d.name,
-        COALESCE(dc.confidence_score, 0) as confidence,
-        COALESCE(dc.revenue_30d, 0) as revenue
+    `SELECT d["id"] as "domainId", d.name
     FROM domains d
-    LEFT JOIN domain_confidence dc ON d["id"] = dc.domain_id
-    WHERE d.org_id = $1 AND d.deleted_at IS NULL`,
+    WHERE d.org_id = $1 AND d.status != 'inactive'`,
     [orgId]
     );
 
-    // Calculate overall confidence from domain data
-    const totalRevenue = domainRows.reduce((sum, d) => sum + parseFloat(d.revenue || 0), 0);
-    const avgConfidence = domainRows.length > 0
-    ? domainRows.reduce((sum, d) => sum + parseFloat(d.confidence || 0), 0) / domainRows.length
-    : 0;
-
     const metrics = {
     overall: {
-    score: Math.round(avgConfidence),
-    level: avgConfidence >= 70 ? 'high' : avgConfidence >= 40 ? 'medium' : 'low',
-    trend: 'stable', // TODO: Calculate from historical data
+    score: 0,
+    level: 'low' as const,
+    trend: 'stable',
     },
     byDomain: domainRows,
-    factors: {
-    trafficStability: 80,
-    revenueDiversification: 70,
-    contentQuality: 85,
-    backlinkProfile: 75,
-    },
+    factors: {},
     };
 
     // Set cache headers
@@ -91,54 +78,16 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     await rateLimit('analytics', 50);
     const { orgId } = ctx;
 
-    // Analyze dependencies and risks from database
-    const { rows: depRows } = await pool.query(
-    `SELECT source_type, percentage, risk_level
-    FROM traffic_dependencies
-    WHERE org_id = $1`,
-    [orgId]
-    );
-
-    const { rows: riskRows } = await pool.query(
-    `SELECT type, description, severity, mitigation
-    FROM portfolio_risks
-    WHERE org_id = $1 AND status = 'active'`,
-    [orgId]
-    );
-
-    // Calculate overall risk score
-    const avgRisk = depRows.length > 0
-    ? depRows.reduce((sum, d) => sum + parseFloat(d.percentage || 0), 0) / depRows.length
-    : 50;
-
+    // H2-FIX: Removed queries to non-existent tables (traffic_dependencies, portfolio_risks)
+    // TODO: Create these tables via migrations and populate real data
     const analysis = {
     overall: {
-    score: Math.round(avgRisk),
-    level: avgRisk >= 70 ? 'high' : avgRisk >= 40 ? 'medium' : 'low',
-    trend: 'improving',
+    score: 0,
+    level: 'low' as const,
+    trend: 'stable',
     },
-    dependencies: depRows.length > 0 ? depRows.reduce((acc, row) => {
-    acc[row.source_type] = { percentage: row.percentage, risk: row.risk_level };
-    return acc;
-    }, {} as Record<string, { percentage: number; risk: string }>) : {
-    google: { percentage: 65, risk: 'high' },
-    amazon: { percentage: 25, risk: 'medium' },
-    direct: { percentage: 10, risk: 'low' },
-    },
-    risks: riskRows.length > 0 ? riskRows : [
-    {
-    type: 'algorithm',
-    description: 'High dependency on Google organic traffic',
-    severity: 'high',
-    mitigation: 'Diversify traffic sources',
-    },
-    {
-    type: 'affiliate',
-    description: 'Revenue concentrated in Amazon Associates',
-    severity: 'medium',
-    mitigation: 'Add CJ and Impact partnerships',
-    },
-    ],
+    dependencies: {},
+    risks: [],
     };
 
     // Set cache headers
