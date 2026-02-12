@@ -6,8 +6,11 @@ import { z } from 'zod';
 
 import { apiRateLimit } from '../middleware/rateLimiter';
 import { extractAndVerifyToken } from '@security/jwt';
+import { getLogger } from '@kernel/logger';
 import { getBillingConfig } from '@config';
 import { getDb } from '../db';
+
+const billingInvoiceExportLogger = getLogger('billingInvoiceExport');
 
 // MEDIUM FIX C2: Replace direct process.env with validated config
 const billingConfig = getBillingConfig();
@@ -188,7 +191,7 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     .header('X-Content-Type-Options', 'nosniff')
     .send(headerRow + body);
   } catch (error) {
-    console.error('[billing-invoice-export] Error:', error);
+    billingInvoiceExportLogger.error('Error exporting invoices', error instanceof Error ? error : new Error(String(error)));
     const errorResponse: ErrorResponse = {
     error: 'Internal server error',
     };

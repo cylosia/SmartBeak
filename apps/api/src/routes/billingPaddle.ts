@@ -9,7 +9,10 @@ import { z } from 'zod';
 import { createPaddleCheckout } from '../billing/paddle';
 import { extractAndVerifyToken } from '@security/jwt';
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
+import { getLogger } from '@kernel/logger';
 import { getDb } from '../db';
+
+const billingPaddleLogger = getLogger('billingPaddle');
 
 const ALLOWED_PADDLE_FIELDS = ['planId'] as const;
 const ALLOWED_PLAN_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -164,7 +167,7 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
     const session = await createPaddleCheckout(orgId, planId);
     return reply.status(200).send(session);
     } catch (error) {
-    console.error('[billing-paddle-checkout] Error:', error);
+    billingPaddleLogger.error('Error in paddle checkout', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     // Categorized error handling with error code checking
     if (error instanceof Error) {

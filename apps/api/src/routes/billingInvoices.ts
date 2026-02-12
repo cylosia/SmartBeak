@@ -3,7 +3,10 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { verifyToken, extractBearerToken as extractTokenFromHeader, TokenExpiredError, TokenInvalidError, } from '@security/jwt';
+import { getLogger } from '@kernel/logger';
 import { getDb } from '../db';
+
+const billingInvoicesLogger = getLogger('billingInvoices');
 
 // Stripe key is validated at startup in config/index.ts
 const stripeKey = process.env['STRIPE_SECRET_KEY'];
@@ -143,7 +146,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     });
     }
 
-    const { limit: _limit, startingAfter } = queryResult.data;
+    const { limit, startingAfter } = queryResult.data;
     const customerId = authReq.user?.stripeCustomerId;
     if (!customerId) {
       return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
@@ -151,6 +154,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
 
     const invoices = await stripe.invoices.list({
     customer: customerId,
+    limit,
     starting_after: startingAfter ?? undefined,
     } as Stripe.InvoiceListParams);
 
@@ -159,7 +163,20 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     hasMore: invoices.has_more,
     });
   } catch (error) {
-    console.error('[billing-invoices] Error:', error);
+    billingInvoicesLogger.error('Error fetching invoices', error instanceof Error ? error : new Error(String(error)));
+
+    if (error instanceof Error) {
+      const errorCode = (error as Error & { code?: string }).code;
+      const isStripeError = errorCode?.startsWith('stripe_') ||
+                  error.message.includes('Stripe') ||
+                  error.name === 'StripeError';
+      if (isStripeError) {
+        return reply.status(502).send({
+          error: 'Payment provider error',
+          code: 'PROVIDER_ERROR',
+        });
+      }
+    }
 
     return reply.status(500).send({
     error: 'Internal server error',

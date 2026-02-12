@@ -11,6 +11,7 @@ const logger = getLogger('billing');
 
 const IDEMPOTENCY_PREFIX = 'idempotency:billing:';
 const IDEMPOTENCY_TTL_SECONDS = 3600; // 1 hour
+const IDEMPOTENCY_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export interface Plan {
   id: string;
@@ -52,6 +53,7 @@ export interface IdempotencyEntry {
   status: string;
   result?: unknown;
   error?: string;
+  startedAt?: number;
 }
 
 /**
@@ -90,7 +92,13 @@ export class BillingService {
     }
     const entry: IdempotencyEntry = JSON.parse(data);
     if (entry.status === 'processing') {
-    return { exists: true, error: 'Operation still in progress' };
+      const elapsed = Date.now() - (entry.startedAt ?? 0);
+      if (elapsed < IDEMPOTENCY_PROCESSING_TIMEOUT_MS) {
+        return { exists: true, error: 'Operation still in progress' };
+      }
+      logger.warn('Idempotency processing timeout exceeded, allowing retry', { key, elapsed });
+      await redis.del(`${IDEMPOTENCY_PREFIX}${key}`);
+      return { exists: false };
     }
     return {
       exists: true,
@@ -101,10 +109,14 @@ export class BillingService {
 
   private async setIdempotencyStatus(key: string, status: string, result?: unknown, error?: string): Promise<void> {
     const redis = await getRedis();
+    const entry: IdempotencyEntry = { status, result, error };
+    if (status === 'processing') {
+      entry.startedAt = Date.now();
+    }
     await redis.setex(
-    `${IDEMPOTENCY_PREFIX}${key}`,
-    IDEMPOTENCY_TTL_SECONDS,
-    JSON.stringify({ status, result, error })
+      `${IDEMPOTENCY_PREFIX}${key}`,
+      IDEMPOTENCY_TTL_SECONDS,
+      JSON.stringify(entry)
     );
   }
 

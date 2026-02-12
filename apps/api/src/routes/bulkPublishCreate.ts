@@ -6,6 +6,7 @@ import { getLogger } from '@kernel/logger';
 
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing-related operations
 import { extractAndVerifyToken, type JwtClaims } from '@security/jwt';
+import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { getDb } from '../db';
 
 // P1-FIX: getDb() is async and must be awaited
