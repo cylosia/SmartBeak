@@ -62,9 +62,9 @@ function sanitizeCsvCell(value: string): string {
   // Escape double quotes
   sanitized = sanitized.replace(/"/g, '""');
 
-  // Wrap in quotes if contains special characters
+  // P2-FIX: Wrap in double quotes per RFC 4180 (was using single quotes)
   if (sanitized.includes(',') || sanitized.includes('\n') || sanitized.includes('"')) {
-  sanitized = `'${sanitized}'`;
+  sanitized = `"${sanitized}"`;
   }
 
   return sanitized;
@@ -146,7 +146,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM activity_log
         WHERE org_id = $1
         AND deleted_at IS NULL`;
-  const params: (string | number)[] = [auth["orgId"] || auth.userId];
+  // P2-FIX: Require orgId — previously fell back to userId which queried wrong tenant
+  if (!auth["orgId"]) {
+    return sendError(res, 400, 'Organization context is required for exports');
+  }
+  const params: (string | number)[] = [auth["orgId"]];
   let paramIndex = 2;
 
   if (domainId) {
@@ -185,7 +189,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       batchParams.push(lastTimestamp);
     }
 
-    batchQuery += ` LIMIT ${BATCH_SIZE}`;
+    // P1-FIX: Use parameterized LIMIT instead of string interpolation
+    batchQuery += ` LIMIT $${batchParamIndex++}`;
+    batchParams.push(BATCH_SIZE);
 
     const batchResult = await pool.query(batchQuery, batchParams);
     const batchRows = batchResult.rows;

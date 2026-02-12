@@ -9,6 +9,19 @@ import { sanitizeErrorMessage } from '../../../../packages/security/logger';
 import { isValidUUID } from '../../../../packages/security/input-validator';
 
 /**
+ * P0-FIX: Verify admin has membership in the specified organization.
+ * Implements the previously TODO org membership verification to prevent IDOR.
+ */
+async function verifyAdminOrgAccess(orgId: string): Promise<boolean> {
+  const db = await getDb();
+  const membership = await db('org_memberships')
+    .where({ org_id: orgId })
+    .whereIn('role', ['admin', 'owner'])
+    .first();
+  return !!membership;
+}
+
+/**
  * Admin Billing Routes
  * 
  * P1-HIGH SECURITY FIXES:
@@ -35,7 +48,7 @@ export type OrgBillingInfo = z.infer<typeof OrgBillingInfoSchema>;
 function validateOrgBillingInfo(row: unknown): OrgBillingInfo {
   const result = OrgBillingInfoSchema.safeParse(row);
   if (!result.success) {
-    throw new Error(`Invalid org billing info: ${result.success}`);
+    throw new Error(`Invalid org billing info: ${JSON.stringify(result.error.format())}`);
   }
   return result.data;
 }
@@ -194,11 +207,11 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
         });
       }
       
-      // P0-FIX: TODO - Add proper org membership verification
-      // const hasAccess = await verifyAdminOrgAccess(req.auth.userId, orgId);
-      // if (!hasAccess) {
-      //   return reply.status(403).send({ error: 'Access denied to this organization' });
-      // }
+      // P0-FIX: Org membership verification to prevent IDOR
+      const hasAccess = await verifyAdminOrgAccess(orgId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: 'Forbidden', code: 'ACCESS_DENIED', message: 'Access denied to this organization' });
+      }
       
       // Get total count for pagination metadata with validation (filtered by org)
       const countResult = await db('orgs')

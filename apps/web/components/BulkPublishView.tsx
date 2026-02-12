@@ -1,6 +1,17 @@
 
 import React, { useState } from 'react';
-export function BulkPublishView({ drafts, onPublish }: any) {
+
+interface Draft {
+  id: string;
+  title: string;
+}
+
+interface BulkPublishViewProps {
+  drafts: Draft[];
+  onPublish: (selectedIds: string[]) => void;
+}
+
+export function BulkPublishView({ drafts, onPublish }: BulkPublishViewProps) {
   const [selected, setSelected] = useState<string[]>([]);
 
   function toggle(id: string) {
@@ -12,11 +23,11 @@ export function BulkPublishView({ drafts, onPublish }: any) {
   return (
   <div>
     <h2>Bulk Publish</h2>
-    {drafts.map((d: any) => (
-    <label key={d["id"]}>
+    {drafts.map((d) => (
+    <label key={d.id}>
       <input
       type='checkbox'
-      onChange={() => toggle(d["id"])}
+      onChange={() => toggle(d.id)}
       />
       {d.title}
     </label>

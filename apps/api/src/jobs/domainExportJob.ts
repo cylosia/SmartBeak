@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import path from 'path';
 import { TIME } from '@kernel/constants';
 import { getDb } from '../db';
 import { randomUUID } from 'crypto';
@@ -148,7 +149,8 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
     }
   }
 }
-const dbModuleCache = createModuleCache(() => import('../../../web/lib/db'));
+// H07-FIX: Import from @database package instead of cross-app relative import
+const dbModuleCache = createModuleCache(() => import('@database'));
 async function exportContent(domainId: string, dateRange?: { start: string; end: string }) {
   const { pool } = await dbModuleCache.get();
 
@@ -329,6 +331,10 @@ function escapeCSVValue(val: unknown) {
     return '';
   }
   const str = String(val);
+  // A03-FIX: Prevent CSV formula injection by prefixing dangerous characters
+  if (/^[+=\-@]/.test(str)) {
+    return `'${str}`;
+  }
   // Escape values containing commas, quotes, or newlines
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return '"' + str.replace(/"/g, '""') + '"';
@@ -382,8 +388,15 @@ async function saveExport(data: Buffer | string, destination: DomainExportInput[
       if (!destination.path) {
         throw new Error('Local path required for local export');
       }
-      const localPath = `${destination.path}/${exportId}.${format}`;
-      const { writeFile } = await import('fs/promises');
+      // C04-FIX: Prevent path traversal — resolve and validate against allowed base dir
+      const ALLOWED_EXPORT_BASE = process.env['EXPORT_BASE_DIR'] || '/tmp/exports';
+      const resolvedPath = path.resolve(destination.path, `${exportId}.${format}`);
+      if (!resolvedPath.startsWith(path.resolve(ALLOWED_EXPORT_BASE))) {
+        throw new Error('Invalid export path: path traversal detected');
+      }
+      const localPath = resolvedPath;
+      const { writeFile, mkdir } = await import('fs/promises');
+      await mkdir(path.dirname(localPath), { recursive: true });
       await writeFile(localPath, buffer);
       return {
         exportId,

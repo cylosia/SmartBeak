@@ -1,6 +1,20 @@
 
 import React from 'react';
-export function BuyerSeoReportView({ report }: any) {
+
+interface BuyerSeoReport {
+  domain: string;
+  completeness_score: number;
+  page_count: number;
+  cluster_count: number;
+  freshness_ratio: number;
+  notes: string[];
+}
+
+interface BuyerSeoReportViewProps {
+  report: BuyerSeoReport;
+}
+
+export function BuyerSeoReportView({ report }: BuyerSeoReportViewProps) {
   return (
   <div>
     <h2>SEO Buyer Report</h2>
@@ -13,7 +27,7 @@ export function BuyerSeoReportView({ report }: any) {
     </ul>
     <h4>Notes</h4>
     <ul>
-    {report.notes.map((n: string, i: number) => <li key={i}>{n}</li>)}
+    {report.notes.map((n, i) => <li key={`note-${i}`}>{n}</li>)}
     </ul>
   </div>
   );

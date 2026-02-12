@@ -152,6 +152,7 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
 /**
 * Register the experiment start job with the scheduler
 */
+// P1-ARCHITECTURE FIX: Wire handler to call experimentStartJob instead of throwing
 export function registerExperimentStartJob(scheduler: JobScheduler): void {
   scheduler.register(
   {
@@ -161,9 +162,8 @@ export function registerExperimentStartJob(scheduler: JobScheduler): void {
     maxRetries: 2,
     timeout: 60000,
   },
-  async (_data: unknown, _job) => {
-    // Job handler implemented separately
-    throw new Error('Handler not implemented - use experimentStartJob function');
+  async (data: unknown, _job) => {
+    await experimentStartJob(data);
   }
   );
 }

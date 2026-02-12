@@ -9,6 +9,9 @@ import { z } from 'zod';
 
 import { createStripeCheckoutSession } from '../billing/stripe';
 import { extractAndVerifyToken } from '@security/jwt';
+import { getLogger } from '../../../packages/kernel/logger';
+
+const billingStripeLogger = getLogger('billingStripe');
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { 
   generateCsrfToken as generateSecureCsrfToken,
@@ -52,39 +55,30 @@ async function generateBillingCsrfToken(orgId: string): Promise<string> {
   return token;
 }
 
-/**
-* Store CSRF token with org association (deprecated - use generateBillingCsrfToken)
-* Kept for API compatibility
-*/
-function storeCsrfToken(token: string, orgId: string): void {
-  // No-op: storage now happens in generateBillingCsrfToken
-  // This function is kept for backward compatibility
-}
 
 /**
 * Validate CSRF token for org
-* CRITICAL-FIX: Now uses Redis for validation instead of in-memory Map
+* CRITICAL-FIX: Atomic get-validate-delete via Lua script to prevent race conditions.
+* Without atomicity, two concurrent requests can both validate the same token.
 */
 async function validateBillingCsrfToken(token: string, orgId: string): Promise<boolean> {
   const redis = await getRedis();
   const key = `${BILLING_CSRF_PREFIX}${token}`;
-  
-  const data = await redis.get(key);
-  if (!data) {
-    return false;
-  }
-  
+
+  // Atomic get-validate-delete: returns 1 if valid (and deletes), 0 otherwise
+  const luaScript = `
+    local data = redis.call('GET', KEYS[1])
+    if not data then return 0 end
+    local ok, record = pcall(cjson.decode, data)
+    if not ok then return 0 end
+    if record.orgId ~= ARGV[1] then return 0 end
+    redis.call('DEL', KEYS[1])
+    return 1
+  `;
+
   try {
-    const record = JSON.parse(data);
-    
-    // Verify org association
-    if (record.orgId !== orgId) {
-      return false;
-    }
-    
-    // Token is valid - delete it (one-time use)
-    await redis.del(key);
-    return true;
+    const result = await redis.eval(luaScript, 1, key, orgId);
+    return result === 1;
   } catch {
     return false;
   }
@@ -265,7 +259,7 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.send({ url: session["url"] });
     } catch (error) {
-    console.error('[billing-stripe-checkout] Error:', error);
+    billingStripeLogger.error('Error in stripe checkout', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     // Categorized error handling with error code checking
     if (error instanceof Error) {

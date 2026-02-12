@@ -1,15 +1,16 @@
 
-
-
-import { LRUCache } from 'lru-cache';
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
+import { getRedis } from '@kernel/redis';
 
 import { StripeAdapter } from './stripe';
 
 const logger = getLogger('billing');
+
+const IDEMPOTENCY_PREFIX = 'idempotency:billing:';
+const IDEMPOTENCY_TTL_SECONDS = 3600; // 1 hour
 
 export interface Plan {
   id: string;
@@ -49,16 +50,9 @@ export interface ActivePlanResult {
 
 export interface IdempotencyEntry {
   status: string;
-  result?: unknown | undefined;
-  error?: string | undefined;
+  result?: unknown;
+  error?: string;
 }
-
-const idempotencyStore = new LRUCache<string, IdempotencyEntry>({
-  max: 1000,
-  ttl: 1000 * 60 * 60,
-  updateAgeOnGet: true,
-  updateAgeOnHas: true,
-});
 
 /**
 * Billing Service
@@ -83,22 +77,29 @@ export class BillingService {
   }
 
   private generateIdempotencyKey(orgId: string, operation: string): string {
-    return `${operation}:${orgId}:${Date.now().toString(36)}`;
+    return `${operation}:${orgId}:${randomUUID()}`;
   }
 
-  private async checkIdempotency(key: string): Promise<{ exists: boolean; result?: unknown | undefined; error?: string | undefined }> {
-    const entry = idempotencyStore.get(key);
-    if (!entry) {
+  private async checkIdempotency(key: string): Promise<{ exists: boolean; result?: unknown; error?: string }> {
+    const redis = await getRedis();
+    const data = await redis.get(`${IDEMPOTENCY_PREFIX}${key}`);
+    if (!data) {
     return { exists: false };
     }
+    const entry: IdempotencyEntry = JSON.parse(data);
     if (entry.status === 'processing') {
     return { exists: true, error: 'Operation still in progress' };
     }
-    return { exists: true, result: entry['result'], error: entry['error'] };
+    return { exists: true, result: entry.result, error: entry.error };
   }
 
   private async setIdempotencyStatus(key: string, status: string, result?: unknown, error?: string): Promise<void> {
-    idempotencyStore.set(key, { status, result: result as unknown, error: error as string | undefined });
+    const redis = await getRedis();
+    await redis.setex(
+    `${IDEMPOTENCY_PREFIX}${key}`,
+    IDEMPOTENCY_TTL_SECONDS,
+    JSON.stringify({ status, result, error })
+    );
   }
 
   private async compensateStripe(customerId?: string, subscriptionId?: string): Promise<void> {
@@ -204,9 +205,9 @@ export class BillingService {
 
     try {
     const { rows } = await this.pool.query<ActivePlanResult>(
-        `SELECT p.*, s["id"] as subscription_id, s.status as subscription_status
+        `SELECT p.*, s.id as subscription_id, s.status as subscription_status
         FROM subscriptions s
-        JOIN plans p ON p["id"] = s.plan_id
+        JOIN plans p ON p.id = s.plan_id
         WHERE s.org_id = $1
         AND s.status = 'active'
         ORDER BY s.created_at DESC
