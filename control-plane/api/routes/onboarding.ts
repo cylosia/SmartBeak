@@ -4,12 +4,16 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { OnboardingService } from '../../services/onboarding';
+import { getLogger } from '../../../packages/kernel/logger';
+import { OnboardingService, OnboardingStep } from '../../services/onboarding';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 
+const logger = getLogger('Onboarding');
+
+// SECURITY FIX (H02): Validate step at route boundary with enum instead of loose string
 const StepParamsSchema = z.object({
-  step: z.string().min(1).max(100),
+  step: z.enum(['profile', 'billing', 'team']),
 });
 
 export type AuthenticatedRequest = FastifyRequest & {
@@ -46,16 +50,17 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
-    await rateLimit('onboarding', 50);
+    // SECURITY FIX (C03): Use per-user identifier instead of global static string
+    await rateLimit(`onboarding:${ctx.userId}`, 50);
 
     const status = await onboarding.get(ctx["orgId"]);
     return res.send(status);
   } catch (error) {
-    console["error"]('[onboarding] Error:', error);
-    // FIX: Added return before reply.send()
+    // SECURITY FIX (H04): Use structured logger instead of console.error
+    logger.error('[onboarding] Error', error instanceof Error ? error : new Error(String(error)));
+    // SECURITY FIX (H01): Do not expose internal error messages to clients
     return res.status(500).send({
     error: 'Failed to fetch onboarding status',
-    message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
   });
@@ -74,6 +79,7 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
   *         required: true
   *         schema:
   *           type: string
+  *           enum: [profile, billing, team]
   *     responses:
   *       200:
   *         description: Step marked as complete
@@ -92,28 +98,28 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
-    await rateLimit('onboarding', 50);
+    // SECURITY FIX (C03): Use per-user identifier instead of global static string
+    await rateLimit(`onboarding:step:${ctx.userId}`, 50);
 
-    // Validate params
+    // SECURITY FIX (H02): Validate step against enum at route boundary
     const paramsResult = StepParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues
+    return res.status(400).send({
+      error: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      details: paramsResult.error.issues
     });
-    return;
     }
 
     const { step } = paramsResult.data;
-    await onboarding.mark(ctx["orgId"], step as 'billing' | 'profile' | 'team');
+    await onboarding.mark(ctx["orgId"], step);
     return res.send({ ok: true });
   } catch (error) {
-    console["error"]('[onboarding/step] Error:', error);
-    // FIX: Added return before reply.send()
+    // SECURITY FIX (H04): Use structured logger instead of console.error
+    logger.error('[onboarding/step] Error', error instanceof Error ? error : new Error(String(error)));
+    // SECURITY FIX (H01): Do not expose internal error messages to clients
     return res.status(500).send({
     error: 'Failed to mark onboarding step',
-    message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
   });
