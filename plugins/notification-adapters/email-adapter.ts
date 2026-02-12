@@ -1,6 +1,7 @@
-import { 
-  DeliveryAdapter, 
-  SendNotificationInput, 
+import crypto from 'crypto';
+import {
+  DeliveryAdapter,
+  SendNotificationInput,
   DeliveryResult,
   DeliveryAdapterError
 } from '../../packages/types/notifications';
@@ -265,7 +266,8 @@ export class EmailAdapter implements DeliveryAdapter {
       return {
         success: true,
         attemptedAt,
-        deliveryId: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        // P2-SECURITY FIX: Use crypto.randomUUID() instead of Math.random() for unique IDs
+        deliveryId: `email_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`
       };
     } catch (error) {
       return {
@@ -286,15 +288,31 @@ export class EmailAdapter implements DeliveryAdapter {
   * @param to - Recipient email
   * @returns Email payload
   */
+  /**
+  * Escape HTML special characters to prevent XSS injection in email templates.
+  * P0-SECURITY FIX: All user-supplied values must be escaped before HTML interpolation.
+  */
+  private escapeHtml(unsafe: string): string {
+    const escapeMap: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return unsafe.replace(/[&<>"']/g, (c) => escapeMap[c] ?? c);
+  }
+
   private async buildEmailPayload(
     template: string,
     payload: Record<string, unknown>,
     to: string
   ): Promise<EmailPayload> {
-    // Helper function to safely extract string value from payload
+    // P0-SECURITY FIX: All user-supplied values are HTML-escaped to prevent XSS in email bodies
     const getString = (key: string, defaultValue = ''): string => {
       const value = payload[key];
-      return typeof value === 'string' ? value : defaultValue;
+      const raw = typeof value === 'string' ? value : defaultValue;
+      return this.escapeHtml(raw);
     };
 
     // Helper function to safely extract number value from payload
@@ -366,7 +384,8 @@ export class EmailAdapter implements DeliveryAdapter {
       },
     };
 
-    const renderer = templates[template] || templates['welcome'];
+    // P1-SECURITY FIX: Remove silent fallback to 'welcome' template — unknown templates must fail
+    const renderer = templates[template];
     if (!renderer) {
       throw new ExternalAPIError(
         `Unknown email template: ${template}`,
@@ -427,7 +446,8 @@ export class EmailAdapter implements DeliveryAdapter {
 
     try {
       await client.send(command);
-      logger.info('Sent via SES', { to: payload.to });
+      // P1-PII FIX: Redact email addresses from logs to comply with GDPR
+      logger.info('Sent via SES', { recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 });
     } catch (error) {
       throw new ExternalAPIError(
         `SES send failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -475,7 +495,8 @@ export class EmailAdapter implements DeliveryAdapter {
         attachments: payload.attachments,
       });
 
-      logger.info('Sent via SMTP', { to: payload.to });
+      // P1-PII FIX: Redact email addresses from logs
+      logger.info('Sent via SMTP', { recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 });
     } catch (error) {
       throw new ExternalAPIError(
         `SMTP send failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -506,8 +527,10 @@ export class EmailAdapter implements DeliveryAdapter {
       );
     }
 
+    // P1-RESILIENCE FIX: Add timeout to prevent hanging on unresponsive external API
     const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -537,7 +560,8 @@ export class EmailAdapter implements DeliveryAdapter {
       );
     }
 
-    logger.info('Sent via SendGrid', { to: payload.to });
+    // P1-PII FIX: Redact email addresses from logs
+    logger.info('Sent via SendGrid', { recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 });
   }
 
   /**
@@ -560,8 +584,10 @@ export class EmailAdapter implements DeliveryAdapter {
       );
     }
 
+    // P1-RESILIENCE FIX: Add timeout to prevent hanging on unresponsive external API
     const response = await fetch('https://api.postmarkapp.com/email', {
       method: 'POST',
+      signal: AbortSignal.timeout(30000),
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
@@ -586,7 +612,8 @@ export class EmailAdapter implements DeliveryAdapter {
       );
     }
 
-    logger.info('Sent via Postmark', { to: payload.to });
+    // P1-PII FIX: Redact email addresses from logs
+    logger.info('Sent via Postmark', { recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 });
   }
 
   /**

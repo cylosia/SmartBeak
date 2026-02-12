@@ -1,47 +1,45 @@
 import { z } from 'zod';
-import jwt from 'jsonwebtoken';
 import { getDb } from '../db';
 import { csrfProtection } from '../middleware/csrf';
+import { apiRateLimit } from '../middleware/rateLimiter';
 import { sanitizeError } from '../utils/sanitizedErrors';
-import { FastifyInstance, FastifyReply } from 'fastify';
+import { extractAndVerifyToken } from '@security/jwt';
+import { FastifyInstance, FastifyReply, FastifyRequest as FRequest, HookHandlerDoneFunction } from 'fastify';
 import { validateExperiment } from '../domain/experiments/validateExperiment';
 import type { FastifyRequest } from 'fastify';
-import type { JwtPayload } from 'jsonwebtoken';
 import { getLogger } from '../../../../packages/kernel/logger';
 
 const logger = getLogger('ExperimentService');
 
+// P1-SECURITY FIX: Replace z.any() with proper variant schema to prevent unconstrained data injection
+const ExperimentVariantSchema = z.object({
+  intent: z.string().min(1).max(100),
+  contentType: z.string().min(1).max(100),
+  name: z.string().max(200).optional(),
+  weight: z.number().min(0).max(1).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+
 const ExperimentBodySchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID'),
-  variants: z.array(z.any()).min(1, 'At least one variant is required')
+  variants: z.array(ExperimentVariantSchema).min(1, 'At least one variant is required').max(20),
 });
+// P1-SECURITY FIX: Use centralized @security/jwt instead of raw jwt.verify
+// Ensures consistent key rotation, clockTolerance, and timing-safe token comparison
 async function verifyAuth(req: FastifyRequest) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  const token = authHeader.slice(7);
-  try {
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured');
-      return null;
-    }
+  const result = extractAndVerifyToken(authHeader);
 
-    const claims = jwt.verify(token, jwtKey, {
-      audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
-      issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
-      algorithms: ['HS256'],
-      clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
-    }) as JwtPayload & { sub?: string; orgId?: string };
-    if (!claims.sub || !claims.orgId) {
-      return null;
-    }
-    return { userId: claims.sub, orgId: claims.orgId };
-  }
-  catch (err) {
+  if (!result.valid || !result.claims) {
     return null;
   }
+
+  const claims = result.claims;
+  if (!claims.sub || !claims.orgId) {
+    return null;
+  }
+
+  return { userId: claims.sub, orgId: claims.orgId };
 }
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {
@@ -81,6 +79,11 @@ async function recordAuditEvent(params: AuditEventParams) {
   }
 }
 export async function experimentRoutes(app: FastifyInstance) {
+  // P1-SECURITY FIX: Add CSRF protection for state-changing operations
+  app.addHook('onRequest', csrfProtection() as (req: FRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  // P1-SECURITY FIX: Add rate limiting to prevent resource exhaustion
+  app.addHook('onRequest', apiRateLimit() as (req: FRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+
   app.post('/experiments', async (req, reply) => {
     const ip = (req as unknown as { ip?: string }).ip || req.socket?.remoteAddress || 'unknown';
 

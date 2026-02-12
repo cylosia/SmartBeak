@@ -1,6 +1,15 @@
 
 import React from 'react';
-export function EmailComplianceHelper({ compliance }: any) {
+
+// P2-TYPE FIX: Replace any props with proper interface
+interface ComplianceData {
+  can_spam_footer?: string;
+  gdpr_notice?: string;
+  unsubscribe_copy?: string;
+  data_usage_summary?: string;
+}
+
+export function EmailComplianceHelper({ compliance }: { compliance: ComplianceData }) {
   return (
   <div>
     <h4>Email Compliance Suggestions</h4>
