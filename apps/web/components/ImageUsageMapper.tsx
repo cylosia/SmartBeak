@@ -1,5 +1,10 @@
 import React from 'react';
-export function ImageUsageMapper({ onMap }: any) {
+
+interface ImageUsageMapperProps {
+  onMap: (platform: string) => void;
+}
+
+export function ImageUsageMapper({ onMap }: ImageUsageMapperProps) {
   return (
   <div>
     <button onClick={() => onMap('web')}>Web</button>

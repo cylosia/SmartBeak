@@ -44,9 +44,10 @@ export class InviteService {
   /**
   * Check for duplicate pending invite
   */
-  private async checkDuplicateInvite(orgId: string, email: string): Promise<void> {
+  private async checkDuplicateInvite(orgId: string, email: string, client?: import('pg').PoolClient): Promise<void> {
   const normalizedEmail = email.toLowerCase().trim();
-  const { rows } = await this.pool.query(
+  const queryable = client || this.pool;
+  const { rows } = await queryable.query(
     'SELECT 1 FROM invites WHERE org_id = $1 AND email = $2 AND status = $3',
     [orgId, normalizedEmail, 'pending']
   );
@@ -58,11 +59,12 @@ export class InviteService {
   /**
   * Check if user is already a member
   */
-  private async checkExistingMembership(orgId: string, email: string): Promise<void> {
+  private async checkExistingMembership(orgId: string, email: string, client?: import('pg').PoolClient): Promise<void> {
   const normalizedEmail = email.toLowerCase().trim();
-  const { rows } = await this.pool.query(
+  const queryable = client || this.pool;
+  const { rows } = await queryable.query(
     `SELECT 1 FROM memberships m
-    JOIN users u ON m.user_id = u["id"]
+    JOIN users u ON m.user_id = u.id
     WHERE m.org_id = $1 AND u.email = $2`,
     [orgId, normalizedEmail]
   );
@@ -88,9 +90,9 @@ export class InviteService {
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
-    // Check for duplicates
-    await this.checkDuplicateInvite(orgId, normalizedEmail);
-    await this.checkExistingMembership(orgId, normalizedEmail);
+    // Check for duplicates within the transaction to prevent TOCTOU races
+    await this.checkDuplicateInvite(orgId, normalizedEmail, client);
+    await this.checkExistingMembership(orgId, normalizedEmail, client);
 
     await client.query(
     'INSERT INTO invites (id, org_id, email, role, status, created_at) VALUES ($1,$2,$3,$4,$5,NOW())',
@@ -152,7 +154,7 @@ export class InviteService {
   * Audit logging for invite operations
   * MEDIUM FIX: Add correlation IDs and use structured logger
   */
-  private async auditLog(action: string, orgId: string, details: Record<string, any>, requestId?: string): Promise<void> {
+  private async auditLog(action: string, orgId: string, details: Record<string, unknown>, requestId?: string): Promise<void> {
   const correlationId = requestId || this.generateRequestId();
   logger.info(`[AUDIT][invite] ${action}`, {
     ...details,

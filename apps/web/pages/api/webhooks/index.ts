@@ -12,7 +12,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 // Webhook handler registry - lazy loaded
 const handlerCache: Record<string, (req: NextApiRequest, res: NextApiResponse) => Promise<void>> = {};
 
-async function loadHandler(provider: string): Promise<(req: NextApiRequest, res: NextApiResponse) => Promise<void> | null> {
+async function loadHandler(provider: string): Promise<((req: NextApiRequest, res: NextApiResponse) => Promise<void>) | null> {
   if (handlerCache[provider]) {
   return handlerCache[provider];
   }
@@ -33,7 +33,7 @@ async function loadHandler(provider: string): Promise<(req: NextApiRequest, res:
     return handler;
     }
     default:
-    return null as unknown as (req: NextApiRequest, res: NextApiResponse) => Promise<void> | null;
+    return null;
   }
   } catch (error) {
   console.error(`[Webhook] Failed to load handler for ${provider}:`, error);

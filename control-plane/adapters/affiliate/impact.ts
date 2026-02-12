@@ -1,8 +1,9 @@
 import fetch from 'node-fetch';
+import { AbortController } from 'abort-controller';
 
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
 
-﻿
+
 
 
 /**
@@ -52,10 +53,26 @@ export interface ImpactActionDetail extends ImpactAction {
   PayoutRule?: string;
 }
 
+const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds
+
 export class ImpactAdapter implements AffiliateRevenueAdapter {
   readonly provider = 'impact';
   private credentials: ImpactCredentials;
   private baseUrl: string;
+
+  /**
+   * Create a fetch call with timeout via AbortController
+   */
+  private async fetchWithTimeout(url: string, options: import('node-fetch').RequestInit = {}): Promise<import('node-fetch').Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal as any });
+      return res;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 
   constructor(credentials?: Partial<ImpactCredentials>) {
   this.credentials = {
@@ -108,7 +125,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
 
     url.searchParams.append('$expand', 'ActionDetails');
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: this.getAuthHeaders(),
     });
@@ -168,7 +185,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
 
     return reports;
   } catch (error: unknown) {
-    console["error"]('[ImpactAdapter] Error fetching reports:', error instanceof Error ? error.message : String(error));
+    console.error('[ImpactAdapter] Error fetching reports:', error instanceof Error ? error.message : String(error));
     throw error;
   }
   }
@@ -177,7 +194,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
   * Get detailed information about a specific action
   */
   private async getActionDetails(actionId: string): Promise<ImpactActionDetail> {
-  const response = await fetch(`${this.baseUrl}/Actions/${actionId}`, {
+  const response = await this.fetchWithTimeout(`${this.baseUrl}/Actions/${actionId}`, {
     method: 'GET',
     headers: this.getAuthHeaders(),
   });
@@ -222,7 +239,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     }
     url.searchParams.append('PageSize', '1000');
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: this.getAuthHeaders(),
     });
@@ -257,7 +274,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     trackingLink: (c.TrackingLink || undefined) as string | undefined,
     })) as { id: string; name: string; description?: string; status: string; category?: string; currency: string; commissionTerms?: string; trackingLink?: string; }[];
   } catch (error: unknown) {
-    console["error"]('[ImpactAdapter] Error listing campaigns:', error instanceof Error ? error.message : String(error));
+    console.error('[ImpactAdapter] Error listing campaigns:', error instanceof Error ? error.message : String(error));
     throw error;
   }
   }
@@ -278,7 +295,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     const url = new URL(`${this.baseUrl}/Campaigns/${campaignId}/Ads`);
     url.searchParams.append('PageSize', '1000');
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: this.getAuthHeaders(),
     });
@@ -311,7 +328,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     dimensions: (ad.Width && ad.Height ? { width: ad.Width, height: ad.Height } : undefined) as { width: number; height: number; } | undefined,
     })) as { id: string; name: string; type: string; trackingLink: string; landingPageUrl?: string; creativeUrl?: string; dimensions?: { width: number; height: number; }; }[];
   } catch (error: unknown) {
-    console["error"]('[ImpactAdapter] Error getting campaign ads:', error instanceof Error ? error.message : String(error));
+    console.error('[ImpactAdapter] Error getting campaign ads:', error instanceof Error ? error.message : String(error));
     throw error;
   }
   }
@@ -331,7 +348,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     url.searchParams.append('StartDate', startDate.toISOString());
     url.searchParams.append('EndDate', endDate.toISOString());
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: this.getAuthHeaders(),
     });
@@ -356,7 +373,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     currency: data.Revenue?.Currency || 'USD',
     };
   } catch (error: unknown) {
-    console["error"]('[ImpactAdapter] Error getting performance summary:', error instanceof Error ? error.message : String(error));
+    console.error('[ImpactAdapter] Error getting performance summary:', error instanceof Error ? error.message : String(error));
     throw error;
   }
   }
@@ -398,7 +415,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     }
     url.searchParams.append('PageSize', '1000');
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: this.getAuthHeaders(),
     });
@@ -432,7 +449,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     landingPage: (d.LandingPageUrl || undefined) as string | undefined,
     })) as { id: string; name: string; description?: string; code?: string; discount?: string; startDate?: string; endDate?: string; landingPage?: string; }[];
   } catch (error: unknown) {
-    console["error"]('[ImpactAdapter] Error getting deals:', error instanceof Error ? error.message : String(error));
+    console.error('[ImpactAdapter] Error getting deals:', error instanceof Error ? error.message : String(error));
     throw error;
   }
   }
@@ -456,7 +473,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     }
     url.searchParams.append('PageSize', '1000');
 
-    const response = await fetch(url.toString(), {
+    const response = await this.fetchWithTimeout(url.toString(), {
     method: 'GET',
     headers: this.getAuthHeaders(),
     });
@@ -488,11 +505,17 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     endDate: (p.EndDate || undefined) as string | undefined,
     })) as { id: string; code: string; campaignId: string; campaignName: string; status: string; startDate?: string; endDate?: string; }[];
   } catch (error: unknown) {
-    console["error"]('[ImpactAdapter] Error getting promo codes:', error instanceof Error ? error.message : String(error));
+    console.error('[ImpactAdapter] Error getting promo codes:', error instanceof Error ? error.message : String(error));
     throw error;
   }
   }
 }
 
-// Backward-compatible default export
-export const impactAdapter = new ImpactAdapter();
+// Lazy initialization to prevent crash on import when env vars are missing
+let _impactAdapter: ImpactAdapter | null = null;
+export function getImpactAdapter(): ImpactAdapter {
+  if (!_impactAdapter) {
+    _impactAdapter = new ImpactAdapter();
+  }
+  return _impactAdapter;
+}

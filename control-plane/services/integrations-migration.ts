@@ -23,6 +23,16 @@ export interface MigrateCentralizedProvidersResult {
 }
 
 /**
+ * Database interface for migration operations
+ */
+export interface MigrationDb {
+  org_integrations: {
+    findOne(criteria: { org_id: string; provider: string }): Promise<unknown | null>;
+    insert(record: { org_id: string; provider: string; encrypted_api_key: string; status: string; last_verified_at: Date }): Promise<void>;
+  };
+}
+
+/**
 * Safely migrates existing centralized provider credentials into
 * org_integrations (never domain_integrations).
 * Idempotent by provider.
@@ -31,7 +41,7 @@ export interface MigrateCentralizedProvidersResult {
 * @returns Promise resolving to migration result
 */
 export async function migrateCentralizedProviders(
-  db: any,
+  db: MigrationDb,
   input: MigrateCentralizedProvidersInput
 ): Promise<MigrateCentralizedProvidersResult> {
   // Validate inputs
