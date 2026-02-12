@@ -28,7 +28,11 @@ const logger = getLogger('jwt');
 // Zod Schemas
 // ============================================================================
 
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer']);
+// P0-FIX: Added 'owner' role. Previously this schema only had ['admin', 'editor', 'viewer'],
+// while packages/security/auth.ts had ['viewer', 'editor', 'admin', 'owner']. This drift
+// caused tokens with role:"owner" to be rejected by verifyToken() (Zod validation failure),
+// silently locking org owners out of any code path using jwt.ts for verification.
+export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner']);
 
 export const JwtClaimsSchema = z.object({
   sub: z.string().min(1).max(256),

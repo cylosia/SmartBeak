@@ -551,38 +551,34 @@ export class AuditLogger extends EventEmitter {
   /**
   * Calculate hash for tamper detection
   * SECURITY FIX: Include all fields in hash calculation for complete tamper detection
+  *
+  * P0-FIX: Removed the array replacer argument from JSON.stringify. The previous
+  * implementation passed Object.keys({...}).sort() as a replacer, which is an array
+  * of top-level key names. Per the JSON.stringify spec, an array replacer filters
+  * properties RECURSIVELY at all nesting levels — so nested properties like
+  * actor.email, actor.ip, actor.userAgent, resource.name, and arbitrary keys in
+  * details/changes were silently excluded from the hash. This meant an attacker
+  * could tamper with those fields without breaking the hash chain.
+  *
+  * The sortKeys() helper already provides deterministic key ordering for nested
+  * objects, so no replacer is needed.
   */
   private calculateHash(event: Omit<AuditEvent, 'hash'>): string {
-  // SECURITY FIX: Include all fields including severity, sessionId, requestId, changes
   const data = JSON.stringify({
-    id: event.id,
-    timestamp: event.timestamp,
-    type: event.type,
-    severity: event.severity, // SECURITY FIX: Include severity in hash
+    action: event.action,
     actor: this.sortKeys(event.actor),
-    resource: this.sortKeys(event.resource),
-    action: event.action,
-    result: event.result,
+    changes: event.changes ? this.sortKeys(event.changes) : undefined,
     details: this.sortKeys(event.details),
-    changes: event.changes ? this.sortKeys(event.changes) : undefined, // SECURITY FIX: Include changes
-    sessionId: event.sessionId, // SECURITY FIX: Include sessionId
-    requestId: event.requestId, // SECURITY FIX: Include requestId
-    previousHash: event.previousHash,
-  }, Object.keys({
     id: event.id,
+    previousHash: event.previousHash,
+    requestId: event.requestId,
+    resource: this.sortKeys(event.resource),
+    result: event.result,
+    sessionId: event.sessionId,
+    severity: event.severity,
     timestamp: event.timestamp,
     type: event.type,
-    severity: undefined,
-    actor: undefined,
-    resource: undefined,
-    action: event.action,
-    result: event.result,
-    details: undefined,
-    changes: undefined,
-    sessionId: undefined,
-    requestId: undefined,
-    previousHash: event.previousHash,
-  }).sort());
+  });
 
   return crypto.createHash('sha256').update(data).digest('hex');
   }

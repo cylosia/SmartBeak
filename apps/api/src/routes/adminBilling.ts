@@ -9,10 +9,18 @@ import { sanitizeErrorMessage } from '../../../../packages/security/logger';
 import { isValidUUID } from '../../../../packages/security/input-validator';
 
 /**
- * P0-FIX: Verify admin has membership in the specified organization.
- * Implements the previously TODO org membership verification to prevent IDOR.
+ * P0-FIX: Verify the specified organization exists and has active admin membership.
+ *
+ * SECURITY NOTE: These admin routes use a shared ADMIN_API_KEY (not per-user JWT),
+ * so we cannot verify *which* admin is requesting. This function ensures the target
+ * org_id is valid and has at least one admin member, preventing enumeration of
+ * non-existent org IDs. For per-user access control, migrate to JWT-based auth
+ * on admin routes so the requesting user's membership can be verified.
  */
 async function verifyAdminOrgAccess(orgId: string): Promise<boolean> {
+  if (!isValidUUID(orgId)) {
+    return false;
+  }
   const db = await getDb();
   const membership = await db('org_memberships')
     .where({ org_id: orgId })
@@ -273,7 +281,17 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
           message: 'Invalid organization ID format',
         });
       }
-      
+
+      // P0-FIX: Org access verification was missing on this endpoint (IDOR)
+      const hasAccess = await verifyAdminOrgAccess(id);
+      if (!hasAccess) {
+        return reply.status(403).send({
+          error: 'Forbidden',
+          code: 'ACCESS_DENIED',
+          message: 'Access denied to this organization',
+        });
+      }
+
       const org = await db('orgs')
         .select('id', 'plan', 'plan_status', 'created_at')
         .where({ id })
