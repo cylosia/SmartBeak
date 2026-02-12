@@ -1,6 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { isValidUUID } from '../../../../packages/security/input-validator';
+import { getLogger } from '../../../../packages/kernel/logger';
+import { adminRateLimit } from '../middleware/rateLimiter';
 import crypto from 'crypto';
 
 const logger = getLogger('adminAudit');
@@ -107,6 +109,8 @@ function isAuditEvent(value: unknown): value is AuditEvent {
 }
 
 export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
+  app.addHook('onRequest', adminRateLimit());
+
   app.addHook('onRequest', async (req, reply) => {
     // Check for admin authentication
     const authHeader = req.headers.authorization;

@@ -198,8 +198,14 @@ async function fetchFromAhrefsAPI(domain: string, competitors: string[], apiKey:
           throw new Error('Ahrefs API authentication failed. Please check your API key.');
         case 403:
           throw new Error('Ahrefs API access denied. Your API key may not have permission for this operation.');
-        case 429:
-          throw new Error('Ahrefs API rate limit exceeded. Please try again later.');
+        case 429: {
+          const retryAfter = response.headers.get('retry-after');
+          const error = new Error('Ahrefs API rate limit exceeded. Please try again later.');
+          (error as Error & { retryAfter?: number; retryable?: boolean }).retryAfter =
+            retryAfter ? parseInt(retryAfter, 10) * 1000 : 60000;
+          (error as Error & { retryAfter?: number; retryable?: boolean }).retryable = true;
+          throw error;
+        }
         case 404:
           throw new Error(`Domain '${domain}' not found in Ahrefs database.`);
         case 500:
@@ -312,8 +318,11 @@ async function processKeywordBatches(domain_id: string, phrases: string[], keywo
       // FIX: Use Promise.all for parallel upserts instead of individual sequential upserts (N+1 fix)
       const keywords = await Promise.all(batchInputs.map(input => upsertKeyword(input)));
       // Map results to KeywordGap format using real data from API
-      const batchResults = keywords.filter((k): k is NonNullable<typeof k> => k != null).map((k, index) => {
-        const phrase = batch[index]!;
+      // Zip keywords with their original batch phrases before filtering to preserve index alignment
+      const batchResults = keywords
+        .map((k, index) => ({ keyword: k, phrase: batch[index]! }))
+        .filter((entry): entry is { keyword: NonNullable<typeof entry.keyword>; phrase: string } => entry.keyword != null)
+        .map(({ keyword: k, phrase }) => {
         const apiData = keywordDataMap.get(phrase);
         return {
           keyword_id: k.id,

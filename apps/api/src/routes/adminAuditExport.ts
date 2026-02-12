@@ -71,6 +71,7 @@ async function verifyOrgMembership(adminId: string, orgId: string): Promise<bool
   const db = await getDb();
   const membership = await db('org_memberships')
     .where({ user_id: adminId, org_id: orgId })
+    .whereIn('role', ['admin', 'owner'])
     .first();
   return !!membership;
 }

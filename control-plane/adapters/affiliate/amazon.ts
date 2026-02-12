@@ -132,39 +132,59 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
     return response;
     }, { maxRetries: 3 });
 
-    const data = await res.json() as {
-    SearchResult?: {
-    Items?: Array<{
-    ASIN: string;
-    DetailPageURL: string;
-    ItemInfo?: {
-        Title?: { DisplayValue: string };
-    };
-    Images?: {
-        Primary?: {
-        Large?: { URL: string };
-        };
-    };
-    Offers?: {
-        Listings?: Array<{
-        Price?: {
-        Amount: number;
-        Currency: string;
-        };
-        }>;
-    };
-    }>;
-    };
-    };
+    const rawData: unknown = await res.json();
 
-    const products = (data.SearchResult?.Items || []).map(item => ({
-    asin: item.ASIN,
-    title: item.ItemInfo?.Title?.DisplayValue || '',
-    imageUrl: item.Images?.Primary?.Large?.URL,
-    price: item.Offers?.Listings?.[0]?.Price?.Amount,
-    currency: item.Offers?.Listings?.[0]?.Price?.Currency,
-    url: item.DetailPageURL,
-    }));
+    // Runtime validation of Amazon PAAPI response structure
+    const products: Array<{
+    asin: string;
+    title: string;
+    imageUrl?: string;
+    price?: number;
+    currency?: string;
+    url: string;
+    }> = [];
+
+    if (typeof rawData === 'object' && rawData !== null) {
+    const data = rawData as Record<string, unknown>;
+    const searchResult = data['SearchResult'];
+    if (typeof searchResult === 'object' && searchResult !== null) {
+    const sr = searchResult as Record<string, unknown>;
+    const items = sr['Items'];
+    if (Array.isArray(items)) {
+    for (const item of items) {
+        if (typeof item !== 'object' || item === null) continue;
+        const i = item as Record<string, unknown>;
+        if (typeof i['ASIN'] !== 'string' || typeof i['DetailPageURL'] !== 'string') {
+        this.logger.warn('Skipping malformed item in Amazon PAAPI response');
+        continue;
+        }
+        const itemInfo = i['ItemInfo'] as Record<string, unknown> | undefined;
+        const title = (itemInfo?.['Title'] as Record<string, unknown> | undefined)?.['DisplayValue'];
+        const images = i['Images'] as Record<string, unknown> | undefined;
+        const primary = (images?.['Primary'] as Record<string, unknown> | undefined);
+        const large = (primary?.['Large'] as Record<string, unknown> | undefined);
+        const offers = i['Offers'] as Record<string, unknown> | undefined;
+        const listings = offers?.['Listings'];
+        let price: number | undefined;
+        let currency: string | undefined;
+        if (Array.isArray(listings) && listings.length > 0) {
+        const firstListing = listings[0] as Record<string, unknown> | undefined;
+        const priceObj = firstListing?.['Price'] as Record<string, unknown> | undefined;
+        if (typeof priceObj?.['Amount'] === 'number') price = priceObj['Amount'];
+        if (typeof priceObj?.['Currency'] === 'string') currency = priceObj['Currency'];
+        }
+        products.push({
+        asin: i['ASIN'],
+        title: typeof title === 'string' ? title : '',
+        imageUrl: typeof large?.['URL'] === 'string' ? large['URL'] : undefined,
+        price,
+        currency,
+        url: i['DetailPageURL'],
+        });
+    }
+    }
+    }
+    }
 
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('searchProducts', latency, true);
