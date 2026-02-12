@@ -29,6 +29,15 @@ import type { CanaryAdapter } from '../../canaries/types';
  * - P2-5: Class implements CanaryAdapter for compile-time contract enforcement
  * - P3-5: Warn when YouTube returns multiple items for single videoId
  * - P3-6: ApiError now carries truncated response body
+ *
+ * Security audit fixes applied (audit 3):
+ * - P1-1: Token factory return value validated at point-of-use
+ * - P1-2: Token fetched inside retry loop for fresh token on each attempt
+ * - P1-3: AbortController timeout cleared before body parsing in updateMetadata
+ * - P2-1: Zod parse failures use non-retryable status 422 instead of 500
+ * - P2-6: errorBody passed to ApiError in updateMetadata error paths
+ * - P3-4: sanitizeVideoIdForLog returns '<invalid>' on empty result
+ * - P3-8: YouTube 403 reason field sanitized before interpolation
  */
 
 /**
@@ -119,7 +128,9 @@ const VALID_VIDEO_PARTS = new Set([
 const MAX_VIDEO_ID_LOG_LENGTH = 20;
 
 function sanitizeVideoIdForLog(videoId: string): string {
-  return videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
+  // P3-4 FIX (audit 3): Return placeholder when sanitization strips all chars
+  const sanitized = videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
+  return sanitized || '<invalid>';
 }
 
 /** P2-5 FIX: Explicit implements CanaryAdapter for compile-time contract enforcement */
@@ -161,8 +172,13 @@ export class YouTubeAdapter implements CanaryAdapter {
     this.logger.info('Updating YouTube video metadata', context, { videoId: sanitizeVideoIdForLog(videoId) });
     const startTime = Date.now();
     try {
-      const accessToken = await this.getAccessToken();
       const data = await withRetry(async () => {
+        // P1-2 FIX (audit 3): Token fetched inside retry so factory can
+        // provide a fresh token on each attempt (e.g., after 429 backoff).
+        const accessToken = await this.getAccessToken();
+        // P1-1 FIX (audit 3): Validate factory-returned token to prevent
+        // silent `Bearer ` / `Bearer null` Authorization headers.
+        validateNonEmptyString(accessToken, 'accessToken');
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
         try {
@@ -195,19 +211,30 @@ export class YouTubeAdapter implements CanaryAdapter {
 
             if (response.status === 429) {
               const retryAfter = response.headers.get('retry-after') || undefined;
-              throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter);
+              // P2-6 FIX (audit 3): Pass errorBody for debugging parity with getVideo
+              throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter, errorBody);
             }
 
+            // P2-6 FIX (audit 3): Pass errorBody for debugging parity with getVideo
             throw new ApiError(
               `YouTube metadata update failed: ${response.status} ${response.statusText}`,
               response.status,
+              undefined,
+              errorBody,
             );
           }
 
+          // P1-3 FIX (audit 3): Clear timeout before parsing body. For non-idempotent
+          // PUT operations, an abort during json() would trigger a retry of a mutation
+          // that already succeeded on the server. Clearing here means only the network
+          // request phase is abortable, not the body parsing phase.
+          clearTimeout(timeoutId);
           const rawData: unknown = await response.json();
           const parsed = YouTubeVideoResponseSchema.safeParse(rawData);
           if (!parsed.success) {
-            throw new ApiError('Invalid response format from YouTube API', 500);
+            // P2-1 FIX (audit 3): Use 422 (non-retryable) instead of 500 for schema
+            // validation failures. Retrying won't change the response shape.
+            throw new ApiError('Invalid response format from YouTube API', 422);
           }
           return parsed.data;
         } finally {
@@ -246,8 +273,11 @@ export class YouTubeAdapter implements CanaryAdapter {
 
     const startTime = Date.now();
     try {
-      const accessToken = await this.getAccessToken();
       const data = await withRetry(async () => {
+        // P1-2 FIX (audit 3): Token fetched inside retry for fresh token on each attempt
+        const accessToken = await this.getAccessToken();
+        // P1-1 FIX (audit 3): Validate factory-returned token
+        validateNonEmptyString(accessToken, 'accessToken');
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
         try {
@@ -285,7 +315,8 @@ export class YouTubeAdapter implements CanaryAdapter {
           const rawData: unknown = await response.json();
           const parsed = YouTubeVideoListResponseSchema.safeParse(rawData);
           if (!parsed.success) {
-            throw new ApiError('Invalid response format from YouTube API', 500);
+            // P2-1 FIX (audit 3): Use 422 (non-retryable) for schema validation failures
+            throw new ApiError('Invalid response format from YouTube API', 422);
           }
           return parsed.data;
         } finally {
@@ -329,6 +360,8 @@ export class YouTubeAdapter implements CanaryAdapter {
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.short);
     try {
       const accessToken = await this.getAccessToken();
+      // P1-1 FIX (audit 3): Validate factory-returned token
+      validateNonEmptyString(accessToken, 'accessToken');
       const res = await fetch(`${this.baseUrl}/channels?part=id&mine=true`, {
         method: 'GET',
         headers: {
@@ -357,7 +390,9 @@ export class YouTubeAdapter implements CanaryAdapter {
         let reason = 'forbidden';
         try {
           const body = JSON.parse(responseBody) as { error?: { errors?: Array<{ reason?: string }> } };
-          reason = body?.error?.errors?.[0]?.reason ?? 'forbidden';
+          // P3-8 FIX (audit 3): Sanitize reason to prevent log injection
+          const rawReason = body?.error?.errors?.[0]?.reason;
+          reason = rawReason ? rawReason.replace(/[^\w]/g, '_').slice(0, 50) : 'forbidden';
         } catch { /* unparseable body */ }
         return {
           healthy: false,

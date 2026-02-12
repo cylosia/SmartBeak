@@ -362,5 +362,49 @@ describe('YouTubeAdapter', () => {
       const [, options] = fetchMock.mock.calls[0] as [string, Record<string, unknown>];
       expect((options['headers'] as Record<string, string>)['Authorization']).toBe('Bearer async-token');
     });
+
+    // P3-9 FIX (audit 3): Test degenerate factory return values
+    test('rejects empty string from token factory (P1-1 audit 3)', async () => {
+      const { validateNonEmptyString: mockValidate } = await import('../../src/utils/validation');
+      const mockFn = mockValidate as ReturnType<typeof vi.fn>;
+      // First call: videoId validation (pass). Second call: accessToken validation (fail).
+      mockFn.mockImplementationOnce(() => { /* videoId passes */ });
+      mockFn.mockImplementationOnce(() => { throw new Error('accessToken cannot be empty'); });
+
+      const tokenFactory = vi.fn().mockReturnValue('');
+      const adapter = new YouTubeAdapter(tokenFactory);
+      await expect(adapter.getVideo('vid123')).rejects.toThrow('accessToken cannot be empty');
+    });
+
+    test('propagates error when token factory throws (P3-9 audit 3)', async () => {
+      const tokenFactory = vi.fn().mockRejectedValue(new Error('OAuth refresh failed'));
+      const adapter = new YouTubeAdapter(tokenFactory);
+      await expect(adapter.getVideo('vid123')).rejects.toThrow('OAuth refresh failed');
+    });
+
+    // P1-2 FIX (audit 3): Token is fetched inside retry, so factory is called on each attempt
+    test('calls token factory on each retry attempt (P1-2 audit 3)', async () => {
+      const { withRetry: mockRetry } = await import('../../src/utils/retry');
+      const mockRetryFn = mockRetry as ReturnType<typeof vi.fn>;
+      // Simulate 2 retry attempts: first fails, second succeeds
+      let callCount = 0;
+      mockRetryFn.mockImplementationOnce(async (fn: () => Promise<unknown>) => {
+        try { callCount++; await fn(); } catch { /* first attempt fails */ }
+        callCount++;
+        return fn(); // second attempt succeeds
+      });
+
+      const responseBody = { items: [{ id: 'vid789', snippet: { title: 'Test' } }] };
+      // First call returns error, second returns success
+      mockFetchResponse({ error: 'temporary' }, false, 500);
+      mockFetchResponse(responseBody);
+
+      const tokenFactory = vi.fn().mockReturnValue('refreshed-token');
+      const adapter = new YouTubeAdapter(tokenFactory);
+      await adapter.getVideo('vid789');
+
+      // Token factory should be called at least twice (once per retry attempt)
+      expect(tokenFactory.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 });

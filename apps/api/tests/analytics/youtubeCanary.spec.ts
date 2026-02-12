@@ -110,4 +110,30 @@ describe('youtubeCanary', () => {
     expect(result.healthy).toBe(false);
     expect(result.error).toContain('YouTube health check returned unhealthy');
   });
+
+  // P1-4 FIX (audit 3): Test the canary timeout path — previously untested.
+  // This exercises the Promise.race timeout when healthCheck hangs indefinitely.
+  test('returns unhealthy with timeout error when healthCheck hangs (P1-4 audit 3)', async () => {
+    vi.useFakeTimers();
+    try {
+      const adapter = createMockAdapter({
+        // healthCheck never resolves — simulates a hanging adapter
+        healthCheck: vi.fn().mockImplementation(() => new Promise(() => {})),
+      });
+
+      const resultPromise = youtubeCanary(adapter);
+
+      // Advance past the CANARY_TIMEOUT_MS (mocked to 15000)
+      await vi.advanceTimersByTimeAsync(15001);
+
+      const result = await resultPromise;
+
+      expect(result.name).toBe('youtube');
+      expect(result.healthy).toBe(false);
+      expect(result.error).toBe('YouTube canary timed out');
+      expect(result.latency).toBeGreaterThanOrEqual(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
