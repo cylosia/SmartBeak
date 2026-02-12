@@ -13,8 +13,11 @@ export class ListContent {
   status: ContentStatus,
   limit = 20,
   offset = 0,
+  orgId?: string,
   domainId?: string
   ): Promise<ReturnType<ContentRepository['listByStatus']>> {
+  // P0-4 FIX: orgId parameter added for multi-tenant isolation.
+  // Callers MUST pass orgId to scope results to the authenticated tenant.
   return this.repo.listByStatus(
     status,
     Math.min(Math.max(1, limit), MAX_LIMIT),

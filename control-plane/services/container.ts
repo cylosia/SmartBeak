@@ -1,4 +1,3 @@
-import { LRUCache } from 'lru-cache';
 import { Pool } from 'pg';
 
 import { DLQService, RegionWorker } from '@kernel/queue';
@@ -18,7 +17,7 @@ import { PostgresNotificationRepository } from '../../domains/notifications/infr
 import { PostgresPublishAttemptRepository } from '../../domains/publishing/infra/persistence/PostgresPublishAttemptRepository';
 import { PostgresPublishingJobRepository } from '../../domains/publishing/infra/persistence/PostgresPublishingJobRepository';
 import { PostgresSearchDocumentRepository } from '../../domains/search/infra/persistence/PostgresSearchDocumentRepository';
-import { ContentRepository } from '../../domains/content/application/ports/ContentRepository';
+import { PostgresContentRepository } from '../../domains/content/infra/persistence/PostgresContentRepository';
 import { PublishingWorker } from '../../domains/publishing/application/PublishingWorker';
 import { SearchIndexingWorker } from '../../domains/search/application/SearchIndexingWorker';
 import { UsageService } from './usage';
@@ -70,7 +69,10 @@ interface ILinkedInAdapter {
 }
 
 export class Container {
-  private instances = new LRUCache<string, object>({ max: 1000, ttl: 3600000 });
+  // P1-5 FIX: Use a plain Map for singletons — they should never expire.
+  // Previously used LRUCache with 1hr TTL which evicted singletons (Redis, EventBus)
+  // causing orphaned connections and resource leaks after 1 hour of uptime.
+  private instances = new Map<string, object>();
   private config: ContainerConfig;
 
   constructor(config: ContainerConfig) {
@@ -218,12 +220,16 @@ export class Container {
   return this.get('searchIndexingWorker', () => {
     const jobRepo = this.indexingJobRepository;
     const documentRepo = new PostgresSearchDocumentRepository(this.db);
+    // P0-9 FIX: Provide actual ContentRepository instead of null.
+    // Previously passed `null as unknown as ContentRepository` which caused
+    // NPE on any contentRepository method call in SearchIndexingWorker.
+    const contentRepo = new PostgresContentRepository(this.db);
     return new SearchIndexingWorker(
     jobRepo,
     documentRepo,
     this.eventBus,
     this.db,
-    null as unknown as ContentRepository,
+    contentRepo,
     );
   });
   }

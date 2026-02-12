@@ -13,8 +13,15 @@ const VALID_PROVIDERS = ['stripe', 'paddle'];
 // UUID validation regex (for plan IDs that might be UUIDs)
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// URL validation regex
-const URL_REGEX = /^https?:\/\/.+/i;
+// P0-1 FIX: Validate URLs against allowlist of trusted origins to prevent open redirect
+const ALLOWED_ORIGINS = [
+  process.env['NEXT_PUBLIC_APP_URL'],
+  process.env['NEXT_PUBLIC_APP_DOMAIN'],
+].filter(Boolean) as string[];
+
+function isAllowedUrl(url: string): boolean {
+  return ALLOWED_ORIGINS.some(origin => url.startsWith(origin));
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!validateMethod(req, res, ['POST'])) return;
@@ -57,22 +64,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return sendError(res, 400, 'quantity must be an integer between 1 and 100');
   }
 
-  // Validate URLs if provided
+  // P0-1 FIX: Validate URLs against allowlist to prevent open redirect phishing
   if (successUrl !== undefined) {
-    if (typeof successUrl !== 'string' || !URL_REGEX.test(successUrl)) {
-    return sendError(res, 400, 'successUrl must be a valid URL');
+    if (typeof successUrl !== 'string' || !isAllowedUrl(successUrl)) {
+    return sendError(res, 400, 'successUrl must belong to a trusted application origin');
     }
   }
   if (cancelUrl !== undefined) {
-    if (typeof cancelUrl !== 'string' || !URL_REGEX.test(cancelUrl)) {
-    return sendError(res, 400, 'cancelUrl must be a valid URL');
+    if (typeof cancelUrl !== 'string' || !isAllowedUrl(cancelUrl)) {
+    return sendError(res, 400, 'cancelUrl must belong to a trusted application origin');
     }
   }
 
-  // Get origin for default URLs
-  const origin = req.headers.origin || process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
-  const defaultSuccessUrl = `${origin}/portfolio?checkout=success`;
-  const defaultCancelUrl = `${origin}/pricing`;
+  // P1-4 FIX: Never trust req.headers.origin for default URLs — use configured app URL only
+  const appOrigin = process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
+  const defaultSuccessUrl = `${appOrigin}/portfolio?checkout=success`;
+  const defaultCancelUrl = `${appOrigin}/pricing`;
 
   switch (provider) {
     case 'stripe': {
@@ -122,7 +129,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.error('[billing/checkout] Stripe error:', stripeError);
 
       if (stripeError.type === 'StripeInvalidRequestError') {
-      return sendError(res, 400, `Invalid request to payment provider: ${stripeError.message}`);
+      // P1-13 FIX: Do not leak Stripe error details (may contain API key prefixes, config info)
+      return sendError(res, 400, 'Invalid payment request. Please check your plan selection.');
       }
 
       throw stripeError;
