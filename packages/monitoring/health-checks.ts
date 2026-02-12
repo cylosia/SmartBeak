@@ -142,6 +142,8 @@ export class HealthChecksRegistry extends EventEmitter {
     environment: string = process.env['NODE_ENV'] || 'development'
   ) {
     super();
+    // P2-FIX: Increase maxListeners to prevent warnings with >10 health checks
+    this.setMaxListeners(50);
     this.version = version;
     this.environment = environment;
     this.startTime = Date.now();
@@ -202,10 +204,12 @@ export class HealthChecksRegistry extends EventEmitter {
     const start = Date.now();
     const timeoutMs = config.timeoutMs || 5000;
 
+    // P1-FIX: Store timeout ID to clear it and prevent timer leaks
+    let timeoutId: NodeJS.Timeout;
     try {
       // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Health check timeout')), timeoutMs);
+        timeoutId = setTimeout(() => reject(new Error('Health check timeout')), timeoutMs);
       });
 
       // Race between check and timeout
@@ -214,6 +218,7 @@ export class HealthChecksRegistry extends EventEmitter {
         timeoutPromise,
       ]);
 
+      clearTimeout(timeoutId!);
       const latencyMs = Date.now() - start;
       const enrichedResult: HealthCheckResult = {
         ...result,
@@ -226,6 +231,7 @@ export class HealthChecksRegistry extends EventEmitter {
 
       return enrichedResult;
     } catch (error) {
+      clearTimeout(timeoutId!);
       const latencyMs = Date.now() - start;
       const failedResult: HealthCheckResult = {
         name,
@@ -247,24 +253,28 @@ export class HealthChecksRegistry extends EventEmitter {
    * Run all health checks
    */
   async runAllChecks(): Promise<HealthReport> {
-    const checks: HealthCheckResult[] = [];
-    
-    for (const [name, config] of this.checks) {
-      if (config.enabled === false) continue;
-      
-      try {
-        const result = await this.runCheck(name);
-        checks.push(result);
-      } catch (error) {
-        checks.push({
-          name,
-          status: 'unhealthy',
-          message: error instanceof Error ? error.message : String(error),
-          latencyMs: 0,
-          timestamp: new Date().toISOString(),
-        });
+    // P1-FIX: Run all checks in parallel to avoid cascading timeout amplification.
+    // Previously sequential: N checks * 5s timeout = N*5s worst case.
+    const enabledChecks = Array.from(this.checks.entries())
+      .filter(([, config]) => config.enabled !== false);
+
+    const results = await Promise.allSettled(
+      enabledChecks.map(([name]) => this.runCheck(name))
+    );
+
+    const checks: HealthCheckResult[] = results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
       }
-    }
+      const [name] = enabledChecks[index];
+      return {
+        name,
+        status: 'unhealthy' as HealthStatus,
+        message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        latencyMs: 0,
+        timestamp: new Date().toISOString(),
+      };
+    });
 
     // Determine overall status
     let status: HealthStatus = 'healthy';
@@ -531,16 +541,18 @@ export function createExternalApiHealthCheck(
       const response = await fetch(options.url, requestInit);
 
       clearTimeout(timeoutId);
+      // P2-FIX: Consume response body to prevent socket/connection leaks
+      await response.body?.cancel();
       const latencyMs = Date.now() - start;
-      
+
       const expectedStatus = options.expectedStatus || 200;
-      
+
       if (response.status === expectedStatus) {
         return {
           name: options.name,
           status: 'healthy',
           latencyMs,
-          metadata: { 
+          metadata: {
             statusCode: response.status,
             url: options.url,
           },
@@ -553,7 +565,7 @@ export function createExternalApiHealthCheck(
         status: 'unhealthy',
         message: `Unexpected status code: ${response.status} (expected ${expectedStatus})`,
         latencyMs,
-        metadata: { 
+        metadata: {
           statusCode: response.status,
           url: options.url,
         },
@@ -586,8 +598,8 @@ export function createDiskHealthCheck(
     try {
       // Use Node.js fs to check disk space
       const fs = await import('fs').then(m => m.promises);
-      const path = require('path');
-      
+
+      // P1-FIX: Removed require('path') — CJS require() throws in ESM, and it was unused.
       // Get stats for root directory
       const stats = await fs.stat('/');
       
