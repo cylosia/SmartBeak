@@ -8,7 +8,11 @@
  * - Coordinating access to shared resources
  */
 
+import { randomBytes } from 'crypto';
 import { getRedis } from './redis';
+import { getLogger } from './logger';
+
+const redlockLogger = getLogger('redlock');
 
 export interface Lock {
   resource: string;
@@ -34,8 +38,13 @@ const DEFAULT_OPTIONS: Required<LockOptions> = {
 /**
  * Generate a unique lock value using timestamp and random component
  */
+/**
+ * AUDIT-FIX P1-06: Use crypto.randomBytes instead of Math.random() for lock
+ * values. Math.random() is predictable with enough samples, enabling an
+ * attacker to predict lock values and release other processes' locks.
+ */
 function generateLockValue(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${process.pid}`;
+  return `${Date.now()}-${randomBytes(16).toString('hex')}-${process.pid}`;
 }
 
 /**
@@ -205,7 +214,8 @@ export async function withLock<T>(
   } finally {
     // Always release lock, even if function throws
     await releaseLock(lock).catch(err => {
-      console.error(`[redlock] Failed to release lock for ${resource}:`, err);
+      // AUDIT-FIX P2-03: Use structured logger instead of console.error
+      redlockLogger.error(`Failed to release lock for ${resource}`, err instanceof Error ? err : new Error(String(err)));
     });
   }
 }
