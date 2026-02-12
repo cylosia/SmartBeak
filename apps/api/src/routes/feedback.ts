@@ -1,10 +1,9 @@
 import { z } from 'zod';
 import { FastifyInstance } from 'fastify';
 import { getDb } from '../db';
-import jwt from 'jsonwebtoken';
 import type { FastifyRequest } from 'fastify';
-import type { JwtPayload } from 'jsonwebtoken';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
+import { getAuthContext, logAuthEvent } from '@security/jwt';
 
 const logger = getLogger('FeedbackService');
 
@@ -13,33 +12,30 @@ const FeedbackQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional(),
   offset: z.coerce.number().min(0).max(10000).optional()
 });
-async function verifyAuth(req: FastifyRequest) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  const token = authHeader.slice(7);
-  try {
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured');
-      return null;
-    }
 
-    const claims = jwt.verify(token, jwtKey, {
-      audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
-      issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
-      algorithms: ['HS256'],
-      clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
-    }) as JwtPayload & { sub?: string; orgId?: string };
-    if (!claims.sub || !claims.orgId) {
-      return null;
-    }
-    return { userId: claims.sub, orgId: claims.orgId };
-  }
-  catch (err) {
+/**
+ * P0-1 FIX: Use centralized JWT verification from @security/jwt.
+ * Previous implementation only checked JWT_KEY_1, breaking key rotation.
+ * The centralized module supports JWT_KEY_1 + JWT_KEY_2 rotation,
+ * token revocation, constant-time comparison, and Zod claim validation.
+ *
+ * P1-2 FIX: Log auth failures for intrusion detection.
+ */
+function verifyAuth(req: FastifyRequest) {
+  const result = getAuthContext({ authorization: req.headers.authorization });
+
+  if (!result) {
+    // P1-2 FIX: Log failed auth attempts for intrusion detection
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    logAuthEvent('auth_failure', {
+      ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+      path: '/feedback',
+    });
     return null;
   }
+
+  return { userId: result.userId, orgId: result.orgId };
 }
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {
@@ -80,9 +76,10 @@ async function recordAuditEvent(params: AuditEventParams) {
 }
 export async function feedbackRoutes(app: FastifyInstance) {
   app.get('/feedback', async (req, reply) => {
-    const ip = (req as unknown as { ip?: string }).ip || req.socket?.remoteAddress || 'unknown';
+    // P3 FIX: Fastify has req.ip built-in, no double cast needed
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
 
-    const auth = await verifyAuth(req);
+    const auth = verifyAuth(req);
     if (!auth) {
       return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
     }
@@ -109,7 +106,9 @@ export async function feedbackRoutes(app: FastifyInstance) {
       // When domain_id is absent, results must still be scoped to auth.orgId
       const orgScope = auth.orgId;
 
-      await recordAuditEvent({
+      // P2-5 FIX: Fire-and-forget audit event to avoid blocking the request path.
+      // recordAuditEvent already handles its own error logging internally.
+      recordAuditEvent({
         orgId: auth.orgId,
         userId: auth.userId,
         action: 'feedback_list_accessed',
@@ -120,6 +119,8 @@ export async function feedbackRoutes(app: FastifyInstance) {
           offset,
         },
         ip,
+      }).catch((err: unknown) => {
+        logger.error('Audit event fire-and-forget failure', err instanceof Error ? err : new Error(String(err)));
       });
       // Return empty feedback data (placeholder for future implementation)
       // NOTE: When implementing, ALL queries MUST be scoped to orgScope
