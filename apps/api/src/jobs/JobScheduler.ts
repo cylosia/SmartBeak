@@ -305,12 +305,42 @@ export class JobScheduler extends EventEmitter {
     };
     const failedHandler = (job: Job | undefined, err: Error) => {
       this.emit('jobFailed', job, err);
+
+      // I2-FIX: Route to DLQ on final failure (all retries exhausted)
+      // Only record when the job has used all its retry attempts
+      if (job && this.dlqService) {
+        const maxAttempts = job.opts?.attempts || 1;
+        if (job.attemptsMade >= maxAttempts) {
+          const region = (job.data as Record<string, string> | undefined)?.['region'] || 'default';
+          this.dlqService.record(
+            job.id || 'unknown',
+            region,
+            err,
+            job.data,
+            job.attemptsMade
+          ).catch(dlqErr => {
+            logger.error('Failed to record job to DLQ', dlqErr instanceof Error ? dlqErr : new Error(String(dlqErr)));
+          });
+          logger.warn(`Job ${job.id} routed to DLQ after ${job.attemptsMade} attempts`, {
+            jobName: job.name,
+            queue: queueName,
+            error: err.message,
+          });
+        }
+      }
     };
     // P1-FIX: Add worker-level error handler
     const errorHandler = (err: Error) => {
       logger.error(`Worker error in queue ${queueName}`, err);
       this.emit('workerError', queueName, err);
     };
+
+    // I2-FIX: Wire stalled event for monitoring
+    // Stalled jobs that exceed maxStalledCount become failed and hit the failedHandler above
+    worker.on('stalled', (jobId: string) => {
+      logger.warn(`Job ${jobId} stalled in queue ${queueName}`);
+      this.emit('jobStalled', jobId, queueName);
+    });
 
     // Attach and track
     worker.on('completed', completedHandler);

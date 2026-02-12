@@ -1,10 +1,11 @@
 
-import Redis from 'ioredis';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import { getLogger } from '../../../../packages/kernel/logger';
 import { pool } from '../../../lib/db';
 import { getStripe, getStripeWebhookSecret } from '../../../lib/stripe';
+import { STRIPE_API_VERSION, STRIPE_STRICT_API_VERSION } from '../../../../packages/config/stripe';
+import { withCircuitBreaker } from '../../../../packages/kernel/circuit-breakers';
 
 const logger = getLogger('StripeWebhook');
 
@@ -28,8 +29,9 @@ export const config = { api: { bodyParser: false } };
 */
 const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024; // 10MB
 
-// Redis client - P0-FIX: No in-memory fallback in serverless
-let redis: Redis | null = null;
+// I5-FIX: Use shared Redis client instead of creating a duplicate
+// Previously: created its own Redis instance with no prefix and no cluster support
+import { getRedis as getSharedRedis } from '../../../../packages/kernel/redis';
 
 const EVENT_ID_TTL_SECONDS = 86400; // 24 hours
 
@@ -76,37 +78,15 @@ function isAllowedEventType(eventType: string): boolean {
 }
 
 /**
-* Get or create Redis client
-* P0-FIX: Fail fast if REDIS_URL not set (no localhost fallback in serverless)
+* I5-FIX: Get shared Redis client from @kernel/redis
+* Gains key prefix, cluster support, and eliminates duplicate connections.
+* Previously created its own standalone Redis client per Vercel function.
 */
-function getRedis(): Redis | null {
-  if (redis) return redis;
-
-  // P0-FIX: Fail fast if REDIS_URL not set
-  const redisUrl = process.env['REDIS_URL'];
-  if (!redisUrl) {
-    throw new Error('REDIS_URL environment variable is required');
-  }
-
+async function getRedisClient(): Promise<{ set: Function; get: Function } | null> {
   try {
-    redis = new Redis(redisUrl, {
-      retryStrategy: (times) => {
-        if (times > 3) {
-          logger.error('Redis connection failed after retries');
-          return null; // Stop retrying
-        }
-        return Math.min(times * 100, 3000);
-      },
-      maxRetriesPerRequest: 3,
-    });
-
-    redis.on('error', (err) => {
-      logger.error('Redis error', err);
-    });
-
-    return redis;
+    return await getSharedRedis();
   } catch (error) {
-    logger.error('Failed to create Redis client', error as Error);
+    logger.error('Failed to get shared Redis client', error as Error);
     return null;
   }
 }
@@ -116,7 +96,7 @@ function getRedis(): Redis | null {
 * P0-FIX: Fail closed - no in-memory fallback in serverless
 */
 async function isDuplicateEvent(eventId: string): Promise<boolean> {
-  const client = getRedis();
+  const client = await getRedisClient();
   if (!client) {
     // P0-FIX: Fail closed - can't verify deduplication
     logger.error('Redis unavailable, cannot verify deduplication');
@@ -126,7 +106,7 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
   const key = `stripe:processed:${eventId}`;
   try {
     // NX = only set if not exists, EX = expire time
-    const result = await client.set(key, '1', 'EX', EVENT_ID_TTL_SECONDS, 'NX');
+    const result = await (client as any).set(key, '1', 'EX', EVENT_ID_TTL_SECONDS, 'NX');
     return result === null; // null means key already existed
   } catch (error) {
     logger.error('Redis error, cannot verify deduplication', error as Error);
@@ -241,14 +221,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.json({ received: true, ignored: true, eventType: event.type });
   }
 
-  // P1-HIGH FIX: Validate Stripe API version for compatibility
-  const expectedApiVersion = '2023-10-16';
-  if (event.api_version !== expectedApiVersion) {
-    logger.warn('API version mismatch', { 
-      receivedVersion: event.api_version, 
-      expectedVersion: expectedApiVersion 
+  // I3-FIX: Validate Stripe API version using shared constant
+  if (event.api_version !== STRIPE_API_VERSION) {
+    logger.warn('API version mismatch', {
+      receivedVersion: event.api_version,
+      expectedVersion: STRIPE_API_VERSION
     });
-    // Continue processing but log warning - can be changed to reject if strict version control is needed
+    // In strict mode, reject webhooks with mismatched API versions
+    if (STRIPE_STRICT_API_VERSION) {
+      return res.status(400).json({ error: 'Unsupported Stripe API version' });
+    }
   }
 
   // P1-FIX: Timestamp validation to prevent replay attacks
@@ -362,8 +344,11 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
       return;
     }
 
+    // I1-FIX: Wrap Stripe API call in circuit breaker to prevent cascading failures
     const stripeClient = getStripe();
-    const subscription = await stripeClient.subscriptions.retrieve(session.subscription as string);
+    const subscription = await withCircuitBreaker('stripe', () =>
+      stripeClient.subscriptions.retrieve(session.subscription as string)
+    );
 
     await client.query(
       `INSERT INTO subscriptions (

@@ -156,29 +156,13 @@ const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
 // SECURITY FIX (Finding 4): In-memory fallback rate limiter for when Redis is unavailable
 // Prevents brute force attacks even during Redis outages
-const inMemoryRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// T3-FIX: Extracted to separate module for testability
+import { InMemoryRateLimiter } from '../services/in-memory-rate-limit';
+
+const inMemoryRateLimiter = new InMemoryRateLimiter(1000);
 
 function inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
-  const now = Date.now();
-  const entry = inMemoryRateLimitMap.get(key);
-
-  // Periodic cleanup of expired entries (every 100 checks)
-  if (inMemoryRateLimitMap.size > 1000) {
-    for (const [k, v] of inMemoryRateLimitMap) {
-      if (v.resetAt < now) inMemoryRateLimitMap.delete(k);
-    }
-  }
-
-  if (!entry || entry.resetAt < now) {
-    inMemoryRateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, retryAfter: 0 };
-  }
-
-  entry.count++;
-  if (entry.count > max) {
-    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  return { allowed: true, retryAfter: 0 };
+  return inMemoryRateLimiter.check(key, max, windowMs);
 }
 
 app.addHook('onRequest', async (req, reply) => {
@@ -520,6 +504,12 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
   // Alert if there are too many stalled jobs
   if (stalledJobs > 10) {
     throw new Error(`${stalledJobs} stalled jobs detected`);
+  }
+
+  // I4-FIX: Alert on excessive backlog (pending jobs)
+  const PENDING_CRITICAL_THRESHOLD = parseInt(process.env['QUEUE_BACKLOG_CRITICAL'] || '1000', 10);
+  if (pendingJobs > PENDING_CRITICAL_THRESHOLD) {
+    throw new Error(`Queue backlog critical: ${pendingJobs} pending jobs (threshold: ${PENDING_CRITICAL_THRESHOLD})`);
   }
 
   return { stalledJobs, failedJobs, pendingJobs };

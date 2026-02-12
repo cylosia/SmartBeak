@@ -7,6 +7,9 @@
 import { parseIntEnv } from './env';
 
 export const circuitBreakerConfig = {
+  /** I1-FIX: Circuit breakers enabled by default (was disabled) */
+  enabled: process.env['ENABLE_CIRCUIT_BREAKER'] !== 'false',
+
   /** Number of failures before opening circuit */
   failureThreshold: parseIntEnv('CIRCUIT_BREAKER_FAILURE_THRESHOLD', 5),
 

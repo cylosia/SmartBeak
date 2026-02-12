@@ -24,8 +24,22 @@ export function createMockRedis(options: MockRedisOptions = {}) {
       return entry.value;
     }),
 
-    set: vi.fn().mockImplementation(async (key: string, value: string) => {
-      data.set(key, { value, expires: Infinity });
+    set: vi.fn().mockImplementation(async (key: string, value: string, ...args: any[]) => {
+      // T4-FIX: Support SET NX and EX flags for webhook deduplication testing
+      const hasNX = args.includes('NX');
+      const exIndex = args.indexOf('EX');
+      const ttl = exIndex >= 0 ? args[exIndex + 1] : undefined;
+
+      // NX: only set if key does not exist
+      if (hasNX) {
+        const existing = data.get(key);
+        if (existing && (existing.expires === Infinity || existing.expires > Date.now())) {
+          return null; // Key exists — NX fails
+        }
+      }
+
+      const expires = ttl ? Date.now() + ttl * 1000 : Infinity;
+      data.set(key, { value, expires });
       return 'OK';
     }),
 
