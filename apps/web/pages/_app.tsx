@@ -3,6 +3,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { getQueryClient } from '../lib/query-client';
 import { ThemeProvider } from '../lib/theme';
 import '../styles/tokens.css';
@@ -24,7 +25,9 @@ export default function App({ Component, pageProps }: AppProps) {
       <meta name='viewport' content='width=device-width, initial-scale=1' />
       <meta name='description' content='Business control plane for digital assets' />
     </Head>
+    <ErrorBoundary>
     <Component {...pageProps} />
+    </ErrorBoundary>
     <ReactQueryDevtools initialIsOpen={false} />
     </ThemeProvider>
   </QueryClientProvider>

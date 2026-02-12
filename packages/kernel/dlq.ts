@@ -168,7 +168,7 @@ class InMemoryDLQStorage implements DLQStorage {
   }
 
   async peek(limit: number): Promise<DLQMessage[]> {
-  return Array.from(this.messages.values())
+  return [...this.messages.values()]
     .sort((a, b) => new Date(b.failedAt).getTime() - new Date(a.failedAt).getTime())
     .slice(0, limit);
   }

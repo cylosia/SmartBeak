@@ -258,7 +258,7 @@ export class QueryCache {
       });
     }
 
-    return Array.from(tags);
+    return [...tags];
   }
 
   /**
@@ -307,7 +307,7 @@ export class QueryCache {
     }
 
     // Sort entries by lastAccessed (oldest first)
-    const entries = Array.from(this.queryVersions.entries())
+    const entries = [...this.queryVersions.entries()]
       .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
 
     // Evict oldest 10% of entries

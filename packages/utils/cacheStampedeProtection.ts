@@ -128,7 +128,7 @@ class CacheStampedeProtector {
   } {
   return {
     inFlightCount: this.inFlight.size,
-    keys: Array.from(this.inFlight.keys()),
+    keys: [...this.inFlight.keys()],
   };
   }
 

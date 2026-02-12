@@ -120,9 +120,9 @@ function delay(ms: number): Promise<void> {
  * Call this during shutdown to prevent hanging timers
  */
 export function cancelAllDelays(): void {
-  Array.from(activeTimers).forEach((timer) => {
+  for (const timer of activeTimers) {
     clearTimeout(timer);
-  });
+  }
   activeTimers.clear();
 }
 /**

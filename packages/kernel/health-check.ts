@@ -144,7 +144,7 @@ export async function checkAllHealth(): Promise<{
   timestamp: string;
 }> {
   // P1-FIX: Run all checks in parallel to avoid cascading timeout amplification.
-  const healthChecks = Array.from(getMutableHealthChecks().entries());
+  const healthChecks = [...getMutableHealthChecks().entries()];
   const results = await Promise.allSettled(
     healthChecks.map(async ([name, check]) => {
       const result = await check.check();

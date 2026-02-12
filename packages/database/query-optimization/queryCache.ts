@@ -381,7 +381,7 @@ export class DbQueryCache {
    * Get frequently accessed queries
    */
   getHotQueries(limit = 10): Array<{ query: string; accessCount: number }> {
-    return Array.from(this.queryStats.entries())
+    return [...this.queryStats.entries()]
       .sort((a, b) => b[1].accessCount - a[1].accessCount)
       .slice(0, limit)
       .map(([_, stats]) => ({

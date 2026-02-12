@@ -186,14 +186,14 @@ export class BundleAnalyzer {
    * Get total size
    */
   getTotalSize(): number {
-    return Array.from(this.sizes.values()).reduce((sum, m) => sum + m.size, 0);
+    return [...this.sizes.values()].reduce((sum, m) => sum + m.size, 0);
   }
 
   /**
    * Get largest modules
    */
   getLargestModules(limit = 10): BundleSize[] {
-    return Array.from(this.sizes.values())
+    return [...this.sizes.values()]
       .sort((a, b) => b.size - a.size)
       .slice(0, limit);
   }
@@ -227,7 +227,7 @@ export class BundleAnalyzer {
    * Generate bundle report
    */
   generateReport(): BundleReport {
-    const modules = Array.from(this.sizes.values());
+    const modules = [...this.sizes.values()];
     const totalSize = this.getTotalSize();
     const gzipSize = modules.reduce((sum, m) => sum + m.gzipSize, 0);
 
@@ -308,7 +308,7 @@ export class DuplicationDetector {
         // This is a simplified check - real implementation would check versions
         duplications.push({
           module,
-          locations: Array.from(locations),
+          locations: [...locations],
           totalSize: 0, // Would be calculated from actual sizes
           suggestion: `Consolidate '${module}' usage to single location`,
         });
