@@ -1,14 +1,18 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { adminRateLimit } from '../middleware/rateLimiter';
-import { getLogger } from '@kernel/logger';
+import { isValidUUID } from '../../../../packages/security/input-validator';
 import crypto from 'crypto';
 
 const logger = getLogger('adminAudit');
 
 /**
- * P0-FIX: Verify admin has membership in the specified organization.
- * Implements the previously TODO org membership verification to prevent IDOR.
+ * P0-FIX: Verify the specified organization exists and has active admin membership.
+ *
+ * SECURITY NOTE: These admin routes use a shared ADMIN_API_KEY (not per-user JWT),
+ * so we cannot verify *which* admin is requesting. This function ensures the target
+ * org_id is valid and has at least one admin member. For per-user access control,
+ * migrate to JWT-based auth on admin routes.
  */
 async function verifyAdminOrgAccess(userId: string, orgId: string): Promise<boolean> {
   const db = await getDb();
@@ -203,9 +207,10 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       if (!orgId) {
         return reply.status(400).send({ error: 'orgId is required' });
       }
-
-      // Validate UUID format
-      if (!/^[0-9a-f-]{36}$/i.test(orgId)) {
+      
+      // P0-FIX: Use consistent UUID validation (isValidUUID from input-validator)
+      // instead of weak regex that accepts non-UUID 36-char hex strings
+      if (!isValidUUID(orgId)) {
         return reply.status(400).send({ error: 'Invalid orgId format' });
       }
 

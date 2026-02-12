@@ -8,13 +8,22 @@ import { getLogger } from '../../../../packages/kernel/logger';
 
 const logger = getLogger('StripeWebhook');
 
-const stripeKey = process.env['STRIPE_SECRET_KEY'];
-if (!stripeKey) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+// P1-FIX: Lazy-initialize Stripe client. Previously the module threw at import time
+// if STRIPE_SECRET_KEY was missing, crashing the entire process even if billing
+// routes weren't needed for a particular deployment or test run.
+let _stripe: Stripe | undefined;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    const stripeKey = process.env['STRIPE_SECRET_KEY'];
+    if (!stripeKey) {
+      throw new Error('STRIPE_SECRET_KEY environment variable is required');
+    }
+    _stripe = new Stripe(stripeKey, {
+      apiVersion: '2023-10-16'
+    });
+  }
+  return _stripe;
 }
-const stripe = new Stripe(stripeKey, {
-  apiVersion: '2023-10-16'
-});
 
 /**
  * Allowed Stripe event types for this webhook handler
@@ -88,7 +97,7 @@ async function verifyStripeSignatureWithRetry(
 ): Promise<Stripe.Event | null> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const event = stripe.webhooks.constructEvent(payload, signature, secret);
+      const event = getStripe().webhooks.constructEvent(payload, signature, secret);
       return event;
     } catch (error) {
       const err = error as { message?: string };
@@ -188,96 +197,105 @@ async function processEvent(event: Stripe.Event): Promise<void> {
     return;
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const orgId = session.metadata?.['orgId'];
-    const stripeCustomerId = session.customer as string | undefined;
+  // P1-FIX: Changed from if/if/if to switch statement. The previous pattern used
+  // separate `if` blocks (not if/else if), meaning multiple blocks could theoretically
+  // execute for a single event. While Stripe event types are mutually exclusive today,
+  // a switch ensures only one handler runs and makes the mutual exclusivity explicit.
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orgId = session.metadata?.['orgId'];
+      const stripeCustomerId = session.customer as string | undefined;
 
-    if (!orgId || !stripeCustomerId) return;
+      if (!orgId || !stripeCustomerId) return;
 
-    // SECURITY FIX: Verify that the orgId belongs to the Stripe customer
-    const isValidOrg = await verifyOrgBelongsToCustomer(orgId, stripeCustomerId);
-    if (!isValidOrg) {
-      // SECURITY FIX: Issue 22 - Sanitize log message
-      const sanitizedOrgId = orgId.substring(0, 8) + '...';
-      const sanitizedCustomerId = stripeCustomerId.substring(0, 8) + '...';
-      logger.error('Security violation: org does not match Stripe customer', undefined, {
-        orgId: sanitizedOrgId,
-        customerId: sanitizedCustomerId
+      // SECURITY FIX: Verify that the orgId belongs to the Stripe customer
+      const isValidOrg = await verifyOrgBelongsToCustomer(orgId, stripeCustomerId);
+      if (!isValidOrg) {
+        const sanitizedOrgId = orgId.substring(0, 8) + '...';
+        const sanitizedCustomerId = stripeCustomerId.substring(0, 8) + '...';
+        logger.error('Security violation: org does not match Stripe customer', undefined, {
+          orgId: sanitizedOrgId,
+          customerId: sanitizedCustomerId
+        });
+        throw new Error('Org verification failed: orgId does not belong to Stripe customer');
+      }
+
+      const db = await getDb();
+      await db.transaction(async (trx) => {
+        await trx('orgs')
+          .where({ id: orgId })
+          .update({ plan: 'pro', plan_status: 'active' });
+
+        await trx('audit_events').insert({
+          org_id: orgId,
+          actor_type: 'system',
+          action: 'billing_plan_upgraded',
+          metadata: JSON.stringify({ provider: 'stripe', sessionId: session.id })
+        });
       });
-      throw new Error('Org verification failed: orgId does not belong to Stripe customer');
+      break;
     }
 
-    const db = await getDb();
+    case 'customer.subscription.updated': {
+      const sub = event.data.object as Stripe.Subscription;
+      if (sub.cancel_at_period_end) {
+        const db = await getDb();
+        await db('orgs')
+          .where({ stripe_customer_id: sub.customer })
+          .update({ plan_status: 'canceling' });
+      }
+      break;
+    }
 
-    await db.transaction(async (trx) => {
-      await trx('orgs')
-        .where({ id: orgId })
-        .update({ plan: 'pro', plan_status: 'active' });
-
-      await trx('audit_events').insert({
-        org_id: orgId,
-        actor_type: 'system',
-        action: 'billing_plan_upgraded',
-        metadata: JSON.stringify({ provider: 'stripe', sessionId: session.id })
-      });
-    });
-  }
-
-  if (event.type === 'customer.subscription.updated') {
-    const sub = event.data.object as Stripe.Subscription;
-    if (sub.cancel_at_period_end) {
+    case 'customer.subscription.deleted': {
+      const sub = event.data.object as Stripe.Subscription;
       const db = await getDb();
       await db('orgs')
         .where({ stripe_customer_id: sub.customer })
-        .update({ plan_status: 'canceling' });
+        .update({ plan_status: 'cancelled' });
+      break;
     }
-  }
-  
-  if (event.type === 'customer.subscription.deleted') {
-    const sub = event.data.object as Stripe.Subscription;
-    const db = await getDb();
-    await db('orgs')
-      .where({ stripe_customer_id: sub.customer })
-      .update({ plan_status: 'cancelled' });
-  }
 
-  // P1-HIGH FIX: Implement payment failed handler - set org to read-only mode
-  if (event.type === 'invoice.payment_failed') {
-    const invoice = event.data.object as Stripe.Invoice;
-    const customerId = invoice.customer as string;
-    
-    const db = await getDb();
-    
-    await db.transaction(async (trx) => {
-      // Set organization to read-only mode
-      await trx('orgs')
-        .where({ stripe_customer_id: customerId })
-        .update({
-          plan_status: 'past_due',
-          read_only_mode: true,
-          payment_failed_at: new Date(),
-          updated_at: new Date(),
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+
+      const db = await getDb();
+      await db.transaction(async (trx) => {
+        await trx('orgs')
+          .where({ stripe_customer_id: customerId })
+          .update({
+            plan_status: 'past_due',
+            read_only_mode: true,
+            payment_failed_at: new Date(),
+            updated_at: new Date(),
+          });
+
+        await trx('alerts').insert({
+          severity: 'critical',
+          category: 'billing',
+          title: 'Payment Failed',
+          message: `Payment failed for customer ${customerId.substring(0, 8)}...`,
+          metadata: JSON.stringify({
+            invoiceId: invoice.id,
+            amount: invoice.amount_due,
+            customerId: customerId.substring(0, 8) + '...'
+          }),
+          created_at: new Date(),
         });
-      
-      // Create alert for admin
-      await trx('alerts').insert({
-        severity: 'critical',
-        category: 'billing',
-        title: 'Payment Failed',
-        message: `Payment failed for customer ${customerId.substring(0, 8)}...`,
-        metadata: JSON.stringify({ 
-          invoiceId: invoice.id, 
-          amount: invoice.amount_due,
-          customerId: customerId.substring(0, 8) + '...'
-        }),
-        created_at: new Date(),
       });
-    });
-    
-    logger.info('Payment failed - org set to read-only mode', {
-      customerId: customerId.substring(0, 8) + '...'
-    });
+
+      logger.info('Payment failed - org set to read-only mode', {
+        customerId: customerId.substring(0, 8) + '...'
+      });
+      break;
+    }
+
+    default:
+      // Event type was already validated against allowlist in handleStripeWebhookRaw
+      logger.info('Event type accepted but no handler implemented', { eventType: event.type });
+      break;
   }
 }
 

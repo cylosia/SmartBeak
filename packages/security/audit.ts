@@ -470,25 +470,43 @@ export class AuditLogger extends EventEmitter {
   lastValidEvent?: AuditEvent;
   firstInvalidEvent?: AuditEvent;
   invalidCount: number;
+  checkedCount: number;
   }> {
-  let query = 'SELECT * FROM audit_logs ORDER BY timestamp';
+  // P2-FIX: Paginate verification instead of loading ALL rows into memory.
+  // Previously: SELECT * FROM audit_logs ORDER BY timestamp (no LIMIT) which
+  // causes OOM on production databases with millions of audit events.
+  // Now processes in batches of 1000 rows using cursor-based pagination.
+  const BATCH_SIZE = 1000;
+  let query: string;
   const params: unknown[] = [];
 
   if (since) {
-    query = 'SELECT * FROM audit_logs WHERE timestamp >= $1 ORDER BY timestamp';
+    query = 'SELECT * FROM audit_logs WHERE timestamp >= $1 ORDER BY timestamp LIMIT $2 OFFSET $3';
     params.push(since);
+  } else {
+    query = 'SELECT * FROM audit_logs ORDER BY timestamp LIMIT $1 OFFSET $2';
   }
 
-  const { rows } = await this.db.query(query, params);
+  let offset = 0;
+  let hasMore = true;
 
   let previousHash = '';
   let invalidCount = 0;
+  let checkedCount = 0;
   let firstInvalid: AuditEvent | undefined;
   let lastValid: AuditEvent | undefined;
 
-  for (const row of rows) {
-    // P0-FIX: Reconstruct full event including ALL fields used by calculateHash
-    // Previously missing: severity, sessionId, requestId, changes, actor.email/ip/userAgent, resource.name
+  while (hasMore) {
+    const batchParams = since
+    ? [params[0], BATCH_SIZE, offset]
+    : [BATCH_SIZE, offset];
+
+    const { rows } = await this.db.query(query, batchParams);
+    hasMore = rows.length === BATCH_SIZE;
+    offset += rows.length;
+
+    for (const row of rows) {
+    checkedCount++;
     const event: AuditEvent = {
     id: row.id,
     timestamp: row.timestamp,
@@ -537,6 +555,7 @@ export class AuditLogger extends EventEmitter {
     }
 
     previousHash = event.hash;
+    }
   }
 
   return {
@@ -544,6 +563,7 @@ export class AuditLogger extends EventEmitter {
     ...(lastValid !== undefined && { lastValidEvent: lastValid }),
     ...(firstInvalid !== undefined && { firstInvalidEvent: firstInvalid }),
     invalidCount,
+    checkedCount,
   };
   }
 
@@ -557,38 +577,34 @@ export class AuditLogger extends EventEmitter {
   /**
   * Calculate hash for tamper detection
   * SECURITY FIX: Include all fields in hash calculation for complete tamper detection
+  *
+  * P0-FIX: Removed the array replacer argument from JSON.stringify. The previous
+  * implementation passed Object.keys({...}).sort() as a replacer, which is an array
+  * of top-level key names. Per the JSON.stringify spec, an array replacer filters
+  * properties RECURSIVELY at all nesting levels — so nested properties like
+  * actor.email, actor.ip, actor.userAgent, resource.name, and arbitrary keys in
+  * details/changes were silently excluded from the hash. This meant an attacker
+  * could tamper with those fields without breaking the hash chain.
+  *
+  * The sortKeys() helper already provides deterministic key ordering for nested
+  * objects, so no replacer is needed.
   */
   private calculateHash(event: Omit<AuditEvent, 'hash'>): string {
-  // SECURITY FIX: Include all fields including severity, sessionId, requestId, changes
   const data = JSON.stringify({
-    id: event.id,
-    timestamp: event.timestamp,
-    type: event.type,
-    severity: event.severity, // SECURITY FIX: Include severity in hash
+    action: event.action,
     actor: this.sortKeys(event.actor),
-    resource: this.sortKeys(event.resource),
-    action: event.action,
-    result: event.result,
+    changes: event.changes ? this.sortKeys(event.changes) : undefined,
     details: this.sortKeys(event.details),
-    changes: event.changes ? this.sortKeys(event.changes) : undefined, // SECURITY FIX: Include changes
-    sessionId: event.sessionId, // SECURITY FIX: Include sessionId
-    requestId: event.requestId, // SECURITY FIX: Include requestId
-    previousHash: event.previousHash,
-  }, Object.keys({
     id: event.id,
+    previousHash: event.previousHash,
+    requestId: event.requestId,
+    resource: this.sortKeys(event.resource),
+    result: event.result,
+    sessionId: event.sessionId,
+    severity: event.severity,
     timestamp: event.timestamp,
     type: event.type,
-    severity: undefined,
-    actor: undefined,
-    resource: undefined,
-    action: event.action,
-    result: event.result,
-    details: undefined,
-    changes: undefined,
-    sessionId: undefined,
-    requestId: undefined,
-    previousHash: event.previousHash,
-  }).sort());
+  });
 
   return crypto.createHash('sha256').update(data).digest('hex');
   }

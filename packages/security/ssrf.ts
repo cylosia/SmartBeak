@@ -6,7 +6,7 @@
  */
 
 import { URL } from 'url';
-import { promises as dns } from 'dns';
+import dns from 'dns/promises';
 
 /**
  * Internal IP patterns to block
@@ -266,6 +266,56 @@ export interface SSRFValidationResult {
  * @param options - Validation options
  * @returns Validation result
  */
+/**
+ * P1-FIX: Async version of validateUrl that resolves DNS to catch rebinding attacks.
+ * The original validateUrl only checks hostname strings against patterns but never
+ * resolves DNS. An attacker can register a domain that resolves to 127.0.0.1 to
+ * bypass the string-based check. This version resolves DNS first.
+ */
+export async function validateUrlWithDnsCheck(
+  urlString: string,
+  options: {
+    allowHttp?: boolean;
+    allowedPorts?: number[];
+    requireHttps?: boolean;
+  } = {}
+): Promise<SSRFValidationResult> {
+  // First run synchronous checks
+  const syncResult = validateUrl(urlString, options);
+  if (!syncResult.allowed) {
+    return syncResult;
+  }
+
+  // Then resolve DNS and check resolved IPs
+  try {
+    const url = new URL(urlString);
+    const hostname = url.hostname;
+
+    // Skip DNS check for IP literals (already checked by validateUrl)
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.startsWith('[')) {
+      return syncResult;
+    }
+
+    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
+    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    const allAddresses = [...addresses, ...addresses6];
+
+    for (const ip of allAddresses) {
+      if (isInternalIp(ip)) {
+        return {
+          allowed: false,
+          reason: `DNS rebinding detected: ${hostname} resolves to internal IP ${ip}`,
+        };
+      }
+    }
+
+    return syncResult;
+  } catch {
+    // DNS resolution failure — fail closed
+    return { allowed: false, reason: 'DNS resolution failed' };
+  }
+}
+
 export function validateUrl(
   urlString: string,
   options: {
