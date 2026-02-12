@@ -73,6 +73,7 @@ export interface LivenessResult {
   uptime: number;
   pid: number;
   memory: NodeJS.MemoryUsage;
+  eventLoopLagMs?: number;
 }
 
 /**
@@ -385,16 +386,26 @@ export class HealthChecksRegistry extends EventEmitter {
 
   /**
    * Check if service is alive
+   * P1-SECURITY-FIX: Added event loop lag detection. Previously hardcoded alive: true,
+   * meaning Kubernetes liveness probes would never restart a stuck process. Now measures
+   * event loop lag via setTimeout(0) and returns alive: false if lag exceeds threshold.
    */
-  checkLiveness(): LivenessResult {
+  async checkLiveness(): Promise<LivenessResult> {
     const memory = process.memoryUsage();
-    
+    const EVENT_LOOP_LAG_THRESHOLD_MS = 5000;
+
+    // Measure event loop lag: schedule a setTimeout(0) and measure actual delay
+    const lagStart = Date.now();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    const eventLoopLagMs = Date.now() - lagStart;
+
     return {
-      alive: true,
+      alive: eventLoopLagMs < EVENT_LOOP_LAG_THRESHOLD_MS,
       timestamp: new Date().toISOString(),
       uptime: (Date.now() - this.startTime) / 1000,
       pid: process.pid,
       memory,
+      eventLoopLagMs,
     };
   }
 
@@ -439,7 +450,7 @@ export class HealthChecksRegistry extends EventEmitter {
     return {
       health,
       readiness,
-      liveness: this.checkLiveness(),
+      liveness: await this.checkLiveness(),
     };
   }
 }
@@ -632,8 +643,8 @@ export function createExternalApiHealthCheck(
 // thresholds entirely, and always returned 'healthy'.
 export function createDiskHealthCheck(
   name: string = 'disk',
-  _warningThresholdPercent: number = 80,
-  _criticalThresholdPercent: number = 90
+  warningThresholdPercent: number = 80,
+  criticalThresholdPercent: number = 90
 ): HealthCheckFn {
   return async (): Promise<HealthCheckResult> => {
     const start = Date.now();
@@ -805,4 +816,14 @@ export function getHealthChecks(): HealthChecksRegistry {
     throw new Error('Health checks not initialized. Call initHealthChecks first.');
   }
   return globalRegistry;
+}
+
+/**
+ * Reset global health checks registry
+ * P2-TESTABILITY-FIX: Allows tests to reset the singleton between test cases
+ * to prevent shared state leaking between tests.
+ */
+export function resetHealthChecks(): void {
+  globalRegistry?.cleanup();
+  globalRegistry = null;
 }
