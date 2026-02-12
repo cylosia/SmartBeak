@@ -76,8 +76,10 @@ export class BillingService {
     }
   }
 
+  // P0-FIX: Removed randomUUID() which made every key unique, defeating idempotency.
+  // Key is now deterministic from (operation, orgId) so retries find the prior entry.
   private generateIdempotencyKey(orgId: string, operation: string): string {
-    return `${operation}:${orgId}:${randomUUID()}`;
+    return `${operation}:${orgId}`;
   }
 
   private async checkIdempotency(key: string): Promise<{ exists: boolean; result?: unknown; error?: string }> {

@@ -40,13 +40,14 @@ export function computeSeoCompleteness(input: {
 
   const validated = validateInput(input);
 
-  // Configurable weights and targets from environment variables
-  const PAGE_WEIGHT = Number(process.env['SEO_PAGE_WEIGHT']) || 25;
-  const PAGE_TARGET = Number(process.env['SEO_PAGE_TARGET']) || 50;
-  const CLUSTER_WEIGHT = Number(process.env['SEO_CLUSTER_WEIGHT']) || 25;
-  const CLUSTER_TARGET = Number(process.env['SEO_CLUSTER_TARGET']) || 20;
-  const FRESHNESS_WEIGHT = Number(process.env['SEO_FRESHNESS_WEIGHT']) || 25;
-  const SCHEMA_WEIGHT = Number(process.env['SEO_SCHEMA_WEIGHT']) || 25;
+  // P1-FIX: Use ?? instead of || so that explicitly setting a weight to 0 works.
+  // With ||, Number('0') is falsy so it falls back to the default, making 0 unreachable.
+  const PAGE_WEIGHT = Number(process.env['SEO_PAGE_WEIGHT'] ?? 25);
+  const PAGE_TARGET = Number(process.env['SEO_PAGE_TARGET'] ?? 50);
+  const CLUSTER_WEIGHT = Number(process.env['SEO_CLUSTER_WEIGHT'] ?? 25);
+  const CLUSTER_TARGET = Number(process.env['SEO_CLUSTER_TARGET'] ?? 20);
+  const FRESHNESS_WEIGHT = Number(process.env['SEO_FRESHNESS_WEIGHT'] ?? 25);
+  const SCHEMA_WEIGHT = Number(process.env['SEO_SCHEMA_WEIGHT'] ?? 25);
 
   let score = 0;
   // FIX: Division by zero protection - use safe division with targets

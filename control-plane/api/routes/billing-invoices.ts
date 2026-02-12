@@ -14,6 +14,20 @@ const FormatQuerySchema = z.object({
   format: z.enum(['csv', 'pdf']).default('csv')
 });
 
+// P1-FIX: Create Stripe client once at module level instead of per-request.
+// Stripe SDK initializes HTTP agent, retry logic, etc. — creating it per request
+// causes memory churn and potential file descriptor exhaustion under load.
+let stripeClient: import('stripe').default | null = null;
+async function getStripeClient(): Promise<import('stripe').default> {
+  if (!stripeClient) {
+    const Stripe = (await import('stripe')).default;
+    stripeClient = new Stripe(billingConfig.stripeSecretKey, {
+      apiVersion: '2024-06-20',
+    });
+  }
+  return stripeClient;
+}
+
 export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /billing/invoices - List invoices for the organization
   app.get('/billing/invoices', async (req, res) => {
@@ -37,11 +51,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return { invoices: [] };
     }
 
-    // Import Stripe dynamically
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(billingConfig.stripeSecretKey, {
-    apiVersion: '2024-06-20' as Stripe.LatestApiVersion
-    });
+    // P1-FIX: Use shared Stripe singleton instead of per-request instantiation
+    const stripe = await getStripeClient();
 
     const invoices = await stripe.invoices.list({
     customer: stripeCustomerId,
@@ -102,10 +113,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(404).send({ error: 'No billing data found' });
     }
 
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(billingConfig.stripeSecretKey, {
-    apiVersion: '2024-06-20' as Stripe.LatestApiVersion
-    });
+    // P1-FIX: Use shared Stripe singleton
+    const stripe = await getStripeClient();
 
     const invoices = await stripe.invoices.list({
     customer: stripeCustomerId,
