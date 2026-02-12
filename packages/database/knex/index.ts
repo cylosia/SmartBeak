@@ -25,6 +25,24 @@ function getConnectionString(): string {
 }
 
 /**
+ * Provide an external Knex instance to prevent this module from creating
+ * its own connection pool. Use this when a caller already has a Knex instance
+ * (e.g., apps/api/src/db.ts) and wants @database utilities to share it,
+ * avoiding dual connection pools.
+ */
+export function setKnexInstance(instance: Knex): void {
+  if (knexInstance && knexInstance !== instance) {
+    _logger.warn(
+      'DUAL_POOL_GUARD: Replacing existing @database Knex instance with externally-provided one. ' +
+      'This may indicate two connection pools were initialized.'
+    );
+  }
+  knexInstance = instance;
+  knexInitializing = false;
+  knexInitPromise = Promise.resolve(instance);
+}
+
+/**
  * Lazy initialization of the Knex query builder instance
  */
 async function getKnexInstance(): Promise<Knex> {

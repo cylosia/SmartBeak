@@ -10,6 +10,31 @@ import crypto from 'crypto';
 const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$/;
 const MAX_DOMAIN_LENGTH = 253;
 
+// DNS error codes that indicate the domain/record doesn't exist or is unreachable,
+// rather than a bug in our code. These are treated as "verification failed" (return false)
+// instead of throwing, to prevent transient DNS issues from crashing the service.
+const RECOVERABLE_DNS_ERRORS = ['ENOTFOUND', 'ENODATA', 'SERVFAIL', 'ETIMEOUT', 'ECONNREFUSED', 'ECONNRESET'];
+
+const DNS_TIMEOUT_MS = 5000;
+
+/**
+ * Wrap a DNS promise with a timeout to prevent indefinite hangs.
+ * Uses the same Promise.race pattern as control-plane/api/http.ts and
+ * control-plane/jobs/media-cleanup.ts.
+ */
+function withDnsTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(Object.assign(new Error(`DNS lookup timed out after ${DNS_TIMEOUT_MS}ms`), { code: 'ETIMEOUT' }));
+    }, DNS_TIMEOUT_MS);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
 /**
 * FIX: Validate domain name format before DNS lookup
 * Prevents injection attacks and invalid lookups
@@ -68,12 +93,11 @@ export async function verifyDns(domain: string, token: string): Promise<boolean>
   }
 
   try {
-  const records = await dns.resolveTxt(`_acp-verification.${domain}`);
+  const records = await withDnsTimeout(dns.resolveTxt(`_acp-verification.${domain}`));
   return records.flat().includes(token);
   } catch (error: unknown) {
-  // DNS resolution failed or record not found
   const dnsError = error as { code?: string };
-  if (dnsError.code === 'ENOTFOUND' || dnsError.code === 'ENODATA') {
+  if (dnsError.code && RECOVERABLE_DNS_ERRORS.includes(dnsError.code)) {
     return false;
   }
   throw error;
@@ -114,7 +138,7 @@ export async function verifyDnsMulti(
 
   try {
     if (method.type === 'txt') {
-    const records = await dns.resolveTxt(method.record);
+    const records = await withDnsTimeout(dns.resolveTxt(method.record));
     results[method.record] = records.flat().includes(method["token"]);
     }
   } catch (error: unknown) {
@@ -138,11 +162,11 @@ export async function getDnsTxtRecords(domain: string): Promise<string[]> {
   }
 
   try {
-  const records = await dns.resolveTxt(domain);
+  const records = await withDnsTimeout(dns.resolveTxt(domain));
   return records.flat();
   } catch (error: unknown) {
   const dnsError = error as { code?: string };
-  if (dnsError.code === 'ENOTFOUND' || dnsError.code === 'ENODATA') {
+  if (dnsError.code && RECOVERABLE_DNS_ERRORS.includes(dnsError.code)) {
     return [];
   }
   throw error;
