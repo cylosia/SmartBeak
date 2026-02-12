@@ -28,64 +28,80 @@ export class DomainOwnershipService {
 
   /**
   * Transfer domain ownership with transaction protection
+  * P1-13 FIX: Added retry for SERIALIZABLE serialization failures (error code 40001)
   */
   async transferDomain(domainId: string, fromOrg: string, toOrg: string): Promise<void> {
-  const client = await this.pool.connect();
+  const MAX_SERIALIZATION_RETRIES = 3;
 
-  try {
+  for (let attempt = 0; attempt < MAX_SERIALIZATION_RETRIES; attempt++) {
+    const client = await this.pool.connect();
+
+    try {
     // Use SERIALIZABLE to prevent concurrent modifications
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
     // Lock the row for update to prevent concurrent transfers
     const { rows } = await client.query(
-    'SELECT org_id FROM domain_registry WHERE id = $1 FOR UPDATE',
-    [domainId]
+      'SELECT org_id FROM domain_registry WHERE id = $1 FOR UPDATE',
+      [domainId]
     );
 
     if (rows.length === 0) {
-    await client.query('ROLLBACK');
-    const error = new Error('Domain not found') as DomainError;
-    error.code = 'DOMAIN_NOT_FOUND';
-    throw error;
+      await client.query('ROLLBACK');
+      const error = new Error('Domain not found') as DomainError;
+      error.code = 'DOMAIN_NOT_FOUND';
+      throw error;
     }
 
     // Verify current ownership
     if (rows[0].org_id !== fromOrg) {
-    await client.query('ROLLBACK');
-    const error = new Error('Domain not owned by source organization') as DomainError;
-    error.code = 'DOMAIN_NOT_OWNED';
-    throw error;
+      await client.query('ROLLBACK');
+      const error = new Error('Domain not owned by source organization') as DomainError;
+      error.code = 'DOMAIN_NOT_OWNED';
+      throw error;
     }
 
     // Perform transfer
     const { rowCount } = await client.query(
-    'UPDATE domain_registry SET org_id=$1, updated_at=NOW() WHERE id=$2 AND org_id=$3',
-    [toOrg, domainId, fromOrg]
+      'UPDATE domain_registry SET org_id=$1, updated_at=NOW() WHERE id=$2 AND org_id=$3',
+      [toOrg, domainId, fromOrg]
     );
 
     if (rowCount === 0) {
-    await client.query('ROLLBACK');
-    const error = new Error('Transfer failed - domain may have been modified') as DomainError;
-    error.code = 'TRANSFER_FAILED';
-    throw error;
+      await client.query('ROLLBACK');
+      const error = new Error('Transfer failed - domain may have been modified') as DomainError;
+      error.code = 'TRANSFER_FAILED';
+      throw error;
     }
 
     // Log the transfer for audit
     await client.query(
-    `INSERT INTO domain_transfer_log (domain_id, from_org_id, to_org_id, transferred_at)
-    VALUES ($1, $2, $3, NOW())`,
-    [domainId, fromOrg, toOrg]
+      `INSERT INTO domain_transfer_log (domain_id, from_org_id, to_org_id, transferred_at)
+      VALUES ($1, $2, $3, NOW())`,
+      [domainId, fromOrg, toOrg]
     );
 
     await client.query('COMMIT');
-  } catch (error) {
+    return; // Success - exit the retry loop
+    } catch (error) {
     await client.query('ROLLBACK').catch((rollbackError: Error) => {
-    logger["error"]('Rollback failed', rollbackError);
+      logger.error('Rollback failed', rollbackError);
     });
+
+    // P1-13 FIX: Retry on serialization failures (PostgreSQL error code 40001)
+    const pgError = error as { code?: string };
+    if (pgError.code === '40001' && attempt < MAX_SERIALIZATION_RETRIES - 1) {
+      logger.warn('Serialization failure during domain transfer, retrying', {
+      domainId, attempt: attempt + 1, maxRetries: MAX_SERIALIZATION_RETRIES,
+      });
+      continue;
+    }
+
     throw error;
-  } finally {
+    } finally {
     client.release();
+    }
   }
   }
 

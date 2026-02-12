@@ -11,8 +11,7 @@ export interface ExportScope {
   includeKeywords?: boolean;
   /** Date range filter for exported data */
   dateRange?: { from: string; to: string };
-  /** Additional export options */
-  [key: string]: unknown;
+  // P2-20 FIX: Removed index signature that defeated type safety
 }
 
 /**

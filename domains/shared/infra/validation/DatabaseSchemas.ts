@@ -118,13 +118,11 @@ export class SchemaValidationError extends Error {
 
 */
 export function validateNotificationPayload(payload: unknown): NotificationPayload {
+  // P2-19 FIX: Removed duplicate null check (was checked twice in succession)
   if (payload === null || typeof payload !== 'object') {
   throw new SchemaValidationError('Payload must be an object', 'payload', ['Expected object']);
   }
 
-  if (typeof payload !== 'object' || payload === null) {
-    throw new SchemaValidationError('Payload must be an object', 'payload', ['Expected object']);
-  }
   const p = payload as Record<string, unknown>;
   const issues: string[] = [];
 
@@ -204,13 +202,11 @@ export function validateNotificationPayload(payload: unknown): NotificationPaylo
 
 */
 export function validateSearchDocumentFields(fields: unknown): SearchDocumentFields {
+  // P2-19 FIX: Removed duplicate null check
   if (fields === null || typeof fields !== 'object') {
   throw new SchemaValidationError('Fields must be an object', 'fields', ['Expected object']);
   }
 
-  if (typeof fields !== 'object' || fields === null) {
-    throw new SchemaValidationError('Fields must be an object', 'fields', ['Expected object']);
-  }
   const f = fields as Record<string, unknown>;
   const issues: string[] = [];
 
@@ -285,13 +281,11 @@ export function validateSearchDocumentFields(fields: unknown): SearchDocumentFie
 
 */
 export function validatePublishTargetConfig(config: unknown): PublishTargetConfig {
+  // P2-19 FIX: Removed duplicate null check
   if (config === null || typeof config !== 'object') {
   throw new SchemaValidationError('Config must be an object', 'config', ['Expected object']);
   }
 
-  if (typeof config !== 'object' || config === null) {
-    throw new SchemaValidationError('Config must be an object', 'config', ['Expected object']);
-  }
   const c = config as Record<string, unknown>;
   const issues: string[] = [];
 
