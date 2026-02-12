@@ -4,11 +4,12 @@ import { validateNonEmptyString } from '../../utils/validation';
 import fetch from 'node-fetch';
 import { withRetry } from '../../utils/retry';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import type { CanaryAdapter } from '../../canaries/types';
 
 /**
  * YouTube Publishing Adapter
  *
- * Security audit fixes applied:
+ * Security audit fixes applied (audit 1):
  * - P0-1: response.text() in error path wrapped in try-catch
  * - P1-2: HealthCheckResult aligned with CanaryAdapter interface
  * - P1-6: parts parameter validated against allowlist
@@ -20,6 +21,14 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '../../
  * - P2-11: Private fields marked readonly
  * - P3-2: ApiError exported
  * - P3-3: YouTubeVideoListResponseSchema uses passthrough()
+ *
+ * Security audit fixes applied (audit 2):
+ * - P1-1: getVideo error path now consumes response body (connection leak fix)
+ * - P1-2: Token factory pattern for OAuth token refresh
+ * - P2-3: passthrough() changed to strip() on response schema
+ * - P2-5: Class implements CanaryAdapter for compile-time contract enforcement
+ * - P3-5: Warn when YouTube returns multiple items for single videoId
+ * - P3-6: ApiError now carries truncated response body
  */
 
 /**
@@ -29,10 +38,13 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '../../
 export class ApiError extends Error {
   readonly status: number;
   readonly retryAfter?: string | undefined;
-  constructor(message: string, status: number, retryAfter?: string | undefined) {
+  /** P3-6 FIX: Truncated response body for debugging without memory risk */
+  readonly responseBody?: string | undefined;
+  constructor(message: string, status: number, retryAfter?: string | undefined, responseBody?: string | undefined) {
     super(message);
     this.status = status;
     this.retryAfter = retryAfter;
+    this.responseBody = responseBody?.slice(0, 1024);
     this.name = this.constructor.name;
   }
 }
@@ -67,12 +79,13 @@ export type YouTubeVideoSnippet = NonNullable<YouTubeVideoResponse['snippet']>;
 export type YouTubeVideoStatus = NonNullable<YouTubeVideoResponse['status']>;
 
 /**
- * P3-3 FIX: passthrough() preserves pagination fields (pageInfo, nextPageToken)
- * that YouTube API returns but we don't currently use.
+ * P2-3 FIX (audit 2): Changed from passthrough() to strip(). Pagination fields
+ * (pageInfo, nextPageToken) are not used; strip prevents untrusted arbitrary
+ * properties from flowing through. Add fields explicitly if pagination is needed.
  */
 const YouTubeVideoListResponseSchema = z.object({
   items: z.array(YouTubeVideoResponseSchema),
-}).passthrough();
+}).strip();
 
 export interface YouTubeVideoMetadata {
   title?: string;
@@ -109,18 +122,29 @@ function sanitizeVideoIdForLog(videoId: string): string {
   return videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
 }
 
-export class YouTubeAdapter {
+/** P2-5 FIX: Explicit implements CanaryAdapter for compile-time contract enforcement */
+export class YouTubeAdapter implements CanaryAdapter {
   // P2-11 FIX: All private fields marked readonly
-  private readonly accessToken: string;
+  /**
+   * P1-2 FIX (audit 2): Token factory supports both static tokens and lazy
+   * resolution for OAuth token refresh. YouTube tokens expire after 1 hour;
+   * long-running workers must use a factory to avoid silent 401 failures.
+   */
+  private readonly getAccessToken: () => string | Promise<string>;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly logger: StructuredLogger;
   private readonly metrics: MetricsCollector;
 
-  constructor(accessToken: string) {
-    validateNonEmptyString(accessToken, 'accessToken');
+  constructor(accessTokenOrFactory: string | (() => string | Promise<string>)) {
+    if (typeof accessTokenOrFactory === 'string') {
+      validateNonEmptyString(accessTokenOrFactory, 'accessToken');
+      const token = accessTokenOrFactory;
+      this.getAccessToken = () => token;
+    } else {
+      this.getAccessToken = accessTokenOrFactory;
+    }
 
-    this.accessToken = accessToken;
     this.baseUrl = `${API_BASE_URLS.youtube}/${API_VERSIONS.youtube}`;
     this.timeoutMs = DEFAULT_TIMEOUTS.long;
     this.logger = new StructuredLogger('YouTubeAdapter');
@@ -137,6 +161,7 @@ export class YouTubeAdapter {
     this.logger.info('Updating YouTube video metadata', context, { videoId: sanitizeVideoIdForLog(videoId) });
     const startTime = Date.now();
     try {
+      const accessToken = await this.getAccessToken();
       const data = await withRetry(async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -144,7 +169,7 @@ export class YouTubeAdapter {
           const response = await fetch(`${this.baseUrl}/videos?part=snippet`, {
             method: 'PUT',
             headers: {
-              'Authorization': `Bearer ${this.accessToken}`,
+              'Authorization': `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
@@ -221,6 +246,7 @@ export class YouTubeAdapter {
 
     const startTime = Date.now();
     try {
+      const accessToken = await this.getAccessToken();
       const data = await withRetry(async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -231,18 +257,29 @@ export class YouTubeAdapter {
           const response = await fetch(url.toString(), {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${this.accessToken}`,
+              'Authorization': `Bearer ${accessToken}`,
               'Accept': 'application/json',
             },
             signal: controller.signal,
           });
 
           if (!response.ok) {
+            // P1-1 FIX (audit 2): Consume response body to prevent TCP connection leak.
+            // node-fetch holds connections open for unconsumed bodies. Under sustained
+            // quota errors, this exhausts the connection pool within minutes.
+            let errorBody = '';
+            try { errorBody = await response.text(); } catch { /* body unreadable */ }
+            this.logger.error('YouTube get video API error', context, new Error(`HTTP ${response.status}`), {
+              status: response.status,
+              body: errorBody.slice(0, 1024),
+              videoId: sanitizeVideoIdForLog(videoId),
+            });
+
             if (response.status === 429) {
               const retryAfter = response.headers.get('retry-after') || undefined;
-              throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter);
+              throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter, errorBody);
             }
-            throw new ApiError(`YouTube get video failed: ${response.status}`, response.status);
+            throw new ApiError(`YouTube get video failed: ${response.status}`, response.status, undefined, errorBody);
           }
 
           const rawData: unknown = await response.json();
@@ -255,6 +292,14 @@ export class YouTubeAdapter {
           clearTimeout(timeoutId);
         }
       }, { maxRetries: 3 });
+
+      // P3-5 FIX: Warn when YouTube returns multiple items for a single videoId
+      if (data.items.length > 1) {
+        this.logger.warn('YouTube returned multiple items for single videoId', context, {
+          videoId: sanitizeVideoIdForLog(videoId),
+          itemCount: data.items.length,
+        });
+      }
 
       const firstItem = data.items[0];
       if (!firstItem) {
@@ -283,10 +328,11 @@ export class YouTubeAdapter {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.short);
     try {
+      const accessToken = await this.getAccessToken();
       const res = await fetch(`${this.baseUrl}/channels?part=id&mine=true`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json',
         },
         signal: controller.signal,
