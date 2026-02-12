@@ -88,28 +88,25 @@ const config: Config = {
   errorOnDeprecated: true,
   
   // Transform settings
+  // P2-5 FIX: Consolidated ts-jest config here. Removed duplicate legacy
+  // `globals: { 'ts-jest': { isolatedModules } }` format which is deprecated
+  // in ts-jest v29+ and was silently ignored.
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: '<rootDir>/tsconfig.json',
+      isolatedModules: true,
     }],
   },
-  
+
   // Ignore patterns
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
     '/.next/',
   ],
-  
+
   // Module file extensions
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  
-  // Globals
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-    },
-  },
 };
 
 export default config;

@@ -58,9 +58,22 @@ export async function assertOrgCapacity(db: Database, orgId: string): Promise<vo
   .where({ status: 'started' })
   .andWhere({ entity_id: orgId })
   ["count"]();
+
+  // P2-2 FIX: Check array is non-empty before accessing index 0
+  if (!countResult.length) {
+  throw new Error('No count result returned from job_executions query');
+  }
+
   const result = validateCountResult(countResult[0]);
 
   const count = typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
+
+  // P2-3 FIX: Check for NaN. parseInt returns NaN for non-numeric strings,
+  // and NaN >= MAX_ACTIVE_JOBS_PER_ORG evaluates to false, silently bypassing
+  // the capacity limit.
+  if (Number.isNaN(count)) {
+  throw new Error(`Invalid job count value: ${String(result["count"])}`);
+  }
 
   logger.debug('Org job count', { orgId, activeJobs: count });
 
@@ -93,7 +106,19 @@ export async function getOrgActiveJobCount(db: Database, orgId: string): Promise
   .where({ status: 'started' })
   .andWhere({ entity_id: orgId })
   ["count"]();
-  const result = validateCountResult(countResult[0]);
 
-  return typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
+  // P2-2 FIX: Check array is non-empty before accessing index 0
+  if (!countResult.length) {
+  throw new Error('No count result returned from job_executions query');
+  }
+
+  const result = validateCountResult(countResult[0]);
+  const count = typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
+
+  // P2-3 FIX: Guard against NaN from parseInt
+  if (Number.isNaN(count)) {
+  throw new Error(`Invalid job count value: ${String(result["count"])}`);
+  }
+
+  return count;
 }

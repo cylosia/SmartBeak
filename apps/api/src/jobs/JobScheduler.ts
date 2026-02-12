@@ -424,30 +424,32 @@ export class JobScheduler extends EventEmitter {
             orgId: (job.data as Record<string, string> | undefined)?.['orgId'] || undefined,
           });
 
-          // P1-FIX: Create AbortController for this job and pass signal to handler
-          const jobId = job.id || `job-${Date.now()}`;
+          // P1-1 FIX: Extract jobId ONCE and reuse in finally block. Previously,
+          // line 428 used `job.id || \`job-${Date.now()}\`` and line 448 used
+          // `job.id || ''`, creating a key mismatch that leaked abort controllers.
+          const effectiveJobId = job.id || `job-${Date.now()}`;
           const abortController = new AbortController();
-          this.abortControllers.set(jobId, abortController);
-          this.abortControllerTimestamps.set(jobId, Date.now());
+          this.abortControllers.set(effectiveJobId, abortController);
+          this.abortControllerTimestamps.set(effectiveJobId, Date.now());
 
           return runWithContext(requestContext, async () => {
             try {
-              // P1-FIX: Invoke handler with abort signal for cancellation support
               const result = await this.executeWithTimeout(
                 handler(job.data, job),
                 config.timeout || jobConfig.defaultTimeoutMs,
                 abortController.signal
               );
-              this.emit('jobCompleted', job, result);
+              // P1-2 FIX: Removed duplicate this.emit('jobCompleted', job, result) here.
+              // The worker 'completed' event handler in attachWorkerHandlers() already
+              // emits 'jobCompleted'. Having both caused double emission for every job.
               return result;
             } catch (error) {
               this.emit('jobFailed', job, error);
               throw error;
             } finally {
-              // P1-FIX: Clean up abort controller after job completion
-              const jobId = job.id || '';
-              this.abortControllers.delete(jobId);
-              this.abortControllerTimestamps.delete(jobId);
+              // P1-1 FIX: Use same effectiveJobId from outer scope
+              this.abortControllers.delete(effectiveJobId);
+              this.abortControllerTimestamps.delete(effectiveJobId);
             }
           });
         },
@@ -609,13 +611,20 @@ export class JobScheduler extends EventEmitter {
     payloadSize,
   });
 
+  // P0-3 FIX: Pass priority to queue.add(). Previously computed but never included
+  // in options, causing all jobs to run at BullMQ default priority.
+  // P0-4 FIX: Wrap backoff in { backoff: { type, delay } } object. BullMQ expects
+  // nested backoff config, not top-level type/delay keys (which are silently ignored).
   return queue.add(name, data, {
+    priority,
     ...(options.delay !== undefined && { delay: options.delay }),
     ...(options.jobId !== undefined && { jobId: options.jobId }),
     ...(handlerConfig.config.maxRetries !== undefined && { attempts: handlerConfig.config.maxRetries }),
     ...(handlerConfig.config.backoffType && handlerConfig.config.backoffDelay ? {
-    type: handlerConfig.config.backoffType as 'fixed' | 'exponential',
-    delay: handlerConfig.config.backoffDelay,
+    backoff: {
+      type: handlerConfig.config.backoffType as 'fixed' | 'exponential',
+      delay: handlerConfig.config.backoffDelay,
+    },
     } : {}),
   });
   }
@@ -782,8 +791,16 @@ export class JobScheduler extends EventEmitter {
     }
     this.redisEventHandlers.clear();
 
-    // FIX: Remove all event listeners from this emitter
-    this.removeAllListeners();
+    // P2-6 FIX: Remove only internal event listeners instead of removeAllListeners(),
+    // which would nuke user-attached monitoring/logging listeners without warning.
+    this.removeAllListeners('redisConnected');
+    this.removeAllListeners('redisDisconnected');
+    this.removeAllListeners('redisError');
+    this.removeAllListeners('redisReconnectFailed');
+    this.removeAllListeners('jobStarted');
+    this.removeAllListeners('jobCompleted');
+    this.removeAllListeners('jobFailed');
+    this.removeAllListeners('workerError');
 
     // FIX: Close Redis connection
     logger.info('[JobScheduler] Shutdown complete');
