@@ -175,7 +175,9 @@ export class MailchimpAdapter implements EmailProviderAdapter {
    */
   async addSubscriber(email: string, listId: string): Promise<void> {
     const context = createRequestContext('MailchimpAdapter', 'addSubscriber');
-    this.logger.info('Adding subscriber to Mailchimp', context, { email, listId });
+    // P1-2 FIX: Redact email in logs to prevent PII leakage
+    const redactedEmail = email.replace(/^(.)(.*)(@.*)$/, '$1***$3');
+    this.logger.info('Adding subscriber to Mailchimp', context, { email: redactedEmail, listId });
 
     try {
       await withTimeout(
@@ -199,7 +201,8 @@ export class MailchimpAdapter implements EmailProviderAdapter {
    */
   private async _addSubscriberInternal(email: string, listId: string): Promise<void> {
     if (!validateEmail(email)) {
-      throw new Error(`Invalid email format: ${email}`);
+      // P1-2 FIX: Do not embed PII in error messages
+      throw new Error('Invalid email format');
     }
     validateNonEmptyString(listId, 'listId');
 
@@ -218,9 +221,9 @@ export class MailchimpAdapter implements EmailProviderAdapter {
             Authorization: `apikey ${this.apiKey}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            // P1-HIGH FIX: Add List-Unsubscribe headers for CAN-SPAM compliance
-            'List-Unsubscribe': `<${unsubscribeUrl}>`,
-            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            // P3-6 FIX: Removed List-Unsubscribe HTTP headers. These are email
+            // headers (RFC 2369), not HTTP headers. Mailchimp manages unsubscribe
+            // via its own subscriber management, not via API request headers.
           },
           body: JSON.stringify({
             email_address: email.toLowerCase().trim(),

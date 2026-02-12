@@ -78,6 +78,8 @@ export class MembershipService {
     );
 
     await client.query('COMMIT');
+    // P3-5 FIX: Call audit log after successful mutations
+    await this.auditLog('addMember', orgId, userId, { role });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -112,6 +114,8 @@ export class MembershipService {
     }
 
     await client.query('COMMIT');
+    // P3-5 FIX: Call audit log after successful mutations
+    await this.auditLog('updateRole', orgId, userId, { role });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -145,8 +149,10 @@ export class MembershipService {
     }
 
     if (rows[0].role === 'owner') {
+    // P1-8 FIX: Lock ALL owner rows with FOR UPDATE to prevent concurrent
+    // removal of different owners from racing past this check.
     const { rows: ownerRows } = await client.query(
-    'SELECT COUNT(*) as count FROM memberships WHERE org_id = $1 AND role = $2',
+    'SELECT COUNT(*) as count FROM memberships WHERE org_id = $1 AND role = $2 FOR UPDATE',
     [orgId, 'owner']
     );
     if (parseInt(ownerRows[0].count, 10) <= 1) {
@@ -160,6 +166,8 @@ export class MembershipService {
     );
 
     await client.query('COMMIT');
+    // P3-5 FIX: Call audit log after successful mutations
+    await this.auditLog('removeMember', orgId, userId, {});
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

@@ -30,9 +30,6 @@ const KEY_ALERT_THRESHOLD = 0.8;
 /** Alert interval in milliseconds (5 minutes) */
 const ALERT_INTERVAL_MS = 300000;
 
-/** Maximum samples for reservoir sampling to limit memory */
-const MAX_RESERVOIR_SAMPLES = 10000;
-
 /** Threshold for using approximation algorithms */
 const APPROXIMATION_THRESHOLD = 10000;
 
@@ -161,10 +158,12 @@ export class MetricsCollector extends EventEmitter {
   private eventLoopLagInterval: NodeJS.Timeout | undefined;
   private lastEventLoopTime: number = 0;
   
-  // LRU tracking for memory leak prevention
-  private readonly keyAccessOrder: string[] = [];
+  // P1-3 FIX: LRU tracking uses Map (O(1) delete+set) instead of array (O(n) indexOf+splice)
+  private readonly keyAccessOrder = new Map<string, true>();
   private keysEvicted = 0;
   private lastAlertTime = 0;
+  // P2-6 FIX: Store previous CPU reading for delta-based calculation
+  private previousCpuUsage: { user: number; system: number; timestamp: number } | null = null;
 
   constructor(
     config: Partial<AggregationConfig> = {},
@@ -233,14 +232,12 @@ export class MetricsCollector extends EventEmitter {
 
   /**
    * Update key access order for LRU tracking
+   * P1-3 FIX: Uses Map (O(1) delete + set) instead of array indexOf/splice (O(n))
    */
   private touchKey(key: string): void {
-    const index = this.keyAccessOrder.indexOf(key);
-    if (index > -1) {
-      // Move to end (most recently used)
-      this.keyAccessOrder.splice(index, 1);
-    }
-    this.keyAccessOrder.push(key);
+    // Delete and re-insert to move to end (most recently used)
+    this.keyAccessOrder.delete(key);
+    this.keyAccessOrder.set(key, true);
   }
 
   /**
@@ -254,10 +251,13 @@ export class MetricsCollector extends EventEmitter {
     const keysToEvict = this.metrics.size - this.config.maxKeys;
     let evicted = 0;
 
-    // Evict oldest keys (from beginning of access order)
-    for (let i = 0; i < keysToEvict && this.keyAccessOrder.length > 0; i++) {
-      const oldestKey = this.keyAccessOrder.shift();
-      if (oldestKey && this.metrics.has(oldestKey)) {
+    // Evict oldest keys (from beginning of Map iteration order)
+    const iter = this.keyAccessOrder.keys();
+    for (let i = 0; i < keysToEvict; i++) {
+      const { value: oldestKey, done } = iter.next();
+      if (done) break;
+      this.keyAccessOrder.delete(oldestKey);
+      if (this.metrics.has(oldestKey)) {
         this.metrics.delete(oldestKey);
         this.aggregations.delete(oldestKey);
         evicted++;
@@ -577,12 +577,27 @@ export class MetricsCollector extends EventEmitter {
     const freeMem = os.freemem();
     const memUsage = process.memoryUsage();
     const cpuUsage = process.cpuUsage();
+    const now = Date.now();
+    const cpuCount = os.cpus().length;
+
+    // P2-6 FIX: Compute CPU % from delta between readings, not cumulative total
+    let cpuPercent = 0;
+    if (this.previousCpuUsage) {
+      const elapsedMs = now - this.previousCpuUsage.timestamp;
+      if (elapsedMs > 0) {
+        const userDelta = cpuUsage.user - this.previousCpuUsage.user;
+        const systemDelta = cpuUsage.system - this.previousCpuUsage.system;
+        // cpuUsage is in microseconds, elapsedMs in milliseconds
+        cpuPercent = ((userDelta + systemDelta) / 1000 / elapsedMs / cpuCount) * 100;
+      }
+    }
+    this.previousCpuUsage = { user: cpuUsage.user, system: cpuUsage.system, timestamp: now };
 
     return {
       cpu: {
-        usagePercent: ((cpuUsage.user + cpuUsage.system) / 1000000 / os.cpus().length) * 100,
+        usagePercent: cpuPercent,
         loadAverage: os.loadavg(),
-        count: os.cpus().length,
+        count: cpuCount,
       },
       memory: {
         total: totalMem,
@@ -667,12 +682,18 @@ export class MetricsCollector extends EventEmitter {
    * Much faster than full sort for large datasets
    */
   private approximateStats(values: number[]): { min: number; max: number; percentiles: Record<string, number> } {
-    // Use QuickSelect for O(n) percentile calculation
     const percentiles: Record<string, number> = {};
-    
-    for (const p of this.config.percentiles) {
-      const k = Math.floor((p / 100) * values.length);
-      percentiles[`p${p}`] = this.quickSelect([...values], k);
+
+    // P2-9 FIX: Use a single copy for all percentile calculations instead of
+    // copying the array once per percentile. Sort the target indices ascending
+    // and compute them in order on the same working copy.
+    const work = [...values];
+    const targets = this.config.percentiles
+      .map(p => ({ p, k: Math.floor((p / 100) * values.length) }))
+      .sort((a, b) => a.k - b.k);
+
+    for (const { p, k } of targets) {
+      percentiles[`p${p}`] = this.quickSelect(work, k);
     }
 
     // O(n) min/max
@@ -705,27 +726,6 @@ export class MetricsCollector extends EventEmitter {
     } else {
       return this.quickSelect(highs, k - lows.length - pivots.length);
     }
-  }
-
-  /**
-   * P1-FIX: Reservoir sampling for fixed-size sample from large datasets
-   * Memory-efficient way to get representative sample
-   */
-  private reservoirSample(values: number[], sampleSize: number): number[] {
-    const reservoir: number[] = [];
-    
-    for (let i = 0; i < values.length; i++) {
-      if (i < sampleSize) {
-        reservoir.push(values[i]!);
-      } else {
-        const j = Math.floor(Math.random() * (i + 1));
-        if (j < sampleSize) {
-          reservoir[j] = values[i]!;
-        }
-      }
-    }
-    
-    return reservoir;
   }
 
   /**
@@ -883,7 +883,7 @@ export class MetricsCollector extends EventEmitter {
   clear(): void {
     this.metrics.clear();
     this.aggregations.clear();
-    this.keyAccessOrder.length = 0;
+    this.keyAccessOrder.clear();
     this.keysEvicted = 0;
   }
 }
