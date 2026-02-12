@@ -241,8 +241,15 @@ export class CostTracker extends EventEmitter {
     );
   } catch (error) {
     logger["error"]('Flush failed', error instanceof Error ? error : new Error(String(error)));
-    // Re-add entries to buffer for retry
+    // P1-7 FIX: Cap buffer size to prevent OOM during sustained DB outage.
+    // Previously, buffer grew unboundedly on every failed 30-second flush cycle.
+    const MAX_BUFFER_SIZE = 10000;
     this.buffer.unshift(...entries);
+    if (this.buffer.length > MAX_BUFFER_SIZE) {
+    const dropped = this.buffer.length - MAX_BUFFER_SIZE;
+    this.buffer.splice(0, dropped);
+    logger["error"](`Cost buffer overflow: dropped ${dropped} oldest entries`);
+    }
   }
   }
 

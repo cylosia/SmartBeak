@@ -48,7 +48,7 @@ export async function acquireAdvisoryLock(lockId: string, timeoutMs = 5000): Pro
         [lockId]
       );
 
-      if (rows[0].acquired) {
+      if (rows[0]?.acquired) {
         activeAdvisoryLocks.set(lockId, client);
         return client; // Return client, DON'T release - caller must hold connection
       }
@@ -145,6 +145,10 @@ async function getPool(): Promise<Pool> {
     const connectionString = getConnectionString();
 
     poolInstance = new Pool({
+      // P0-FIX: connectionString was validated but never passed to Pool.
+      // Without it, pg falls back to PGHOST/PGPORT/etc env vars or localhost:5432,
+      // silently ignoring CONTROL_PLANE_DB.
+      connectionString,
       // P1-FIX: PostgreSQL timeouts to prevent runaway queries
       statement_timeout: 30000,  // 30 seconds max query time
       idle_in_transaction_session_timeout: 60000,  // 60 seconds max idle in transaction

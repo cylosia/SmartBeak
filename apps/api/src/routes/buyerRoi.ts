@@ -115,7 +115,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
 
   try {
 
-    await optionalAuthFastify(req, reply, () => {});
+    await optionalAuthFastify(req, reply);
     const auth = req.authContext;
     if (!auth) {
     return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });

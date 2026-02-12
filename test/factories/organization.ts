@@ -12,8 +12,9 @@ export interface OrgFactoryOptions {
   slug?: string;
   plan?: 'free' | 'pro' | 'enterprise';
   planStatus?: 'active' | 'cancelled' | 'past_due';
-  settings?: Record<string, any>;
-  metadata?: Record<string, any>;
+  // FIX (M13): Use Record<string, unknown> instead of Record<string, any> for type safety
+  settings?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   createdAt?: Date;
 }
 
@@ -23,7 +24,8 @@ export function createOrganization(options: OrgFactoryOptions = {}) {
   const name = options.name || `Test Organization ${randomSuffix}`;
 
   return {
-    id: options.id || `org-${timestamp}-${randomSuffix}`,
+    // FIX (M15): Use UUID format to match production (randomUUID generates v4 UUIDs)
+    id: options.id || crypto.randomUUID(),
     name,
     slug: options.slug || name.toLowerCase().replace(/\s+/g, '-'),
     plan: options.plan || 'free',
@@ -56,7 +58,8 @@ export interface MembershipFactoryOptions {
   id?: string;
   userId?: string;
   orgId?: string;
-  role?: 'owner' | 'admin' | 'member';
+  // FIX (M14): Match production role types (owner, admin, editor, viewer) instead of 'member'
+  role?: 'owner' | 'admin' | 'editor' | 'viewer';
   status?: 'active' | 'inactive' | 'pending';
   invitedAt?: Date;
   joinedAt?: Date;
@@ -67,10 +70,12 @@ export function createMembership(options: MembershipFactoryOptions = {}) {
   const randomSuffix = crypto.randomBytes(4).toString('hex');
 
   return {
-    id: options.id || `mem-${timestamp}-${randomSuffix}`,
-    user_id: options.userId || `user-${randomSuffix}`,
-    org_id: options.orgId || `org-${randomSuffix}`,
-    role: options.role || 'member',
+    // FIX (M15): Use UUID format to match production
+    id: options.id || crypto.randomUUID(),
+    user_id: options.userId || crypto.randomUUID(),
+    org_id: options.orgId || crypto.randomUUID(),
+    // FIX (M14): Default to 'editor' instead of non-existent 'member' role
+    role: options.role || 'editor',
     status: options.status || 'active',
     invited_at: options.invitedAt || new Date(),
     joined_at: options.joinedAt || new Date(),

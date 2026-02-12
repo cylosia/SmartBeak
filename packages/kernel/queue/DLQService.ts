@@ -102,45 +102,51 @@ export class DLQService {
   /**
   * List DLQ entries, optionally filtered by region
   * MEDIUM FIX M9: Add pagination for large result sets
+  * SECURITY FIX P0-3: Added orgId parameter for tenant isolation
+  * @param orgId - Organization ID for tenant isolation (required)
   * @param region - Optional region filter
   * @param limit - Maximum number of entries to return (default: 100)
   * @param offset - Number of entries to skip (default: 0)
   * @returns Array of DLQ entries
   */
-  async list(region?: string, limit = 100, offset = 0): Promise<DLQEntry[]> {
+  async list(orgId: string, region?: string, limit = 100, offset = 0): Promise<DLQEntry[]> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required for tenant isolation');
+  }
   // P0-CRITICAL FIX: Cap offset to prevent unbounded pagination
   const MAX_SAFE_OFFSET = 10000;
   const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
-  logger.debug('Listing DLQ entries', { region, limit, offset: safeOffset });
+  logger.debug('Listing DLQ entries', { orgId, region, limit, offset: safeOffset });
 
   const query = region
     ? `SELECT
-    id, publishing_job_id as 'jobId', region,
-    error_message as 'errorMessage',
-    error_stack as 'errorStack',
-    error_category as 'errorCategory',
-    job_data as 'jobData',
-    retry_count as 'retryCount',
-    created_at as 'createdAt'
+    id, publishing_job_id as "jobId", region,
+    error_message as "errorMessage",
+    error_stack as "errorStack",
+    error_category as "errorCategory",
+    job_data as "jobData",
+    retry_count as "retryCount",
+    created_at as "createdAt"
     FROM publishing_dlq
-    WHERE region = $1
+    WHERE org_id = $1 AND region = $2
     ORDER BY created_at DESC
-    LIMIT $2 OFFSET $3`
+    LIMIT $3 OFFSET $4`
     : `SELECT
-    id, publishing_job_id as 'jobId', region,
-    error_message as 'errorMessage',
-    error_stack as 'errorStack',
-    error_category as 'errorCategory',
-    job_data as 'jobData',
-    retry_count as 'retryCount',
-    created_at as 'createdAt'
+    id, publishing_job_id as "jobId", region,
+    error_message as "errorMessage",
+    error_stack as "errorStack",
+    error_category as "errorCategory",
+    job_data as "jobData",
+    retry_count as "retryCount",
+    created_at as "createdAt"
     FROM publishing_dlq
+    WHERE org_id = $1
     ORDER BY created_at DESC
-    LIMIT $1 OFFSET $2`;
+    LIMIT $2 OFFSET $3`;
 
   const { rows } = region
-    ? await this["pool"].query(query, [region, limit, safeOffset])
-    : await this["pool"].query(query, [limit, safeOffset]);
+    ? await this["pool"].query(query, [orgId, region, limit, safeOffset])
+    : await this["pool"].query(query, [orgId, limit, safeOffset]);
 
   logger.debug('DLQ entries retrieved', { count: rows.length });
 
@@ -214,23 +220,57 @@ export class DLQService {
   }
 
   /**
-  * Retry a job - removes from DLQ
+  * Retry a job - removes from DLQ for re-processing
+  * SECURITY FIX P0-3: Added orgId parameter for tenant isolation
+  * @param orgId - Organization ID for tenant isolation (required)
   * @param jobId - Job ID to retry
   * @returns True if job was found and removed
   */
-  async retry(jobId: string): Promise<boolean> {
-  logger.info('Retrying job from DLQ', { jobId });
+  async retry(orgId: string, jobId: string): Promise<boolean> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required for tenant isolation');
+  }
+  logger.info('Retrying job from DLQ', { orgId, jobId });
 
   const { rowCount } = await this["pool"].query(
-    'DELETE FROM publishing_dlq WHERE publishing_job_id = $1',
-    [jobId]
+    'DELETE FROM publishing_dlq WHERE publishing_job_id = $1 AND org_id = $2',
+    [jobId, orgId]
   );
 
   const success = (rowCount ?? 0) > 0;
   if (success) {
-    logger.info('Job removed from DLQ for retry', { jobId });
+    logger.info('Job removed from DLQ for retry', { orgId, jobId });
   } else {
-    logger.warn('Job not found in DLQ for retry', { jobId });
+    logger.warn('Job not found in DLQ for retry', { orgId, jobId });
+  }
+
+  return success;
+  }
+
+  /**
+  * Permanently delete a DLQ entry without re-processing
+  * SECURITY FIX P0-4: Separate delete from retry to prevent accidental re-execution
+  * SECURITY FIX P0-3: Requires orgId for tenant isolation
+  * @param orgId - Organization ID for tenant isolation (required)
+  * @param jobId - Job ID to delete
+  * @returns True if entry was found and deleted
+  */
+  async delete(orgId: string, jobId: string): Promise<boolean> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required for tenant isolation');
+  }
+  logger.info('Permanently deleting job from DLQ', { orgId, jobId });
+
+  const { rowCount } = await this["pool"].query(
+    'DELETE FROM publishing_dlq WHERE publishing_job_id = $1 AND org_id = $2',
+    [jobId, orgId]
+  );
+
+  const success = (rowCount ?? 0) > 0;
+  if (success) {
+    logger.info('Job permanently deleted from DLQ', { orgId, jobId });
+  } else {
+    logger.warn('Job not found in DLQ for deletion', { orgId, jobId });
   }
 
   return success;

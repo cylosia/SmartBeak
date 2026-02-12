@@ -106,7 +106,8 @@ export class AggregateValidationError extends ValidationError {
   override toJSON(): { message: string; code: ErrorCode; errors: FormattedValidationError[] } {
     return {
       message: this.message,
-      code: (this as unknown as { code: ErrorCode }).code,
+      // P2-TYPE FIX: Access inherited `code` property directly instead of unsafe double cast
+      code: this.code,
       errors: this.errors,
     };
   }

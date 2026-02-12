@@ -52,6 +52,26 @@ export interface WebhookConfig {
 }
 
 /**
+ * P0-3 SECURITY FIX: Allowlist for api-key header names to prevent header injection.
+ * Only these header names are accepted for api-key auth keyHeader.
+ */
+const ALLOWED_API_KEY_HEADERS = new Set([
+  'x-api-key',
+  'x-auth-token',
+  'x-access-token',
+  'x-secret-key',
+  'x-webhook-key',
+  'x-custom-key',
+  'api-key',
+  'apikey',
+]);
+
+/**
+ * P2-1 FIX: Bounded active controllers map with max size to prevent memory leak
+ */
+const MAX_ACTIVE_CONTROLLERS = 10000;
+
+/**
  * Active fetch controllers for request cancellation
  * Maps request IDs to AbortControllers
  */
@@ -69,6 +89,14 @@ function generateRequestId(): string {
  * SECURITY FIX: Issue 18 - Request cancellation on unmount
  */
 export function registerRequestController(requestId: string, controller: AbortController): void {
+  // P2-1 FIX: Prevent unbounded memory growth
+  if (activeControllers.size >= MAX_ACTIVE_CONTROLLERS) {
+    // Evict oldest entry
+    const oldest = activeControllers.keys().next().value;
+    if (oldest !== undefined) {
+      activeControllers.delete(oldest);
+    }
+  }
   activeControllers.set(requestId, controller);
 }
 
@@ -156,10 +184,20 @@ export class WebPublishingAdapter extends PublishingAdapter {
       };
     }
 
-    const config = target.config as unknown as WebhookConfig;
+    // P2-2 FIX: Validate config shape before unsafe cast
+    const rawConfig = target.config;
+    if (typeof rawConfig["url"] !== 'string') {
+      return { success: false, error: 'Invalid config: url must be a string', timestamp: new Date() };
+    }
+    const config: WebhookConfig = {
+      url: rawConfig["url"],
+      method: rawConfig["method"] as WebhookConfig['method'],
+      headers: rawConfig["headers"] as WebhookConfig['headers'],
+      auth: rawConfig["auth"] as WebhookConfig['auth'],
+    };
 
     // SECURITY FIX: Issue 1 - SSRF protection using centralized utility
-    const urlValidation = validateUrl(config["url"], { requireHttps: true });
+    const urlValidation = validateUrl(config.url, { requireHttps: true });
     if (!urlValidation.allowed) {
       return {
         success: false,
@@ -195,10 +233,28 @@ export class WebPublishingAdapter extends PublishingAdapter {
             headers['Authorization'] = `Basic ${auth}`;
             break;
           case 'api-key':
+            // P0-3 SECURITY FIX: Validate keyHeader against allowlist to prevent header injection
             if (config.auth.keyHeader && config.auth.token) {
+              const normalizedHeader = config.auth.keyHeader.toLowerCase();
+              if (!ALLOWED_API_KEY_HEADERS.has(normalizedHeader)) {
+                return {
+                  success: false,
+                  error: `Invalid api-key header name: ${config.auth.keyHeader}. Allowed: ${[...ALLOWED_API_KEY_HEADERS].join(', ')}`,
+                  timestamp: new Date(),
+                };
+              }
               headers[config.auth.keyHeader] = config.auth.token;
             }
             break;
+          // P2-3 FIX: Exhaustive switch — reject unknown auth types
+          default: {
+            const unknownType: string = config.auth.type;
+            return {
+              success: false,
+              error: `Unknown auth type: ${unknownType}`,
+              timestamp: new Date(),
+            };
+          }
         }
       }
 
@@ -211,7 +267,8 @@ export class WebPublishingAdapter extends PublishingAdapter {
       const timeoutId = setTimeout(() => controller.abort(), PUBLISHING_TIMEOUT_MS);
 
       try {
-        const response = await fetch(config["url"], {
+        // P0-5 FIX: Use sanitizedUrl from SSRF validation instead of original config URL (TOCTOU)
+        const response = await fetch(urlValidation.sanitizedUrl!, {
           method: config["method"] || 'POST',
           headers,
           body: JSON.stringify(payload),
@@ -242,7 +299,7 @@ export class WebPublishingAdapter extends PublishingAdapter {
         clearTimeout(timeoutId);
         unregisterRequestController(requestId);
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          throw new FetchTimeoutError(`Request to ${config["url"]} timed out after ${PUBLISHING_TIMEOUT_MS}ms`);
+          throw new FetchTimeoutError(`Webhook request timed out after ${PUBLISHING_TIMEOUT_MS}ms`);
         }
         throw fetchError;
       }

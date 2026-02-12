@@ -36,7 +36,8 @@ export class UsageBatcher {
   // P1-FIX: Use setInterval instead of recursive setTimeout for consistent timing
   this.intervalTimer = setInterval(() => {
     if (!this.flushing && this.buffer.length > 0) {
-    this.flush();
+    // P1-FIX: Catch unhandled rejections from async flush() in setInterval callback
+    this.flush().catch(err => this.logger.error('Flush failed in interval', err instanceof Error ? err : undefined));
     }
   }, this.flushMs);
   // P0-FIX: Add unref to prevent blocking graceful shutdown
@@ -64,8 +65,9 @@ export class UsageBatcher {
   }
 
   // P1-FIX: Drop oldest items if buffer is at capacity (backpressure)
+  // P1-FIX: Emit error-level log (not warn) so monitoring catches billing data loss
   if (this.buffer.length >= MAX_BUFFER_SIZE) {
-    this.logger.warn('Buffer at capacity, dropping oldest item');
+    this.logger.error('BILLING_DATA_LOSS: Buffer at capacity, dropping oldest usage increment. Reconciliation required.');
     this.buffer.shift(); // Remove oldest
   }
 
@@ -78,7 +80,8 @@ export class UsageBatcher {
 
   // P1-FIX: Immediate flush if buffer is getting full (80% capacity)
   if (this.buffer.length >= MAX_BUFFER_SIZE * 0.8 && !this.flushing) {
-    this.flush();
+    // P1-FIX: Catch unhandled rejections from async flush()
+    this.flush().catch(err => this.logger.error('Flush failed in add()', err instanceof Error ? err : undefined));
   }
   }
 

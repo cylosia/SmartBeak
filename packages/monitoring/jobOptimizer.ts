@@ -232,7 +232,7 @@ export class JobOptimizer extends EventEmitter {
   const timeout = setTimeout(() => {
     this.pendingJobs.delete(key);
     this.scheduler.schedule(jobName, data).catch(err => {
-      logger.error('Failed to schedule coalesced job', {
+      logger.error('Failed to schedule coalesced job', undefined, {
         jobName,
         key,
         error: err instanceof Error ? err.message : String(err),

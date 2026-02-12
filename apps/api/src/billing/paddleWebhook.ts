@@ -50,10 +50,14 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
     await redis.setex(key, 86400, '1');
     return false;
   } catch (error) {
-    // P0-FIX: Fail open - allow processing if Redis is down
-    // Better to process twice than lose a payment
-    logger.error('Redis error checking duplication', error instanceof Error ? error : undefined, { eventId });
-    return false;
+    // P0-FIX: Fail CLOSED on Redis failure — match Stripe's behavior.
+    // Previously failed open ("return false"), allowing duplicate processing of
+    // financial webhooks during Redis downtime. Paddle retries with exponential
+    // backoff, so throwing here returns 500 and Paddle will redeliver later.
+    // Processing a payment twice (double plan upgrade, duplicate audit entries)
+    // is worse than delaying it.
+    logger.error('Redis unavailable for deduplication - failing closed', error instanceof Error ? error : undefined, { eventId });
+    throw new Error('Deduplication service unavailable');
   }
 }
 
@@ -147,38 +151,44 @@ export async function handlePaddleWebhook(
     if (payload['customer'] && typeof payload['customer'] !== 'object') {
       throw new Error('Invalid customer data in payload');
     }
-    
+
     const db = await getDb();
-    
-    // P0-FIX: Check for existing active subscription before upgrade
-    const existingSub = await db('orgs')
-      .where({ id: org_id })
-      .select('plan', 'plan_status')
-      .first();
-    
-    if (existingSub?.plan === 'pro' && existingSub?.plan_status === 'active') {
-      logger.info('Org already has active pro plan, skipping', { orgId: org_id });
-      return;
-    }
-    
-    await db('orgs')
-      .where({ id: org_id })
-      .update({ plan: 'pro', plan_status: 'active' });
-    
-    await db('audit_events').insert({
-      org_id,
-      actor_type: 'system',
-      action: 'billing_plan_upgraded',
-      metadata: JSON.stringify({
-        provider: 'paddle',
-        event_type,
-        subscription_id: payload['subscription_id'],
-        customer_email: (payload['customer'] as { email?: string } | undefined)?.email,
-        event_id: eventId,  // Track event ID for audit trail
-      })
+
+    // P0-FIX: Wrap check-and-update in a transaction to prevent race conditions
+    // from concurrent webhook deliveries creating duplicate audit entries or
+    // racing on the plan upgrade. Previously this was 3 separate queries with
+    // no transaction (SELECT + UPDATE + INSERT), unlike the subscription.cancelled
+    // path which correctly used a transaction.
+    await db.transaction(async (trx) => {
+      const existingSub = await trx('orgs')
+        .where({ id: org_id })
+        .select('plan', 'plan_status')
+        .first();
+
+      if (existingSub?.plan === 'pro' && existingSub?.plan_status === 'active') {
+        logger.info('Org already has active pro plan, skipping', { orgId: org_id });
+        return;
+      }
+
+      await trx('orgs')
+        .where({ id: org_id })
+        .update({ plan: 'pro', plan_status: 'active' });
+
+      await trx('audit_events').insert({
+        org_id,
+        actor_type: 'system',
+        action: 'billing_plan_upgraded',
+        metadata: JSON.stringify({
+          provider: 'paddle',
+          event_type,
+          subscription_id: payload['subscription_id'],
+          customer_email: (payload['customer'] as { email?: string } | undefined)?.email,
+          event_id: eventId,
+        })
+      });
+
+      logger.info('Org upgraded to pro plan', { orgId: org_id });
     });
-    
-    logger.info('Org upgraded to pro plan', { orgId: org_id });
   }
 
   if (event_type === 'subscription.cancelled') {

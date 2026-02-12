@@ -7,8 +7,6 @@ export type UsageField = typeof VALID_FIELDS[number];
 
 // Magic number constants
 const DEFAULT_USAGE_VALUE = 0;
-const MIN_SECRET_LENGTH = 1;
-const BYTES_PER_KB = 1024;
 
 /**
 * Service for tracking organization usage metrics
@@ -24,6 +22,9 @@ const BYTES_PER_KB = 1024;
 * ```
 */
 export class UsageService {
+  // P1-FIX: Cache org existence to avoid N+1 INSERT...ON CONFLICT before every increment
+  private knownOrgs = new Set<string>();
+
   /**
   * Creates a new UsageService instance
   * @param pool - PostgreSQL connection pool
@@ -81,11 +82,16 @@ export class UsageService {
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
-  if (typeof by !== 'number' || !Number.isInteger(by)) {
-    throw new Error('Increment value must be an integer');
+  // P1-FIX: Reject negative values to prevent bypassing GREATEST(0, ...) floor in decrement()
+  if (typeof by !== 'number' || !Number.isInteger(by) || by < 0) {
+    throw new Error('Increment value must be a non-negative integer');
   }
 
-  await this.ensureOrg(orgId);
+  // P1-FIX: Only call ensureOrg on first encounter to eliminate N+1 queries
+  if (!this.knownOrgs.has(orgId)) {
+    await this.ensureOrg(orgId);
+    this.knownOrgs.add(orgId);
+  }
 
   // SECURITY: Field is validated against whitelist before use
   // The validateField() call ensures only allowed column names are used
@@ -193,7 +199,11 @@ export class UsageService {
     throw new Error('Value must be a non-negative integer');
   }
 
-  await this.ensureOrg(orgId);
+  // P1-FIX: Only call ensureOrg on first encounter to eliminate N+1 queries
+  if (!this.knownOrgs.has(orgId)) {
+    await this.ensureOrg(orgId);
+    this.knownOrgs.add(orgId);
+  }
 
   const { rowCount } = await this.pool.query(
     `UPDATE org_usage

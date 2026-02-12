@@ -7,6 +7,7 @@
 
 import { getEnvVar, isPlaceholder } from './env';
 import { getLogger } from '../kernel/logger';
+import crypto from 'crypto';
 
 const logger = getLogger('ConfigValidation');
 
@@ -24,6 +25,9 @@ export const REQUIRED_ENV_VARS = [
   'STRIPE_WEBHOOK_SECRET',
   'JWT_KEY_1',
   'JWT_KEY_2',
+  // P3-6 FIX: KEY_ENCRYPTION_SECRET is critical for encrypting other secrets;
+  // it must be required, not optional, in a financial-grade system
+  'KEY_ENCRYPTION_SECRET',
 ] as const;
 
 export type RequiredEnvVar = typeof REQUIRED_ENV_VARS[number];
@@ -69,7 +73,6 @@ export const OPTIONAL_ENV_VARS = [
   'GBP_CLIENT_SECRET',
   'TIKTOK_CLIENT_KEY',
   'TIKTOK_CLIENT_SECRET',
-  'KEY_ENCRYPTION_SECRET',
   'PORT',
   'NEXT_PUBLIC_APP_URL',
   'NEXT_PUBLIC_ACP_API',
@@ -167,26 +170,32 @@ export function validateConfig(): ValidationResult {
   }
 
   // Validate specific required variables
+  // P2-8 FIX: Replace non-null assertions (!) with safe defaults
   const nodeEnvResult = validateNodeEnv(getEnvVar('NODE_ENV'));
   if (!nodeEnvResult.valid) {
-    invalid.push({ key: 'NODE_ENV', reason: nodeEnvResult.reason! });
+    invalid.push({ key: 'NODE_ENV', reason: nodeEnvResult.reason ?? 'Unknown validation error' });
   }
 
   const logLevelResult = validateLogLevel(getEnvVar('LOG_LEVEL'));
   if (!logLevelResult.valid) {
-    invalid.push({ key: 'LOG_LEVEL', reason: logLevelResult.reason! });
+    invalid.push({ key: 'LOG_LEVEL', reason: logLevelResult.reason ?? 'Unknown validation error' });
   }
 
   const serviceNameResult = validateServiceName(getEnvVar('SERVICE_NAME'));
   if (!serviceNameResult.valid) {
-    invalid.push({ key: 'SERVICE_NAME', reason: serviceNameResult.reason! });
+    invalid.push({ key: 'SERVICE_NAME', reason: serviceNameResult.reason ?? 'Unknown validation error' });
   }
 
-  // Security check: Validate JWT keys are different
+  // P2-9 FIX: Use timing-safe comparison for JWT key equality check
   const jwtKey1 = getEnvVar('JWT_KEY_1');
   const jwtKey2 = getEnvVar('JWT_KEY_2');
-  if (jwtKey1 && jwtKey2 && jwtKey1 === jwtKey2) {
-    invalid.push({ key: 'JWT_KEY_2', reason: 'JWT_KEY_1 and JWT_KEY_2 must be different values' });
+  if (jwtKey1 && jwtKey2) {
+    const buf1 = Buffer.from(jwtKey1);
+    const buf2 = Buffer.from(jwtKey2);
+    const areEqual = buf1.length === buf2.length && crypto.timingSafeEqual(buf1, buf2);
+    if (areEqual) {
+      invalid.push({ key: 'JWT_KEY_2', reason: 'JWT_KEY_1 and JWT_KEY_2 must be different values' });
+    }
   }
 
   // Check optional variables in non-production

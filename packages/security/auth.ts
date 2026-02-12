@@ -1,9 +1,15 @@
 
-import jwt, { TokenExpiredError as JwtTokenExpiredError } from 'jsonwebtoken';
+import { TokenExpiredError as JwtTokenExpiredError } from 'jsonwebtoken';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
+import {
+  verifyToken as jwtVerifyToken,
+  TokenExpiredError as JwtModuleTokenExpiredError,
+  TokenInvalidError as JwtModuleTokenInvalidError,
+  type JwtClaims,
+} from './jwt';
 
 /**
 * Unified Authentication Package
@@ -202,8 +208,14 @@ export async function optionalAuthFastify(
       return;
     }
 
-    // Validate role and convert to array
-    const roles = claims.role ? [claims.role] : ['viewer'];
+    // P1-FIX: Don't silently default missing role to 'viewer'. The required auth
+    // path (requireAuthNextJs line 83) throws on missing role, but optional auth
+    // was silently granting viewer access. If role is missing, don't attach auth
+    // context — treat it the same as missing sub/orgId.
+    if (!claims.role) {
+      return;
+    }
+    const roles = [claims.role];
 
     // Attach auth context to request
     req.authContext = {
@@ -258,8 +270,12 @@ export async function requireAuthFastify(
       return;
     }
 
-    // Validate role and convert to array
-    const roles = claims.role ? [claims.role] : ['viewer'];
+    // P1-FIX: Reject missing role instead of silently defaulting to 'viewer'
+    if (!claims.role) {
+      res.status(401).send({ error: 'Unauthorized. Token missing role claim.' });
+      return;
+    }
+    const roles = [claims.role];
 
     // Attach auth context to request
     req.authContext = {
@@ -344,11 +360,8 @@ export interface AuthContext {
   requestId?: string | undefined;
 }
 
-export interface UserRoleSchema {
-  viewer: 'viewer';
-  editor: 'editor';
-  admin: 'admin';
-}
+// P2-FIX: Removed unused UserRoleSchema interface that shadowed the Zod schema
+// via declaration merging. The interface was never used and caused confusion.
 
 // SECURITY FIX: Add 'owner' role which exists in DB but was missing from types
 const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
@@ -379,26 +392,23 @@ class TokenBindingError extends Error {
   }
 }
 
-// P0-FIX #2: Consolidated JWT verification. Previously this function used JWT_SECRET
-// while packages/security/jwt.ts used JWT_KEY_1/JWT_KEY_2, creating two independent
-// verification paths with potentially different secrets. Now uses JWT_KEY_1 as the
-// primary key (matching jwt.ts) with JWT_SECRET as fallback for migration.
+// P0-FIX: Delegate to packages/security/jwt.ts verifyToken instead of maintaining a
+// separate implementation. Previously this function only tried JWT_KEY_1 || JWT_SECRET
+// (single key, no rotation support), while jwt.ts tried all keys from getCurrentKeys()
+// (JWT_KEY_1 + JWT_KEY_2 with automatic rotation). During key rotation, tokens signed
+// with JWT_KEY_2 would be verified by jwt.ts but REJECTED here. Now both code paths
+// use the same verification logic with consistent key rotation, Zod validation, and
+// clock tolerance.
 function verifyToken(token: string): { sub?: string; orgId?: string; role?: string; jti?: string; exp?: number } {
   try {
-    const secret = process.env['JWT_KEY_1'] || process.env['JWT_SECRET'];
-    if (!secret) {
-      throw new Error('JWT_KEY_1 (or JWT_SECRET) environment variable must be set');
-    }
-    if (secret.length < 32) {
-      throw new Error('JWT key must be at least 32 characters');
-    }
-    // Explicitly specify algorithm to prevent algorithm confusion attacks
-    return jwt.verify(token, secret, { algorithms: ['HS256'] }) as {
-      sub?: string; orgId?: string; role?: string; jti?: string; exp?: number
-    };
+    const claims: JwtClaims = jwtVerifyToken(token);
+    return claims;
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
+    if (error instanceof JwtModuleTokenExpiredError) {
       throw new TokenExpiredError();
+    }
+    if (error instanceof JwtModuleTokenInvalidError) {
+      throw new Error('Invalid token');
     }
     throw new Error('Invalid token');
   }

@@ -3,6 +3,8 @@ import { getLogger, getRequestContext } from '@kernel/logger';
 import { abuseGuardConfig } from '@config';
 import { sanitizeForLogging } from '@security/logger';
 
+const logger = getLogger('abuseGuard');
+
 /**
  * Abuse Guard Middleware
  * Content validation and abuse detection for user submissions
@@ -290,7 +292,8 @@ export async function abuseGuard(req: GuardRequest, _res: GuardResponse, next: N
         userId: validated.userId,
         ip: validated.ip,
       });
-      console.warn('[abuseGuard] High risk submission:', logData);
+      // P2-FIX: Use structured logger instead of console.warn
+      logger.warn('High risk submission detected', logData as Record<string, unknown>);
     }
     next();
   }
@@ -355,9 +358,13 @@ export function checkAbuseDetailed(payload: unknown): AbuseCheckResult {
         ...(contentCheck.flags || []),
         ...validated.riskFlags,
       ];
+      // P1-FIX: riskOverride no longer honored in checkAbuseDetailed because there
+      // is no user context to verify admin role. The middleware version (abuseGuard)
+      // correctly requires canOverrideRisk(req.user) before honoring riskOverride.
+      // Without a role check here, any caller could bypass risk assessment by
+      // setting riskOverride:true in the payload.
       return {
-        allowed: combinedRisk < 50 ||
-          (assessment.criticalFlags.length === 0 && validated.riskOverride === true),
+        allowed: combinedRisk < 50,
         reason: combinedFlags.length > 0 ? `Flags: ${combinedFlags.join(', ')}` : undefined,
         riskScore: combinedRisk,
         flags: combinedFlags.length > 0 ? combinedFlags : undefined,

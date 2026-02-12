@@ -18,20 +18,23 @@ import { runMediaCanary } from './mediaCanaries';
 export async function youtubeCanary(adapter: YouTubeAdapter): Promise<CanaryResult> {
   const startTime = Date.now();
   try {
-  await runMediaCanary('youtube', async () => {
-    await adapter.healthCheck();
-  });
-  return {
-    name: 'youtube',
-    healthy: true,
-    latency: Date.now() - startTime,
-  };
+    await runMediaCanary('youtube', async () => {
+      const result = await adapter.healthCheck();
+      if (!result.healthy) {
+        throw new Error(result.error ?? 'YouTube health check returned unhealthy');
+      }
+    });
+    return {
+      name: 'youtube',
+      healthy: true,
+      latency: Date.now() - startTime,
+    };
   } catch (error) {
-  return {
-    name: 'youtube',
-    healthy: false,
-    latency: Date.now() - startTime,
-    error: error instanceof Error ? error["message"] : 'Unknown error',
-  };
+    return {
+      name: 'youtube',
+      healthy: false,
+      latency: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }

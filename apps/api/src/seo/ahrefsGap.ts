@@ -312,7 +312,7 @@ async function processKeywordBatches(domain_id: string, phrases: string[], keywo
       // FIX: Use Promise.all for parallel upserts instead of individual sequential upserts (N+1 fix)
       const keywords = await Promise.all(batchInputs.map(input => upsertKeyword(input)));
       // Map results to KeywordGap format using real data from API
-      const batchResults = keywords.map((k: { id: string }, index: number) => {
+      const batchResults = keywords.filter((k): k is NonNullable<typeof k> => k != null).map((k, index) => {
         const phrase = batch[index]!;
         const apiData = keywordDataMap.get(phrase);
         return {
@@ -408,6 +408,7 @@ async function processInChunks(domain_id: string, phrases: string[], keywordData
           phrase,
           source: 'ahrefs',
         });
+        if (!k) throw new Error(`Failed to upsert keyword: ${phrase}`);
         const apiData = keywordDataMap.get(phrase);
         return {
           keyword_id: k.id,

@@ -111,6 +111,10 @@ export interface EmailPayload {
 export class EmailAdapter implements DeliveryAdapter {
   private config: EmailConfig;
   private provider: EmailProvider;
+  // P1-PERFORMANCE FIX: Cache SES client and SMTP transporter as instance properties
+  // instead of creating new connections per-send, which causes TCP port exhaustion under load
+  private sesClient: InstanceType<typeof import('@aws-sdk/client-ses').SESClient> | null = null;
+  private smtpTransporter: ReturnType<typeof import('nodemailer').createTransport> | null = null;
 
   /**
   * Create a new EmailAdapter
@@ -120,11 +124,13 @@ export class EmailAdapter implements DeliveryAdapter {
   * @param config - Partial email configuration
   */
   constructor(config?: Partial<EmailConfig>) {
+    // P2-CORRECTNESS FIX: Spread config FIRST, then apply defaults only for missing fields.
+    // Previously, the spread came AFTER defaults, overwriting them with raw config values.
     this.config = {
+      ...(config as Partial<EmailConfig>),
       fromEmail: config?.fromEmail || getEnvWithDefault('EMAIL_FROM', DEFAULT_FROM_EMAIL),
       fromName: config?.fromName || getEnvWithDefault('EMAIL_FROM_NAME', DEFAULT_FROM_NAME),
       replyTo: config?.replyTo || getEnv('EMAIL_REPLY_TO') || undefined,
-      ...(config as Partial<EmailConfig>),
     } as EmailConfig;
 
     // Auto-detect provider from env vars
@@ -224,10 +230,11 @@ export class EmailAdapter implements DeliveryAdapter {
       const { EmailSchema } = await import('@kernel/validation');
       const emailValidation = EmailSchema.safeParse(to);
       if (!emailValidation.success) {
+        // P1-PII FIX: Do not include email address in error details
         throw new ExternalAPIError(
-          `Invalid recipient email address: ${to}`,
+          'Invalid recipient email address',
           ErrorCodes.INVALID_EMAIL,
-          { recipient: to }
+          { validationErrors: emailValidation.error.issues.map(i => i.message) }
         );
       }
 
@@ -299,8 +306,10 @@ export class EmailAdapter implements DeliveryAdapter {
       '>': '&gt;',
       '"': '&quot;',
       "'": '&#39;',
+      // P2-SECURITY FIX: Escape backticks to prevent template literal injection
+      '`': '&#96;',
     };
-    return unsafe.replace(/[&<>"']/g, (c) => escapeMap[c] ?? c);
+    return unsafe.replace(/[&<>"'`]/g, (c) => escapeMap[c] ?? c);
   }
 
   private async buildEmailPayload(
@@ -419,13 +428,17 @@ export class EmailAdapter implements DeliveryAdapter {
     // Dynamic import to avoid bundling AWS SDK if not used
     const { SESClient, SendEmailCommand } = await import('@aws-sdk/client-ses');
 
-    const client = new SESClient({
-      region: this.config.awsRegion || getEnvWithDefault('AWS_REGION', DEFAULT_AWS_REGION),
-      credentials: {
-        accessKeyId: this.config.awsAccessKeyId || getEnv('AWS_ACCESS_KEY_ID')!,
-        secretAccessKey: this.config.awsSecretAccessKey || getEnv('AWS_SECRET_ACCESS_KEY')!,
-      },
-    });
+    // P1-PERFORMANCE FIX: Reuse SES client instead of creating per-send
+    if (!this.sesClient) {
+      this.sesClient = new SESClient({
+        region: this.config.awsRegion || getEnvWithDefault('AWS_REGION', DEFAULT_AWS_REGION),
+        credentials: {
+          accessKeyId: this.config.awsAccessKeyId || getEnv('AWS_ACCESS_KEY_ID') || '',
+          secretAccessKey: this.config.awsSecretAccessKey || getEnv('AWS_SECRET_ACCESS_KEY') || '',
+        },
+      });
+    }
+    const client = this.sesClient;
 
     const command = new SendEmailCommand({
       Source: `${this.config.fromName} <${this.config.fromEmail}>`,
@@ -452,7 +465,8 @@ export class EmailAdapter implements DeliveryAdapter {
       throw new ExternalAPIError(
         `SES send failed: ${error instanceof Error ? error.message : String(error)}`,
         ErrorCodes.EXTERNAL_API_ERROR,
-        { provider: 'ses', recipient: payload.to },
+        // P1-PII FIX: Do not include recipient email in error details (GDPR violation)
+        { provider: 'ses', recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 },
         error instanceof Error ? error : undefined
       );
     }
@@ -470,17 +484,21 @@ export class EmailAdapter implements DeliveryAdapter {
   private async sendWithSMTP(payload: EmailPayload): Promise<void> {
     const nodemailer = await import('nodemailer');
 
-    const smtpSecure = this.config.smtpSecure ?? (getEnvWithDefault('SMTP_SECURE', 'false') === 'true');
+    // P1-PERFORMANCE FIX: Reuse SMTP transporter instead of creating per-send
+    if (!this.smtpTransporter) {
+      const smtpSecure = this.config.smtpSecure ?? (getEnvWithDefault('SMTP_SECURE', 'false') === 'true');
 
-    const transporter = nodemailer.createTransport({
-      host: this.config.smtpHost || getEnv('SMTP_HOST'),
-      port: this.config.smtpPort || parseInt(getEnvWithDefault('SMTP_PORT', String(DEFAULT_SMTP_PORT)), 10),
-      secure: smtpSecure,
-      auth: {
-        user: this.config.smtpUser || getEnv('SMTP_USER'),
-        pass: this.config.smtpPass || getEnv('SMTP_PASS'),
-      },
-    });
+      this.smtpTransporter = nodemailer.createTransport({
+        host: this.config.smtpHost || getEnv('SMTP_HOST'),
+        port: this.config.smtpPort || parseInt(getEnvWithDefault('SMTP_PORT', String(DEFAULT_SMTP_PORT)), 10),
+        secure: smtpSecure,
+        auth: {
+          user: this.config.smtpUser || getEnv('SMTP_USER'),
+          pass: this.config.smtpPass || getEnv('SMTP_PASS'),
+        },
+      });
+    }
+    const transporter = this.smtpTransporter;
 
     try {
       await transporter.sendMail({
@@ -501,7 +519,8 @@ export class EmailAdapter implements DeliveryAdapter {
       throw new ExternalAPIError(
         `SMTP send failed: ${error instanceof Error ? error.message : String(error)}`,
         ErrorCodes.EXTERNAL_API_ERROR,
-        { provider: 'smtp', recipient: payload.to },
+        // P1-PII FIX: Do not include recipient email in error details (GDPR violation)
+        { provider: 'smtp', recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 },
         error instanceof Error ? error : undefined
       );
     }
@@ -556,7 +575,8 @@ export class EmailAdapter implements DeliveryAdapter {
       throw new ExternalAPIError(
         `SendGrid API error: ${response.status} - ${errorText}`,
         ErrorCodes.EXTERNAL_API_ERROR,
-        { provider: 'sendgrid', status: response.status, recipient: payload.to }
+        // P1-PII FIX: Do not include recipient email in error details (GDPR violation)
+        { provider: 'sendgrid', status: response.status, recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 }
       );
     }
 
@@ -608,7 +628,8 @@ export class EmailAdapter implements DeliveryAdapter {
       throw new ExternalAPIError(
         `Postmark API error: ${response.status} - ${errorText}`,
         ErrorCodes.EXTERNAL_API_ERROR,
-        { provider: 'postmark', status: response.status, recipient: payload.to }
+        // P1-PII FIX: Do not include recipient email in error details (GDPR violation)
+        { provider: 'postmark', status: response.status, recipientCount: Array.isArray(payload.to) ? payload.to.length : 1 }
       );
     }
 
@@ -644,17 +665,23 @@ export class EmailAdapter implements DeliveryAdapter {
     switch (this.provider) {
       case 'ses': {
         const { SESClient, GetSendQuotaCommand } = await import('@aws-sdk/client-ses');
-        const client = new SESClient({
-          region: this.config.awsRegion || getEnvWithDefault('AWS_REGION', DEFAULT_AWS_REGION),
-          credentials: {
-            accessKeyId: this.config.awsAccessKeyId || getEnv('AWS_ACCESS_KEY_ID')!,
-            secretAccessKey: this.config.awsSecretAccessKey || getEnv('AWS_SECRET_ACCESS_KEY')!,
-          },
-        });
-        const response = await client.send(new GetSendQuotaCommand({}));
+        // P1-PERFORMANCE FIX: Reuse cached SES client
+        if (!this.sesClient) {
+          this.sesClient = new SESClient({
+            region: this.config.awsRegion || getEnvWithDefault('AWS_REGION', DEFAULT_AWS_REGION),
+            credentials: {
+              accessKeyId: this.config.awsAccessKeyId || getEnv('AWS_ACCESS_KEY_ID') || '',
+              secretAccessKey: this.config.awsSecretAccessKey || getEnv('AWS_SECRET_ACCESS_KEY') || '',
+            },
+          });
+        }
+        const response = await this.sesClient.send(new GetSendQuotaCommand({}));
+        // P2-CORRECTNESS FIX: Max24HourSend IS the 24-hour limit. Do not multiply by 24.
+        const limit = Math.floor(response.Max24HourSend || 0);
+        const sent = Math.floor(response.SentLast24Hours || 0);
         return {
-          limit: Math.floor((response.Max24HourSend || 0) * 24),
-          remaining: Math.floor((response.Max24HourSend || 0) * 24 - (response.SentLast24Hours || 0)),
+          limit,
+          remaining: limit - sent,
         };
       }
       default:

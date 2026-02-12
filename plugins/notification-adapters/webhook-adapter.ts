@@ -1,7 +1,8 @@
 import fetch from 'node-fetch';
-import { 
-  DeliveryAdapter, 
-  SendNotificationInput, 
+import crypto from 'crypto';
+import {
+  DeliveryAdapter,
+  SendNotificationInput,
   DeliveryResult,
   DeliveryAdapterError
 } from '../../packages/types/notifications.js';
@@ -21,9 +22,6 @@ import { getLogger } from '../../packages/kernel/logger';
 * MEDIUM FIX M16: Add JSDoc comments
 * MEDIUM FIX R1: Fix AbortController cleanup
 */
-
-// Alias for backward compatibility
-const getEnv = getOptionalEnv;
 
 const logger = getLogger('WebhookAdapter');
 
@@ -47,10 +45,11 @@ const MAX_WEBHOOK_PAYLOAD_SIZE = 1024 * 1024;
 * @throws Error if no valid URLs configured
 */
 function getWebhookAllowlist(): string[] {
-  const envAllowlist = getEnv('ALERT_WEBHOOK_URL') || getEnvWithDefault('SLACK_WEBHOOK_URL', '');
+  const envAllowlist = getOptionalEnv('ALERT_WEBHOOK_URL') || getEnvWithDefault('SLACK_WEBHOOK_URL', '');
 
   if (!envAllowlist) {
-    throw new Error('WEBHOOK_ALLOWLIST must be configured');
+    // P2-4 FIX: Error message now references the actual env vars being read
+    throw new Error('ALERT_WEBHOOK_URL or SLACK_WEBHOOK_URL must be configured');
   }
 
   // Parse comma-separated list and validate each URL
@@ -68,7 +67,7 @@ function getWebhookAllowlist(): string[] {
       validUrls.push(url);
     } catch (error) {
       logger.warn(`Invalid URL in allowlist: ${url}`, {
-        error: error instanceof Error ? (error as Error).message : String(error),
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }
@@ -145,7 +144,7 @@ export class WebhookAdapter implements DeliveryAdapter {
         } catch (error) {
           logger.warn('Error parsing allowlist URL', {
             allowed,
-            error: error instanceof Error ? (error as Error).message : String(error),
+            error: error instanceof Error ? error.message : String(error),
           });
           return false;
         }
@@ -159,8 +158,9 @@ export class WebhookAdapter implements DeliveryAdapter {
         );
       }
 
-      // Validate payload size - MEDIUM FIX I5: Add length validation
-      const payloadSize = JSON.stringify(payload).length;
+      // P2-5 FIX: Use Buffer.byteLength for accurate byte count (not character count)
+      const payloadJson = JSON.stringify(payload);
+      const payloadSize = Buffer.byteLength(payloadJson, 'utf8');
       if (payloadSize > MAX_WEBHOOK_PAYLOAD_SIZE) {
         throw new ExternalAPIError(
           `Webhook payload exceeds maximum size of ${MAX_WEBHOOK_PAYLOAD_SIZE} bytes`,
@@ -175,9 +175,10 @@ export class WebhookAdapter implements DeliveryAdapter {
       try {
         timeout = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
 
-        const res = await fetch(to, {
+        // P2-6 FIX: Use normalized URL from parsed targetUrl instead of raw input
+        const res = await fetch(targetUrl.toString(), {
           method: 'POST',
-          body: JSON.stringify(payload),
+          body: payloadJson,
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal
         });
@@ -198,7 +199,8 @@ export class WebhookAdapter implements DeliveryAdapter {
       return {
         success: true,
         attemptedAt,
-        deliveryId: `webhook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        // P2-7 FIX: Use crypto.randomBytes instead of Math.random(); .substring() instead of deprecated .substr()
+        deliveryId: `webhook_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`
       };
     } catch (error) {
       return {

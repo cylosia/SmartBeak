@@ -404,48 +404,9 @@ export type TypeMap<S extends string, T> = {
 // Error Code Types
 // ============================================================================
 
-/** Standardized error codes for the application */
-export type ErrorCode =
-  // Validation
-  | 'VALIDATION_ERROR'
-  | 'INVALID_PARAMS'
-  | 'INVALID_INPUT'
-  | 'INVALID_UUID'
-  | 'INVALID_FORMAT'
-  // Authentication
-  | 'AUTH_ERROR'
-  | 'AUTH_REQUIRED'
-  | 'INVALID_TOKEN'
-  | 'TOKEN_EXPIRED'
-  | 'INSUFFICIENT_PERMISSIONS'
-  | 'FORBIDDEN'
-  // Resource
-  | 'NOT_FOUND'
-  | 'CONTENT_NOT_FOUND'
-  | 'DOMAIN_NOT_FOUND'
-  | 'USER_NOT_FOUND'
-  // Domain/Ownership
-  | 'DOMAIN_NOT_OWNED'
-  | 'ACCESS_DENIED'
-  // Database
-  | 'DATABASE_ERROR'
-  | 'DUPLICATE_ENTRY'
-  | 'CONNECTION_ERROR'
-  | 'QUERY_TIMEOUT'
-  // Service
-  | 'INTERNAL_ERROR'
-  | 'SERVICE_UNAVAILABLE'
-  | 'RATE_LIMIT_EXCEEDED'
-  // Business Logic
-  | 'PUBLISH_FAILED'
-  | 'BILLING_ERROR'
-  | 'QUOTA_EXCEEDED'
-  // Method
-  | 'METHOD_NOT_ALLOWED'
-  | 'PAYLOAD_TOO_LARGE'
-  | 'RESOURCE_CONFLICT'
-  | 'CONFLICT'
-  | 'JSONB_SIZE_EXCEEDED';
+// P2-2 FIX: Re-export ErrorCode from types-base to avoid duplicate definitions
+// with divergent member sets. The canonical definition is in types-base.ts.
+export type { ErrorCode } from './types-base';
 
 // ============================================================================
 // Base Validation Error

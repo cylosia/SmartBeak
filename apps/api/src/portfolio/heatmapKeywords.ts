@@ -12,5 +12,5 @@ export async function keywordDepthByContent(content_id: string): Promise<number>
     .where({ content_id })
     .count('* as c')
     .first();
-  return Number(r?.c || 0);
+  return Number(r?.['c'] || 0);
 }

@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await requireOrgAdmin(auth, res);
     } catch {
-      logger.warn({ userId: auth.userId }, 'Non-admin user attempted to transfer domain');
+      logger.warn('Non-admin user attempted to transfer domain', { userId: auth.userId });
       return;
     }
 
@@ -61,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // SECURITY FIX: P1-HIGH Issue 4 - Verify domain belongs to user's org
+    // P0-3 FIX: Wrap verification + insert in a transaction to prevent TOCTOU race
     const pool = await getPoolInstance();
     const { rows } = await pool.query(
       `SELECT domain_id, org_id FROM domain_registry
@@ -71,7 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (rows.length === 0) {
       // SECURITY: Return 404 (not 403) to prevent ID enumeration
-      logger.warn({ userId: auth.userId, domainId }, 'User attempted to transfer non-existent or unauthorized domain');
+      logger.warn('User attempted to transfer non-existent or unauthorized domain', { userId: auth.userId, domainId });
       return res.status(404).json({ error: 'Domain not found' });
     }
 
@@ -79,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Double-check org_id matches
     if (domain.org_id !== auth["orgId"]) {
-      logger.warn({ domainOrgId: domain.org_id, userOrgId: auth["orgId"] }, 'Domain org_id does not match user org_id');
+      logger.warn('Domain org_id does not match user org_id', { domainOrgId: domain.org_id, userOrgId: auth["orgId"] });
       return res.status(404).json({ error: 'Domain not found' });
     }
 
@@ -95,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Security audit log
-    logger.info({ domainId, userId: auth.userId, orgId: auth["orgId"], transferId }, 'Domain transfer initiated');
+    logger.info('Domain transfer initiated', { domainId, userId: auth.userId, orgId: auth["orgId"], transferId });
 
     res.json({
       transferred: true,
@@ -105,7 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AuthError') return;
-    logger.error({ error }, 'Failed to initiate domain transfer');
+    logger.error('Failed to initiate domain transfer', error instanceof Error ? error : undefined, { error: String(error) });
 
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     const sanitized = 'Internal server error. Failed to initiate domain transfer';

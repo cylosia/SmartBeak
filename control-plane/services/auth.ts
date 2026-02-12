@@ -1,5 +1,9 @@
 
 import { verifyToken, JwtClaims } from './jwt';
+import {
+  TokenExpiredError as KernelTokenExpiredError,
+  TokenRevokedError as KernelTokenRevokedError,
+} from '@kernel/auth';
 
 export type Role = 'admin' | 'editor' | 'viewer' | 'owner';
 
@@ -145,13 +149,14 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
   try {
   claims = await verifyToken(token);
   } catch (error: unknown) {
+  // P1-FIX: Use instanceof checks instead of fragile string matching on error messages
+  if (error instanceof KernelTokenExpiredError) {
+    throw new TokenExpiredError(error.message);
+  }
+  if (error instanceof KernelTokenRevokedError) {
+    throw new TokenRevokedError(error.message);
+  }
   const errorMessage = error instanceof Error ? error.message : String(error);
-  if (errorMessage.includes('expired')) {
-    throw new TokenExpiredError(errorMessage);
-  }
-  if (errorMessage.includes('revoked')) {
-    throw new TokenRevokedError(errorMessage);
-  }
   throw new InvalidTokenError(`Token verification failed: ${errorMessage}`);
   }
 

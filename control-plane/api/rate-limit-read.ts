@@ -1,6 +1,7 @@
 import { LRUCache } from 'lru-cache';
 
-﻿import Redis from 'ioredis';
+import Redis from 'ioredis';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Rate Limiting for Read Operations
@@ -9,6 +10,9 @@ import { LRUCache } from 'lru-cache';
 *
 * This implementation uses Redis when available for proper distributed rate limiting
 */
+
+// AUDIT-FIX P2-03: Use structured logger instead of console.log/warn/error
+const logger = getLogger('RateLimitRead');
 
 // ============================================================================
 // Configuration
@@ -51,20 +55,20 @@ function getRedisClient(): Redis | null {
 
   redisClient.on('connect', () => {
     redisAvailable = true;
-    console.log('[RateLimitRead] Redis connected for distributed rate limiting');
+    logger.info('Redis connected for distributed rate limiting');
   });
 
   redisClient.on('error', (err) => {
     redisAvailable = false;
     // Only log once to prevent spam
     if (err.message?.includes('ECONNREFUSED')) {
-    console.warn('[RateLimitRead] Redis unavailable, using in-memory fallback');
+    logger.warn('Redis unavailable, using in-memory fallback');
     }
   });
 
   return redisClient;
   } catch (error) {
-  console["error"]('[RateLimitRead] Failed to initialize Redis:', error);
+  logger.error('Failed to initialize Redis', error instanceof Error ? error : new Error(String(error)));
   redisAvailable = false;
   return null;
   }
@@ -208,7 +212,7 @@ export async function readRateLimit(
     return await checkRedisRateLimit(key, max, windowMs);
   } catch (error) {
     // Fall back to memory if Redis fails
-    console.warn('[RateLimitRead] Redis failed, using memory fallback:', error);
+    logger.warn('Redis failed, using memory fallback');
   }
   }
 

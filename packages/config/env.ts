@@ -4,8 +4,9 @@
  * Provides safe parsing and validation of environment variables.
  */
 
-// Placeholder detection regex - comprehensive pattern matching
-const PLACEHOLDER_PATTERN = /placeholder|your_|xxx|example|test|demo|fake|mock|invalid|null|^\s*$/i;
+// P1-SECURITY FIX: Use word boundaries to prevent matching legitimate values
+// containing substrings like "test" (e.g., "contest-api-key", "attestation-token")
+const PLACEHOLDER_PATTERN = /\bplaceholder\b|\byour_|\bxxx\b|\bexample\b|\btest\b|\bdemo\b|\bfake\b|\bmock\b|\binvalid\b|\bnull\b|^\s*$/i;
 
 /**
  * Get environment variable value
@@ -29,8 +30,10 @@ export function isPlaceholder(value: string | undefined): boolean {
 export function parseIntEnv(name: string, defaultValue: number): number {
   const value = process.env[name];
   if (!value) return defaultValue;
-  const parsed = parseInt(value, 10);
-  return isNaN(parsed) ? defaultValue : parsed;
+  // P2-TYPE FIX: Use Number() + Number.isInteger() instead of parseInt() to match requireIntEnv.
+  // parseInt('3.14abc', 10) silently returns 3, masking invalid input.
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : defaultValue;
 }
 
 /**
@@ -69,7 +72,14 @@ export function parseFloatEnv(name: string, defaultValue: number): number {
 export function parseBoolEnv(name: string, defaultValue: boolean): boolean {
   const value = process.env[name];
   if (!value) return defaultValue;
-  return value.toLowerCase() === 'true' || value === '1';
+  // P1-SECURITY FIX: Only recognize explicit true/false values.
+  // Previously, ANY non-"true"/non-"1" string (including typos like "ture", "yes", "on")
+  // silently returned false, potentially disabling security features.
+  const normalized = value.toLowerCase();
+  if (normalized === 'true' || value === '1') return true;
+  if (normalized === 'false' || value === '0') return false;
+  console.warn(`[config] Unrecognized boolean value for ${name}: "${value}", using default: ${defaultValue}`);
+  return defaultValue;
 }
 
 /**
@@ -106,7 +116,11 @@ export function parseJSONEnv<T>(name: string, defaultValue: T): T {
   if (!value) return defaultValue;
   try {
     return JSON.parse(value) as T;
-  } catch {
+  } catch (e) {
+    // P2-SECURITY FIX: Log a warning when JSON parsing fails instead of silently returning default.
+    // For security-critical configs, silent failures can mask misconfiguration.
+    const errMsg = e instanceof Error ? e.message : String(e);
+    console.warn(`[config] Failed to parse JSON env var ${name}: ${errMsg}, using default`);
     return defaultValue;
   }
 }

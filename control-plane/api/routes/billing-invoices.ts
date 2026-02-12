@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
+import type StripeTypes from 'stripe';
 
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';

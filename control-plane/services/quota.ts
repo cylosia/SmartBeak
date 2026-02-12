@@ -90,12 +90,9 @@ export class QuotaService {
   const plan = await this.billing.getActivePlan(orgId);
   const usage = await this.usage.getUsage(orgId);
 
+  // P2-4/P3-4: Reuse getLimitFromPlan to avoid duplicated logic
   const createQuotaInfo = (field: QuotaField) => {
-    const limit =
-    field === 'domain_count' ? plan?.max_domains ?? null :
-    field === 'content_count' ? plan?.max_content ?? null :
-    field === 'media_count' ? plan?.max_media ?? null :
-    null;
+    const limit = this.getLimitFromPlan(plan, field);
 
     const fieldUsage = usage[field as keyof typeof usage] as number | undefined;
     return {

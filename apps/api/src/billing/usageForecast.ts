@@ -17,10 +17,11 @@ export type UsageForecast = {
 export function isUsageForecast(obj: unknown): obj is UsageForecast {
   if (typeof obj !== 'object' || obj === null) return false;
   const forecast = obj as UsageForecast;
+  // P3-FIX: Also check for NaN/Infinity since typeof NaN === 'number'
   return (
-  typeof forecast.period_days === 'number' &&
-  typeof forecast.projected_jobs === 'number' &&
-  typeof forecast.projected_cost_usd === 'number'
+  typeof forecast.period_days === 'number' && Number.isFinite(forecast.period_days) &&
+  typeof forecast.projected_jobs === 'number' && Number.isFinite(forecast.projected_jobs) &&
+  typeof forecast.projected_cost_usd === 'number' && Number.isFinite(forecast.projected_cost_usd)
   );
 }
 

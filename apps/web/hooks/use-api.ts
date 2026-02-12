@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { apiUrl } from '../lib/api-client';
 
@@ -49,16 +50,25 @@ function createTimeoutController(timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS)
  * @returns Fetch response
  */
 async function fetchWithTimeout(
-  url: string, 
+  url: string,
   options: RequestInit = {},
   timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS
 ): Promise<Response> {
   const { controller, clear } = createTimeoutController(timeoutMs);
-  
+
   try {
+    // P1-FIX: Combine timeout signal with caller-provided signal (e.g., React Query's
+    // unmount cancellation signal) using AbortSignal.any(). Previously, the caller's
+    // signal was overwritten, breaking request cancellation on component unmount.
+    const signals: AbortSignal[] = [controller.signal];
+    if (options.signal) {
+      signals.push(options.signal);
+    }
+    const combinedSignal = AbortSignal.any(signals);
+
     const response = await fetch(url, {
       ...options,
-      signal: controller.signal,
+      signal: combinedSignal,
     });
     clear();
     return response;
@@ -254,7 +264,7 @@ export function useUpdateLlmPreferences() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (preferences: any) => {
+    mutationFn: async (preferences: Record<string, unknown>) => {
       const res = await fetchWithTimeout(
         apiUrl('llm/preferences'),
         {
@@ -396,7 +406,8 @@ export { fetchWithTimeout, createTimeoutController, DEFAULT_REQUEST_TIMEOUT_MS }
 * SECURITY FIX: Issue 17 & 18 - Request timeout and cancellation
 */
 export function useApi() {
-  return {
+  // P2-FIX: Memoize the API object to prevent new function references on every render
+  return useMemo(() => ({
     get: async (path: string) => {
       const url = apiUrl(path.replace(/^\//, ''));
       const response = await fetchWithTimeout(url, {
@@ -436,5 +447,5 @@ export function useApi() {
       if (!response.ok) throw new Error(`Failed to DELETE ${path}`);
       return { data: await response.json() };
     },
-  };
+  }), []);
 }
