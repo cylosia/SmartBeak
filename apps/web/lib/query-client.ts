@@ -34,8 +34,9 @@ async function fetchWithTimeout(
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
   
   // Combine external signal with internal timeout
+  // SECURITY FIX P1-7: Use { once: true } to prevent event listener memory leak
   if (signal) {
-    signal.addEventListener('abort', () => controller.abort());
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
   
   try {
