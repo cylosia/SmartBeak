@@ -74,7 +74,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
-    try { await rateLimit('llm', 30, req, res); } catch { return; }
+    try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
 
     let models: LlmModel[];
     try {
@@ -113,7 +113,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
-    try { await rateLimit('llm', 30, req, res); } catch { return; }
+    try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
 
     const preferences: LlmPreferences = {
     defaultModel: 'gpt-4',
@@ -153,7 +153,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin']);
-    try { await rateLimit('llm', 30, req, res); } catch { return; }
+    try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
 
     // Validate input
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);

@@ -21,7 +21,7 @@ function getRedisConnection(): { host: string; port: number; password?: string; 
   if (url.password) {
     try {
       password = decodeURIComponent(url.password);
-    } catch {
+    } catch (_e) {
       throw new Error('REDIS_URL contains an invalid percent-encoded password');
     }
   }
