@@ -1,9 +1,85 @@
 /**
  * Shard Generator Service
  * Generates site-specific shard files from base templates
+ *
+ * SECURITY FIXES:
+ * - P0 #6: HTML entity escaping for all config values in templates
+ * - P0 #7: CSS color validation and customCss sanitization
+ * - P1 #17: Exported VALID_THEME_IDS for route validation
  */
 
 import { ShardFile } from './shard-deployment';
+
+/**
+ * SECURITY FIX P0 #6: Escape HTML entities to prevent XSS in generated templates.
+ */
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '`': '&#96;',
+};
+
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"'`]/g, (c) => HTML_ESCAPE_MAP[c] || c);
+}
+
+/**
+ * SECURITY FIX P0 #7: Validate CSS color values.
+ * Only allows hex colors (#rgb, #rrggbb, #rrggbbaa) and named CSS colors.
+ */
+const CSS_COLOR_REGEX = /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const SAFE_NAMED_COLORS = new Set([
+  'red', 'blue', 'green', 'black', 'white', 'gray', 'grey', 'orange', 'purple',
+  'pink', 'brown', 'cyan', 'magenta', 'yellow', 'navy', 'teal', 'maroon',
+  'olive', 'lime', 'aqua', 'fuchsia', 'silver', 'transparent', 'inherit',
+]);
+
+function validateCssColor(color: string): string {
+  const trimmed = color.trim().toLowerCase();
+  if (CSS_COLOR_REGEX.test(trimmed)) return trimmed;
+  if (SAFE_NAMED_COLORS.has(trimmed)) return trimmed;
+  // Default to a safe color if invalid
+  return '#333333';
+}
+
+/**
+ * SECURITY FIX P0 #7: Sanitize custom CSS to prevent injection.
+ * Strips dangerous CSS constructs.
+ */
+function sanitizeCustomCss(css: string | undefined): string {
+  if (!css || typeof css !== 'string') return '';
+
+  return css
+    // Remove @import rules (can load external stylesheets)
+    .replace(/@import\b[^;]*;?/gi, '')
+    // Remove url() references (can exfiltrate data or load external resources)
+    .replace(/url\s*\([^)]*\)/gi, '')
+    // Remove expression() (IE-specific JS execution in CSS)
+    .replace(/expression\s*\([^)]*\)/gi, '')
+    // Remove -moz-binding (Firefox-specific JS execution)
+    .replace(/-moz-binding\s*:[^;]*/gi, '')
+    // Remove behavior: (IE-specific HTC loading)
+    .replace(/behavior\s*:[^;]*/gi, '')
+    // Remove javascript: in any value
+    .replace(/javascript\s*:/gi, '')
+    // Remove HTML comments that could break out of style context
+    .replace(/<!--/g, '')
+    .replace(/-->/g, '')
+    // Remove </style> tags that could break out of CSS context
+    .replace(/<\/?style[^>]*>/gi, '');
+}
+
+/** Valid theme IDs for input validation (P1 #17) */
+export const VALID_THEME_IDS = [
+  'affiliate-comparison',
+  'authority-site',
+  'landing-leadgen',
+  'local-business',
+  'media-newsletter',
+];
 
 // Base template for Next.js app
 const BASE_TEMPLATE = {
@@ -151,30 +227,34 @@ export function generateShardFiles(
 
 /**
  * Replace template variables in content
+ * SECURITY FIX P0 #6: All user-provided values are HTML-escaped
  */
 function replaceTemplateVars(content: string, config: ThemeConfig): string {
   return content
-    .replace(/\{\{siteName\}\}/g, config.siteName)
-    .replace(/\{\{siteDescription\}\}/g, config.siteDescription || config.siteName)
-    .replace(/\{\{primaryColor\}\}/g, config.primaryColor)
-    .replace(/\{\{logoUrl\}\}/g, config.logoUrl || '');
+    .replace(/\{\{siteName\}\}/g, escapeHtml(config.siteName))
+    .replace(/\{\{siteDescription\}\}/g, escapeHtml(config.siteDescription || config.siteName))
+    .replace(/\{\{primaryColor\}\}/g, validateCssColor(config.primaryColor))
+    .replace(/\{\{logoUrl\}\}/g, escapeHtml(config.logoUrl || ''));
 }
 
 // Page generators for each theme
 function generateAffiliateLandingPage(config: ThemeConfig): string {
+  // SECURITY FIX P0 #6: Escape all user-provided values
+  const safeName = escapeHtml(config.siteName);
+  const safeDesc = escapeHtml(config.siteDescription || 'Best product comparisons');
   return `import Head from 'next/head';
 
 export default function Home() {
   return (
     <>
       <Head>
-        <title>${config.siteName}</title>
-        <meta name="description" content="${config.siteDescription || 'Best product comparisons'}" />
+        <title>${safeName}</title>
+        <meta name="description" content="${safeDesc}" />
       </Head>
-      
+
       <main className="container">
         <header className="header">
-          <h1>${config.siteName}</h1>
+          <h1>${safeName}</h1>
           <p>Honest reviews and comparisons</p>
         </header>
         
@@ -193,19 +273,21 @@ export default function Home() {
 }
 
 function generateAuthorityLandingPage(config: ThemeConfig): string {
+  const safeName = escapeHtml(config.siteName);
+  const safeDesc = escapeHtml(config.siteDescription || 'Expert insights and guides');
   return `import Head from 'next/head';
 
 export default function Home() {
   return (
     <>
       <Head>
-        <title>${config.siteName}</title>
-        <meta name="description" content="${config.siteDescription || 'Expert insights and guides'}" />
+        <title>${safeName}</title>
+        <meta name="description" content="${safeDesc}" />
       </Head>
-      
+
       <main className="container">
         <header className="hero">
-          <h1>${config.siteName}</h1>
+          <h1>${safeName}</h1>
           <p className="tagline">Expert knowledge, trusted guidance</p>
         </header>
         
@@ -223,22 +305,24 @@ export default function Home() {
 }
 
 function generateLeadGenLandingPage(config: ThemeConfig): string {
+  const safeName = escapeHtml(config.siteName);
+  const safeDesc = escapeHtml(config.siteDescription || 'Get your free guide');
   return `import Head from 'next/head';
 import { useState } from 'react';
 
 export default function Home() {
   const [email, setEmail] = useState('');
-  
+
   return (
     <>
       <Head>
-        <title>${config.siteName}</title>
-        <meta name="description" content="${config.siteDescription || 'Get your free guide'}" />
+        <title>${safeName}</title>
+        <meta name="description" content="${safeDesc}" />
       </Head>
-      
+
       <main className="landing">
         <div className="hero">
-          <h1>${config.siteName}</h1>
+          <h1>${safeName}</h1>
           <p>Get instant access to our exclusive guide</p>
           
           <form className="lead-form" onSubmit={(e) => e.preventDefault()}>
@@ -261,19 +345,21 @@ export default function Home() {
 }
 
 function generateLocalBusinessPage(config: ThemeConfig): string {
+  const safeName = escapeHtml(config.siteName);
+  const safeDesc = escapeHtml(config.siteDescription || 'Your local service provider');
   return `import Head from 'next/head';
 
 export default function Home() {
   return (
     <>
       <Head>
-        <title>${config.siteName}</title>
-        <meta name="description" content="${config.siteDescription || 'Your local service provider'}" />
+        <title>${safeName}</title>
+        <meta name="description" content="${safeDesc}" />
       </Head>
-      
+
       <main>
         <header className="business-header">
-          <h1>${config.siteName}</h1>
+          <h1>${safeName}</h1>
           <p>Professional services in your area</p>
         </header>
         
@@ -293,19 +379,21 @@ export default function Home() {
 }
 
 function generateNewsletterPage(config: ThemeConfig): string {
+  const safeName = escapeHtml(config.siteName);
+  const safeDesc = escapeHtml(config.siteDescription || 'Daily insights delivered to your inbox');
   return `import Head from 'next/head';
 
 export default function Home() {
   return (
     <>
       <Head>
-        <title>${config.siteName}</title>
-        <meta name="description" content="${config.siteDescription || 'Daily insights delivered to your inbox'}" />
+        <title>${safeName}</title>
+        <meta name="description" content="${safeDesc}" />
       </Head>
-      
+
       <main className="newsletter-layout">
         <header>
-          <h1>${config.siteName}</h1>
+          <h1>${safeName}</h1>
           <p>Stay informed with our daily digest</p>
         </header>
         
@@ -339,10 +427,12 @@ export default function App({ Component, pageProps }: AppProps) {
 }`;
 }
 
-// CSS generators
+// CSS generators — SECURITY FIX P0 #7: Validate colors and sanitize custom CSS
 function generateAffiliateStyles(config: ThemeConfig): string {
+  const safeColor = validateCssColor(config.primaryColor);
+  const safeCss = sanitizeCustomCss(config.customCss);
   return `:root {
-  --primary-color: ${config.primaryColor};
+  --primary-color: ${safeColor};
   --text-color: #333;
   --bg-color: #f5f5f5;
 }
@@ -405,12 +495,14 @@ body {
   opacity: 0.9;
 }
 
-${config.customCss || ''}`;
+${safeCss}`;
 }
 
 function generateAuthorityStyles(config: ThemeConfig): string {
+  const safeColor = validateCssColor(config.primaryColor);
+  const safeCss = sanitizeCustomCss(config.customCss);
   return `:root {
-  --primary-color: ${config.primaryColor};
+  --primary-color: ${safeColor};
   --text-color: #2c3e50;
   --bg-color: #ffffff;
 }
@@ -455,13 +547,16 @@ body {
   font-weight: bold;
 }
 
-${config.customCss || ''}`;
+${safeCss}`;
 }
 
 function generateLeadGenStyles(config: ThemeConfig): string {
+  const safeColor = validateCssColor(config.primaryColor);
+  const safeAccent = validateCssColor(config.secondaryColor || '#ff6b6b');
+  const safeCss = sanitizeCustomCss(config.customCss);
   return `:root {
-  --primary-color: ${config.primaryColor};
-  --accent-color: ${config.secondaryColor || '#ff6b6b'};
+  --primary-color: ${safeColor};
+  --accent-color: ${safeAccent};
 }
 
 body {
@@ -514,12 +609,14 @@ body {
   cursor: pointer;
 }
 
-${config.customCss || ''}`;
+${safeCss}`;
 }
 
 function generateLocalBusinessStyles(config: ThemeConfig): string {
+  const safeColor = validateCssColor(config.primaryColor);
+  const safeCss = sanitizeCustomCss(config.customCss);
   return `:root {
-  --primary-color: ${config.primaryColor};
+  --primary-color: ${safeColor};
 }
 
 body {
@@ -566,12 +663,14 @@ body {
   margin: 2rem auto;
 }
 
-${config.customCss || ''}`;
+${safeCss}`;
 }
 
 function generateNewsletterStyles(config: ThemeConfig): string {
+  const safeColor = validateCssColor(config.primaryColor);
+  const safeCss = sanitizeCustomCss(config.customCss);
   return `:root {
-  --primary-color: ${config.primaryColor};
+  --primary-color: ${safeColor};
 }
 
 body {
@@ -630,5 +729,5 @@ header h1 {
   color: #666;
 }
 
-${config.customCss || ''}`;
+${safeCss}`;
 }

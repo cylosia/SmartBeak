@@ -337,7 +337,7 @@ export function validateUrl(
   } catch (error) {
     return {
       allowed: false,
-      reason: `URL validation error: ${error instanceof Error ? error["message"] : String(error)}`
+      reason: `URL validation error: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }
