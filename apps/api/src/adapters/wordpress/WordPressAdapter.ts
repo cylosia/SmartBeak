@@ -1,6 +1,7 @@
 import { getLogger } from '@kernel/logger';
 import { MetricsCollector, createRequestContext } from '../../utils/request';
 import { withRetry } from '../../utils/retry';
+import { validateUrl } from '@security/ssrf';
 
 import { DEFAULT_TIMEOUTS } from '@config';
 
@@ -49,9 +50,15 @@ export async function fetchWordPressPosts(
   throw new Error('Invalid WordPress config: baseUrl is required');
   }
 
-  // Warning - Basic auth should only be used over HTTPS
-  if (config.baseUrl.startsWith('http://')) {
-  logger.warn('Using HTTP instead of HTTPS. Basic auth credentials may be exposed.');
+  // P0-1 SECURITY FIX: SSRF protection using centralized utility
+  const urlCheck = validateUrl(config.baseUrl, { requireHttps: false, allowHttp: true });
+  if (!urlCheck.allowed) {
+  throw new Error(`SSRF protection: ${urlCheck.reason}`);
+  }
+
+  // P1-6 SECURITY FIX: Enforce HTTPS when credentials are present
+  if (config.username && config.password && config.baseUrl.startsWith('http://')) {
+  throw new Error('HTTPS is required when using authentication credentials');
   }
 
   const url = new URL(`${config.baseUrl}/wp-json/wp/v2/posts`);
@@ -62,21 +69,20 @@ export async function fetchWordPressPosts(
   'Accept': 'application/json',
   };
 
-  // Validate credentials before using
-  // Warning - Basic auth should only be used over HTTPS
   if (config.username && config.password) {
-  if (config.username.length === 0 || config.password.length === 0) {
-    throw new Error('Invalid WordPress credentials: username and password must not be empty');
-  }
   const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
   headers['Authorization'] = `Basic ${auth}`;
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
+  // P1-4 FIX: AbortController moved to be created fresh per retry attempt
   const startTime = Date.now();
   try {
-  const response = await withRetry(() => fetch(url.toString(), { headers, signal: controller.signal }), { maxRetries: 3 });
+  const response = await withRetry(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
+    return fetch(url.toString(), { headers, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+  }, { maxRetries: 3 });
 
   if (!response.ok) {
     throw new Error(`WordPress API error: ${response.status} ${response.statusText}`);
@@ -90,11 +96,10 @@ export async function fetchWordPressPosts(
   return posts;
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('WordPress API error', createRequestContext('WordPressAdapter', 'fetchPosts'), err, { status: (error as { status?: number }).status });
+  logger.error('WordPress API error', createRequestContext('WordPressAdapter', 'fetchPosts'), err);
   metrics.recordError('fetchPosts', err.name);
   throw new Error('Failed to fetch WordPress posts');
   } finally {
-  clearTimeout(timeoutId);
   const duration = Date.now() - startTime;
   metrics.recordLatency('fetchPosts', duration, true);
   }
@@ -118,9 +123,15 @@ export async function createWordPressPost(
   throw new Error('Invalid WordPress config: baseUrl is required');
   }
 
-  // Warning - Basic auth should only be used over HTTPS
-  if (config.baseUrl.startsWith('http://')) {
-  logger.warn('Using HTTP instead of HTTPS. Basic auth credentials may be exposed.');
+  // P0-1 SECURITY FIX: SSRF protection using centralized utility
+  const urlCheck = validateUrl(config.baseUrl, { requireHttps: false, allowHttp: true });
+  if (!urlCheck.allowed) {
+  throw new Error(`SSRF protection: ${urlCheck.reason}`);
+  }
+
+  // P1-6 SECURITY FIX: Enforce HTTPS when credentials are present
+  if (config.username && config.password && config.baseUrl.startsWith('http://')) {
+  throw new Error('HTTPS is required when using authentication credentials');
   }
 
   const url = `${config.baseUrl}/wp-json/wp/v2/posts`;
@@ -130,31 +141,31 @@ export async function createWordPressPost(
   'Accept': 'application/json',
   };
 
-  // Validate credentials before using
-  // Warning - Basic auth should only be used over HTTPS
   if (config.username && config.password) {
-  if (config.username.length === 0 || config.password.length === 0) {
-    throw new Error('Invalid WordPress credentials: username and password must not be empty');
-  }
   const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
   headers['Authorization'] = `Basic ${auth}`;
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
   const startTime = Date.now();
   try {
-  const response = await withRetry(() => fetch(url, {
+  // P0-2 FIX: Pass headers to fetch (was missing entirely)
+  // P1-4 FIX: Create AbortController fresh per retry attempt
+  const response = await withRetry(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
+    return fetch(url, {
     method: 'POST',
+    headers,
     body: JSON.stringify({
-    title: post.title,
-    content: post.content,
-    status: post.status || 'draft',
-    categories: post.categories || [],
-    tags: post.tags || [],
+      title: post.title,
+      content: post.content,
+      status: post.status || 'draft',
+      categories: post.categories || [],
+      tags: post.tags || [],
     }),
     signal: controller.signal,
-  }), { maxRetries: 3 });
+    }).finally(() => clearTimeout(timeoutId));
+  }, { maxRetries: 3 });
 
   if (!response.ok) {
     throw new Error(`WordPress API error: ${response.status} ${response.statusText}`);
@@ -168,11 +179,10 @@ export async function createWordPressPost(
   return created;
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('WordPress API error', createRequestContext('WordPressAdapter', 'createPost'), err, { status: (error as { status?: number }).status });
+  logger.error('WordPress API error', createRequestContext('WordPressAdapter', 'createPost'), err);
   metrics.recordError('createPost', err.name);
   throw new Error('Failed to create WordPress post');
   } finally {
-  clearTimeout(timeoutId);
   const duration = Date.now() - startTime;
   metrics.recordLatency('createPost', duration, true);
   }
@@ -195,6 +205,16 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   };
   }
 
+  // P0-1 SECURITY FIX: SSRF protection using centralized utility
+  const urlCheck = validateUrl(config.baseUrl, { requireHttps: false, allowHttp: true });
+  if (!urlCheck.allowed) {
+  return {
+    healthy: false,
+    latency: 0,
+    error: `SSRF protection: ${urlCheck.reason}`,
+  };
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -210,7 +230,9 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
     headers['Authorization'] = `Basic ${auth}`;
   }
 
+  // P1-5 FIX: Pass headers to fetch (was missing)
   const response = await fetch(url, {
+    headers,
     signal: controller.signal,
     method: 'HEAD'
   });
@@ -245,8 +267,8 @@ export function parseWordPressContent(htmlContent: string): { text: string; imag
   }
 
   // P1-FIX: ReDoS - Simplified regex without catastrophic backtracking
-  // Use a non-greedy pattern and avoid nested quantifiers
-  const imageRegex = /<img[^>]+src=['\']([^'']+)['\'][^>]*>/gi;
+  // P2-9 FIX: Match both single and double quotes (was only matching single quotes)
+  const imageRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
   const images: string[] = [];
   let match;
   let iterations = 0;

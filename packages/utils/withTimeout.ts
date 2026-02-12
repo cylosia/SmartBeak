@@ -7,26 +7,40 @@
 */
 export class TimeoutError extends Error {
   constructor(message: string = 'Operation timed out') {
-  super(message);
-  this.name = 'TimeoutError';
+    super(message);
+    this.name = 'TimeoutError';
   }
 }
 
 /**
 * Wrap a promise with a timeout
+* P1-8 FIX: Added optional AbortController support for cancellation propagation.
+* When the timeout fires, the signal is aborted so the underlying operation can clean up.
+*
 * @param promise - The promise to wrap
 * @param timeoutMs - Timeout in milliseconds
-* @param message - Optional custom timeout message
+* @param options - Optional configuration
+* @param options.message - Custom timeout error message
+* @param options.signal - AbortController signal to abort on timeout
 * @returns Promise that rejects if timeout is exceeded
 */
 export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  message?: string
+  options?: string | { message?: string; signal?: AbortController }
 ): Promise<T> {
+  // Support legacy string message parameter
+  const config = typeof options === 'string'
+    ? { message: options }
+    : (options ?? {});
+
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      reject(new TimeoutError(message || `Operation timed out after ${timeoutMs}ms`));
+      // P1-8 FIX: Abort the signal to propagate cancellation to the underlying operation
+      if (config.signal) {
+        config.signal.abort();
+      }
+      reject(new TimeoutError(config.message || `Operation timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     promise
@@ -60,6 +74,7 @@ function clampTimeout(timeoutMs: number): number {
 /**
 * Fetch with timeout wrapper
 * P1-FIX: Added bounded timeout limits to prevent excessive resource usage
+* P2-14 FIX: URL no longer leaked in timeout error messages
 * @param url - URL to fetch
 * @param options - Fetch options
 * @param timeoutMs - Timeout in milliseconds (default: 30000, min: 100, max: 300000)
@@ -77,17 +92,18 @@ export async function fetchWithTimeout(
   const timeoutId = setTimeout(() => controller.abort(), safeTimeoutMs);
 
   try {
-  const response = await fetch(url, {
-    ...options,
-    signal: controller.signal,
-  });
-  return response;
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
   } catch (error) {
-  if (error instanceof Error && error.name === 'AbortError') {
-    throw new TimeoutError(`Request to ${url} timed out after ${safeTimeoutMs}ms`);
-  }
-  throw error;
+    if (error instanceof Error && error.name === 'AbortError') {
+      // P2-14 FIX: Don't leak URL in error message (may contain API keys in query params)
+      throw new TimeoutError(`Request timed out after ${safeTimeoutMs}ms`);
+    }
+    throw error;
   } finally {
-  clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
   }
 }
