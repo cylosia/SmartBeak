@@ -136,6 +136,11 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
       return false;
     }
   }
+
+  /** P2-1 FIX: Public accessor for circuit state instead of (p as any) cast */
+  isCircuitOpen(): boolean {
+    return this.circuit.isOpen;
+  }
 }
 
 /**
@@ -202,17 +207,33 @@ export class FallbackEmailSender {
   /**
    * Queue failed email for manual retry
    */
+  /** Maximum number of failed emails to keep in the retry queue */
+  private static readonly MAX_FAILED_QUEUE_SIZE = 10000;
+
   private async queueForRetry(message: EmailMessage): Promise<void> {
     try {
       const redis = await getRedis();
 
+      // P2-8 FIX: Strip attachment content to prevent memory amplification
+      // (Buffer serialization via JSON.stringify causes 4-5x expansion)
       const failedMessage = {
-        ...message,
+        to: message.to,
+        from: message.from,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+        headers: message.headers,
+        listUnsubscribe: message.listUnsubscribe,
+        listUnsubscribePost: message.listUnsubscribePost,
+        // Store attachment metadata only, not content
+        attachmentNames: message.attachments?.map(a => a.filename),
         failedAt: new Date().toISOString(),
         retryCount: 0,
       };
 
       await redis.lpush('email:failed', JSON.stringify(failedMessage));
+      // P1-3 FIX: Cap the queue size to prevent unbounded growth
+      await redis.ltrim('email:failed', 0, FallbackEmailSender.MAX_FAILED_QUEUE_SIZE - 1);
       // SECURITY FIX (Finding 14): Mask PII in logs
       logger.info('Email queued for manual retry', { to: maskEmail(message.to) });
     } catch (error) {
@@ -231,7 +252,7 @@ export class FallbackEmailSender {
       this.providers.map(async (p) => ({
         name: p.name,
         healthy: await p.healthCheck(),
-        circuitOpen: (p as any).circuit.isOpen,
+        circuitOpen: p.isCircuitOpen(),
       }))
     );
 
