@@ -97,7 +97,7 @@ export async function themeRoutes(app: FastifyInstance, pool: Pool) {
     isDefault: row.is_default,
     }));
     } catch (dbError) {
-    logger.warn('[themes] Database error, using defaults:', dbError);
+    logger.warn(`[themes] Database error, using defaults: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
     // Fallback to configurable defaults if DB unavailable
     themes = getDefaultThemes();
     }
@@ -109,7 +109,7 @@ export async function themeRoutes(app: FastifyInstance, pool: Pool) {
 
     return { themes };
   } catch (error) {
-    logger.error('[themes] Error:', error);
+    logger.error('[themes] Error', error instanceof Error ? error : new Error(String(error)));
     return res.status(500).send({ error: 'Failed to fetch themes' });
   }
   });

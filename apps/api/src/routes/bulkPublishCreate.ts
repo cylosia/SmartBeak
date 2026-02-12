@@ -2,7 +2,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing-related operations
 import { rateLimitMiddleware } from '../middleware/rateLimiter';

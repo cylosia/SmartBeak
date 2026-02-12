@@ -56,7 +56,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
         {
           siteId: body.siteId,
           themeId: body.themeId,
-          themeConfig: body.themeConfig,
+          themeConfig: body.themeConfig as unknown as Record<string, unknown>,
         },
         files
       );
@@ -99,7 +99,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
       
       return reply.send({
         siteId,
-        versions: versions.map(v => ({
+        versions: versions.map((v: { id: string; version: number; status: string; vercel_url: string; created_at: string; deployed_at: string }) => ({
           id: v.id,
           version: v.version,
           status: v.status,

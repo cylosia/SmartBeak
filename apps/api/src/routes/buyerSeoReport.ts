@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { generateBuyerSeoReport, BuyerSeoReport } from '../seo/buyerReport';
 import { getDb } from '../db';
 import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('BuyerSeoReport');
 

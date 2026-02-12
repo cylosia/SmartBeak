@@ -5,6 +5,7 @@
  * Used by the shard deployment system and other file storage needs.
  */
 
+// @ts-expect-error -- @aws-sdk/client-s3 not yet installed; tracked as tech debt
 import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
 
 // Storage provider types
@@ -14,13 +15,13 @@ export type StorageProvider = 'r2' | 's3' | 'gcs' | 'local';
 export interface StorageConfig {
   provider: StorageProvider;
   bucketName: string;
-  endpoint?: string;
-  region?: string;
+  endpoint?: string | undefined;
+  region?: string | undefined;
   credentials: {
     accessKeyId: string;
     secretAccessKey: string;
   };
-  publicDomain?: string;
+  publicDomain?: string | undefined;
 }
 
 /**

@@ -87,7 +87,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     );
     models = result.rows;
     } catch (dbError) {
-    logger.error('[llm/models] Database error:', dbError);
+    logger.error('[llm/models] Database error', dbError instanceof Error ? dbError : new Error(String(dbError)));
     // Return empty array if table doesn't exist or other DB error
     models = [];
     }
@@ -96,7 +96,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // Client should handle this gracefully
     return res.send({ models });
   } catch (error) {
-    logger.error('[llm/models] Error:', error);
+    logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to fetch LLM models' });
   }
@@ -136,7 +136,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send(preferences);
   } catch (error) {
-    logger.error('[llm/preferences] Error:', error);
+    logger.error('[llm/preferences] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to fetch LLM preferences' });
   }
@@ -173,7 +173,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send({ updated: true, preferences: updates });
   } catch (error) {
-    logger.error('[llm/preferences] Update error:', error);
+    logger.error('[llm/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to update LLM preferences' });
   }

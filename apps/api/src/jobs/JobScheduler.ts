@@ -94,7 +94,7 @@ export class JobScheduler extends EventEmitter {
   // P1-FIX: Maximum age for abort controllers (5 minutes)
   private readonly ABORT_CONTROLLER_MAX_AGE_MS = 300000;
   // P1-FIX: Cleanup interval for stale abort controllers
-  private abortControllerCleanupInterval?: NodeJS.Timeout;
+  private abortControllerCleanupInterval?: NodeJS.Timeout | undefined;
   private redisReconnectDelay = redisConfig.initialReconnectDelayMs;
   private readonly maxReconnectDelay = redisConfig.maxReconnectDelayMs;
   private isConnected = false;

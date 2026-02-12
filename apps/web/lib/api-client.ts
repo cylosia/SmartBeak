@@ -222,7 +222,7 @@ export const apiUrl = (path: string): string => {
 
 export const authFetch = async <T = unknown>(
   urlOrPath: string,
-  options?: RequestInit & { timeoutMs?: number; retries?: number; ctx?: { req?: { headers?: { cookie?: string } } } }
+  options?: RequestInit & { timeoutMs?: number; retries?: number; ctx?: { req?: { headers?: { cookie?: string | undefined } } } }
 ): Promise<Response> => {
   // If already a full URL, use it directly; otherwise prepend base URL
   const url = urlOrPath.startsWith('http') ? urlOrPath : apiUrl(urlOrPath.startsWith('/') ? urlOrPath : `/${urlOrPath}`);

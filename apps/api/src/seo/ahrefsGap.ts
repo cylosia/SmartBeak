@@ -1,4 +1,4 @@
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { API_BASE_URLS } from '@config';
 import { upsertKeyword } from '../keywords/keywords';
 import { ValidationError, validateNonEmptyString, validateArray } from '../utils/validation';

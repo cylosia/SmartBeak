@@ -5,7 +5,7 @@ import { csrfProtection } from '../middleware/csrf';
 import { FastifyInstance } from 'fastify';
 import { computeContentRoi } from '../roi/contentRoi';
 import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('ContentRoi');
 

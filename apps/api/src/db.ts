@@ -326,11 +326,9 @@ export async function analyticsDb(): Promise<Knex> {
         const err = error instanceof Error ? error : new Error(String(error));
         const durationMs = Date.now() - initStartTime;
         
-        logger.error('Failed to initialize analytics DB', { 
-          error: err.message, 
-          stack: err.stack,
+        logger.error('Failed to initialize analytics DB', err, {
           durationMs,
-          retryCount: analyticsRetryCount 
+          retryCount: analyticsRetryCount
         });
         
         // P1-FIX: Emit error metrics for monitoring

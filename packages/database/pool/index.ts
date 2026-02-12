@@ -97,7 +97,7 @@ export async function releaseAllAdvisoryLocks(): Promise<void> {
       logger["error"](`Failed to release advisory lock ${lockId}`, err);
     } finally {
       try {
-        await client.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
+        await originalClient.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         logger["error"](`Failed to release advisory lock ${lockId}`, err);

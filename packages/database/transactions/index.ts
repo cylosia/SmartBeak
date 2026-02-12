@@ -73,6 +73,8 @@ export async function withTransaction<T>(
     }
   };
 
+  let timedOut = false;
+
   try {
     // P0-FIX #3: BEGIN must come BEFORE SET LOCAL.
     // SET LOCAL only takes effect within a transaction block.
@@ -86,7 +88,6 @@ export async function withTransaction<T>(
     await client.query('SET LOCAL statement_timeout = $1', [timeoutMs]);
 
     const abortController = new AbortController();
-    let timedOut = false;
 
     // P1-FIX: Link abortController to timeout cleanup
     const timeoutPromise = new Promise<never>((_, reject) => {

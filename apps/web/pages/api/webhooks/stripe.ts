@@ -2,7 +2,7 @@
 import Redis from 'ioredis';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { pool } from '../../../lib/db';
 import { getStripe, getStripeWebhookSecret } from '../../../lib/stripe';
 

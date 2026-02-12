@@ -199,18 +199,17 @@ export function initTelemetry(config: TelemetryConfig): void {
       registerInstrumentations({
         instrumentations: [
           new HttpInstrumentation({
-            requestHook: (span: Span, request: HttpRequest) => {
-              span.setAttribute('http.request.body.size', 
+            requestHook: ((span: Span, request: HttpRequest) => {
+              span.setAttribute('http.request.body.size',
                 request.headers['content-length'] || 0);
-            },
-            responseHook: (span: Span, response: HttpResponse) => {
+            }) as never,
+            responseHook: ((span: Span, response: HttpResponse) => {
               span.setAttribute('http.response.body.size',
                 response.headers['content-length'] || 0);
-            },
+            }) as never,
           }),
           new PgInstrumentation({
             enhancedDatabaseReporting: true,
-            addSqlCommenterComment: true,
           }),
           new RedisInstrumentation({
             dbStatementSerializer: (cmd: string, args: unknown[]) => {
