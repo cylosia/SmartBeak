@@ -201,7 +201,7 @@ export async function mapInBatches<T, R>(
 
   for (const [index, batchResult] of batchResults.entries()) {
     if (batchResult.status === 'fulfilled') {
-    results.push(batchResult.value as unknown as R);
+    results.push(batchResult.value);
     } else {
     const error = batchResult.reason instanceof Error
     ? batchResult.reason
