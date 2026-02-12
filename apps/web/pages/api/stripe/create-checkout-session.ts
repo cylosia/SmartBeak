@@ -17,8 +17,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Validate Stripe is configured
     validateStripeConfig();
-    // Validate auth
+    // P0-3 FIX: Check auth return value — if auth fails, requireAuth sends
+    // a response but execution continues. Must return early.
     const auth = await requireAuth(req, res);
+    if (!auth) return;
     const { priceId, successUrl, cancelUrl } = req.body;
     // Validate required fields
     if (!priceId) {
@@ -30,8 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         error: "Invalid priceId format. Should start with 'price_'"
       });
     }
-    // Get origin for default URLs
-    const origin = req.headers.origin || process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
+    // P1-4 FIX: Never trust req.headers.origin — use configured app URL only
+    const origin = process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -63,9 +65,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     logger.error('Checkout session creation failed', error instanceof Error ? error : undefined);
     if (error instanceof Error && 'type' in error && error.type === 'StripeInvalidRequestError') {
+      // P1-13 FIX: Do not leak Stripe error details to client
       return res.status(400).json({
-        error: 'Invalid request to Stripe',
-        message: (error as Error).message
+        error: 'Invalid payment request. Please check your plan selection.',
       });
     }
     if (error instanceof Error && error.message === 'Stripe is not properly configured') {

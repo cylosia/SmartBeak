@@ -403,5 +403,20 @@ export class CJAdapter implements AffiliateRevenueAdapter {
   }
 }
 
-// Backward-compatible default export
-export const cjAdapter = new CJAdapter();
+// P0-8 FIX: Use lazy initialization to prevent module-level crash when
+// CJ_PERSONAL_TOKEN or CJ_WEBSITE_ID env vars are missing.
+// Previously, `new CJAdapter()` at module scope crashed the entire app on import.
+let _cjAdapter: CJAdapter | null = null;
+export function getCjAdapter(): CJAdapter {
+  if (!_cjAdapter) {
+  _cjAdapter = new CJAdapter();
+  }
+  return _cjAdapter;
+}
+
+// Backward-compatible getter (deprecated — use getCjAdapter() instead)
+export const cjAdapter = new Proxy({} as CJAdapter, {
+  get(_target, prop) {
+  return (getCjAdapter() as Record<string | symbol, unknown>)[prop];
+  },
+});
