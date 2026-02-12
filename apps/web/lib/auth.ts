@@ -37,17 +37,19 @@ function isValidIP(ip: string): boolean {
   if (!ip || ip === 'unknown') {
     return false;
   }
-  // IPv4 regex
-  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?.[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?.[0-9][0-9]?)$/;
+  // IPv4 regex — P1-FIX: fixed unescaped '.' after [01]? that matched any character
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
   // IPv6 regex (simplified)
   const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$/;
   return ipv4Regex.test(ip) || ipv6Regex.test(ip);
 }
 // Role hierarchy for authorization checks
+// P0-FIX: Added owner:4 — was missing, causing owners to be denied access
 const roleHierarchy: Record<string, number> = {
   viewer: 1,
   editor: 2,
   admin: 3,
+  owner: 4,
 };
 const authAuditCallbacks: Array<(event: AuthAuditEvent) => void> = [];
 
@@ -678,11 +680,12 @@ export function getRateLimitIdentifier(req: NextApiRequest, userId?: string): st
   let ip: string;
   if (typeof forwarded === 'string') {
 
+    // P1-FIX: Use first IP (client IP), not last (proxy IP), for consistency with getClientInfo
     const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
-    ip = (ips.length > 0 ? ips[ips.length - 1] : req.socket?.remoteAddress || 'unknown') as string;
+    ip = (ips.length > 0 ? ips[0] : req.socket?.remoteAddress || 'unknown') as string;
   }
   else if (Array.isArray(forwarded) && forwarded.length > 0) {
-    ip = forwarded[forwarded.length - 1] as string;
+    ip = forwarded[0] as string;
   }
   else {
     ip = (req.socket?.remoteAddress || 'unknown') as string;

@@ -63,10 +63,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify org_id matches for all content access
+    // P1-FIX: Changed ci["id"] to ci.id — bracket notation is for JSON field access, not columns
     const { rows } = await pool.query<ContentItem>(
-      `SELECT ci["id"], ci.domain_id, ci.title, ci.status, ci.org_id
+      `SELECT ci.id, ci.domain_id, ci.title, ci.status, ci.org_id
        FROM content_items ci
-       WHERE ci["id"] = $1
+       WHERE ci.id = $1
        AND ci.org_id = $2
        AND ci.domain_id IN (
          SELECT domain_id FROM memberships m
@@ -107,9 +108,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [intentId, contentId, reason || 'User initiated', now, 'approved', auth.userId, auth["orgId"]]
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
+      // P1-FIX: Use unknown instead of any for type safety
       // Intent table may not exist, continue with archive
-      if (err.code !== '42P01') {
+      const pgError = err as { code?: string };
+      if (pgError.code !== '42P01') {
         throw err;
       }
     }

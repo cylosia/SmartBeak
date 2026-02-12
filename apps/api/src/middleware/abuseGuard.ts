@@ -319,8 +319,12 @@ export function checkAbuse(payload: unknown): CheckAbuseResult {
       return { allowed: false, reason: 'Prohibited content detected' };
     }
     // Check content
+    // P1-FIX: riskOverride now requires admin role — previously any caller could bypass
     const contentCheck = checkContentRisk(validated.content);
-    if (!contentCheck.allowed && !validated.riskOverride) {
+    if (!contentCheck.allowed) {
+      // riskOverride is no longer honored in the standalone function
+      // because there's no user context to verify admin role.
+      // Use the middleware version for role-checked overrides.
       return { allowed: false, reason: contentCheck.reason };
     }
     return { allowed: true };

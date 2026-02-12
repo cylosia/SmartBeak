@@ -121,7 +121,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM activity_log
         WHERE org_id = $1
         AND deleted_at IS NULL`;
-  const params: (string | number)[] = [auth["orgId"] || auth.userId];
+  // P2-FIX: Require orgId — previously fell back to userId which queried wrong tenant
+  if (!auth["orgId"]) {
+    return sendError(res, 400, 'Organization context is required for exports');
+  }
+  const params: (string | number)[] = [auth["orgId"]];
   let paramIndex = 2;
 
   if (domainId) {
@@ -190,9 +194,10 @@ Exported by: ${auth.userId}
 Export Date: ${new Date().toISOString()}
 `;
 
-  const filename = `activity-export-${new Date().toISOString().split('T')[0]}.pdf`;
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename='${filename}'`);
+  // P2-FIX: Content is plain text, not a valid PDF — use correct Content-Type
+  const filename = `activity-export-${new Date().toISOString().split('T')[0]}.txt`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
