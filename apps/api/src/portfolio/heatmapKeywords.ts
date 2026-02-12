@@ -7,9 +7,10 @@ import { getDb } from '../db';
 */
 export async function keywordDepthByContent(content_id: string): Promise<number> {
   const db = await getDb();
+  // P2-FIX: Use dot notation instead of bracket notation for readability
   const r = await db('content_keywords')
     .where({ content_id })
-    ["count"]('* as c')
+    .count('* as c')
     .first();
-  return Number(r?.["c"] || 0);
+  return Number(r?.c || 0);
 }

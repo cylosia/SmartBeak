@@ -11,13 +11,10 @@ export function buildHeatmap(points: HeatmapPoint[]) {
   return [];
   }
 
-  // FIX: Safely calculate averages to avoid division by zero
-  const avgTraffic = points.length > 0
-  ? points.reduce((sum, p) => sum + (p.traffic || 0), 0) / points.length
-  : 0;
-  const avgRoi = points.length > 0
-  ? points.reduce((sum, p) => sum + (p.roi_12mo || 0), 0) / points.length
-  : 0;
+  // P2-FIX: Removed redundant points.length > 0 ternaries — early return on line 10
+  // guarantees points.length > 0 at this point.
+  const avgTraffic = points.reduce((sum, p) => sum + (p.traffic || 0), 0) / points.length;
+  const avgRoi = points.reduce((sum, p) => sum + (p.roi_12mo || 0), 0) / points.length;
 
   return points.map(p => {
   let quadrant = 'invest';
@@ -34,6 +31,7 @@ export function buildHeatmap(points: HeatmapPoint[]) {
 
   return {
     ...p,
+    quadrant,
   };
   });
 }

@@ -96,7 +96,7 @@ await app.register(cors, {
   origin: validatedOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'X-CSRF-Token']
 });
 
 // SECURITY FIX: Add security headers (HSTS, CSP, etc.)
@@ -211,12 +211,14 @@ app.addHook('onRequest', async (req, reply) => {
 
     try {
       const redis = await getRedis();
-      const current = await redis.incr(key);
-
-      if (current === 1) {
-        // Set TTL on first request
-        await redis.expire(key, windowSeconds);
-      }
+      // P0-FIX: Atomic INCR+EXPIRE via Lua script to prevent permanent rate-limiting
+      // if process crashes between INCR and EXPIRE (key persists without TTL forever).
+      const atomicIncrScript = `
+        local current = redis.call('INCR', KEYS[1])
+        if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+        return current
+      `;
+      const current = await redis.eval(atomicIncrScript, 1, key, windowSeconds) as number;
 
       if (current > AUTH_RATE_LIMIT_MAX) {
         const ttl = await redis.ttl(key);
@@ -276,12 +278,21 @@ app.addHook('onRequest', async (req, reply) => {
 // F9-FIX: Register BigInt serialization as a Fastify preSerialization hook.
 // Previously this function existed but was never registered, causing
 // TypeError crashes on any response containing BigInt values.
+// P1-FIX: Only perform BigInt serialization when needed, not on every response.
+// Previously double-serialized every response payload (O(n) memory + CPU overhead).
 app.addHook('preSerialization', async (_request, _reply, payload) => {
   if (typeof payload === 'object' && payload !== null) {
-    const json = JSON.stringify(payload, (_, v) =>
-      typeof v === 'bigint' ? v.toString() : v
-    );
-    return JSON.parse(json);
+    try {
+      // Fast path: standard serialization (succeeds if no BigInt values)
+      JSON.stringify(payload);
+      return payload;
+    } catch {
+      // Slow path: only if standard serialization fails (BigInt present)
+      const json = JSON.stringify(payload, (_, v) =>
+        typeof v === 'bigint' ? v.toString() : v
+      );
+      return JSON.parse(json);
+    }
   }
   return payload;
 });
@@ -496,29 +507,20 @@ async function checkRedisHealth(): Promise<{ latency: number; mode: string }> {
  * Check queue health - look for stalled and failed jobs
  */
 async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number; pendingJobs: number }> {
-  // Check for stalled jobs (running for too long)
-  const stalledResult = await pool.query(
-    `SELECT COUNT(*) as count FROM publishing_jobs
-     WHERE status = 'processing'
-     AND updated_at < NOW() - INTERVAL '30 minutes'`
+  // P1-FIX: Combined 3 sequential queries into 1 to reduce pool connection usage.
+  // Previously consumed 3 pool connections per health check request.
+  const result = await pool.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE status = 'processing' AND updated_at < NOW() - INTERVAL '30 minutes') AS stalled,
+       COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '1 hour') AS failed,
+       COUNT(*) FILTER (WHERE status IN ('pending', 'scheduled')) AS pending
+     FROM publishing_jobs`
   );
 
-  // Check for failed jobs in the last hour
-  const failedResult = await pool.query(
-    `SELECT COUNT(*) as count FROM publishing_jobs
-     WHERE status = 'failed'
-     AND updated_at > NOW() - INTERVAL '1 hour'`
-  );
-
-  // Check pending jobs (backlog)
-  const pendingResult = await pool.query(
-    `SELECT COUNT(*) as count FROM publishing_jobs
-     WHERE status IN ('pending', 'scheduled')`
-  );
-
-  const stalledJobs = parseInt(stalledResult.rows[0]?.count || '0', 10);
-  const failedJobs = parseInt(failedResult.rows[0]?.count || '0', 10);
-  const pendingJobs = parseInt(pendingResult.rows[0]?.count || '0', 10);
+  const row = result.rows[0];
+  const stalledJobs = parseInt(row?.stalled || '0', 10);
+  const failedJobs = parseInt(row?.failed || '0', 10);
+  const pendingJobs = parseInt(row?.pending || '0', 10);
 
   // Alert if there are too many stalled jobs
   if (stalledJobs > 10) {
