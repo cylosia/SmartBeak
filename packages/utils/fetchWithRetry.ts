@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import { LRUCache } from './lruCache';
 
 import { getLogger } from '@kernel/logger';
@@ -60,6 +62,11 @@ export async function waitForPendingCacheWrites(timeoutMs = 30000): Promise<void
   }
 }
 
+// P2-7 FIX: Maximum response size to cache (1MB).
+// Without this, a single large response (e.g., export file) cached as
+// ArrayBuffer causes unbounded memory spikes.
+const MAX_CACHEABLE_BODY_SIZE = 1024 * 1024; // 1MB
+
 /**
  * Execute cache write with timeout and proper error handling
  * P0-FIX: Prevents floating promises and unhandled rejections
@@ -70,11 +77,25 @@ function executeCacheWrite(
   timeoutMs: number
 ): void {
   const cacheWritePromise = (async (): Promise<void> => {
+    // P2-7 FIX: Skip caching if Content-Length indicates a large response
+    const contentLength = clonedResponse.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_CACHEABLE_BODY_SIZE) {
+      logger.debug(`Skipping cache for large response (${contentLength} bytes)`);
+      return;
+    }
+
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Cache write timeout')), timeoutMs);
     });
 
     const body = await Promise.race([clonedResponse.arrayBuffer(), timeoutPromise]);
+
+    // P2-7 FIX: Also check actual body size (Content-Length may be absent)
+    if (body.byteLength > MAX_CACHEABLE_BODY_SIZE) {
+      logger.debug(`Skipping cache for large response body (${body.byteLength} bytes)`);
+      return;
+    }
+
     const headers: Record<string, string> = {};
     clonedResponse.headers.forEach((value, key) => {
       headers[key] = value;
@@ -186,6 +207,9 @@ function sleep(ms: number): Promise<void> {
 /**
 * Generate cache key for request
 * P0-FIX: Include Authorization header to prevent cross-user cache poisoning
+* P0-4 FIX: Hash the auth token instead of storing it in plain text.
+* Previously, raw JWT/API keys were embedded in cache key strings, meaning
+* any heap dump, debug log, or error serialization would expose credentials.
 * P2-FIX: Normalize body representation for stable cache keys
 */
 function generateCacheKey(url: string, options: RequestInit): string {
@@ -193,18 +217,24 @@ function generateCacheKey(url: string, options: RequestInit): string {
   const body = typeof options.body === 'string' ? options.body : '';
   // P0-FIX: Include auth header in cache key to prevent cross-user data leakage
   const headers = options.headers;
-  let authKey = '';
+  let rawAuth = '';
   if (headers) {
     if (headers instanceof Headers) {
-      authKey = headers.get('authorization') || headers.get('cookie') || '';
+      rawAuth = headers.get('authorization') || headers.get('cookie') || '';
     } else if (Array.isArray(headers)) {
       const authEntry = headers.find(([k]) => k.toLowerCase() === 'authorization' || k.toLowerCase() === 'cookie');
-      authKey = authEntry ? authEntry[1] : '';
+      rawAuth = authEntry ? authEntry[1] : '';
     } else {
       const headerRecord = headers as Record<string, string>;
-      authKey = headerRecord['Authorization'] || headerRecord['authorization'] || headerRecord['Cookie'] || headerRecord['cookie'] || '';
+      rawAuth = headerRecord['Authorization'] || headerRecord['authorization'] || headerRecord['Cookie'] || headerRecord['cookie'] || '';
     }
   }
+  // P0-4 FIX: Hash the auth value so raw tokens never appear in cache keys.
+  // A truncated SHA-256 provides sufficient uniqueness for cache differentiation
+  // while preventing credential exposure in heap dumps or debug logs.
+  const authKey = rawAuth
+    ? createHash('sha256').update(rawAuth).digest('hex').slice(0, 16)
+    : '';
   return `${method}:${url}:${body}:${authKey}`;
 }
 

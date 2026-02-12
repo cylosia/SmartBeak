@@ -9,6 +9,8 @@ module.exports = {
     ecmaFeatures: {
       jsx: true,
     },
+    // P1-9 FIX: Enable type-aware linting for no-floating-promises rule
+    project: './tsconfig.base.json',
   },
 
   env: {
@@ -46,6 +48,12 @@ module.exports = {
     '@typescript-eslint/ban-types': 'warn',
     '@typescript-eslint/no-namespace': 'warn',
     '@typescript-eslint/no-unnecessary-type-constraint': 'warn',
+
+    // P1-9 FIX: Catch unhandled promise rejections and async-in-sync-callback bugs.
+    // The codebase has manual "P0-FIX" comments for floating promise issues,
+    // proving these bugs occur. These rules prevent new ones from being introduced.
+    '@typescript-eslint/no-floating-promises': 'error',
+    '@typescript-eslint/no-misused-promises': 'error',
   },
 
   overrides: [

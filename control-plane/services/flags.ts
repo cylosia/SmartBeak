@@ -42,9 +42,11 @@ export class FlagService {
   const validatedKey = validateFlagKey(key);
   const validatedValue = validateFlagValue(value);
 
+  // P2-13 FIX: Include updated_at in the INSERT so new records don't have
+  // NULL updated_at when the table column lacks a DEFAULT.
   await this.pool.query(
-    `INSERT INTO system_flags (key, value)
-    VALUES ($1,$2)
+    `INSERT INTO system_flags (key, value, updated_at)
+    VALUES ($1, $2, now())
     ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=now()`,
     [validatedKey, validatedValue]
   );
