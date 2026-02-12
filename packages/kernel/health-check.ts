@@ -57,10 +57,7 @@ const stateStore: StateStore = {
   timers: new Map<string, NodeJS.Timeout>()
 };
 
-// Read-only access functions
-const _getHealthChecks = (): ReadonlyMap<string, HealthCheck> => stateStore.healthChecks;
-const _getLastResults = (): ReadonlyMap<string, HealthCheckResult> => stateStore.lastResults;
-
+// P2-DEAD-CODE-FIX: Removed _getHealthChecks and _getLastResults — never referenced.
 // Internal mutable access
 const getMutableHealthChecks = (): Map<string, HealthCheck> => stateStore.healthChecks;
 const getMutableLastResults = (): Map<string, HealthCheckResult> => stateStore.lastResults;
@@ -144,12 +141,27 @@ export async function checkAllHealth(): Promise<{
   timestamp: string;
 }> {
   // P1-FIX: Run all checks in parallel to avoid cascading timeout amplification.
+  // P1-SECURITY-FIX: Wrap each check in a 10-second timeout to prevent indefinite hangs.
+  // Unlike HealthChecksRegistry.runCheck() (monitoring module) which has per-check timeouts,
+  // this kernel module previously had no timeout, so a single hanging check (e.g., DNS
+  // resolution failure on external API) would block the entire health system forever.
+  const DEFAULT_CHECK_TIMEOUT_MS = 10000;
   const healthChecks = Array.from(getMutableHealthChecks().entries());
   const results = await Promise.allSettled(
     healthChecks.map(async ([name, check]) => {
-      const result = await check.check();
-      getMutableLastResults().set(name, result);
-      return result;
+      let timeoutHandle: NodeJS.Timeout;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error(`Health check '${name}' timed out after ${DEFAULT_CHECK_TIMEOUT_MS}ms`)), DEFAULT_CHECK_TIMEOUT_MS);
+      });
+      try {
+        const result = await Promise.race([check.check(), timeoutPromise]);
+        clearTimeout(timeoutHandle!);
+        getMutableLastResults().set(name, result);
+        return result;
+      } catch (err) {
+        clearTimeout(timeoutHandle!);
+        throw err;
+      }
     })
   );
 
@@ -391,6 +403,10 @@ export function healthCheckMiddleware(
 
     res.statusCode = statusCode;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(health));
+    // P1-SECURITY-FIX: Only return { healthy, timestamp } on the public endpoint.
+    // Previously returned full health check details including error messages and metadata
+    // (pool counts, latencies, error strings from pg/ioredis that may contain connection URLs),
+    // exposing infrastructure information useful for reconnaissance.
+    res.end(JSON.stringify({ healthy: health.healthy, timestamp: health.timestamp }));
   };
 }

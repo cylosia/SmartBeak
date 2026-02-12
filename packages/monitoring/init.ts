@@ -348,7 +348,7 @@ export function createHealthMiddleware(
 
     // Liveness endpoint
     if (url === livePath) {
-      const liveness = healthRegistry.checkLiveness();
+      const liveness = await healthRegistry.checkLiveness();
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify(liveness));

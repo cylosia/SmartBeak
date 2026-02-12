@@ -4,13 +4,17 @@
 
 import cors from '@fastify/cors';
 import Fastify, { FastifyRequest } from 'fastify';
-import { LRUCache } from 'lru-cache';
 import { Pool } from 'pg';
 import { getPoolInstance } from '@database/pool';
+import { registerShutdownHandler } from '@shutdown';
 import { validateEnv } from '@config';
 
 import { getLogger } from '@kernel/logger';
 
+// P2-PERF-FIX: Moved dynamic imports to top-level. Previously these were
+// await import() inside route handlers, making the first request to each endpoint slow.
+import { getRepositoryHealth } from '../services/repository-factory';
+import { checkSequenceHealth } from '@database/health';
 import { affiliateRoutes } from './routes/affiliates';
 import { analyticsRoutes } from './routes/analytics';
 import { attributionRoutes } from './routes/attribution';
@@ -84,9 +88,18 @@ function validateOrigin(origin: string): string {
     throw new Error('Wildcard origin not allowed when credentials=true');
   }
   try {
-    new URL(origin);
+    const parsed = new URL(origin);
+    // P1-SECURITY-FIX: Enforce HTTPS in production to prevent MITM when credentials=true.
+    // An http:// origin combined with credentials: true allows session cookies to be
+    // transmitted in cleartext, enabling interception by network attackers.
+    if (process.env['NODE_ENV'] === 'production' && parsed.protocol !== 'https:') {
+      throw new Error('HTTPS origin required in production when credentials=true');
+    }
     return origin;
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('HTTPS origin required')) {
+      throw err;
+    }
     throw new Error(`Invalid origin format: ${origin}`);
   }
 }
@@ -97,7 +110,10 @@ await app.register(cors, {
   origin: validatedOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'X-CSRF-Token']
+  // P2-SECURITY-FIX: Removed X-CSRF-Token from allowedHeaders. It was listed but
+  // no CSRF validation middleware exists, creating a false sense of security.
+  // For a Bearer-token-only API, CSRF protection is not required.
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
 });
 
 // SECURITY FIX: Add security headers (HSTS, CSP, etc.)
@@ -160,31 +176,10 @@ try {
 const AUTH_RATE_LIMIT_MAX = 5; // 5 attempts
 const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
-// SECURITY FIX (Finding 4): In-memory fallback rate limiter for when Redis is unavailable
-// Prevents brute force attacks even during Redis outages
-// P0-AUDIT-FIX: Replaced plain Map with actual LRU cache. The previous Map used FIFO eviction
-// (keys().next().value), allowing attackers rotating IPs to evict rate-limited entries.
-// LRU eviction ensures the least-recently-seen IPs are evicted, not the most-recently-rate-limited.
-const inMemoryRateLimitCache = new LRUCache<string, { count: number; resetAt: number }>({
-  max: 10000,
-  ttl: AUTH_RATE_LIMIT_WINDOW,
-});
-
-function _inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
-  const now = Date.now();
-  const entry = inMemoryRateLimitCache.get(key);
-
-  if (!entry || entry.resetAt < now) {
-    inMemoryRateLimitCache.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, retryAfter: 0 };
-  }
-
-  entry.count++;
-  if (entry.count > max) {
-    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  return { allowed: true, retryAfter: 0 };
-}
+// P2-DEAD-CODE-FIX: Removed _inMemoryRateLimit function and inMemoryRateLimitCache (LRU).
+// These were dead code: _inMemoryRateLimit was never called, and the Redis catch block (below)
+// returns 429 directly (fail-closed). The LRU cache allocated 10k-entry capacity for nothing.
+// The fail-closed policy is intentional for auth endpoints (see P0-FIX #1 comment below).
 
 // P0-AUDIT-FIX: Use explicit path set for auth endpoints instead of startsWith/regex.
 // Previous startsWith('/auth') matched /authors, /authorization etc.
@@ -247,9 +242,13 @@ app.addHook('onRequest', async (req, reply) => {
     // Check if route is marked as public (via route config or path pattern)
     // P0-AUDIT-FIX: Use strict path boundary matching. Previous startsWith('/health')
     // matched /healthadmin, /healthy etc. Now requires exact match or path separator.
+    // P1-SECURITY-FIX: Removed blanket pathname.startsWith('/webhooks/') exemption.
+    // Previously ALL /webhooks/* routes were unauthenticated with no signature verification
+    // at the middleware level. Webhook routes must now individually opt into public access
+    // via config: { public: true } on the route definition and implement their own
+    // signature verification (e.g., Stripe HMAC, Clerk webhook signature).
     const isPublicRoute = (req.routeOptions?.config as { public?: boolean })?.public === true ||
-                         pathname === '/health' || pathname.startsWith('/health/') ||
-                         pathname.startsWith('/webhooks/');
+                         pathname === '/health' || pathname.startsWith('/health/');
 
     if (!authHeader) {
       if (isPublicRoute) {
@@ -265,10 +264,15 @@ app.addHook('onRequest', async (req, reply) => {
 
     (req as { auth: unknown }).auth = await authFromHeader(authHeader);
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unauthorized';
+    // P2-SECURITY-FIX: Return generic 'Unauthorized' message instead of forwarding
+    // authFromHeader error details. Previously, JWT library internals like
+    // "Token verification failed: invalid algorithm" were sent to the client,
+    // leaking implementation details useful for targeted attacks.
+    // The specific error is already logged server-side via the logger.
+    logger.warn('Auth middleware rejected request', { error: error instanceof Error ? error.message : String(error) });
     return reply.status(401).send({
       error: 'Unauthorized',
-      message: errorMessage
+      message: 'Unauthorized'
     });
   }
 });
@@ -478,17 +482,44 @@ interface HealthStatus {
  */
 async function checkDatabase(): Promise<{ latency: number }> {
   const start = Date.now();
-  // P1-AUDIT-FIX: Add 5s timeout to pool.connect() so health checks don't hang
-  // indefinitely during pool exhaustion (the exact scenario health checks should detect).
-  const connectTimeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Database connect timeout (5s)')), 5000)
-  );
-  const client = await Promise.race([pool.connect(), connectTimeout]);
+  const TIMEOUT_MS = 5000;
+  // P0-FIX: Rewritten to fix two bugs in the original Promise.race pattern:
+  // 1. Pool connection leak: when timeout won, pool.connect() still resolved later,
+  //    returning a PoolClient that was never released (permanent pool exhaustion).
+  // 2. Unhandled rejection: when pool.connect() won, the timeout setTimeout still fired
+  //    and rejected a promise nobody was listening to (process crash with --unhandled-rejections=throw).
+  //
+  // Solution: Track the connect promise separately so we can release the client even if
+  // the timeout wins the race. The .then() on connectPromise always releases the client
+  // when the timeout has already fired.
+  let timeoutHandle: NodeJS.Timeout;
+  let timedOut = false;
+
+  const connectPromise = pool.connect();
+  const connectTimeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      reject(new Error('Database connect timeout (5s)'));
+    }, TIMEOUT_MS);
+  });
+
+  // Ensure orphaned connections are released if timeout fires first
+  connectPromise.then(c => {
+    if (timedOut) c.release();
+  }).catch(() => { /* pool.connect() failure already handled by Promise.race */ });
+
   try {
-    await client.query('SELECT 1');
-    return { latency: Date.now() - start };
-  } finally {
-    client.release();
+    const client = await Promise.race([connectPromise, connectTimeout]);
+    clearTimeout(timeoutHandle!);
+    try {
+      await client.query('SELECT 1');
+      return { latency: Date.now() - start };
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    clearTimeout(timeoutHandle!);
+    throw err;
   }
 }
 
@@ -569,7 +600,6 @@ app.get('/health/repositories', async (request, reply) => {
   }
   // P0-AUDIT-FIX: Require admin/owner role
   try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
-  const { getRepositoryHealth } = await import('../services/repository-factory');
   return getRepositoryHealth();
 });
 
@@ -581,7 +611,6 @@ app.get('/health/sequences', async (request, reply) => {
   }
   // P0-AUDIT-FIX: Require admin/owner role
   try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
-  const { checkSequenceHealth } = await import('@database');
   const sequenceHealth = await checkSequenceHealth();
 
   return reply.status(sequenceHealth.healthy ? 200 : 503).send({
@@ -595,9 +624,20 @@ app.get('/health/sequences', async (request, reply) => {
 async function start(): Promise<void> {
   try {
   await registerRoutes();
-  const port = parseInt(process.env['PORT'] || '3000', 10);
+  const port = Number(process.env['PORT']) || 3000; // P3-FIX: Use Number() || fallback instead of parseInt to avoid NaN
   await app.listen({ port, host: '0.0.0.0' });
   logger.info(`Server started on port ${port}`);
+
+  // P1-SECURITY-FIX: Register Fastify graceful shutdown handler.
+  // Previously, app.close() was never called on SIGTERM/SIGINT. This caused:
+  // 1. In-flight requests to receive TCP RST during deployments (502 errors)
+  // 2. Database transactions to commit without HTTP response being sent
+  // 3. Client-side retries on already-completed operations (double-writes)
+  registerShutdownHandler(async () => {
+    logger.info('Closing Fastify server (draining connections)...');
+    await app.close();
+    logger.info('Fastify server closed');
+  });
   } catch (error) {
   logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));
   process.exit(1);

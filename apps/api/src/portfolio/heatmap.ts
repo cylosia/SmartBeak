@@ -18,16 +18,21 @@ export function buildHeatmap(points: HeatmapPoint[]): HeatmapResult[] {
 
   // P2-FIX: Removed redundant points.length > 0 ternaries — early return on line 10
   // guarantees points.length > 0 at this point.
-  const avgTraffic = points.reduce((sum, p) => sum + (p.traffic || 0), 0) / points.length;
-  const avgRoi = points.reduce((sum, p) => sum + (p.roi_12mo || 0), 0) / points.length;
+  // P2-DATA-INTEGRITY-FIX: Use Number.isFinite() guards instead of || or ??.
+  // Previously: || treated 0 and NaN as falsy (inconsistent with ?? on lines 28-30).
+  // Now: Number.isFinite() consistently rejects NaN, Infinity, null, and undefined,
+  // preventing silent misclassification of corrupted data into 'invest' quadrant.
+  const safeNum = (v: number): number => Number.isFinite(v) ? v : 0;
+  const avgTraffic = points.reduce((sum, p) => sum + safeNum(p.traffic), 0) / points.length;
+  const avgRoi = points.reduce((sum, p) => sum + safeNum(p.roi_12mo), 0) / points.length;
 
   return points.map(p => {
   let quadrant: Quadrant = 'invest';
 
-  // FIX: Use safe comparisons with null/undefined handling
-  const traffic = p.traffic ?? 0;
-  const roi = p.roi_12mo ?? 0;
-  const freshness = p.freshness_days ?? 0;
+  // P2-DATA-INTEGRITY-FIX: Use consistent Number.isFinite() guards for all numeric fields
+  const traffic = safeNum(p.traffic);
+  const roi = safeNum(p.roi_12mo);
+  const freshness = safeNum(p.freshness_days);
 
   // Dynamic thresholds based on averages to avoid hardcoded magic numbers
   if (traffic < Math.max(100, avgTraffic * 0.5) && roi < 0) quadrant = 'prune';
