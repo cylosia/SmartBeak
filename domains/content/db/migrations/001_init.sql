@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS content_items (
   title TEXT NOT NULL,
   body TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('draft', 'scheduled', 'published', 'archived')),
-  content_type TEXT DEFAULT 'article' CHECK (content_type IN ('article', 'page', 'product', 'review', 'guide')),
+  content_type TEXT DEFAULT 'article' CHECK (content_type IN ('article', 'page', 'product', 'review', 'guide', 'post', 'video', 'image')),
   publish_at TIMESTAMP,
   archived_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
