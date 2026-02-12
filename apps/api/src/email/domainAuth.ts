@@ -8,6 +8,34 @@ export type DomainAuthStatus = {
   dmarc: boolean;
 };
 
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 500;
+
+/**
+* Resolve TXT records with exponential backoff retry.
+* Returns empty array on ENODATA/ENOTFOUND (no records), rethrows transient failures after retries.
+*/
+async function resolveTxtWithRetry(hostname: string): Promise<string[]> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  try {
+    const records = await dns.resolveTxt(hostname);
+    return records.flat();
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    // ENODATA / ENOTFOUND means the record genuinely doesn't exist — no retry needed
+    if (code === 'ENODATA' || code === 'ENOTFOUND') {
+    return [];
+    }
+    if (attempt === MAX_RETRIES) {
+    return []; // Exhausted retries; treat as not found rather than crashing
+    }
+    const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  }
+  return [];
+}
+
 // M08-FIX: Implement actual DNS checks instead of always throwing
 export async function checkDomainAuth(domain: string): Promise<DomainAuthStatus> {
 
@@ -23,30 +51,15 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuthStatus>
 
   const status: DomainAuthStatus = { spf: false, dkim: false, dmarc: false };
 
-  try {
-  const txtRecords = await dns.resolveTxt(domain);
-  const flat = txtRecords.flat();
-  status.spf = flat.some(r => r.startsWith('v=spf1'));
-  } catch {
-  // No TXT records or DNS failure — SPF not found
-  }
+  const [spfRecords, dmarcRecords, dkimRecords] = await Promise.all([
+  resolveTxtWithRetry(domain),
+  resolveTxtWithRetry(`_dmarc.${domain}`),
+  resolveTxtWithRetry(`default._domainkey.${domain}`),
+  ]);
 
-  try {
-  const dmarcRecords = await dns.resolveTxt(`_dmarc.${domain}`);
-  const flat = dmarcRecords.flat();
-  status.dmarc = flat.some(r => r.startsWith('v=DMARC1'));
-  } catch {
-  // No DMARC record
-  }
-
-  try {
-  // Check for default DKIM selector
-  const dkimRecords = await dns.resolveTxt(`default._domainkey.${domain}`);
-  const flat = dkimRecords.flat();
-  status.dkim = flat.some(r => r.includes('v=DKIM1'));
-  } catch {
-  // No DKIM record at default selector
-  }
+  status.spf = spfRecords.some(r => r.startsWith('v=spf1'));
+  status.dmarc = dmarcRecords.some(r => r.startsWith('v=DMARC1'));
+  status.dkim = dkimRecords.some(r => r.includes('v=DKIM1'));
 
   return status;
 }

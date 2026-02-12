@@ -5,36 +5,57 @@
 */
 
 /**
+* Base application error with HTTP status code and safe serialization.
+* Strips stack traces in production to prevent information leakage.
+*/
+export class AppError extends Error {
+  constructor(
+  message: string,
+  public readonly statusCode: number = 500,
+  public readonly isOperational: boolean = true
+  ) {
+  super(message);
+  this.name = 'AppError';
+  Object.setPrototypeOf(this, new.target.prototype);
+  }
+
+  toJSON(): { name: string; message: string; statusCode: number; stack?: string } {
+  return {
+    name: this.name,
+    message: this.message,
+    statusCode: this.statusCode,
+    ...(process.env['NODE_ENV'] === 'development' ? { stack: this.stack } : {}),
+  };
+  }
+}
+
+/**
 * Error thrown when a feature or function is not yet implemented.
 * Use this instead of returning mock data to prevent accidental production usage.
 */
-export class NotImplementedError extends Error {
+export class NotImplementedError extends AppError {
   constructor(message: string = 'Feature not yet implemented') {
-  super(message);
+  super(message, 501);
   this.name = 'NotImplementedError';
-  // Fix prototype chain for instanceof checks
-  Object.setPrototypeOf(this, NotImplementedError.prototype);
   }
 }
 
 /**
 * Error thrown when a domain authentication check fails.
 */
-export class DomainAuthError extends Error {
+export class DomainAuthError extends AppError {
   constructor(message: string = 'Domain authentication failed') {
-  super(message);
+  super(message, 422);
   this.name = 'DomainAuthError';
-  Object.setPrototypeOf(this, DomainAuthError.prototype);
   }
 }
 
 /**
 * Error thrown when CDN transformation fails due to invalid input.
 */
-export class CdnTransformError extends Error {
+export class CdnTransformError extends AppError {
   constructor(message: string = 'CDN transformation failed') {
-  super(message);
+  super(message, 400);
   this.name = 'CdnTransformError';
-  Object.setPrototypeOf(this, CdnTransformError.prototype);
   }
 }

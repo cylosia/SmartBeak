@@ -28,6 +28,35 @@ export interface EmailComplianceCopy {
 }
 
 /**
+* RFC 8058 List-Unsubscribe headers required by Gmail/Yahoo (Feb 2024+).
+*/
+export interface ListUnsubscribeHeaders {
+  'List-Unsubscribe': string;
+  'List-Unsubscribe-Post': string;
+}
+
+/**
+* Build RFC 8058 List-Unsubscribe headers for an email.
+* @param unsubscribeUrl - HTTPS one-click unsubscribe endpoint
+* @param unsubscribeMailto - Optional mailto fallback
+*/
+export function buildListUnsubscribeHeaders(
+  unsubscribeUrl: string,
+  unsubscribeMailto?: string
+): ListUnsubscribeHeaders {
+  const parts: string[] = [];
+  if (unsubscribeMailto) {
+  parts.push(`<mailto:${unsubscribeMailto}>`);
+  }
+  parts.push(`<${unsubscribeUrl}>`);
+
+  return {
+  'List-Unsubscribe': parts.join(', '),
+  'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+}
+
+/**
 * Generate email compliance copy
 * @param context - Compliance context
 * @returns Email compliance copy

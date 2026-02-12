@@ -71,11 +71,11 @@ export function renderEmailHTML(message: EmailMessage): string {
     case 'paragraph':
     return `<p style='${style['p']}'>${escape(b.text)}</p>`;
     case 'image': {
-    const img = `<img src='${sanitizeUrl(b.src)}' alt='${escape(b.alt)}' style='${style['img']}'/>`;
-    return b.link ? `<a href='${sanitizeUrl(b.link)}'>${img}</a>` : img;
+    const img = `<img src='${escape(sanitizeUrl(b.src))}' alt='${escape(b.alt)}' style='${style['img']}'/>`;
+    return b.link ? `<a href='${escape(sanitizeUrl(b.link))}'>${img}</a>` : img;
     }
     case 'button':
-    return `<a href='${sanitizeUrl(b['url'])}' style='${style['btn']}'>${escape(b.text)}</a>`;
+    return `<a href='${escape(sanitizeUrl(b['url']))}' style='${style['btn']}'>${escape(b.text)}</a>`;
     case 'divider':
     return `<hr style='${style['hr']}'/>`;
   }
@@ -86,7 +86,7 @@ export function renderEmailHTML(message: EmailMessage): string {
   <p style='font-size:12px;color:#6b7280;'>
     ${escape(message.footer.compliance_copy)}<br/>
     ${escape(message.footer.physical_address)}<br/>
-    <a href='${sanitizeUrl(message.footer.unsubscribe_link)}'>Unsubscribe</a>
+    <a href='${escape(sanitizeUrl(message.footer.unsubscribe_link))}'>Unsubscribe</a>
   </p>
   `;
 
