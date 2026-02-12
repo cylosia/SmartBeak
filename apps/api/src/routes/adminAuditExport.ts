@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { adminRateLimit } from '../middleware/rateLimiter';
@@ -77,7 +77,7 @@ async function verifyOrgMembership(adminId: string, orgId: string): Promise<bool
 
 export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void> {
 
-  app.addHook('onRequest', adminRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', adminRateLimit());
 
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
   try {

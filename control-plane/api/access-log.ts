@@ -11,7 +11,7 @@ export function logReadAccess(req: FastifyRequest, context: string) {
     service: 'api:access',
     correlationId: requestId,
     context: {
-      route: req.routerPath,
+      route: req.routeOptions.url,
       method: req.method,
     }
   });

@@ -1,6 +1,6 @@
 
 import crypto from 'crypto';
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getDb } from '../db';
@@ -110,7 +110,7 @@ function validateColumnName(column: string): string {
 export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
   const db = await getDb();
 
-  app.addHook('onRequest', adminRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', adminRateLimit());
 
   app.addHook('onRequest', async (req, reply) => {
     // Check for admin authentication

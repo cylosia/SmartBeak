@@ -4,7 +4,7 @@
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing
 
 import crypto from 'crypto';
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { createStripeCheckoutSession } from '../billing/stripe';
@@ -155,7 +155,7 @@ async function verifyOrgMembership(userId: string, orgId: string): Promise<boole
 
 export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
   // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing (5 req/min)
-  app.addHook('onRequest', rateLimitMiddleware('strict', undefined, { detectBots: true }) as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', rateLimitMiddleware('strict', undefined, { detectBots: true }));
 
   // SECURITY FIX: Use centralized JWT verification
   app.addHook('onRequest', async (req, reply) => {

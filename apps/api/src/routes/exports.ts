@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getDb } from '../db';
@@ -80,9 +80,9 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
 
 export async function exportRoutes(app: FastifyInstance): Promise<void> {
   // P1-FIX: Add CSRF protection for state-changing operations
-  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', csrfProtection());
 
-  app.addHook('onRequest', apiRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', apiRateLimit());
 
   app.post<{
     Body: ExportBodyType;

@@ -695,7 +695,7 @@ export { detectBot };
 // Fastify Middleware Functions
 // ============================================================================
 
-import type { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 
 /**
  * Rate limit middleware options
@@ -791,8 +791,7 @@ function getRateLimitKey(request: FastifyRequest, prefix: string): string {
 export function adminRateLimit() {
   return async (
     request: FastifyRequest,
-    reply: FastifyReply,
-    done: HookHandlerDoneFunction
+    reply: FastifyReply
   ) => {
     // P0-FIX: Reduced to 10 req/min for admin endpoints (was 100)
     const config: RateLimitConfig = {
@@ -800,19 +799,17 @@ export function adminRateLimit() {
       intervalSeconds: 60,
       burstSize: 10,
     };
-    
+
     // P0-FIX: Use distributed key with tenant isolation
     const key = getRateLimitKey(request, 'admin');
-    
+
     // P0-FIX: Distributed rate limiting with fail-closed behavior
     const allowed = await checkRateLimitDistributed(key, config);
-    
+
     if (!allowed) {
       reply.status(429).send({ error: 'Rate limit exceeded' });
       return;
     }
-    
-    done();
   };
 }
 
@@ -824,8 +821,7 @@ export function adminRateLimit() {
 export function apiRateLimit() {
   return async (
     request: FastifyRequest,
-    reply: FastifyReply,
-    done: HookHandlerDoneFunction
+    reply: FastifyReply
   ) => {
     // API rate limit: 60 requests per minute
     const config: RateLimitConfig = {
@@ -833,19 +829,17 @@ export function apiRateLimit() {
       intervalSeconds: 60,
       burstSize: 60,
     };
-    
+
     // P0-FIX: Use distributed key with tenant isolation
     const key = getRateLimitKey(request, 'api');
-    
+
     // P0-FIX: Distributed rate limiting with fail-closed behavior
     const allowed = await checkRateLimitDistributed(key, config);
-    
+
     if (!allowed) {
       reply.status(429).send({ error: 'Rate limit exceeded' });
       return;
     }
-    
-    done();
   };
 }
 
@@ -862,8 +856,7 @@ export function rateLimitMiddleware(
 ) {
   return async (
     request: FastifyRequest,
-    reply: FastifyReply,
-    done: HookHandlerDoneFunction
+    reply: FastifyReply
   ) => {
     // Bot detection
     if (options.detectBots) {
@@ -875,14 +868,14 @@ export function rateLimitMiddleware(
         return;
       }
     }
-    
+
     // Tier-based rate limits
     const tierLimits: Record<string, RateLimitConfig> = {
       strict: { tokensPerInterval: 10, intervalSeconds: 60, burstSize: 10 },
       standard: { tokensPerInterval: 60, intervalSeconds: 60, burstSize: 60 },
       lenient: { tokensPerInterval: 1000, intervalSeconds: 60, burstSize: 100 },
     };
-    
+
     const tierConfig = tierLimits[tier] ?? tierLimits['standard']!;
     const tokensPerInterval = customConfig?.tokensPerInterval ?? tierConfig.tokensPerInterval ?? 60;
     const intervalSeconds = customConfig?.intervalSeconds ?? tierConfig.intervalSeconds ?? 60;
@@ -891,7 +884,7 @@ export function rateLimitMiddleware(
     const retryDelayMs = customConfig?.retryDelayMs ?? tierConfig.retryDelayMs ?? 1000;
     const failureThreshold = customConfig?.failureThreshold ?? tierConfig.failureThreshold ?? 5;
     const cooldownSeconds = customConfig?.cooldownSeconds ?? tierConfig.cooldownSeconds ?? 60;
-    
+
     const config: RateLimitConfig = {
       tokensPerInterval,
       intervalSeconds,
@@ -901,18 +894,16 @@ export function rateLimitMiddleware(
       failureThreshold,
       cooldownSeconds,
     };
-    
+
     // P0-CRITICAL-FIX: Use distributed rate limiting with tenant isolation
     // SECURITY: Previously used in-memory checkRateLimit() which bypassed Redis
     // This allowed rate limit bypass in scaled deployments (multiple instances)
     const key = getRateLimitKey(request, tier);
     const allowed = await checkRateLimitDistributed(key, config);
-    
+
     if (!allowed) {
       reply.status(429).send({ error: 'Rate limit exceeded' });
       return;
     }
-    
-    done();
   };
 }
