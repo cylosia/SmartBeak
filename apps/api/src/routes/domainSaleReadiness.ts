@@ -19,22 +19,7 @@ const ALLOWED_READINESS_FIELDS = [
   'risk_score',
   'rationale'
 ];
-const SaleReadinessQuerySchema = z.object({
-  domain_id: z.string().uuid('domain_id must be a valid UUID'),
-  seo: z.coerce.number().min(0).max(100).default(0),
-  freshness: z.coerce.number().min(0).max(1).default(0),
-  audience: z.coerce.number().min(0).max(1000000000).default(0),
-  growth: z.coerce.number().min(-100).max(1000).default(0),
-  revenue: z.coerce.number().min(0).max(100000000).default(0),
-  risks: z.coerce.number().min(0).max(100).default(0),
-});
-/**
- * Validate UUID format
- */
-function isValidUUID(str: string) {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
+// P2-21 FIX: Removed dead code (SaleReadinessQuerySchema and isValidUUID were defined but never used)
 // H06-FIX: Removed custom verifyAuth — using @security/auth middleware instead
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {
@@ -171,4 +156,4 @@ export interface AuditEventParams {
   ip: string;
 }
 
-export type SaleReadinessQueryType = z.infer<typeof SaleReadinessQuerySchema>;
+// P2-21 FIX: Removed SaleReadinessQueryType (referenced deleted SaleReadinessQuerySchema)

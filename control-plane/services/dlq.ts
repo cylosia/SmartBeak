@@ -155,21 +155,29 @@ export async function getDLQStatsSafe(service: KernelDLQService): Promise<DLQSta
 */
 export async function retryDLQJobSafe(
   service: KernelDLQService,
+  orgId: string,
   jobId: string
 ): Promise<boolean> {
   try {
   if (!service || typeof service.retry !== 'function') {
-    logger["error"]('Invalid DLQ service provided', new Error('Validation failed'));
+    logger.error('Invalid DLQ service provided', new Error('Validation failed'));
     throw new Error('Invalid DLQ service: retry method not found');
   }
 
+  // P0-1 SECURITY FIX: Validate orgId for tenant isolation (was missing, causing arity mismatch)
+  if (typeof orgId !== 'string' || orgId.length === 0) {
+    logger.error('Invalid orgId for DLQ retry', new Error('Validation failed'), { orgId });
+    throw new Error('Invalid orgId: must be a non-empty string');
+  }
+
   if (typeof jobId !== 'string' || jobId.length === 0) {
-    logger["error"]('Invalid jobId for DLQ retry', new Error('Validation failed'), { jobId });
+    logger.error('Invalid jobId for DLQ retry', new Error('Validation failed'), { jobId });
     throw new Error('Invalid jobId: must be a non-empty string');
   }
 
   const sanitizedJobId = jobId.trim();
-  const result = await service.retry(sanitizedJobId);
+  // P0-1 SECURITY FIX: Pass orgId to enforce tenant isolation
+  const result = await service.retry(orgId, sanitizedJobId);
 
   if (result) {
     logger.info('DLQ job retried successfully', { jobId: sanitizedJobId });
@@ -197,24 +205,32 @@ export async function retryDLQJobSafe(
 */
 export async function listDLQEntriesSafe(
   service: KernelDLQService,
+  orgId: string,
   region?: string
 ): Promise<DLQEntry[]> {
   try {
   if (!service || typeof service.list !== 'function') {
-    logger["error"]('Invalid DLQ service provided', new Error('Validation failed'));
+    logger.error('Invalid DLQ service provided', new Error('Validation failed'));
     throw new Error('Invalid DLQ service: list method not found');
+  }
+
+  // P0-1 SECURITY FIX: Validate orgId for tenant isolation (was missing, causing arity mismatch)
+  if (typeof orgId !== 'string' || orgId.length === 0) {
+    logger.error('Invalid orgId for DLQ list', new Error('Validation failed'), { orgId });
+    throw new Error('Invalid orgId: must be a non-empty string');
   }
 
   // Validate region if provided
   if (region !== undefined) {
     if (typeof region !== 'string' || region.length === 0 || region.length > 100) {
-    logger["error"]('Invalid region filter', new Error('Validation failed'), { region });
+    logger.error('Invalid region filter', new Error('Validation failed'), { region });
     throw new Error('Invalid region: must be a non-empty string (max 100 chars)');
     }
   }
 
   const sanitizedRegion = region ? region.trim().toLowerCase() : undefined;
-  const entries = await service.list(sanitizedRegion);
+  // P0-1 SECURITY FIX: Pass orgId to enforce tenant isolation
+  const entries = await service.list(orgId, sanitizedRegion);
 
   logger.info('DLQ entries listed', {
     count: entries.length,

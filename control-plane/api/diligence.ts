@@ -38,7 +38,9 @@ export async function registerDiligenceRoutes(app: FastifyInstance) {
     [session.domain_id]
   );
 
-  return snapshot.rows[0] ?? null;
+  // P2-13 FIX: Return 404 instead of 200-with-null for missing data
+  if (!snapshot.rows[0]) return reply.code(404).send({ error: 'No snapshot data found' });
+  return snapshot.rows[0];
   });
 
   app.get('/diligence/:token/provenance', async (req, reply) => {
