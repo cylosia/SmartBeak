@@ -57,7 +57,7 @@ export const JwtClaimsInputSchema = z.object({
 export const VerifyOptionsSchema = z.object({
   audience: z.string().optional(),
   issuer: z.string().optional(),
-  ignoreExpiration: z.boolean().optional(),
+  // F29-FIX: Removed ignoreExpiration - expired tokens must always be rejected
 });
 
 export const TokenMetadataSchema = z.object({

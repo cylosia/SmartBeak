@@ -186,9 +186,11 @@ export function buildPublicUrl(path: string, config?: StorageConfig): string | n
     return `${storageConfig.publicDomain}/${path}`;
   }
   
-  if (storageConfig.provider === 'r2' && storageConfig.endpoint) {
-    // R2 public URLs are constructed differently
-    return `${storageConfig.endpoint}/${storageConfig.bucketName}/${path}`;
+  if (storageConfig.provider === 'r2') {
+    // F26-FIX: Do not expose raw R2 endpoint URL (contains Cloudflare account ID)
+    // in public URLs. Require R2_PUBLIC_DOMAIN for public access.
+    // Previously: returned endpoint URL which leaked infrastructure details.
+    return null;
   }
   
   if (storageConfig.provider === 's3') {

@@ -53,10 +53,12 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
     const result = await redis.set(key, '1', 'EX', 86400, 'NX');
     return result === null; // null means key already existed
   } catch (error) {
-    // P0-FIX: Fail open - if Redis is down, allow processing
-    // Better to process twice than lose a payment
-    logger.error('Redis error checking duplication', { error, eventId });
-    return false;
+    // F13-FIX: Fail CLOSED on Redis failure. Previously failed open which allowed
+    // duplicate processing of financial webhooks (double charges, duplicate plan upgrades).
+    // Stripe retries with exponential backoff, so throwing here returns 500 and Stripe
+    // will redeliver. Processing a charge twice is worse than delaying it.
+    logger.error('Redis unavailable for deduplication - failing closed', { error, eventId });
+    throw new Error('Deduplication service unavailable');
   }
 }
 
@@ -154,6 +156,9 @@ export async function handleStripeWebhookRaw(
   const event = await verifyStripeSignatureWithRetry(payload, sig, webhookSecret);
   
   if (!event) {
+    // F39-FIX: Alert on signature verification failure. Repeated failures indicate
+    // either an attacker probing the endpoint or a Stripe key rotation issue.
+    logger.error('ALERT: Stripe webhook signature verification failed - possible attack or key rotation issue');
     throw new Error('Invalid Stripe signature');
   }
 

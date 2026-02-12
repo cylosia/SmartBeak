@@ -23,6 +23,26 @@ export function startWorker(eventBus: EventBus): Worker {
     return worker;
   }
 
+  // F15-FIX: Parse Redis connection from REDIS_URL. Without this, BullMQ defaults
+  // to localhost:6379 which silently fails in production/Vercel environments.
+  const redisUrl = process.env['REDIS_URL'];
+  if (!redisUrl) {
+    throw new Error('REDIS_URL environment variable is required for BullMQ worker');
+  }
+
+  let connectionConfig: { host: string; port: number; password?: string; tls?: object };
+  try {
+    const url = new URL(redisUrl);
+    connectionConfig = {
+      host: url.hostname,
+      port: parseInt(url.port || '6379', 10),
+      ...(url.password && { password: decodeURIComponent(url.password) }),
+      ...(url.protocol === 'rediss:' && { tls: {} }),
+    };
+  } catch {
+    throw new Error('REDIS_URL is not a valid URL');
+  }
+
   worker = new Worker('events', async (job: Job) => {
     // P0-FIX: Create request context from job data for correlation ID propagation
     const requestContext = createRequestContext({
@@ -44,6 +64,8 @@ export function startWorker(eventBus: EventBus): Worker {
       }
     });
   }, {
+    // F15-FIX: Use parsed Redis connection config
+    connection: connectionConfig,
     // SECURITY FIX (Finding 10): Stalled job detection and lock management
     // Without these settings, crashed jobs stay "active" forever, blocking concurrency slots
     stalledInterval: 30000,   // Check for stalled jobs every 30 seconds

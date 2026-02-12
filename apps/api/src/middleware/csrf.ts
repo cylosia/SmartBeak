@@ -91,7 +91,16 @@ export async function validateCsrfToken(
     result |= stored.charCodeAt(i) ^ providedToken.charCodeAt(i);
   }
 
-  return result === 0;
+  const isValid = result === 0;
+
+  // F27-FIX: Invalidate token after successful validation. Previously the token
+  // remained valid for the full 1-hour TTL, allowing unlimited replay attacks.
+  // CSRF tokens MUST be single-use.
+  if (isValid) {
+    await redis.del(key);
+  }
+
+  return isValid;
 }
 
 /**
@@ -129,8 +138,12 @@ export function csrfProtection(config: CsrfConfig = {}) {
       return;
     }
 
-    // Get session ID from auth context or cookie
-    const sessionId = typeof req.headers['x-session-id'] === 'string' ? req.headers['x-session-id'] : undefined;
+    // F28-FIX: Derive session ID from authenticated JWT claims, NOT from the
+    // client-controlled x-session-id header. Using a client header allows an
+    // attacker to generate a CSRF token with their own session ID and use it
+    // against a victim's authenticated request, completely bypassing CSRF protection.
+    const authUser = (req as { auth?: { userId?: string; sessionId?: string } }).auth;
+    const sessionId = authUser?.sessionId || authUser?.userId;
 
     if (!sessionId) {
       res.status(403).send({
@@ -171,7 +184,9 @@ export function csrfProtection(config: CsrfConfig = {}) {
         return;
       }
     } catch (error) {
-      console.error('[CSRF] Validation error:', error);
+      // F40-FIX: Use structured logger instead of console.error for Vercel log parsing
+      const { getLogger } = await import('@kernel/logger');
+      getLogger('csrf').error('CSRF token validation error', error instanceof Error ? error : new Error(String(error)));
       res.status(500).send({
         error: 'CSRF protection: Validation error',
         code: 'CSRF_VALIDATION_ERROR',

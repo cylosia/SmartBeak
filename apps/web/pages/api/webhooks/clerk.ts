@@ -6,26 +6,11 @@ import { getLogger } from '../../../../packages/kernel/logger';
 import { requireEnv } from '../../../lib/env';
 
 const logger = getLogger('ClerkWebhook');
-// import { getRedis } from '@kernel/redis';
-// Placeholder Redis client for webhook deduplication
-// P1-FIX: Updated to match ioredis return types
-interface RedisClient {
-  get(key: string): Promise<string | null>;
-  setex(key: string, seconds: number, value: string): Promise<string | null>;
-}
-let redisInstance: RedisClient | null = null;
-const getRedis = async (): Promise<RedisClient> => {
-  if (!redisInstance) {
-    // P1-FIX: Fail closed - require REDIS_URL, no fallback to localhost
-    const redisUrl = process.env['REDIS_URL'];
-    if (!redisUrl) {
-      throw new Error('REDIS_URL environment variable is required for webhook deduplication');
-    }
-    const Redis = (await import('ioredis')).default;
-    redisInstance = new Redis(redisUrl);
-  }
-  return redisInstance;
-};
+// F16-FIX: Use the shared Redis client from @kernel/redis instead of creating
+// a standalone connection. The standalone client had no environment-based key
+// prefix, so prod and staging shared the same dedup namespace when using the
+// same Redis instance, causing cross-environment webhook dedup collisions.
+import { getRedis } from '../../../../packages/kernel/redis';
 
 /**
 * Maximum allowed payload size for webhooks (10MB)
@@ -333,28 +318,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const internalUserId = userRows[0]?.id;
 
         if (internalUserId) {
+          // F22-FIX: Use internalUserId (from users table PK) for cascading deletes,
+          // not userId (clerk_id). FK references in related tables point to the
+          // internal user ID, not the external Clerk ID. Using the wrong ID meant
+          // these DELETEs found nothing, violating GDPR Article 17.
+
           // 2. Delete org memberships (user removed from all orgs)
+          // Try both internal ID and clerk_id since different tables may use different FK
           await client.query(
-            'DELETE FROM org_memberships WHERE user_id = $1',
-            [userId]
+            'DELETE FROM org_memberships WHERE user_id = $1 OR user_id = $2',
+            [internalUserId, userId]
           );
 
           // 3. Delete user sessions
           await client.query(
-            'DELETE FROM user_sessions WHERE user_id = $1',
-            [userId]
+            'DELETE FROM user_sessions WHERE user_id = $1 OR user_id = $2',
+            [internalUserId, userId]
           );
 
           // 4. Delete refresh tokens
           await client.query(
-            'DELETE FROM refresh_tokens WHERE user_id = $1',
-            [userId]
+            'DELETE FROM refresh_tokens WHERE user_id = $1 OR user_id = $2',
+            [internalUserId, userId]
           );
 
           // 5. Delete API keys
           await client.query(
-            'DELETE FROM api_keys WHERE user_id = $1',
-            [userId]
+            'DELETE FROM api_keys WHERE user_id = $1 OR user_id = $2',
+            [internalUserId, userId]
           );
 
           // 6. Anonymize audit logs (keep structure, remove PII)
@@ -363,20 +354,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                actor_email = 'deleted_user',
                actor_name = 'Deleted User',
                actor_ip = NULL
-             WHERE actor_id = $1`,
-            [userId]
+             WHERE actor_id = $1 OR actor_id = $2`,
+            [internalUserId, userId]
           );
 
           // 7. Delete email subscriptions
           await client.query(
-            'DELETE FROM email_subscriptions WHERE user_id = $1',
-            [userId]
+            'DELETE FROM email_subscriptions WHERE user_id = $1 OR user_id = $2',
+            [internalUserId, userId]
           );
 
           // 8. Delete notification preferences
           await client.query(
-            'DELETE FROM notification_preferences WHERE user_id = $1',
-            [userId]
+            'DELETE FROM notification_preferences WHERE user_id = $1 OR user_id = $2',
+            [internalUserId, userId]
           );
         }
 
@@ -406,21 +397,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     case 'organizationMembership.created': {
-      const userId = event.data.id;
-      const orgId = event.data.organization_id;
+      // F21-FIX: For membership events, event.data.id is the MEMBERSHIP ID, not the user ID.
+      // The user ID is in event.data.public_user_data.user_id for Clerk membership events.
+      const membershipData = event.data as { id: string; organization_id?: string; public_user_data?: { user_id?: string }; role?: string };
+      const userId = membershipData.public_user_data?.user_id || membershipData.id;
+      const orgId = membershipData.organization_id;
       logger.info('User joined org', { userId, orgId });
-      
+
+      if (!orgId) {
+        logger.warn('Missing organization_id in membership event');
+        return res.status(400).json({ error: 'Missing organization_id' });
+      }
+
       // P0-FIX: Verify org and user exist before creating membership
       const { getDb } = await import('../../../lib/db');
       const db = await getDb();
-      
+
       // Verify organization exists
       const org = await db('orgs').where({ id: orgId }).first();
       if (!org) {
         logger.warn('Org not found, skipping membership', { orgId });
         return res.status(400).json({ error: 'Invalid organization' });
       }
-      
+
       // Verify user exists in our database
       const user = await db('users').where({ clerk_id: userId }).first();
       if (!user) {
@@ -434,19 +433,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           updated_at: new Date(),
         }).onConflict('clerk_id').ignore();
       }
-      
+
+      // F23-FIX: Validate role against allowed values instead of unsafe (event.data as any).role
+      const ALLOWED_ROLES = ['admin', 'editor', 'viewer', 'member', 'org:admin', 'org:member'];
+      const rawRole = membershipData.role;
+      const role = (rawRole && ALLOWED_ROLES.includes(rawRole)) ? rawRole : 'member';
+
       await db('org_memberships').insert({
         user_id: userId,
         org_id: orgId,
-        role: (event.data as any).role || 'member',
+        role,
         created_at: new Date(),
       }).onConflict(['user_id', 'org_id']).merge();
       break;
     }
 
     case 'organizationMembership.deleted': {
-      const userId = event.data.id;
-      const orgId = event.data.organization_id;
+      // F21-FIX: Same as created - use public_user_data.user_id for membership events
+      const deleteMembershipData = event.data as { id: string; organization_id?: string; public_user_data?: { user_id?: string } };
+      const userId = deleteMembershipData.public_user_data?.user_id || deleteMembershipData.id;
+      const orgId = deleteMembershipData.organization_id;
       logger.info('User left org', { userId, orgId });
       
       // P0-FIX: Verify membership exists before deleting

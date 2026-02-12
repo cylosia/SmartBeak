@@ -89,7 +89,7 @@ export class TokenBindingError extends AuthError {
 export interface VerifyTokenOptions {
   audience?: string;
   issuer?: string;
-  ignoreExpiration?: boolean;
+  // F29-FIX: Removed ignoreExpiration - expired tokens must always be rejected
 }
 
 /**
