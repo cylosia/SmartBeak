@@ -38,10 +38,10 @@ export async function domainOwnershipRoutes(app: FastifyInstance, pool: Pool) {
   // Validate body
   const bodyResult = TransferBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
+    // M18-FIX: Map to user-friendly messages instead of leaking Zod internals
     return res.status(400).send({
-    error: 'Validation failed',
+    error: 'Validation failed: fromOrg and toOrg must be valid UUIDs',
     code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues
     });
   }
 

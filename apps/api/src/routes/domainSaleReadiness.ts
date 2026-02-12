@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import jwt from 'jsonwebtoken';
+// H06-FIX: Use the existing auth middleware instead of custom JWT verification
 import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { computeSaleReadiness } from '../domain/saleReadiness';
-import type { JwtPayload } from 'jsonwebtoken';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainSaleReadiness');
 
@@ -35,34 +34,7 @@ function isValidUUID(str: string) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
-async function verifyAuth(req: FastifyRequest) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  const token = authHeader.slice(7);
-  try {
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured', new Error('JWT_KEY_1 not configured'));
-      return null;
-    }
-
-    const claims = jwt.verify(token, jwtKey, {
-      audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
-      issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
-      algorithms: ['HS256'],
-      clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
-    }) as JwtPayload & { sub?: string; orgId?: string };
-    if (!claims.sub || !claims.orgId) {
-      return null;
-    }
-    return { userId: claims.sub, orgId: claims.orgId };
-  }
-  catch (err) {
-    return null;
-  }
-}
+// H06-FIX: Removed custom verifyAuth — using @security/auth middleware instead
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {
   try {
@@ -100,16 +72,29 @@ async function recordAuditEvent(params: AuditEventParams) {
     logger.error('Failed to record audit event', error instanceof Error ? error : new Error(String(error)));
   }
 }
-export async function domainSaleReadinessRoutes(app: FastifyInstance) {
-  app.get('/domain/sale-readiness', async (req, reply) => {
-    const ip = (req as unknown as { ip?: string }).ip || req.socket?.remoteAddress || 'unknown';
+const SaleReadinessBodySchema = z.object({
+  domain_id: z.string().uuid('domain_id must be a valid UUID'),
+  seo: z.coerce.number().min(0).max(100).default(0),
+  freshness: z.coerce.number().min(0).max(1).default(0),
+  audience: z.coerce.number().min(0).max(1000000000).default(0),
+  growth: z.coerce.number().min(-100).max(1000).default(0),
+  revenue: z.coerce.number().min(0).max(100000000).default(0),
+  risks: z.coerce.number().min(0).max(100).default(0),
+});
 
-    const auth = await verifyAuth(req);
+export async function domainSaleReadinessRoutes(app: FastifyInstance) {
+  // C05-FIX: Changed from GET to POST — this endpoint performs an INSERT, which is
+  // not idempotent. GET requests bypass CSRF, can be triggered by prefetch/crawlers.
+  app.post('/domain/sale-readiness', { preHandler: optionalAuthFastify }, async (req, reply) => {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+
+    // H06-FIX: Use auth context from middleware instead of custom JWT verification
+    const auth = req.user as { userId: string; orgId: string } | undefined;
     if (!auth) {
       return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
     }
     try {
-            const parseResult = SaleReadinessQuerySchema.safeParse(req.query);
+      const parseResult = SaleReadinessBodySchema.safeParse(req.body);
       if (!parseResult.success) {
         return reply.status(400).send({
           error: 'Invalid query parameters',
@@ -144,7 +129,7 @@ export async function domainSaleReadinessRoutes(app: FastifyInstance) {
         risk_score: result.breakdown.risk,
         rationale: result.rationale
       })
-        .returning('*');
+        .returning(ALLOWED_READINESS_FIELDS);
 
       await recordAuditEvent({
         orgId: auth.orgId,

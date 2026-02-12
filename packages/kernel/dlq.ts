@@ -381,7 +381,7 @@ export function withDLQ<T>(
     if (attempt >= maxAttempts) {
     // Send to DLQ
     await sendToDLQ(
-      'default-queue', // queue name - should be parameterized
+      queueName, // H10-FIX: Use actual queue name parameter instead of hardcoded value
       payload,
       error instanceof Error ? error : new Error(String(error)),
       attempt,

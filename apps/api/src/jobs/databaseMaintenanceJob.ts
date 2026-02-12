@@ -181,9 +181,20 @@ export async function getUnacknowledgedAlerts(
 /**
  * Run manual vacuum on a table
  */
+// M10-FIX: Whitelist of known tables to prevent SQL injection via table name
+const ALLOWED_VACUUM_TABLES = [
+  'domains', 'domain_registry', 'domain_activity', 'content_items',
+  'domain_sale_readiness', 'diligence_sessions', 'diligence_tokens',
+  'email_optin_confirmations', 'audit_events', 'org_usage',
+  'domain_exports', 'domain_transfer_log', 'memberships',
+] as const;
+
 export async function manualVacuumTable(
   tableName: string
 ): Promise<maintenance.MaintenanceResult> {
+  if (!(ALLOWED_VACUUM_TABLES as readonly string[]).includes(tableName)) {
+    throw new Error(`Table "${tableName}" is not in the allowed vacuum list`);
+  }
   logger.info('Running manual vacuum', { table: tableName });
   return await maintenance.vacuumAnalyzeTable(db, tableName);
 }

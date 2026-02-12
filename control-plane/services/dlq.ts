@@ -103,39 +103,7 @@ export class SafeDLQService extends KernelDLQService {
   }
   }
 
-  /**
-  * Categorize an error for DLQ
-  * @param error - Error to categorize
-  * @returns Error category
-  */
-  private categorizeError(error: Error): import('@kernel/queue/DLQService').ErrorCategory {
-  const message = error.message.toLowerCase();
-
-  if (message.includes('timeout') || message.includes('etimedout')) {
-    return 'timeout';
-  }
-  if (
-    message.includes('unauthorized') ||
-    message.includes('forbidden') ||
-    message.includes('auth')
-  ) {
-    return 'auth';
-  }
-  if (message.includes('validation') || message.includes('invalid')) {
-    return 'validation';
-  }
-  if (
-    message.includes('connection') ||
-    message.includes('econnrefused') ||
-    message.includes('enotfound')
-  ) {
-    return 'network';
-  }
-  if (message.includes('database') || message.includes('query') || message.includes('sql')) {
-    return 'database';
-  }
-  return 'unknown';
-  }
+  // M12-FIX: Removed unused private categorizeError() method (dead code)
 }
 
 /**
