@@ -133,7 +133,8 @@ export function createApiClient(config: ApiClientConfig) {
     data?: unknown,
     requestConfig: RequestConfig = {}
   ): Promise<T> {
-    const url = `${baseUrl}${path}`;
+    const normalizedPath = path.replace(/^\//, '');
+    const url = `${baseUrl}/${normalizedPath}`;
     const timeoutMs = requestConfig.timeoutMs || defaultTimeout;
     const retries = requestConfig.retries ?? defaultRetries;
     
@@ -207,30 +208,40 @@ export const authApiClient = createApiClient({
 
 // Exported helpers for backward compatibility
 export const apiUrl = (path: string): string => {
-  const base = typeof process !== 'undefined' && process.env['NEXT_PUBLIC_API_URL'] 
-    ? process.env['NEXT_PUBLIC_API_URL'] 
+  const base = typeof process !== 'undefined' && process.env['NEXT_PUBLIC_API_URL']
+    ? process.env['NEXT_PUBLIC_API_URL']
     : '/api';
-  return `${base.replace(/\/$/, '')}${path}`;
+  // C5-FIX: Ensure path separator between base URL and path
+  const normalizedPath = path.replace(/^\//, '');
+  return `${base.replace(/\/$/, '')}/${normalizedPath}`;
 };
 
 export const authFetch = async <T = unknown>(
   urlOrPath: string,
-  options?: RequestInit & { timeoutMs?: number; retries?: number; ctx?: unknown }
+  options?: RequestInit & { timeoutMs?: number; retries?: number; ctx?: { req?: { headers?: { cookie?: string } } } }
 ): Promise<Response> => {
   // If already a full URL, use it directly; otherwise prepend base URL
   const url = urlOrPath.startsWith('http') ? urlOrPath : apiUrl(urlOrPath.startsWith('/') ? urlOrPath : `/${urlOrPath}`);
+
+  // C6-FIX: Forward cookies from SSR context for authenticated server-side requests
+  const ssrHeaders: Record<string, string> = {};
+  if (options?.ctx?.req?.headers?.cookie) {
+    ssrHeaders['Cookie'] = options.ctx.req.headers.cookie;
+  }
+
   const response = await fetchWithRetry(url, {
     ...options,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...ssrHeaders,
       ...options?.headers,
     },
   });
-  
+
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
-  
+
   return response;
 };

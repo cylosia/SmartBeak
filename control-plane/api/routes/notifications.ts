@@ -183,7 +183,8 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     }
 
     const { channel, enabled, frequency } = bodyResult.data;
-    const result = await prefs.set(ctx.userId, channel, enabled, frequency!);
+    // M2-FIX: Default frequency to 'immediate' instead of non-null assertion on optional field
+    const result = await prefs.set(ctx.userId, channel, enabled, frequency ?? 'immediate');
     return res.send(result);
   } catch (error) {
     logger.error('[notifications/preferences] Update error:', error);

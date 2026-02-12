@@ -5,14 +5,18 @@ import { AppShell } from '../../../../components/AppShell';
 import { ContentAdvancedFilters } from '../../../../components/ContentAdvancedFilters';
 import { ContentBulkReviewBar } from '../../../../components/ContentBulkReviewBar';
 import { DomainTabs } from '../../../../components/DomainTabs';
+import { authFetch, apiUrl } from '../../../../lib/api-client';
 
+// H5-FIX: Aligned interface fields to match API response shape
 interface ContentItem {
   id: string;
   title: string;
-  type: string;
+  contentType: string;
   status: string;
-  primary_keyword: string | null;
-  author: string | null;
+  domainId: string;
+  domainName: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ContentIndexProps {
@@ -33,7 +37,7 @@ export default function ContentIndex({ domainId, content }: ContentIndexProps) {
 
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Content</h2>
-        <a href={`/domains/${domainId}/content/new`}>➕ Create Content</a>
+        <a href={`/domains/${domainId}/content/new`}>+ Create Content</a>
       </header>
 
       <ContentAdvancedFilters onFilter={() => {}} />
@@ -46,11 +50,13 @@ export default function ContentIndex({ domainId, content }: ContentIndexProps) {
             <th>Title</th>
             <th>Type</th>
             <th>Status</th>
-            <th>Primary Keyword</th>
-            <th>Author</th>
+            <th>Updated</th>
           </tr>
         </thead>
         <tbody>
+          {content.length === 0 && (
+            <tr><td colSpan={5}>No content yet. Create your first piece of content.</td></tr>
+          )}
           {content.map((c) => (
             <tr key={c.id}>
               <td>
@@ -63,10 +69,9 @@ export default function ContentIndex({ domainId, content }: ContentIndexProps) {
               <td>
                 <a href={`/domains/${domainId}/content/${c.id}`}>{c.title}</a>
               </td>
-              <td>{c.type}</td>
+              <td>{c.contentType}</td>
               <td>{c.status}</td>
-              <td>{c.primary_keyword || '—'}</td>
-              <td>{c.author || '—'}</td>
+              <td>{c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}</td>
             </tr>
           ))}
         </tbody>
@@ -75,16 +80,19 @@ export default function ContentIndex({ domainId, content }: ContentIndexProps) {
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
+// C9-FIX: Replaced hardcoded mock data with actual API fetch
+export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   const id = params?.['id'];
   if (typeof id !== 'string') {
     return { notFound: true };
   }
 
-  const content: ContentItem[] = [
-    { id: '1', title: 'Best Wireless Headphones', type: 'Blog', status: 'Published', primary_keyword: 'wireless headphones', author: 'Jane Smith' },
-    { id: '2', title: 'Noise Cancelling Guide', type: 'Web', status: 'Draft', primary_keyword: 'noise cancelling', author: 'Editorial Team' }
-  ];
-
-  return { props: { domainId: id, content } };
+  try {
+    const res = await authFetch(apiUrl(`content?domainId=${id}`), { ctx: { req } });
+    const json = await res.json();
+    const content = json.data || [];
+    return { props: { domainId: id, content } };
+  } catch {
+    return { props: { domainId: id, content: [] } };
+  }
 }

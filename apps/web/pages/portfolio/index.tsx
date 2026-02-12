@@ -1,10 +1,12 @@
 
 import { GetServerSideProps } from 'next';
 
+import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
+// M1-FIX: Wrapped in AppShell for consistent navigation
 export default function Portfolio({ revenue, risk }: any) {
   return (
-  <main>
+  <AppShell>
     <h1>Portfolio Overview</h1>
 
     <section>
@@ -16,7 +18,7 @@ export default function Portfolio({ revenue, risk }: any) {
     <h2>Risk & Dependency</h2>
     <pre>{JSON.stringify(risk, null, 2)}</pre>
     </section>
-  </main>
+  </AppShell>
   );
 }
 

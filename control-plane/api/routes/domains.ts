@@ -84,12 +84,13 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   const offset = (page - 1) * limit;
 
   try {
+    // H11-FIX: Filter out archived (soft-deleted) domains by default
     let query = `
     d["id"], d.name, d.status, d.created_at, d.updated_at,
     dr.domain_type, dr.revenue_confidence, dr.replaceability
     FROM domains d
     LEFT JOIN domain_registry dr ON d["id"] = dr["id"]
-    WHERE d.org_id = $1
+    WHERE d.org_id = $1 AND d.archived_at IS NULL
     `;
     const params: unknown[] = [ctx["orgId"]];
 
@@ -371,8 +372,10 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     values.push(domainId);
 
     if (updates.length > 0) {
+    // C1-FIX: Pass values array to pool.query (was missing, causing silent update failure)
     await pool.query(
     `UPDATE domains SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+    values
     );
     }
 
@@ -425,8 +428,9 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   }
 
   try {
+    // H11-FIX: Also set archived_at so deleted domains are filtered from listings
     await pool.query(
-    'UPDATE domains SET status = $1, updated_at = NOW() WHERE id = $2',
+    'UPDATE domains SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2',
     ['inactive', domainId]
     );
 

@@ -15,7 +15,7 @@ import { attributionRoutes } from './routes/attribution';
 import { authFromHeader } from '../services/auth';
 import { billingInvoiceRoutes } from './routes/billing-invoices';
 import { billingRoutes } from './routes/billing';
-import { contentListRoutes } from './routes/content-list';
+// C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
 import { contentRevisionRoutes } from './routes/content-revisions';
 import { contentRoutes } from './routes/content';
 import { contentScheduleRoutes } from './routes/content-schedule';
@@ -322,7 +322,8 @@ async function registerRoutes(): Promise<void> {
   await queueRoutes(app, pool);
 
   // Additional routes
-  await contentListRoutes(app);
+  // C3-FIX: Removed contentListRoutes — it registered a duplicate GET /content that conflicted
+  // with contentRoutes above. The content.ts handler is the canonical one.
   await contentRevisionRoutes(app, pool);
   await contentScheduleRoutes(app);
   await domainOwnershipRoutes(app, pool);
