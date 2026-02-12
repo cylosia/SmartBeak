@@ -6,7 +6,7 @@
  */
 
 import { URL } from 'url';
-import dns from 'dns';
+import { promises as dns } from 'dns';
 
 /**
  * Internal IP patterns to block
@@ -330,7 +330,7 @@ export function validateUrl(
       };
     }
 
-    // URL is safe
+    // URL is safe (string-level check only — use validateUrlWithDns for full protection)
     return {
       allowed: true,
       sanitizedUrl: url.toString(),
@@ -344,58 +344,55 @@ export function validateUrl(
 }
 
 /**
- * P0-4 SECURITY FIX: DNS resolution check to prevent DNS rebinding attacks.
- * Resolves hostname to IP addresses and re-validates each against internal IP checks.
- * Must be called AFTER validateUrl() passes synchronous checks.
+ * Resolve hostname and check all resolved IPs against internal IP blocklist.
+ * P0-FIX: Prevents DNS rebinding SSRF attacks where an attacker registers
+ * a domain (e.g., evil.com) that resolves to 127.0.0.1 or 169.254.169.254.
+ * String-based hostname checks cannot detect this — DNS resolution is required.
  *
- * @param hostname - Hostname to resolve and check
- * @param timeoutMs - DNS resolution timeout (default 5000ms)
+ * @param hostname - Hostname to resolve and validate
  * @returns Validation result
  */
-export async function validateDnsResolution(
-  hostname: string,
-  timeoutMs: number = 5000
-): Promise<SSRFValidationResult> {
-  // Skip DNS check for IP addresses (already validated by isInternalIp)
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':')) {
-    return { allowed: true };
-  }
-
+export async function validateResolvedIps(hostname: string): Promise<SSRFValidationResult> {
   try {
-    const resolver = new dns.promises.Resolver();
-    resolver.setLocalAddress(undefined);
-
-    // Race DNS resolution against timeout
-    const addresses = await Promise.race([
-      resolver.resolve4(hostname),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('DNS resolution timeout')), timeoutMs)
-      ),
+    // Resolve both IPv4 and IPv6 addresses
+    const [ipv4Addresses, ipv6Addresses] = await Promise.allSettled([
+      dns.resolve4(hostname),
+      dns.resolve6(hostname),
     ]);
 
-    // Re-validate each resolved IP against internal IP checks
-    for (const ip of addresses) {
+    const allIps: string[] = [];
+    if (ipv4Addresses.status === 'fulfilled') {
+      allIps.push(...ipv4Addresses.value);
+    }
+    if (ipv6Addresses.status === 'fulfilled') {
+      allIps.push(...ipv6Addresses.value);
+    }
+
+    // If no IPs resolved, the hostname doesn't exist
+    if (allIps.length === 0) {
+      return { allowed: false, reason: 'Hostname could not be resolved' };
+    }
+
+    // Check every resolved IP against internal IP blocklist
+    for (const ip of allIps) {
       if (isInternalIp(ip)) {
         return {
           allowed: false,
-          reason: `DNS rebinding detected: ${hostname} resolves to internal IP ${ip}`,
+          reason: `Hostname resolves to internal IP: ${ip}`,
         };
       }
     }
 
     return { allowed: true };
-  } catch (error) {
-    if (error instanceof Error && error.message === 'DNS resolution timeout') {
-      return { allowed: false, reason: 'DNS resolution timed out' };
-    }
-    // DNS resolution failure — hostname doesn't resolve, allow the fetch to fail naturally
-    return { allowed: true };
+  } catch {
+    return { allowed: false, reason: 'DNS resolution failed' };
   }
 }
 
 /**
- * Async version of validateUrl that includes DNS rebinding protection.
- * Use this for outbound requests where DNS rebinding is a concern.
+ * Full SSRF-safe URL validation with DNS resolution.
+ * P0-FIX: Combines string-based checks with DNS resolution to prevent
+ * DNS rebinding attacks. Use this instead of validateUrl() for outbound requests.
  *
  * @param urlString - URL to validate
  * @param options - Validation options
@@ -409,20 +406,23 @@ export async function validateUrlWithDns(
     requireHttps?: boolean;
   } = {}
 ): Promise<SSRFValidationResult> {
-  // Run synchronous checks first
-  const syncResult = validateUrl(urlString, options);
-  if (!syncResult.allowed) {
-    return syncResult;
+  // First: run all synchronous string-based checks
+  const stringResult = validateUrl(urlString, options);
+  if (!stringResult.allowed) {
+    return stringResult;
   }
 
-  // Run DNS resolution check
+  // Second: resolve DNS and validate resolved IPs
   const url = new URL(urlString);
-  const dnsResult = await validateDnsResolution(url.hostname);
+  const dnsResult = await validateResolvedIps(url.hostname);
   if (!dnsResult.allowed) {
     return dnsResult;
   }
 
-  return syncResult;
+  return {
+    allowed: true,
+    sanitizedUrl: stringResult.sanitizedUrl,
+  };
 }
 
 /**

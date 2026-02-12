@@ -28,7 +28,10 @@ const logger = getLogger('jwt');
 // Zod Schemas
 // ============================================================================
 
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer']);
+// P0-FIX: Added 'owner' role. It existed in auth.ts roleHierarchy (level 4)
+// and in the database, but was missing here — causing Zod to reject owner JWTs
+// with TokenInvalidError, completely locking out organization owners.
+export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner']);
 
 export const JwtClaimsSchema = z.object({
   sub: z.string().min(1).max(256),

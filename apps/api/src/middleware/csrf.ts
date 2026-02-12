@@ -123,7 +123,11 @@ export function csrfProtection(config: CsrfConfig = {}) {
     res: FastifyReply
   ): Promise<void> => {
     const method = req["method"]?.toUpperCase();
-    const path = req["url"] || '';
+    // P1-FIX: Strip query parameters before path comparison.
+    // Fastify's req.url includes query params (e.g., '/webhook?token=xyz').
+    // Without stripping, excluded paths like '/webhook' fail to match when
+    // query params are present, causing CSRF to block legitimate webhook POSTs.
+    const path = (req["url"] || '').split('?')[0] || '';
 
     // Skip if method is not protected
     if (!mergedConfig.protectedMethods.includes(method)) {
@@ -181,10 +185,9 @@ export function csrfProtection(config: CsrfConfig = {}) {
         return;
       }
 
-      // P1-FIX #14: Invalidate the CSRF token after successful validation.
-      // Previously tokens could be reused for multiple requests within their 1-hour TTL.
-      // Single-use tokens prevent CSRF replay attacks.
-      await clearCsrfToken(sessionId);
+      // P2-FIX: Removed redundant clearCsrfToken() call. The token is already
+      // deleted inside validateCsrfToken() on success (F27-FIX, line 99-100).
+      // This was a duplicate Redis DELETE on every validated request.
     } catch (error) {
       // P1-FIX #15: Use structured logging instead of console.error to prevent
       // PII/connection strings leaking to stdout in production container logs.
