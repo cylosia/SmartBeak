@@ -6,6 +6,7 @@
  */
 
 import { URL } from 'url';
+import dns from 'dns';
 
 /**
  * Internal IP patterns to block
@@ -343,6 +344,88 @@ export function validateUrl(
 }
 
 /**
+ * P0-4 SECURITY FIX: DNS resolution check to prevent DNS rebinding attacks.
+ * Resolves hostname to IP addresses and re-validates each against internal IP checks.
+ * Must be called AFTER validateUrl() passes synchronous checks.
+ *
+ * @param hostname - Hostname to resolve and check
+ * @param timeoutMs - DNS resolution timeout (default 5000ms)
+ * @returns Validation result
+ */
+export async function validateDnsResolution(
+  hostname: string,
+  timeoutMs: number = 5000
+): Promise<SSRFValidationResult> {
+  // Skip DNS check for IP addresses (already validated by isInternalIp)
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':')) {
+    return { allowed: true };
+  }
+
+  try {
+    const resolver = new dns.promises.Resolver();
+    resolver.setLocalAddress(undefined);
+
+    // Race DNS resolution against timeout
+    const addresses = await Promise.race([
+      resolver.resolve4(hostname),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('DNS resolution timeout')), timeoutMs)
+      ),
+    ]);
+
+    // Re-validate each resolved IP against internal IP checks
+    for (const ip of addresses) {
+      if (isInternalIp(ip)) {
+        return {
+          allowed: false,
+          reason: `DNS rebinding detected: ${hostname} resolves to internal IP ${ip}`,
+        };
+      }
+    }
+
+    return { allowed: true };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'DNS resolution timeout') {
+      return { allowed: false, reason: 'DNS resolution timed out' };
+    }
+    // DNS resolution failure — hostname doesn't resolve, allow the fetch to fail naturally
+    return { allowed: true };
+  }
+}
+
+/**
+ * Async version of validateUrl that includes DNS rebinding protection.
+ * Use this for outbound requests where DNS rebinding is a concern.
+ *
+ * @param urlString - URL to validate
+ * @param options - Validation options
+ * @returns Validation result
+ */
+export async function validateUrlWithDns(
+  urlString: string,
+  options: {
+    allowHttp?: boolean;
+    allowedPorts?: number[];
+    requireHttps?: boolean;
+  } = {}
+): Promise<SSRFValidationResult> {
+  // Run synchronous checks first
+  const syncResult = validateUrl(urlString, options);
+  if (!syncResult.allowed) {
+    return syncResult;
+  }
+
+  // Run DNS resolution check
+  const url = new URL(urlString);
+  const dnsResult = await validateDnsResolution(url.hostname);
+  if (!dnsResult.allowed) {
+    return dnsResult;
+  }
+
+  return syncResult;
+}
+
+/**
  * Extract and validate URL from user input
  * SECURITY FIX: Issue 1 - Safe URL extraction
  *
@@ -357,11 +440,12 @@ export function extractSafeUrl(input: string): string | null {
   // P1-FIX #11: Removed /\/\//g pattern - it matched the :// in every URL's protocol,
   // causing extractSafeUrl() to return null for ALL valid URLs.
   // Protocol-relative URLs are already handled by the protocol allowlist check below.
+  // P2-10 FIX: Only check for @ in authority portion (credentials), not in paths
+  // (URLs like https://medium.com/@author are legitimate)
   const suspiciousPatterns = [
-    /@/g,           // Credentials in URL
-    /#.*@/g,       // Fragment with @
-    /\\/g,         // Backslash (Windows path / auth bypass)
-    /\.\./g,       // Path traversal
+    /\/\/[^/]*@/g,  // Credentials in authority (user:pass@host) - only before first path /
+    /\\/g,          // Backslash (Windows path / auth bypass)
+    /\.\./g,        // Path traversal
   ];
 
   for (const pattern of suspiciousPatterns) {
