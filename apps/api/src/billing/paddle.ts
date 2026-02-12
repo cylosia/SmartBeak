@@ -1,9 +1,10 @@
 import crypto from 'crypto';
+import { z } from 'zod';
 
 /**
 * Paddle Billing Integration
 * Handles Paddle API interactions for subscription management
-* 
+*
 * P1-HIGH SECURITY FIX: Added idempotency key generation for checkout sessions
 */
 
@@ -24,17 +25,19 @@ export interface PaddleWebhookPayload {
   };
 }
 
-export interface PaddleSubscription {
-  id: string;
-  customerId: string;
-  status: 'active' | 'canceled' | 'paused' | 'past_due';
-  items: Array<{
-  priceId: string;
-  quantity: number;
-  }>;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-}
+const PaddleSubscriptionSchema = z.object({
+  id: z.string().min(1),
+  customerId: z.string().min(1),
+  status: z.enum(['active', 'canceled', 'paused', 'past_due']),
+  items: z.array(z.object({
+    priceId: z.string(),
+    quantity: z.number(),
+  })),
+  currentPeriodStart: z.date(),
+  currentPeriodEnd: z.date(),
+});
+
+export type PaddleSubscription = z.infer<typeof PaddleSubscriptionSchema>;
 
 /**
 * Validate Paddle webhook signature
@@ -86,21 +89,21 @@ export function processPaddleWebhook(payload: PaddleWebhookPayload): {
     return {
     handled: true,
     eventType: 'subscription_created',
-    data: normalizeSubscription(data) as unknown as Record<string, unknown>,
+    data: normalizeAndValidateSubscription(data),
     };
 
   case 'subscription.updated':
     return {
     handled: true,
     eventType: 'subscription_updated',
-    data: normalizeSubscription(data) as unknown as Record<string, unknown>,
+    data: normalizeAndValidateSubscription(data),
     };
 
   case 'subscription.canceled':
     return {
     handled: true,
     eventType: 'subscription_canceled',
-    data: normalizeSubscription(data) as unknown as Record<string, unknown>,
+    data: normalizeAndValidateSubscription(data),
     };
 
   case 'transaction.completed':
@@ -120,14 +123,31 @@ export function processPaddleWebhook(payload: PaddleWebhookPayload): {
 }
 
 /**
-* Normalize subscription data
+* Normalize and validate subscription data using Zod schema
+*/
+function normalizeAndValidateSubscription(data: Record<string, unknown>): Record<string, unknown> {
+  const normalized = normalizeSubscription(data);
+  const result = PaddleSubscriptionSchema.safeParse(normalized);
+  if (!result.success) {
+    throw new Error(`Invalid subscription data: ${result.error.issues.map(i => i.message).join(', ')}`);
+  }
+  return result.data as unknown as Record<string, unknown>;
+}
 
+/**
+* Normalize subscription data from Paddle's format to our internal format
 */
 function normalizeSubscription(data: Record<string, unknown>): PaddleSubscription {
+  const statusValue = String(data['status'] || 'past_due');
+  const validStatuses = ['active', 'canceled', 'paused', 'past_due'] as const;
+  const status = validStatuses.includes(statusValue as typeof validStatuses[number])
+    ? (statusValue as PaddleSubscription['status'])
+    : 'past_due';
+
   return {
   id: String(data['id'] || ''),
   customerId: String(data['customer_id'] || ''),
-  status: (data['status'] as PaddleSubscription['status']) || 'past_due',
+  status,
   items: Array.isArray(data['items'])
     ? (data['items'] as Record<string, unknown>[]).map((item: Record<string, unknown>) => ({
       priceId: String(item['price_id'] || ''),

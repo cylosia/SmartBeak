@@ -1,9 +1,11 @@
 
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
 import { getRedis } from '@kernel/redis';
+import { getPool } from '@database';
+import type { OrgId, PlanId, SubscriptionId } from '@kernel/branded';
 
 import { StripeAdapter } from './stripe';
 
@@ -14,7 +16,7 @@ const IDEMPOTENCY_TTL_SECONDS = 3600; // 1 hour
 const IDEMPOTENCY_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export interface Plan {
-  id: string;
+  id: PlanId;
   name: string;
   price_cents: number;
   interval: string;
@@ -24,9 +26,9 @@ export interface Plan {
 }
 
 export interface Subscription {
-  id: string;
-  org_id: string;
-  plan_id: string;
+  id: SubscriptionId;
+  org_id: OrgId;
+  plan_id: PlanId;
   status: string;
   stripe_subscription_id?: string | undefined;
   stripe_customer_id?: string | undefined;
@@ -37,12 +39,12 @@ export interface Subscription {
 }
 
 export interface ActivePlanResult {
-  id: string;
+  id: PlanId;
   name: string;
   price_cents: number;
   interval: string;
   features: string[];
-  subscription_id: string;
+  subscription_id: SubscriptionId;
   subscription_status: string;
   max_domains?: number | undefined;
   max_content?: number | undefined;
@@ -69,13 +71,17 @@ export interface IdempotencyEntry {
 * ```
 */
 export class BillingService {
-  constructor(
-    private pool: Pool,
-    private stripe = new StripeAdapter()
-  ) {
-    if (!pool) {
-    throw new Error('Database pool is required');
-    }
+  private pool: Pool | null;
+  private stripe: StripeAdapter;
+
+  constructor(pool?: Pool, stripe = new StripeAdapter()) {
+    this.pool = pool ?? null;
+    this.stripe = stripe;
+  }
+
+  private async getDbPool(): Promise<Pool> {
+    if (this.pool) return this.pool;
+    return getPool();
   }
 
   // P0-FIX: Removed randomUUID() which made every key unique, defeating idempotency.
@@ -135,7 +141,7 @@ export class BillingService {
     }
   }
 
-  async assignPlan(orgId: string, planId: string, idempotencyKey?: string): Promise<void> {
+  async assignPlan(orgId: OrgId, planId: PlanId, idempotencyKey?: string): Promise<void> {
     if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId (string) is required');
     }
@@ -156,7 +162,8 @@ export class BillingService {
 
     await this.setIdempotencyStatus(key, 'processing');
 
-    const client = await this.pool.connect();
+    const pool = await this.getDbPool();
+    const client = await pool.connect();
     let stripeCustomerId: string | undefined;
     let stripeSubscriptionId: string | undefined;
 
@@ -174,7 +181,7 @@ export class BillingService {
     }
 
     const existingSub = await client.query(
-        'SELECT stripe_subscription_id FROM subscriptions WHERE org_id = $1 AND status = $2',
+        'SELECT stripe_subscription_id FROM subscriptions WHERE org_id = $1 AND status = $2 FOR UPDATE',
         [orgId, 'active']
     );
 
@@ -216,13 +223,14 @@ export class BillingService {
     }
   }
 
-  async getActivePlan(orgId: string): Promise<ActivePlanResult | null> {
+  async getActivePlan(orgId: OrgId): Promise<ActivePlanResult | null> {
     if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId (string) is required');
     }
 
     try {
-    const { rows } = await this.pool.query<ActivePlanResult>(
+    const pool = await this.getDbPool();
+    const { rows } = await pool.query<ActivePlanResult>(
         `SELECT p.*, s.id as subscription_id, s.status as subscription_status
         FROM subscriptions s
         JOIN plans p ON p.id = s.plan_id
@@ -240,7 +248,7 @@ export class BillingService {
     }
   }
 
-  async enterGrace(orgId: string, days = 7): Promise<void> {
+  async enterGrace(orgId: OrgId, days = 7): Promise<void> {
     if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId (string) is required');
     }
@@ -248,7 +256,8 @@ export class BillingService {
     throw new Error('days must be a positive integer');
     }
 
-    const client = await this.pool.connect();
+    const pool = await this.getDbPool();
+    const client = await pool.connect();
 
     try {
     await client.query('BEGIN');
@@ -280,12 +289,13 @@ export class BillingService {
     }
   }
 
-  async cancelSubscription(orgId: string): Promise<void> {
+  async cancelSubscription(orgId: OrgId): Promise<void> {
     if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId (string) is required');
     }
 
-    const client = await this.pool.connect();
+    const pool = await this.getDbPool();
+    const client = await pool.connect();
 
     try {
     await client.query('BEGIN');
@@ -295,7 +305,8 @@ export class BillingService {
         `SELECT id, stripe_subscription_id, stripe_customer_id
         FROM subscriptions
         WHERE org_id = $1 AND status = 'active'
-        LIMIT 1`,
+        LIMIT 1
+        FOR UPDATE`,
         [orgId]
     );
 
@@ -335,7 +346,7 @@ export class BillingService {
     }
   }
 
-  async updateSubscriptionStatus(subscriptionId: string, status: string): Promise<void> {
+  async updateSubscriptionStatus(subscriptionId: SubscriptionId, status: string): Promise<void> {
     if (!subscriptionId || typeof subscriptionId !== 'string') {
     throw new Error('Valid subscriptionId (string) is required');
     }
@@ -348,7 +359,8 @@ export class BillingService {
     throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
 
-    const client = await this.pool.connect();
+    const pool = await this.getDbPool();
+    const client = await pool.connect();
 
     try {
     await client.query('BEGIN');
@@ -379,13 +391,14 @@ export class BillingService {
     }
   }
 
-  async getSubscriptions(orgId: string): Promise<Subscription[]> {
+  async getSubscriptions(orgId: OrgId): Promise<Subscription[]> {
     if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId (string) is required');
     }
 
     try {
-    const { rows } = await this.pool.query<Subscription>(
+    const pool = await this.getDbPool();
+    const { rows } = await pool.query<Subscription>(
         `SELECT * FROM subscriptions
         WHERE org_id = $1
         ORDER BY created_at DESC`,

@@ -1,5 +1,6 @@
 
 // Valid quota fields
+import type { OrgId } from '@kernel/branded';
 import { BillingService } from './billing';
 import { UsageService } from './usage';
 
@@ -63,7 +64,7 @@ export class QuotaService {
     throw new Error('Valid orgId is required');
   }
 
-  const plan = await this.billing.getActivePlan(orgId);
+  const plan = await this.billing.getActivePlan(orgId as OrgId);
   if (!plan) {
     return { exceeded: false, current: 0, limit: null };
   }
@@ -87,7 +88,7 @@ export class QuotaService {
   * Get all quota usage for an organization
   */
   async getAllQuotas(orgId: string): Promise<Record<QuotaField, { current: number; limit: number | null; exceeded: boolean }>> {
-  const plan = await this.billing.getActivePlan(orgId);
+  const plan = await this.billing.getActivePlan(orgId as OrgId);
   const usage = await this.usage.getUsage(orgId);
 
   // P2-4/P3-4: Reuse getLimitFromPlan to avoid duplicated logic

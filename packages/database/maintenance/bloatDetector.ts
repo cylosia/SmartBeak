@@ -10,16 +10,26 @@
 import type { Knex } from 'knex';
 import type { TableBloat, IndexUsageStats, MaintenanceResult } from './types';
 
+/** Threshold in MB above which an index is considered oversized */
+const INDEX_SIZE_THRESHOLD_MB = 1000;
+
+/** Minimum days of inactivity before an index is considered unused */
+const UNUSED_INDEX_AGE_DAYS = 7;
+
 /**
  * Get bloat information for all tables
  */
+/** Statement timeout for bloat detection queries (ms) */
+const BLOAT_QUERY_TIMEOUT_MS = 10000;
+
 export async function getTableBloat(
   knex: Knex
 ): Promise<TableBloat[]> {
+  await knex.raw('SET LOCAL statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
   const result = await knex.raw<{
     rows: TableBloat[];
   }>(`
-    SELECT 
+    SELECT
       schemaname,
       table_name,
       total_size,
@@ -40,6 +50,7 @@ export async function getTableBloat(
 export async function getCriticalBloat(
   knex: Knex
 ): Promise<TableBloat[]> {
+  await knex.raw('SET LOCAL statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
   const result = await knex.raw<{
     rows: TableBloat[];
   }>(`
@@ -92,6 +103,7 @@ export async function getTableBloatByName(
 export async function getIndexUsageStats(
   knex: Knex
 ): Promise<IndexUsageStats[]> {
+  await knex.raw('SET LOCAL statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
   const result = await knex.raw<{
     rows: Array<{
       schemaname: string;
@@ -277,7 +289,7 @@ export function getBloatRecommendations(
     const unit = indexSizeMatch[2]!;
     const sizeInMB = unit === 'GB' ? size * 1024 : unit === 'KB' ? size / 1024 : size;
     
-    if (sizeInMB > 1000) { // Over 1GB in indexes
+    if (sizeInMB > INDEX_SIZE_THRESHOLD_MB) {
       recommendations.push(
         `Consider REINDEX for ${bloat.table_name} - indexes are ${bloat.indexes_size}`
       );
@@ -317,10 +329,10 @@ export async function runBloatAnalysis(
   }
   
   // Check for unused indexes
-  const unusedIndexes = await getUnusedIndexes(knex, 7);
+  const unusedIndexes = await getUnusedIndexes(knex, UNUSED_INDEX_AGE_DAYS);
   if (unusedIndexes.length > 0) {
     recommendations.push(
-      `Found ${unusedIndexes.length} unused indexes older than 7 days. ` +
+      `Found ${unusedIndexes.length} unused indexes older than ${UNUSED_INDEX_AGE_DAYS} days. ` +
       `Consider removing them to save space.`
     );
   }

@@ -109,6 +109,9 @@ export type ReportId = Brand<string, 'ReportId'>;
 // Financial IDs
 // ============================================================================
 
+/** Plan ID - identifies a billing plan */
+export type PlanId = Brand<string, 'PlanId'>;
+
 /** Subscription ID - identifies a subscription */
 export type SubscriptionId = Brand<string, 'SubscriptionId'>;
 
@@ -239,6 +242,19 @@ export function createPaymentId(value: string): PaymentId {
     throw new TypeError(`PaymentId must be a valid UUID, got: ${value}`);
   }
   return value as PaymentId;
+}
+
+/**
+ * Factory function for PlanId with runtime validation
+ */
+export function createPlanId(value: string): PlanId {
+  if (!value || typeof value !== 'string') {
+    throw new TypeError('PlanId must be a non-empty string');
+  }
+  if (!isValidUuid(value)) {
+    throw new TypeError(`PlanId must be a valid UUID, got: ${value}`);
+  }
+  return value as PlanId;
 }
 
 /**

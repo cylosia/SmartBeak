@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import type { OrgId, PlanId } from '@kernel/branded';
 
 import { BillingService } from '../../services/billing';
 import { getAuthContext } from '../types';
@@ -38,7 +39,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     const { planId } = parseResult.data;
-    await billing.assignPlan(ctx["orgId"], planId);
+    await billing.assignPlan(ctx["orgId"] as OrgId, planId as PlanId);
     return res.send({ ok: true });
   } catch (error) {
     logger["error"]('[billing/subscribe] Error:', error instanceof Error ? error : new Error(String(error)));
@@ -52,7 +53,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner','admin']);
     await rateLimit('billing', 50);
-    const plan = await billing.getActivePlan(ctx["orgId"]);
+    const plan = await billing.getActivePlan(ctx["orgId"] as OrgId);
     return res.send(plan);
   } catch (error) {
     logger["error"]('[billing/plan] Error:', error instanceof Error ? error : new Error(String(error)));

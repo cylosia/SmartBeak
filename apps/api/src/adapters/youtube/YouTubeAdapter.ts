@@ -47,12 +47,15 @@ import type { CanaryAdapter } from '../../canaries/types';
 export class ApiError extends Error {
   readonly status: number;
   readonly retryAfter?: string | undefined;
+  /** Whether this error is retryable based on status code (5xx are retryable, 4xx are not) */
+  readonly retryable: boolean;
   /** P3-6 FIX: Truncated response body for debugging without memory risk */
   readonly responseBody?: string | undefined;
   constructor(message: string, status: number, retryAfter?: string | undefined, responseBody?: string | undefined) {
     super(message);
     this.status = status;
     this.retryAfter = retryAfter;
+    this.retryable = status >= 500 || status === 429;
     this.responseBody = responseBody?.slice(0, 1024);
     this.name = this.constructor.name;
   }

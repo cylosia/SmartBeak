@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import type { OrgId } from '@kernel/branded';
 
 import { BillingService } from '../../services/billing';
 import { getAuthContext } from '../types';
@@ -204,7 +205,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     const currentDomainCount = usageRows[0]?.["domain_count"] ?? 0;
 
     // Check quota within the same transaction
-    const plan = await billing.getActivePlan(ctx["orgId"]);
+    const plan = await billing.getActivePlan(ctx["orgId"] as OrgId);
     const maxDomains = plan?.max_domains;
 
     if (maxDomains !== null && maxDomains !== undefined && currentDomainCount >= maxDomains) {

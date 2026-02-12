@@ -1,4 +1,5 @@
 
+import type { OrgId } from '@kernel/branded';
 import { BillingService } from './billing';
 import { UsageService } from './usage';
 
@@ -9,7 +10,7 @@ export class PricingUXService {
   ) {}
 
   async getDomainAllowance(orgId: string) {
-  const plan = await this.billing.getActivePlan(orgId);
+  const plan = await this.billing.getActivePlan(orgId as OrgId);
   const usage = await this.usage.getUsage(orgId) as Record<string, number>;
 
   if (!plan || plan.max_domains === null) {
