@@ -122,7 +122,8 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
         entityType: 'export',
         metadata: {
           domain_id: domainId,
-          export_type: (req.body as { type?: string })?.type || 'default',
+          // P1-SECURITY FIX: Use validated data instead of raw body to prevent validation bypass
+          export_type: parseResult.data.type || 'default',
         },
         ip: req.ip || 'unknown',
       });

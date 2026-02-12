@@ -159,11 +159,24 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: num
 }
 
 /**
-* Cleanup function for graceful shutdown
+* Rate limit middleware
+* P0-SECURITY FIX: Previously a no-op that just called next().
+* Now properly wires checkRateLimit to block abusive traffic.
 */
-export function rateLimitMiddleware(req: unknown, res: unknown, next: () => void): void {
-  // Express middleware - passes through for now
-  // In production, implement proper rate limiting
+export function rateLimitMiddleware(
+  req: { ip?: string; socket?: { remoteAddress?: string } },
+  res: { status: (code: number) => { send: (body: unknown) => void } },
+  next: () => void
+): void {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const result = checkRateLimit(ip);
+  if (!result.allowed) {
+    res.status(429).send({
+      error: 'Rate limit exceeded',
+      retryAfter: result.retryAfter,
+    });
+    return;
+  }
   next();
 }
 
@@ -173,6 +186,10 @@ export function cleanupRateLimitStore(): void {
   logger.info('Rate limit store cleaned up');
 }
 
-// Register cleanup on process shutdown
-process.on('SIGTERM', cleanupRateLimitStore);
-process.on('SIGINT', cleanupRateLimitStore);
+// P2-ARCHITECTURE FIX: Move signal registration to explicit init function
+// instead of module-level side effect. This prevents duplicate handler
+// registration when the module is imported in tests.
+export function registerShutdownHandlers(): void {
+  process.on('SIGTERM', cleanupRateLimitStore);
+  process.on('SIGINT', cleanupRateLimitStore);
+}

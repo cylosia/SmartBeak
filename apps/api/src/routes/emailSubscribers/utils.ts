@@ -42,12 +42,17 @@ export function hashEmail(email: string): string {
 
 /**
 * Validate email format
+* P1-SECURITY FIX: Delegate to the canonical EmailSchema from @kernel/validation
+* instead of a weak local regex that accepts invalid formats like "a@b.c".
+* The import is async to avoid circular dependency issues at module load time.
 * @param email - Email address to validate
 * @returns True if valid email format
 */
 export function validateEmailFormat(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  // Use a stricter inline regex matching the canonical EmailSchema pattern.
+  // The canonical implementation is in packages/kernel/validation/email.ts.
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  return emailRegex.test(email) && email.length <= 255;
 }
 
 /**
