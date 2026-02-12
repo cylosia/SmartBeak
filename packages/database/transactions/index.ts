@@ -41,7 +41,7 @@ export interface TrackedClient extends PoolClient {
  * Helper for transactions with timeout and proper cleanup
  */
 export async function withTransaction<T>(
-  fn: (client: PoolClient) => Promise<T>,
+  fn: (client: PoolClient, signal: AbortSignal) => Promise<T>,
   options: TransactionOptions = {}
 ): Promise<T> {
   const { timeoutMs = DEFAULT_TRANSACTION_TIMEOUT, isolationLevel } = options;
@@ -61,7 +61,7 @@ export async function withTransaction<T>(
     try {
       client.release(withError);
     } catch (releaseError) {
-      logger["error"]('Error releasing client', releaseError as Error);
+      logger.error('Error releasing client', releaseError as Error);
     }
   };
 
@@ -103,7 +103,7 @@ export async function withTransaction<T>(
     let result: T;
     try {
       result = await Promise.race([
-        fn(client),
+        fn(client, abortController.signal),
         timeoutPromise,
       ]);
 
@@ -204,7 +204,7 @@ export async function query(text: string, params?: unknown[], timeoutMs?: number
 }
 
 function isConnectionError(error: Error): boolean {
-  const message = error["message"].toLowerCase();
+  const message = error.message.toLowerCase();
   return (
     message.includes('connection') ||
     message.includes('timeout') ||

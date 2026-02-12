@@ -1,7 +1,17 @@
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 export function ImageEditor() {
   const [preview, setPreview] = useState<string | null>(null);
+  const previousUrlRef = useRef<string | null>(null);
+
+  // P2-2 FIX: Revoke previous blob URL to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (previousUrlRef.current) {
+        URL.revokeObjectURL(previousUrlRef.current);
+      }
+    };
+  }, []);
 
   return (
   <div>
@@ -11,7 +21,15 @@ export function ImageEditor() {
     accept='image/*'
     onChange={(e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) setPreview(URL.createObjectURL(file));
+      if (file) {
+        // Revoke previous URL before creating new one
+        if (previousUrlRef.current) {
+          URL.revokeObjectURL(previousUrlRef.current);
+        }
+        const newUrl = URL.createObjectURL(file);
+        previousUrlRef.current = newUrl;
+        setPreview(newUrl);
+      }
     }}
     />
     {preview && <img src={preview} style={{ maxWidth: '100%', marginTop: 12 }} />}

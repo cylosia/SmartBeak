@@ -3,7 +3,18 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
-export default function DomainIntegrations({ domainId, integrations }: any) {
+interface DomainIntegration {
+  provider: string;
+  status: string;
+  account_identifier?: string;
+}
+
+interface DomainIntegrationsProps {
+  domainId: string;
+  integrations: DomainIntegration[];
+}
+
+export default function DomainIntegrations({ domainId, integrations }: DomainIntegrationsProps) {
   return (
   <AppShell>
     <DomainTabs domainId={domainId} active='integrations' />
@@ -24,7 +35,7 @@ export default function DomainIntegrations({ domainId, integrations }: any) {
       </tr>
     </thead>
     <tbody>
-      {integrations.map((i: any) => (
+      {integrations.map((i: DomainIntegration) => (
       <tr key={i.provider}>
         <td>{i.provider}</td>
         <td>Domain</td>
@@ -55,7 +66,15 @@ export default function DomainIntegrations({ domainId, integrations }: any) {
 
 export const getServerSideProps: GetServerSideProps = async ({ params }) => {
   const domainId = params?.['id'];
-  // Placeholder fetch – wire to domain_integrations table
+
+  if (!domainId || typeof domainId !== 'string') {
+    return { notFound: true };
+  }
+
+  // TODO: Wire to domain_integrations table with proper authorization:
+  // 1. Verify user session via getSession(req)
+  // 2. Check canAccessDomain(userId, domainId) before returning data
+  // 3. Return { notFound: true } if unauthorized
   const integrations = [
   { provider: 'Google Search Console', status: 'connected', account_identifier: 'sc-domain:example.com' }
   ];

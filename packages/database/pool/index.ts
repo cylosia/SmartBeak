@@ -91,16 +91,16 @@ export async function releaseAllAdvisoryLocks(): Promise<void> {
 
   for (const [lockId, originalClient] of activeAdvisoryLocks) {
     try {
-      await originalClient.query('SELECT pg_advisory_unlock($1)', [lockId]);
+      // Must use hashtext() to match the lock acquired in acquireAdvisoryLock
+      await originalClient.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      logger["error"](`Failed to release advisory lock ${lockId}`, err);
+      logger.error(`Failed to release advisory lock ${lockId}`, err);
     } finally {
       try {
-        await originalClient.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        logger["error"](`Failed to release advisory lock ${lockId}`, err);
+        originalClient.release();
+      } catch {
+        // Client may already be released
       }
     }
   }
@@ -170,13 +170,13 @@ async function getPool(): Promise<Pool> {
         poolInitializing = false;
         poolInitPromise = null;
         const err = error instanceof Error ? error : new Error(String(error));
-        throw new Error(`Failed to validate database connection: ${err["message"]}`);
+        throw new Error(`Failed to validate database connection: ${err.message}`);
       }
     }
 
     // Handle pool errors to prevent crashes
     poolInstance.on('error', (err) => {
-      logger["error"]('Unexpected pool error', err);
+      logger.error('Unexpected pool error', err);
       // Don't exit - let the application handle reconnection
     });
 
@@ -226,7 +226,7 @@ function checkPoolExhaustion(pool: Pool): void {
     connectionMetrics.poolExhaustionEvents++;
     connectionMetrics.lastExhaustionTime = now;
     
-    logger["error"]('DATABASE POOL EXHAUSTION ALERT', new Error(`utilization: ${(utilization * 100).toFixed(1)}%, activeConnections: ${activeConnections}, totalConnections: ${totalConnections}, waitingClients: ${waitingClients}, maxPoolSize: ${pool.options.max}, message: Connection pool approaching exhaustion. Consider increasing pool size or optimizing queries.`));
+    logger.error('DATABASE POOL EXHAUSTION ALERT', new Error(`utilization: ${(utilization * 100).toFixed(1)}%, activeConnections: ${activeConnections}, totalConnections: ${totalConnections}, waitingClients: ${waitingClients}, maxPoolSize: ${pool.options.max}, message: Connection pool approaching exhaustion. Consider increasing pool size or optimizing queries.`));
   }
 }
 
@@ -254,7 +254,7 @@ function setupPoolMetrics(pool: Pool): void {
     if (errorMessage.includes('timeout') || errorMessage.includes('exhausted')) {
       connectionMetrics.poolExhaustionEvents++;
       connectionMetrics.lastExhaustionTime = Date.now();
-      logger["error"]('Pool error - possible exhaustion', err);
+      logger.error('Pool error - possible exhaustion', err);
     }
   });
 }
@@ -324,11 +324,12 @@ export async function getPoolInstance(): Promise<Pool> {
  * Export a proxy that throws if accessed before initialization
  */
 export const pool = new Proxy({} as Pool, {
-  get(_, prop) {
+  get(_, prop: string | symbol) {
     if (!poolInstance) {
       throw new Error('Pool not initialized. Use getPoolInstance() async function instead.');
     }
-    return (poolInstance as any)[prop];
+    const value = poolInstance[prop as keyof Pool];
+    return typeof value === 'function' ? (value as Function).bind(poolInstance) : value;
   }
 });
 

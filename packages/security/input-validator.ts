@@ -166,10 +166,16 @@ export function sanitizeEventHandlers(input: string): string {
   let i = 0;
 
   const eventPrefixes = ['on', 'ON', 'On', 'oN'];
-  const eventNames = ['click', 'error', 'load', 'mouseover', 'mouseout',
-    'mousedown', 'mouseup', 'mousemove', 'keydown', 'keyup', 'keypress',
-    'submit', 'change', 'focus', 'blur', 'select', 'scroll', 'resize',
-    'unload', 'beforeunload', 'hashchange', 'popstate', 'pageshow', 'pagehide'];
+  const eventNames = ['click', 'dblclick', 'auxclick', 'contextmenu',
+    'error', 'load', 'input',
+    'mouseover', 'mouseout', 'mousedown', 'mouseup', 'mousemove', 'mouseenter', 'mouseleave', 'wheel',
+    'keydown', 'keyup', 'keypress',
+    'pointerdown', 'pointerup', 'pointermove', 'pointerenter', 'pointerleave', 'pointerover', 'pointerout',
+    'touchstart', 'touchend', 'touchmove', 'touchcancel',
+    'drag', 'dragstart', 'dragend', 'dragover', 'dragenter', 'dragleave', 'drop',
+    'submit', 'change', 'focus', 'blur', 'focusin', 'focusout', 'select', 'scroll', 'resize',
+    'unload', 'beforeunload', 'hashchange', 'popstate', 'pageshow', 'pagehide',
+    'animationstart', 'animationend', 'animationiteration', 'transitionend', 'transitionstart'];
 
   while (i < input.length) {
     let found = false;
@@ -184,10 +190,27 @@ export function sanitizeEventHandlers(input: string): string {
           // Check if followed by = or whitespace then =
           const after = input.slice(i + pattern.length).trimStart();
           if (after.startsWith('=')) {
-            // Skip until we hit a space or >
+            // Skip the pattern name
             i += pattern.length;
-            while (i < input.length && input[i] !== ' ' && input[i] !== '>') {
+            // Skip whitespace and the = sign
+            while (i < input.length && (input[i] === '=' || input[i] === ' ')) {
               i++;
+            }
+            // Handle quoted attribute values (e.g., onclick="alert(1) payload")
+            if (i < input.length && (input[i] === '"' || input[i] === "'")) {
+              const quote = input[i]!;
+              i++; // skip opening quote
+              while (i < input.length && input[i] !== quote) {
+                i++;
+              }
+              if (i < input.length) {
+                i++; // skip closing quote
+              }
+            } else {
+              // Unquoted value - skip until space or >
+              while (i < input.length && input[i] !== ' ' && input[i] !== '>') {
+                i++;
+              }
             }
             found = true;
             break;

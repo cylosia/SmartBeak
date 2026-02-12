@@ -126,7 +126,7 @@ export class AppError extends Error {
 
   toJSON(): ErrorResponse {
   return {
-    error: this["message"],
+    error: this.message,
     code: this.code,
     ...(this.details !== undefined && { details: this.details }),
     ...(this.requestId !== undefined && { requestId: this.requestId }),
@@ -141,7 +141,7 @@ export class AppError extends Error {
   const isDevelopment = process.env['NODE_ENV'] === 'development';
 
   return {
-    error: this["message"],
+    error: this.message,
     code: this.code,
     ...(isDevelopment && this.details !== undefined && { details: this.details }),
     ...(isDevelopment && this.requestId !== undefined && { requestId: this.requestId }),
@@ -176,7 +176,7 @@ export class ValidationError extends AppError {
     'Validation failed',
     issues.map(issue => ({
     path: issue.path,
-    message: issue["message"],
+    message: issue.message,
     code: issue.code,
     })),
   );
@@ -252,7 +252,7 @@ export class DatabaseError extends AppError {
   * P2-MEDIUM FIX: Map DB errors to generic messages
   */
   static fromDBError(error: Error): DatabaseError {
-  const message = error["message"].toLowerCase();
+  const message = error.message.toLowerCase();
   let sanitizedMessage = 'An unexpected database error occurred';
   let code: string = ErrorCodes.DATABASE_ERROR;
 
@@ -267,7 +267,7 @@ export class DatabaseError extends AppError {
     code = ErrorCodes.DUPLICATE_ENTRY;
   }
 
-  return new DatabaseError(sanitizedMessage, { originalError: process.env['NODE_ENV'] === 'development' ? error["message"] : undefined });
+  return new DatabaseError(sanitizedMessage, { originalError: process.env['NODE_ENV'] === 'development' ? error.message : undefined });
   }
 }
 
@@ -327,7 +327,7 @@ export class PayloadTooLargeError extends AppError {
 */
 export function sanitizeErrorForClient(error: unknown): ErrorResponse {
   // Log full error server-side for debugging
-  logger["error"]('Internal error', error instanceof Error ? error : new Error(String(error)));
+  logger.error('Internal error', error instanceof Error ? error : new Error(String(error)));
 
   // If it's already an AppError, use its serialization
   if (error instanceof AppError) {
@@ -344,7 +344,7 @@ export function sanitizeErrorForClient(error: unknown): ErrorResponse {
     code: ErrorCodes.VALIDATION_ERROR,
     details: issues.map((issue: ZodIssue) => ({
     path: issue.path,
-    message: issue["message"],
+    message: issue.message,
     code: issue.code,
     })),
     };
@@ -354,13 +354,13 @@ export function sanitizeErrorForClient(error: unknown): ErrorResponse {
   const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: string }).code : undefined;
   if (code && Object.values(ErrorCodes).includes(code as ErrorCode)) {
     return {
-    error: error["message"],
+    error: error.message,
     code: code as ErrorCode,
     };
   }
 
   // P2-MEDIUM FIX: Sanitize database errors
-  const errorMessage = error["message"].toLowerCase();
+  const errorMessage = error.message.toLowerCase();
   if (errorMessage.includes('database') ||
     errorMessage.includes('connection') ||
     errorMessage.includes('query') ||
@@ -440,16 +440,16 @@ export function extractZodIssues(error: unknown): Array<{ path: (string | number
   if (Array.isArray(err.issues)) {
   return err.issues.map((issue: ZodIssue) => ({
     path: issue.path || [],
-    message: issue["message"] || 'Invalid value',
+    message: issue.message || 'Invalid value',
     code: issue.code || 'invalid_type',
   }));
   }
 
   // Fallback for legacy error formats
-  if (Array.isArray(err["errors"])) {
-  return err["errors"].map((errorItem: ZodIssue) => ({
+  if (Array.isArray(err.errors)) {
+  return err.errors.map((errorItem: ZodIssue) => ({
     path: errorItem.path || [],
-    message: errorItem["message"] || 'Invalid value',
+    message: errorItem.message || 'Invalid value',
     code: errorItem.code || 'invalid_type',
   }));
   }
@@ -516,7 +516,7 @@ export function formatZodError(error: unknown): { message: string; issues: Array
 
   return {
     message: issues.length > 0
-      ? `Validation failed: ${issues.map(i => i["message"]).join(', ')}`
+      ? `Validation failed: ${issues.map(i => i.message).join(', ')}`
       : 'Validation failed',
     issues,
   };
@@ -537,8 +537,8 @@ export function safeStringifyError(error: unknown): string {
   if (error instanceof Error) {
     const result: Record<string, unknown> = {
       name: error.name,
-      message: error["message"],
-      stack: error["stack"],
+      message: error.message,
+      stack: error.stack,
     };
     if (error.cause) {
       result['cause'] = safeStringifyError(error.cause);
