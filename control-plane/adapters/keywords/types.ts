@@ -1,6 +1,6 @@
 export type KeywordSuggestion = {
   keyword: string;
-  metrics?: Record<string, any>;
+  metrics?: Record<string, unknown>;
 };
 
 export interface KeywordIngestionAdapter {

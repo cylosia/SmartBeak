@@ -37,6 +37,14 @@ export async function getRedis(): Promise<Redis> {
 
     redis.on('error', (err: Error) => {
       logger.error('Connection error', err);
+      // AUDIT-FIX P1-04: On fatal connection errors, reset the singleton
+      // so the next getRedis() call creates a fresh connection instead
+      // of returning the dead instance forever.
+      const fatalPatterns = ['ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET', 'ERR AUTH'];
+      if (fatalPatterns.some(p => err.message.includes(p))) {
+        logger.warn('Fatal Redis error detected - resetting connection for recovery');
+        redis = null;
+      }
     });
   }
   

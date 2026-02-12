@@ -24,16 +24,14 @@ const logger = getLogger('notifications-hook');
 function getAdminEmail(): string {
   const email = process.env['ADMIN_NOTIFICATION_EMAIL'];
   if (!email) {
-  const timestamp = new Date().toISOString();
-  process.stderr.write(`[${timestamp}] [WARN] [notifications-hook] ADMIN_NOTIFICATION_EMAIL not set, using fallback\n`);
-  return 'admin@example.com';
+  // P1-FIX: Fail-fast instead of falling back to admin@example.com.
+  // example.com is a registrable domain — sending internal details there is a data leak.
+  throw new Error('ADMIN_NOTIFICATION_EMAIL environment variable is not configured');
   }
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-  const timestamp = new Date().toISOString();
-  process.stderr.write(`[${timestamp}] [WARN] [notifications-hook] Invalid ADMIN_NOTIFICATION_EMAIL format, using fallback\n`);
-  return 'admin@example.com';
+  throw new Error('ADMIN_NOTIFICATION_EMAIL has invalid email format');
   }
   return email;
 }
@@ -119,6 +117,9 @@ export function registerNotificationsDomain(eventBus: EventBus, pool: Pool): voi
 
     const adminEmail = getAdminEmail();
 
+    // P1-FIX: Removed `...event["payload"]` spread that allowed attacker-controlled
+    // fields to override sanitized values (e.g., `to: adminEmail` could be overwritten
+    // by a `to` field in the event payload). Only explicitly validated fields are passed.
     const result = await service.create(
     event["meta"]["domainId"],
     'admin-user',
@@ -131,7 +132,6 @@ export function registerNotificationsDomain(eventBus: EventBus, pool: Pool): voi
     error: event["payload"]?.["error"],
     target: event["payload"]?.["target"],
     timestamp: new Date().toISOString(),
-    ...event["payload"]
     }
     );
 

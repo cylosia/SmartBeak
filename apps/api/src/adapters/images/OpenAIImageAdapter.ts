@@ -147,48 +147,51 @@ export class OpenAIImageAdapter {
 
     const startTime = Date.now();
 
-    // P0-FIX: Create new AbortController for each call to prevent sharing
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
     try {
-      const res = await withRetry(async () => {
-        const response = await fetch(`${this.baseUrl}/images/generations`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            prompt,
-            size,
-            quality,
-            style,
-            n,
-            response_format: 'url',
-          }),
-          signal: controller.signal,
-        });
+      // FIX (H05): Create AbortController per retry attempt, not shared across retries.
+      // A shared controller causes later retries to be prematurely aborted by the original timeout.
+      // FIX (M09): Move JSON parsing inside retry block so corrupt response bodies are retried.
+      const data = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+          const response = await fetch(`${this.baseUrl}/images/generations`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model,
+              prompt,
+              size,
+              quality,
+              style,
+              n,
+              response_format: 'url',
+            }),
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
+            }
+
+            const errorText = await response.text();
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
           }
 
-          const errorText = await response.text();
-          throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+          const rawData = await response.json();
+          if (!isOpenAIImageResponse(rawData)) {
+            throw new ApiError('Invalid response format from OpenAI API', 500);
+          }
+          return rawData;
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        return response;
       }, { maxRetries: 3 });
-
-      const rawData = await res.json();
-      if (!isOpenAIImageResponse(rawData)) {
-        throw new ApiError('Invalid response format from OpenAI API', 500);
-      }
-      const data = rawData;
 
       // Validate each item in the data array has required fields
       if (!data.data.every((item: unknown) => {
@@ -203,10 +206,10 @@ export class OpenAIImageAdapter {
         revisedPrompt: img.revised_prompt ?? undefined,
         b64Json: img.b64_json ?? undefined,
         metadata: {
-          model: model as DalleModel,
-          size: size as DalleSize,
-          quality: quality as DalleQuality,
-          style: (style as DalleStyle) ?? undefined,
+          model,
+          size,
+          quality,
+          style: style ?? undefined,
           prompt,
           createdAt: new Date(data.created * 1000).toISOString(),
           provider: 'openai',
@@ -226,8 +229,6 @@ export class OpenAIImageAdapter {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error('Failed to generate image with OpenAI', context, err);
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
@@ -255,50 +256,52 @@ export class OpenAIImageAdapter {
 
     const startTime = Date.now();
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
     try {
-      const res = await withRetry(async () => {
-        // Create new FormData for each retry to avoid consumed stream issues
-        const formData = new FormData();
-        formData.append('image', image, { filename: 'image.png', contentType: 'image/png' });
-        if (mask) {
-          formData.append('mask', mask, { filename: 'mask.png', contentType: 'image/png' });
-        }
-        formData.append('prompt', prompt);
-        formData.append('size', size);
-        formData.append('n', n.toString());
-        formData.append('response_format', 'url');
+      // FIX (H05): Create AbortController per retry attempt
+      const data = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+          // Create new FormData for each retry to avoid consumed stream issues
+          const formData = new FormData();
+          formData.append('image', image, { filename: 'image.png', contentType: 'image/png' });
+          if (mask) {
+            formData.append('mask', mask, { filename: 'mask.png', contentType: 'image/png' });
+          }
+          formData.append('prompt', prompt);
+          formData.append('size', size);
+          formData.append('n', n.toString());
+          formData.append('response_format', 'url');
 
-        const response = await fetch(`${this.baseUrl}/images/edits`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            ...formData.getHeaders(),
-          },
-          body: formData,
-          signal: controller.signal,
-        });
+          const response = await fetch(`${this.baseUrl}/images/edits`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              ...formData.getHeaders(),
+            },
+            body: formData,
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
+            }
+
+            const errorText = await response.text();
+            throw new Error(`OpenAI edit error: ${response.status} - ${errorText}`);
           }
 
-          const errorText = await response.text();
-          throw new Error(`OpenAI edit error: ${response.status} - ${errorText}`);
+          const rawData = await response.json();
+          if (!isOpenAIImageResponse(rawData)) {
+            throw new ApiError('Invalid response format from OpenAI API', 500);
+          }
+          return rawData;
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        return response;
       }, { maxRetries: 3 });
-
-      const rawData = await res.json();
-      if (!isOpenAIImageResponse(rawData)) {
-        throw new ApiError('Invalid response format from OpenAI API', 500);
-      }
-      const data = rawData;
 
       const images = data.data.map((img): GeneratedImage => ({
         url: img["url"],
@@ -313,15 +316,19 @@ export class OpenAIImageAdapter {
         },
       }));
 
+      // FIX (M10): Record latency on success (was missing)
+      const latency = Date.now() - startTime;
+      this.metrics.recordLatency('editImage', latency, true);
       this.metrics.recordSuccess('editImage');
       return images;
     } catch (error) {
+      // FIX (M10): Record latency on error (was missing)
+      const latency = Date.now() - startTime;
+      this.metrics.recordLatency('editImage', latency, false);
       this.metrics.recordError('editImage', error instanceof Error ? error.name : 'Unknown');
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error('Failed to edit image with OpenAI', context, err);
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
@@ -345,45 +352,47 @@ export class OpenAIImageAdapter {
 
     const startTime = Date.now();
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
     try {
-      const res = await withRetry(async () => {
-        const formData = new FormData();
-        formData.append('image', image, { filename: 'image.png', contentType: 'image/png' });
-        formData.append('size', size);
-        formData.append('n', n.toString());
-        formData.append('response_format', 'url');
+      // FIX (H05): Create AbortController per retry attempt
+      const data = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+          const formData = new FormData();
+          formData.append('image', image, { filename: 'image.png', contentType: 'image/png' });
+          formData.append('size', size);
+          formData.append('n', n.toString());
+          formData.append('response_format', 'url');
 
-        const response = await fetch(`${this.baseUrl}/images/variations`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            ...formData.getHeaders(),
-          },
-          body: formData,
-          signal: controller.signal,
-        });
+          const response = await fetch(`${this.baseUrl}/images/variations`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              ...formData.getHeaders(),
+            },
+            body: formData,
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
+            }
+
+            const errorText = await response.text();
+            throw new Error(`OpenAI variation error: ${response.status} - ${errorText}`);
           }
 
-          const errorText = await response.text();
-          throw new Error(`OpenAI variation error: ${response.status} - ${errorText}`);
+          const rawData = await response.json();
+          if (!isOpenAIImageResponse(rawData)) {
+            throw new ApiError('Invalid response format from OpenAI API', 500);
+          }
+          return rawData;
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        return response;
       }, { maxRetries: 3 });
-
-      const rawData = await res.json();
-      if (!isOpenAIImageResponse(rawData)) {
-        throw new ApiError('Invalid response format from OpenAI API', 500);
-      }
-      const data = rawData;
 
       const images = data.data.map((img): GeneratedImage => ({
         url: img["url"],
@@ -398,15 +407,19 @@ export class OpenAIImageAdapter {
         },
       }));
 
+      // FIX (M10): Record latency on success (was missing)
+      const latency = Date.now() - startTime;
+      this.metrics.recordLatency('createVariation', latency, true);
       this.metrics.recordSuccess('createVariation');
       return images;
     } catch (error) {
+      // FIX (M10): Record latency on error (was missing)
+      const latency = Date.now() - startTime;
+      this.metrics.recordLatency('createVariation', latency, false);
       this.metrics.recordError('createVariation', error instanceof Error ? error.name : 'Unknown');
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error('Failed to create image variation with OpenAI', context, err);
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 

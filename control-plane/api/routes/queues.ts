@@ -4,10 +4,14 @@ import { z } from 'zod';
 
 import { DLQService } from '@kernel/queue';
 import { ErrorCodes, PaginationQuerySchema, validateUUID, type ErrorCode, ExternalAPIError } from '@kernel/validation';
+import { getLogger } from '@kernel/logger';
 
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+
+// P2-6: Use structured logger instead of console.error
+const logger = getLogger('queue-routes');
 
 /**
 * Queue Routes
@@ -40,11 +44,10 @@ function withErrorBoundary(
     try {
     return await handler(req, res);
     } catch (error) {
-    // Log error with context
-    console["error"]('[queueRoutes] Error:', {
+    // P2-6: Use structured logger with context instead of console.error
+    logger.error('[queueRoutes] Error', error instanceof Error ? error : new Error(String(error)), {
         path: req.url,
         method: req.method,
-        error: error instanceof Error ? error.message : String(error),
         code: error instanceof ExternalAPIError ? error.code : ErrorCodes.INTERNAL_ERROR,
     });
 
@@ -224,8 +227,9 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
 
     const query = queryValidation.data;
 
-    // List DLQ entries (filtered by region if provided)
+    // SECURITY FIX P0-3: Pass orgId for tenant isolation
     const results = await dlq.list(
+      ctx["orgId"],
       query.region,
       query["limit"],
       query.offset
@@ -257,8 +261,8 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
     const { id } = req.params as { id: string };
     validateUUID(id, 'id');
 
-    // Retry the DLQ item
-    const result = await dlq.retry(id);
+    // SECURITY FIX P0-3: Pass orgId for tenant isolation
+    const result = await dlq.retry(ctx["orgId"], id);
 
     return res.send({ success: true, data: result });
   }));
@@ -286,8 +290,9 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
     const { id } = req.params as { id: string };
     validateUUID(id, 'id');
 
-    // Delete the DLQ item by retrying it (removes from DLQ)
-    await dlq.retry(id);
+    // SECURITY FIX P0-4: Use proper delete instead of retry to prevent accidental re-execution
+    // SECURITY FIX P0-3: Pass orgId for tenant isolation
+    await dlq.delete(ctx["orgId"], id);
 
     return res.status(204).send();
   }));

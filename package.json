@@ -20,7 +20,7 @@
     "worker": "tsx apps/api/src/jobs/worker.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'node_modules/**' --ignore-pattern 'dist/**' --ignore-pattern 'build/**'",
-    "lint:security": "eslint . --ext .ts,.tsx --config .eslintrc.security.js --ignore-pattern 'node_modules/**' --ignore-pattern 'dist/**' --ignore-pattern 'build/**' || echo 'Security eslint config not found, skipping'",
+    "lint:security": "eslint . --ext .ts,.tsx --config .eslintrc.security.cjs --ignore-pattern 'node_modules/**' --ignore-pattern 'dist/**' --ignore-pattern 'build/**'",
     "test:unit": "jest --config jest.config.ts --testPathPattern=unit --passWithNoTests",
     "test:integration": "jest --config jest.config.ts --testPathPattern=integration --runInBand --passWithNoTests",
     "analyze:bundle": "cd apps/web && ANALYZE=true next build",

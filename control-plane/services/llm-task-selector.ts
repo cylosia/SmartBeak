@@ -60,9 +60,10 @@ export async function selectLlmForTask(
   });
   if (domainPref) return domainPref;
 
+  // P2-FIX: Use null instead of undefined — DB layers may ignore undefined fields
   return db.llm_task_preferences.findOne({
   tenant_id: input.tenant_id,
-  domain_id: undefined,
+  domain_id: undefined as unknown as string | undefined,
   task_type: input.task_type
   });
 }

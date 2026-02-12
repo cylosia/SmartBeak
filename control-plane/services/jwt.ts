@@ -25,7 +25,8 @@ export type UserRole = 'admin' | 'editor' | 'viewer';
 export interface JwtClaims {
   sub: string;
   role: UserRole;
-  orgId?: string | undefined;
+  // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
+  orgId: string;
   aud?: string;
   iss?: string;
   jti: string;
@@ -48,7 +49,9 @@ export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer']);
 export const JwtClaimsInputSchema = z.object({
   sub: z.string().min(1).max(256),
   role: UserRoleSchema,
-  orgId: z.string().min(1).max(256).optional(),
+  // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
+  // Tokens without orgId will fail Zod validation during verification, causing silent 401s.
+  orgId: z.string().min(1).max(256),
   aud: z.string().min(1).max(256).optional(),
   iss: z.string().min(1).max(256).optional(),
   expiresIn: z.string().regex(/^\d+\s*(ms|s|m|h|d|w)$/).optional(),
@@ -81,7 +84,8 @@ export type TokenMetadata = z.infer<typeof TokenMetadataSchema>;
 export interface SignTokenInput {
   sub: string;
   role: UserRole;
-  orgId?: string;
+  // P0-5 FIX: orgId is required to match verification schema
+  orgId: string;
   aud?: string;
   iss?: string;
   expiresIn?: string;
@@ -230,28 +234,19 @@ function getKeys(): string[] {
 }
 
 // Load keys at module initialization
-const KEYS: string[] = (() => {
-  try {
-  return getKeys();
-  } catch (error) {
-  logger.error('Failed to load JWT keys', error instanceof Error ? error : new Error(String(error)));
-  // Return empty keys - will fail at runtime when signing/verifying
-  return ['', ''];
-  }
-})();
+// P0-2 FIX: Fail-closed instead of fail-open. If signing keys are invalid,
+// the application must crash at startup rather than silently producing tokens
+// signed with empty strings that can never be verified.
+const KEYS: string[] = getKeys();
 
 // ============================================================================
-// Redis Connection
+// Redis Connection (Lazy Initialization)
 // ============================================================================
 
-const REDIS_URL = process.env['REDIS_URL'];
-if (!REDIS_URL) {
-  throw new Error('REDIS_URL environment variable is required');
-}
-const redis = new Redis(REDIS_URL, {
-  retryStrategy: (times: number): number => Math.min(times * 50, 2000),
-  maxRetriesPerRequest: 3,
-});
+// P1-5 FIX: Defer Redis connection to first use instead of module-level throw.
+// Module-level throw crashes any file that imports this module (tests, CLI tools,
+// type-only imports) if REDIS_URL is not set.
+let redis: Redis | null = null;
 
 // Circuit breaker state
 const circuitBreaker: CircuitBreakerState = {
@@ -260,10 +255,25 @@ const circuitBreaker: CircuitBreakerState = {
   isOpen: false,
 };
 
-// Handle Redis errors gracefully
-redis.on('error', (err: Error) => {
-  logger.error('Redis connection error', err);
-});
+function getRedisClient(): Redis {
+  if (redis) return redis;
+
+  const url = process.env['REDIS_URL'];
+  if (!url) {
+    throw new Error('REDIS_URL environment variable is required');
+  }
+
+  redis = new Redis(url, {
+    retryStrategy: (times: number): number => Math.min(times * 50, 2000),
+    maxRetriesPerRequest: 3,
+  });
+
+  redis.on('error', (err: Error) => {
+    logger.error('Redis connection error', err);
+  });
+
+  return redis;
+}
 
 // ============================================================================
 // Token Generation
@@ -373,7 +383,7 @@ async function isTokenRevoked(jti: string): Promise<boolean> {
   }
 
   try {
-  const revoked = await redis.exists(`${REVOCATION_KEY_PREFIX}${jti}`);
+  const revoked = await getRedisClient().exists(`${REVOCATION_KEY_PREFIX}${jti}`);
   // Success - reset failure count
   circuitBreaker.failures = 0;
   return revoked === 1;
@@ -393,7 +403,7 @@ async function isTokenRevoked(jti: string): Promise<boolean> {
 */
 export async function revokeToken(tokenId: string): Promise<void> {
   try {
-  await redis.setex(`${REVOCATION_KEY_PREFIX}${tokenId}`, REVOCATION_TTL_SECONDS, '1');
+  await getRedisClient().setex(`${REVOCATION_KEY_PREFIX}${tokenId}`, REVOCATION_TTL_SECONDS, '1');
   } catch (error) {
   logger.error('Error revoking token', error instanceof Error ? error : new Error(String(error)));
   throw new AuthError('Failed to revoke token', 'REVOCATION_FAILED');
@@ -410,8 +420,9 @@ export async function revokeToken(tokenId: string): Promise<void> {
 export async function revokeAllUserTokens(userId: string): Promise<void> {
   try {
   const key = `jwt:revoked:user:${userId}`;
-  await redis.setex(key, REVOCATION_TTL_SECONDS, Date.now().toString());
-  logger.info(`Revoked all tokens for user ${userId}`);
+  await getRedisClient().setex(key, REVOCATION_TTL_SECONDS, Date.now().toString());
+  // P2-1 FIX: Avoid logging userId directly (potential PII)
+  logger.info('Revoked all tokens for user', { userId: userId.substring(0, 8) + '...' });
   } catch (error) {
   logger.error('Error revoking user tokens', error instanceof Error ? error : new Error(String(error)));
   throw new AuthError('Failed to revoke user tokens', 'USER_REVOCATION_FAILED');
@@ -442,8 +453,9 @@ export async function verifyToken(
 ): Promise<JwtClaims> {
   // Import from unified auth package
   const { verifyToken: verifyTokenSync } = await import('@kernel/auth');
-  // Call the synchronous verifyToken with options
-  return verifyTokenSync(token, { audience: aud, issuer: iss }) as Promise<JwtClaims>;
+  // P2-13 FIX: Remove incorrect Promise<JwtClaims> cast. verifyTokenSync returns
+  // JwtClaims synchronously; the async function auto-wraps it in a Promise.
+  return verifyTokenSync(token, { audience: aud, issuer: iss }) as JwtClaims;
 }
 
 // ============================================================================
@@ -509,38 +521,56 @@ export function getTokenInfo(token: string): TokenInfo | null {
 * @param expiresIn - New expiration time
 * @returns New signed token
 */
+/**
+ * P0-1 SECURITY FIX: Token refresh now VERIFIES the old token before re-signing.
+ *
+ * Previously used jwt.decode() (no signature verification), which allowed an
+ * attacker to craft an arbitrary JWT payload and get it re-signed with a valid key.
+ * Now uses jwt.verify() to ensure the old token was legitimately signed.
+ */
 export function refreshToken(token: string, expiresIn?: string): string {
-  const decoded = jwt.decode(token) as { sub?: string; role?: string; orgId?: string; aud?: string; iss?: string } | null;
-  if (!decoded) {
-  throw new TokenInvalidError('unable to decode token');
+  // P0-1 FIX: VERIFY the token cryptographically instead of just decoding it.
+  // jwt.decode() performs NO signature verification - an attacker could craft
+  // any payload and get it signed with a valid production key.
+  let verified: jwt.JwtPayload;
+  try {
+    verified = jwt.verify(token, KEYS[0]!, {
+      algorithms: ['HS256'],
+      clockTolerance: 30,
+    }) as jwt.JwtPayload;
+  } catch {
+    // Try second key for rotation support
+    try {
+      verified = jwt.verify(token, KEYS[1]!, {
+        algorithms: ['HS256'],
+        clockTolerance: 30,
+      }) as jwt.JwtPayload;
+    } catch {
+      throw new TokenInvalidError('Token verification failed during refresh');
+    }
   }
 
-  const sub = ('sub' in decoded ? decoded['sub'] : '') as string;
-  const role = ('role' in decoded ? decoded['role'] : 'viewer') as UserRole;
-  const orgId = 'orgId' in decoded ? (decoded['orgId'] as string) : undefined;
-  const aud = 'aud' in decoded ? (decoded['aud'] as string) : undefined;
-  const iss = 'iss' in decoded ? (decoded['iss'] as string) : undefined;
-  
+  const sub = verified.sub;
+  const role = (verified['role'] || 'viewer') as UserRole;
+  const orgId = verified['orgId'] as string | undefined;
+  const aud = verified.aud as string | undefined;
+  const iss = verified.iss as string | undefined;
+
   if (!sub) {
     throw new TokenInvalidError('Token missing required claim: sub');
   }
-  
-  const signInput: SignTokenInput = {
+
+  if (!orgId) {
+    throw new TokenInvalidError('Token missing required claim: orgId');
+  }
+
+  return signToken({
     sub,
     role,
-  };
-  
-  if (orgId !== undefined) {
-    signInput.orgId = orgId;
-  }
-  if (aud !== undefined) {
-    signInput.aud = aud;
-  }
-  if (iss !== undefined) {
-    signInput.iss = iss;
-  }
-  
-  return signToken(signInput);
+    orgId,
+    ...(aud !== undefined && { aud }),
+    ...(iss !== undefined && { iss }),
+  });
 }
 
 // ============================================================================
@@ -551,5 +581,8 @@ export function refreshToken(token: string, expiresIn?: string): string {
 * Close Redis connection gracefully
 */
 export async function closeJwtRedis(): Promise<void> {
-  await redis.quit();
+  if (redis) {
+    await redis.quit();
+    redis = null;
+  }
 }

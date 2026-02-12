@@ -303,7 +303,8 @@ function createLogEntry(
 * @param metadata - Additional metadata
 */
 export function debug(message: string, metadata?: Record<string, unknown>): void {
-  if (process.env['LOG_LEVEL'] === 'debug') {
+  // P1-FIX: Use shouldLog() instead of direct string comparison for consistent behavior
+  if (shouldLog('debug')) {
   const entry = createLogEntry('debug', message, metadata);
   getHandlers().forEach(h => h(entry));
   }

@@ -10,7 +10,7 @@ export interface JobFactoryOptions {
   id?: string;
   name?: string;
   queue?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   priority?: number;
   delay?: number;
   attempts?: number;
@@ -102,7 +102,7 @@ export function createFailedJob(options: FailedJobOptions = {}) {
 }
 
 export interface CompletedJobOptions extends JobFactoryOptions {
-  result?: any;
+  result?: unknown;
   processingTimeMs?: number;
 }
 

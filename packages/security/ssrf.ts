@@ -338,7 +338,7 @@ export function validateUrl(
   } catch (error) {
     return {
       allowed: false,
-      reason: `URL validation error: ${error instanceof Error ? error["message"] : String(error)}`
+      reason: `URL validation error: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }
@@ -440,11 +440,12 @@ export function extractSafeUrl(input: string): string | null {
   // P1-FIX #11: Removed /\/\//g pattern - it matched the :// in every URL's protocol,
   // causing extractSafeUrl() to return null for ALL valid URLs.
   // Protocol-relative URLs are already handled by the protocol allowlist check below.
+  // P2-10 FIX: Only check for @ in authority portion (credentials), not in paths
+  // (URLs like https://medium.com/@author are legitimate)
   const suspiciousPatterns = [
-    /@/g,           // Credentials in URL
-    /#.*@/g,       // Fragment with @
-    /\\/g,         // Backslash (Windows path / auth bypass)
-    /\.\./g,       // Path traversal
+    /\/\/[^/]*@/g,  // Credentials in authority (user:pass@host) - only before first path /
+    /\\/g,          // Backslash (Windows path / auth bypass)
+    /\.\./g,        // Path traversal
   ];
 
   for (const pattern of suspiciousPatterns) {

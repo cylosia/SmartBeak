@@ -6,7 +6,9 @@
  * multiple instances need shared rate limit state.
  */
 
+import { randomBytes } from 'crypto';
 import { getRedis } from './redis';
+import { getLogger } from './logger';
 
 export interface RateLimitConfig {
   // Maximum requests allowed in window
@@ -29,6 +31,7 @@ export interface RateLimitResult {
 }
 
 const DEFAULT_KEY_PREFIX = 'ratelimit';
+const logger = getLogger('rateLimiterRedis');
 
 /**
  * Check rate limit using sliding window algorithm
@@ -63,44 +66,40 @@ export async function checkRateLimit(
   const now = Date.now();
   const windowStart = now - config.windowMs;
 
-  // P0-FIX: Atomic rate limit check using Redis pipeline
+  // AUDIT-FIX P0-01/P0-02/P0-03: Rewritten to fix three critical issues:
+  // 1. Fail-closed on Redis error (was fail-open)
+  // 2. Use crypto.randomBytes for member uniqueness (was Math.random)
+  // 3. Check count before adding request (was add-then-remove race)
+
+  // Step 1: Clean old entries and get current count BEFORE adding
   const pipeline = redis.pipeline();
-  
-  // Remove entries outside the window
   pipeline.zremrangebyscore(redisKey, 0, windowStart);
-  
-  // Count entries in current window
   pipeline.zcard(redisKey);
-  
-  // Add current request
-  pipeline.zadd(redisKey, now, `${now}-${Math.random()}`);
-  
-  // Set expiration on the key
-  pipeline.pexpire(redisKey, config.windowMs);
-  
+
   const results = await pipeline.exec();
-  
+
   if (!results) {
-    // Redis error - fail open to prevent blocking legitimate traffic
-    console.error('[rateLimiter] Redis pipeline failed');
+    // AUDIT-FIX P0-01: Fail CLOSED on Redis error - deny request
+    logger.error('[rateLimiter] Redis pipeline failed - failing closed');
     return {
-      allowed: true,
-      remaining: config.maxRequests - 1,
+      allowed: false,
+      remaining: 0,
       resetTime: now + config.windowMs,
       limit: config.maxRequests,
     };
   }
 
-  // Get current count (second command result)
-  const currentCount = (results[1]![1] as number) + 1; // +1 for the request we just added
-  
-  const allowed = currentCount <= config.maxRequests;
-  const remaining = Math.max(0, config.maxRequests - currentCount);
+  const currentCount = results[1]![1] as number;
+  const allowed = currentCount < config.maxRequests;
+  const remaining = Math.max(0, config.maxRequests - currentCount - (allowed ? 1 : 0));
   const resetTime = now + config.windowMs;
 
-  // If rate limited, remove the request we just added
-  if (!allowed) {
-    await redis.zremrangebyscore(redisKey, now, now);
+  // Step 2: Only add the request if allowed (fixes P0-03 race condition)
+  if (allowed) {
+    // AUDIT-FIX P0-02: Use crypto.randomBytes instead of Math.random for member uniqueness
+    const memberId = `${now}-${randomBytes(8).toString('hex')}`;
+    await redis.zadd(redisKey, now, memberId);
+    await redis.pexpire(redisKey, config.windowMs);
   }
 
   return {

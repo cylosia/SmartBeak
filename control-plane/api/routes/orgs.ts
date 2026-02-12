@@ -26,6 +26,27 @@ const CreateOrgSchema = z.object({
   .trim(),
 });
 
+// SECURITY FIX (C01): Validate invite body - prevents privilege escalation and XSS via email
+const InviteSchema = z.object({
+  email: z.string().email('Invalid email address').max(254).toLowerCase().trim(),
+  role: z.enum(['admin', 'editor', 'viewer'], {
+    errorMap: () => ({ message: 'Role must be one of: admin, editor, viewer' }),
+  }),
+});
+
+// SECURITY FIX (C02): Validate add-member body - prevents privilege escalation to owner
+const AddMemberSchema = z.object({
+  userId: z.string().uuid('Invalid user ID format'),
+  role: z.enum(['admin', 'editor', 'viewer'], {
+    errorMap: () => ({ message: 'Role must be one of: admin, editor, viewer' }),
+  }),
+});
+
+// SECURITY FIX (H08): Validate org ID route parameter
+const OrgIdParamsSchema = z.object({
+  id: z.string().uuid('Invalid organization ID format'),
+});
+
 export async function orgRoutes(app: FastifyInstance, pool: Pool) {
   const orgs = new OrgService(pool);
   const members = new MembershipService(pool);
@@ -38,7 +59,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['admin','owner']);
-    await rateLimit('orgs:create', 20);
+    await rateLimit(`orgs:create:${ctx.userId}`, 20);
 
     // SECURITY FIX: Validate org name with Zod
     const bodyResult = CreateOrgSchema.safeParse(req.body);
@@ -66,8 +87,14 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['admin','owner']);
-    await rateLimit('orgs:members', 50);
-    const { id } = req.params as { id: string };
+    await rateLimit(`orgs:members:${ctx.userId}`, 50);
+
+    // SECURITY FIX (H08): Validate route params
+    const paramsResult = OrgIdParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return res.status(400).send({ error: 'Invalid organization ID', code: 'VALIDATION_ERROR' });
+    }
+    const { id } = paramsResult.data;
 
     // IDOR FIX: Verify user has access to this org
     if (ctx["orgId"] !== id) {
@@ -77,7 +104,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
 
     return await orgs.listMembers(id);
   } catch (error) {
-    console["error"]('[orgs/:id/members] Error:', error);
+    logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to retrieve members' });
   }
@@ -90,8 +117,14 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['admin','owner']);
-    await rateLimit('orgs:invite', 30);
-    const { id } = req.params as { id: string };
+    await rateLimit(`orgs:invite:${ctx.userId}`, 30);
+
+    // SECURITY FIX (H08): Validate route params
+    const paramsResult = OrgIdParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return res.status(400).send({ error: 'Invalid organization ID', code: 'VALIDATION_ERROR' });
+    }
+    const { id } = paramsResult.data;
 
     // IDOR FIX: Verify user has access to this org
     if (ctx["orgId"] !== id) {
@@ -99,10 +132,19 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(404).send({ error: 'Organization not found' });
     }
 
-    const { email, role } = req.body as { email: string; role: string };
+    // SECURITY FIX (C01): Validate invite body with Zod
+    const bodyResult = InviteSchema.safeParse(req.body);
+    if (!bodyResult.success) {
+    return res.status(400).send({
+      error: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      details: bodyResult.error.issues,
+    });
+    }
+    const { email, role } = bodyResult.data;
     return await invites.invite(id, email, role);
   } catch (error) {
-    console["error"]('[orgs/:id/invite] Error:', error);
+    logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to send invite' });
   }
@@ -115,8 +157,14 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['admin','owner']);
-    await rateLimit('orgs:members:add', 30);
-    const { id } = req.params as { id: string };
+    await rateLimit(`orgs:members:add:${ctx.userId}`, 30);
+
+    // SECURITY FIX (H08): Validate route params
+    const paramsResult = OrgIdParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return res.status(400).send({ error: 'Invalid organization ID', code: 'VALIDATION_ERROR' });
+    }
+    const { id } = paramsResult.data;
 
     // IDOR FIX: Verify user has access to this org
     if (ctx["orgId"] !== id) {
@@ -124,11 +172,20 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(404).send({ error: 'Organization not found' });
     }
 
-    const { userId, role } = req.body as { userId: string; role: string };
+    // SECURITY FIX (C02): Validate add-member body with Zod
+    const bodyResult = AddMemberSchema.safeParse(req.body);
+    if (!bodyResult.success) {
+    return res.status(400).send({
+      error: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      details: bodyResult.error.issues,
+    });
+    }
+    const { userId, role } = bodyResult.data;
     await members.addMember(id, userId, role);
     return { ok: true };
   } catch (error) {
-    console["error"]('[orgs/:id/members] Error:', error);
+    logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to add member' });
   }

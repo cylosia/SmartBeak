@@ -4,24 +4,28 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, type AuthContext } from '../../services/auth';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('queue-metrics');
 
 // Interface for queue metrics
 export interface QueueMetrics {
   publishing: {
   backlog: number;
   errorRate: number;
-  concurrency: string;
+  concurrency: 'adaptive';
   };
   search: {
   backlog: number;
   errorRate: number;
-  concurrency: string;
+  concurrency: 'adaptive';
   };
 }
 
-// Fetch metrics from database
-async function fetchQueueMetrics(pool: Pool): Promise<QueueMetrics> {
+// SECURITY FIX P1-6: Added orgId parameter for tenant isolation
+async function fetchQueueMetrics(pool: Pool, orgId: string): Promise<QueueMetrics> {
   const publishingMetrics = await pool.query(
   `SELECT
     COUNT(*) FILTER (WHERE status = 'pending') as backlog,
@@ -31,7 +35,8 @@ async function fetchQueueMetrics(pool: Pool): Promise<QueueMetrics> {
     0
     ) as error_rate
   FROM publishing_jobs
-  WHERE created_at > NOW() - INTERVAL '24 hours'`
+  WHERE org_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
+  [orgId]
   );
 
   const searchMetrics = await pool.query(
@@ -43,7 +48,8 @@ async function fetchQueueMetrics(pool: Pool): Promise<QueueMetrics> {
     0
     ) as error_rate
   FROM search_indexing_jobs
-  WHERE created_at > NOW() - INTERVAL '24 hours'`
+  WHERE org_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`,
+  [orgId]
   );
 
   return {
@@ -63,17 +69,17 @@ async function fetchQueueMetrics(pool: Pool): Promise<QueueMetrics> {
 export async function queueMetricsRoutes(app: FastifyInstance, pool: Pool) {
   app.get('/admin/queues/metrics', async (req, res) => {
   try {
-    const ctx = req.auth as AuthContext;
-    if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
-    }
+    // SECURITY FIX P1-8: Use getAuthContext() instead of unsafe cast
+    const ctx = getAuthContext(req);
     requireRole(ctx, ['owner','admin']);
     await rateLimit('admin:queues:metrics', 40);
 
-    const metrics = await fetchQueueMetrics(pool);
+    // SECURITY FIX P1-6: Pass orgId for tenant isolation
+    const metrics = await fetchQueueMetrics(pool, ctx["orgId"]);
     return res.send(metrics);
   } catch (error) {
-    console["error"]('[admin/queues/metrics] Error:', error);
+    // P2-6: Use structured logger instead of console.error
+    logger.error('[admin/queues/metrics] Error:', error as Error);
     return res.status(500).send({ error: 'Failed to retrieve queue metrics' });
   }
   });

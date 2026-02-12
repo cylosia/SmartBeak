@@ -1,9 +1,9 @@
 /**
  * Vacuum Manager Utility
- * 
+ *
  * Manages vacuum and analyze operations for database tables.
  * Provides utilities for maintenance scheduling and bloat prevention.
- * 
+ *
  * @module @packages/database/maintenance/vacuumManager
  */
 
@@ -36,6 +36,55 @@ const MEDIUM_CHURN_TABLES = [
   'media_assets',
 ];
 
+// P0-3 FIX: Strict allowlist regex for table names to prevent SQL injection
+// Only lowercase letters, digits, and underscores allowed
+const TABLE_NAME_REGEX = /^[a-z_][a-z0-9_]*$/;
+
+/**
+ * P0-3 FIX: Validate table name against strict allowlist pattern
+ * Prevents SQL injection via table name manipulation in raw VACUUM/ANALYZE commands
+ */
+function validateTableName(tableName: string): void {
+  if (!tableName || typeof tableName !== 'string') {
+    throw new Error('Table name is required and must be a string');
+  }
+  if (tableName.length > 63) {
+    throw new Error('Table name exceeds PostgreSQL maximum identifier length');
+  }
+  if (!TABLE_NAME_REGEX.test(tableName)) {
+    throw new Error(`Invalid table name format: ${tableName}. Only lowercase alphanumeric and underscores allowed.`);
+  }
+}
+
+/**
+ * P0-2 FIX: Validate numeric config value at runtime
+ * TypeScript types are erased at runtime; this ensures values are actually finite numbers
+ */
+function validateNumericConfig(name: string, value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    throw new Error(`Invalid numeric value for ${name}: ${String(value)}`);
+  }
+  return num;
+}
+
+/**
+ * P1-10 FIX: Set statement timeout for maintenance operations
+ * Prevents runaway VACUUM FULL from holding AccessExclusiveLock indefinitely
+ */
+async function withStatementTimeout(
+  knex: Knex,
+  timeoutMs: number,
+  fn: () => Promise<void>
+): Promise<void> {
+  await knex.raw('SET statement_timeout = ?', [timeoutMs]);
+  try {
+    await fn();
+  } finally {
+    await knex.raw('RESET statement_timeout');
+  }
+}
+
 /**
  * Get vacuum statistics for all tables
  */
@@ -45,7 +94,7 @@ export async function getVacuumStatistics(
   const result = await knex.raw<{
     rows: VacuumStatistics[];
   }>(`
-    SELECT 
+    SELECT
       schemaname,
       relname as table_name,
       n_live_tup as live_tuples,
@@ -74,7 +123,7 @@ export async function getTableVacuumStats(
   const result = await knex.raw<{
     rows: VacuumStatistics[];
   }>(`
-    SELECT 
+    SELECT
       schemaname,
       relname as table_name,
       n_live_tup as live_tuples,
@@ -103,30 +152,35 @@ export async function vacuumAnalyzeTable(
   tableName: string,
   options: MaintenanceOptions = {}
 ): Promise<MaintenanceResult> {
+  // P0-3 FIX: Validate table name before building raw SQL command
+  validateTableName(tableName);
+
   const startTime = Date.now();
   const full = options.full ?? false;
   const verbose = options.verbose ?? false;
-  
+
   try {
     // Get before stats
     const beforeStats = await getTableVacuumStats(knex, tableName);
-    
-    // Build vacuum command
+
+    // Build vacuum command using validated identifier
     const vacuumCmd = [
       full ? 'VACUUM FULL' : 'VACUUM',
       verbose ? 'VERBOSE' : '',
       options.analyze !== false ? 'ANALYZE' : '',
       knex.raw('??', [tableName]).toString(),
     ].filter(Boolean).join(' ');
-    
-    // Execute vacuum (outside transaction)
-    await knex.raw(vacuumCmd);
-    
+
+    // P1-10 FIX: Execute vacuum with statement timeout to prevent runaway locks
+    await withStatementTimeout(knex, DEFAULT_TIMEOUT_MS, async () => {
+      await knex.raw(vacuumCmd);
+    });
+
     // Get after stats
     const afterStats = await getTableVacuumStats(knex, tableName);
-    
+
     const duration = Date.now() - startTime;
-    
+
     // Log maintenance
     await logMaintenanceOperation(knex, {
       table_name: tableName,
@@ -136,7 +190,7 @@ export async function vacuumAnalyzeTable(
       dead_tuples_after: afterStats?.dead_tuples ?? undefined,
       success: true,
     });
-    
+
     return {
       success: true,
       operation: full ? 'VACUUM FULL' : 'VACUUM ANALYZE',
@@ -146,7 +200,7 @@ export async function vacuumAnalyzeTable(
     };
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+
     await logMaintenanceOperation(knex, {
       table_name: tableName,
       operation: 'vacuum',
@@ -154,7 +208,7 @@ export async function vacuumAnalyzeTable(
       success: false,
       error_message: error instanceof Error ? error.message : String(error),
     });
-    
+
     return {
       success: false,
       operation: 'VACUUM',
@@ -174,27 +228,33 @@ export async function analyzeTable(
   tableName: string,
   options: Pick<MaintenanceOptions, 'verbose'> = {}
 ): Promise<MaintenanceResult> {
+  // P0-3 FIX: Validate table name before building raw SQL command
+  validateTableName(tableName);
+
   const startTime = Date.now();
   const verbose = options.verbose ?? false;
-  
+
   try {
     const analyzeCmd = [
       'ANALYZE',
       verbose ? 'VERBOSE' : '',
       knex.raw('??', [tableName]).toString(),
     ].filter(Boolean).join(' ');
-    
-    await knex.raw(analyzeCmd);
-    
+
+    // P1-10 FIX: Execute with statement timeout
+    await withStatementTimeout(knex, DEFAULT_TIMEOUT_MS, async () => {
+      await knex.raw(analyzeCmd);
+    });
+
     const duration = Date.now() - startTime;
-    
+
     await logMaintenanceOperation(knex, {
       table_name: tableName,
       operation: 'analyze',
       duration_ms: duration,
       success: true,
     });
-    
+
     return {
       success: true,
       operation: 'ANALYZE',
@@ -204,7 +264,7 @@ export async function analyzeTable(
     };
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+
     return {
       success: false,
       operation: 'ANALYZE',
@@ -224,12 +284,12 @@ export async function vacuumHighChurnTables(
   options: MaintenanceOptions = {}
 ): Promise<MaintenanceResult[]> {
   const results: MaintenanceResult[] = [];
-  
+
   for (const table of HIGH_CHURN_TABLES) {
     const result = await vacuumAnalyzeTable(knex, table, options);
     results.push(result);
   }
-  
+
   return results;
 }
 
@@ -243,7 +303,7 @@ export async function getTablesNeedingVacuum(
   const result = await knex.raw<{
     rows: Array<{ table_name: string; dead_tuple_ratio: number; dead_tuples: number }>;
   }>(`
-    SELECT 
+    SELECT
       relname as table_name,
       dead_tuple_ratio,
       n_dead_tup as dead_tuples
@@ -277,8 +337,10 @@ async function logMaintenanceOperation(
       ...data,
       completed_at: new Date(),
     });
-  } catch {
-    // Silently fail logging - don't break maintenance for logging issues
+  } catch (err) {
+    // P1-9 FIX: Log failure instead of silently swallowing
+    // eslint-disable-next-line no-console
+    console.error('[vacuumManager] Failed to log maintenance operation:', err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -295,20 +357,20 @@ export async function getTableAutovacuumConfig(
       reloptions: string[] | null;
     }>;
   }>(`
-    SELECT 
+    SELECT
       relname,
       reloptions
     FROM pg_class
     WHERE relname = ?
       AND relkind = 'r'
   `, [tableName]);
-  
+
   if (!result.rows[0]) return null;
-  
+
   // Parse reloptions array
   const options = result.rows[0].reloptions ?? [];
   const config: TableAutovacuumConfig = { table_name: tableName };
-  
+
   for (const option of options) {
     const [key, value] = option.split('=');
     if (value === undefined) continue;
@@ -333,7 +395,7 @@ export async function getTableAutovacuumConfig(
         break;
     }
   }
-  
+
   return config;
 }
 
@@ -345,32 +407,50 @@ export async function setTableAutovacuumConfig(
   tableName: string,
   config: Partial<Omit<TableAutovacuumConfig, 'table_name'>>
 ): Promise<void> {
+  // P0-3 FIX: Validate table name
+  validateTableName(tableName);
+
+  // P0-2 FIX: Use parameterized values with runtime numeric validation
+  // to prevent SQL injection via config values interpolated into ALTER TABLE
   const options: string[] = [];
-  
+  const values: number[] = [];
+
   if (config.autovacuum_vacuum_scale_factor !== undefined) {
-    options.push(`autovacuum_vacuum_scale_factor=${config.autovacuum_vacuum_scale_factor}`);
+    const val = validateNumericConfig('autovacuum_vacuum_scale_factor', config.autovacuum_vacuum_scale_factor);
+    options.push('autovacuum_vacuum_scale_factor = ?');
+    values.push(val);
   }
   if (config.autovacuum_vacuum_threshold !== undefined) {
-    options.push(`autovacuum_vacuum_threshold=${config.autovacuum_vacuum_threshold}`);
+    const val = validateNumericConfig('autovacuum_vacuum_threshold', config.autovacuum_vacuum_threshold);
+    options.push('autovacuum_vacuum_threshold = ?');
+    values.push(val);
   }
   if (config.autovacuum_analyze_scale_factor !== undefined) {
-    options.push(`autovacuum_analyze_scale_factor=${config.autovacuum_analyze_scale_factor}`);
+    const val = validateNumericConfig('autovacuum_analyze_scale_factor', config.autovacuum_analyze_scale_factor);
+    options.push('autovacuum_analyze_scale_factor = ?');
+    values.push(val);
   }
   if (config.autovacuum_analyze_threshold !== undefined) {
-    options.push(`autovacuum_analyze_threshold=${config.autovacuum_analyze_threshold}`);
+    const val = validateNumericConfig('autovacuum_analyze_threshold', config.autovacuum_analyze_threshold);
+    options.push('autovacuum_analyze_threshold = ?');
+    values.push(val);
   }
   if (config.autovacuum_vacuum_cost_limit !== undefined) {
-    options.push(`autovacuum_vacuum_cost_limit=${config.autovacuum_vacuum_cost_limit}`);
+    const val = validateNumericConfig('autovacuum_vacuum_cost_limit', config.autovacuum_vacuum_cost_limit);
+    options.push('autovacuum_vacuum_cost_limit = ?');
+    values.push(val);
   }
   if (config.autovacuum_vacuum_cost_delay !== undefined) {
-    options.push(`autovacuum_vacuum_cost_delay=${config.autovacuum_vacuum_cost_delay}`);
+    const val = validateNumericConfig('autovacuum_vacuum_cost_delay', config.autovacuum_vacuum_cost_delay);
+    options.push('autovacuum_vacuum_cost_delay = ?');
+    values.push(val);
   }
-  
+
   if (options.length === 0) return;
-  
+
   await knex.raw(
     `ALTER TABLE ?? SET (${options.join(', ')})`,
-    [tableName]
+    [tableName, ...values]
   );
 }
 
@@ -393,25 +473,33 @@ export async function runVacuumMaintenance(
   const minRatio = options.minDeadTupleRatio ?? 10;
   const includeHighChurn = options.includeHighChurn ?? true;
   const dryRun = options.dryRun ?? false;
-  
+
   // Get tables needing vacuum
   const tablesNeedingVacuum = await getTablesNeedingVacuum(knex, minRatio);
-  
+
   // Add high-churn tables if requested
   const tablesToVacuum = new Set(tablesNeedingVacuum.map(t => t.table_name));
   if (includeHighChurn) {
     HIGH_CHURN_TABLES.forEach(t => tablesToVacuum.add(t));
   }
-  
+
   const results: MaintenanceResult[] = [];
-  
+
   if (!dryRun) {
     for (const table of Array.from(tablesToVacuum)) {
+      // P0-3 FIX: Validate dynamically-sourced table names from db_vacuum_statistics
+      try {
+        validateTableName(table);
+      } catch {
+        // eslint-disable-next-line no-console
+        console.error(`[vacuumManager] Skipping table with invalid name from db_vacuum_statistics: ${table}`);
+        continue;
+      }
       const result = await vacuumAnalyzeTable(knex, table);
       results.push(result);
     }
   }
-  
+
   return {
     checked_at: new Date(),
     tables_checked: (await getVacuumStatistics(knex)).length,
@@ -425,16 +513,16 @@ export async function runVacuumMaintenance(
  */
 export function formatVacuumStats(stats: VacuumStatistics): string {
   const status = stats.dead_tuple_ratio >= 30
-    ? '🔴 CRITICAL'
+    ? 'CRITICAL'
     : stats.dead_tuple_ratio >= 15
-    ? '🟡 WARNING'
-    : '🟢 OK';
-  
+    ? 'WARNING'
+    : 'OK';
+
   const lastVacuum = stats.last_autovacuum ?? stats.last_vacuum;
-  const lastVacuumStr = lastVacuum 
+  const lastVacuumStr = lastVacuum
     ? new Date(lastVacuum).toLocaleDateString()
     : 'Never';
-  
+
   return `[${status}] ${stats.table_name}: ${stats.dead_tuple_ratio.toFixed(2)}% dead tuples ` +
     `(${stats.dead_tuples.toLocaleString()} / ${stats.live_tuples.toLocaleString()}) ` +
     `- Last vacuum: ${lastVacuumStr}`;

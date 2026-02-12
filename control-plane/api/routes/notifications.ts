@@ -72,10 +72,10 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
-    // Add index hints for better performance
+    // P2-FIX: Removed Oracle/MySQL-style hint comments (/*+ INDEX(...) */) that are
+    // no-ops in PostgreSQL. Ensure proper indexes exist in migrations instead.
     const result = await client.query(
-    `SELECT /*+ INDEX(notifications idx_notifications_user_created) */
-        id, channel, template, status, created_at
+    `SELECT id, channel, template, status, created_at
     FROM notifications
     WHERE user_id = $1
     ORDER BY created_at DESC
@@ -86,7 +86,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
 
     // Get total count within same transaction
     const countResult = await client.query(
-    `SELECT /*+ INDEX(notifications idx_notifications_user) */ COUNT(*) as total
+    `SELECT COUNT(*) as total
     FROM notifications WHERE user_id = $1`,
     [ctx.userId]
     );
@@ -116,10 +116,9 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     });
   } catch (error) {
     logger.error('[notifications] Unexpected error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
+    // P1-FIX: Removed error.message leak to client
     return res.status(500).send({
     error: 'Internal server error',
-    message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
   });
@@ -145,10 +144,9 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     return res.send(preferences);
   } catch (error) {
     logger.error('[notifications/preferences] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
+    // P1-FIX: Removed error.message leak to client
     return res.status(500).send({
     error: 'Failed to fetch preferences',
-    message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
   });
@@ -188,10 +186,9 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     return res.send(result);
   } catch (error) {
     logger.error('[notifications/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
+    // P1-FIX: Removed error.message leak to client
     return res.status(500).send({
     error: 'Failed to update preferences',
-    message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
   });
