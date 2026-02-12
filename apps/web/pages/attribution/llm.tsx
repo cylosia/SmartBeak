@@ -2,7 +2,16 @@
 import { GetServerSideProps } from 'next';
 
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function LlmAttribution({ rows }: any) {
+
+// P1-FIX: Replace `any` with proper type
+interface LlmAttributionRow {
+  model: string;
+  provider: string;
+  usageCount: number;
+  totalTokens: number;
+}
+
+export default function LlmAttribution({ rows }: { rows: LlmAttributionRow[] }) {
   return (
   <main>
     <h1>LLM Model Attribution</h1>

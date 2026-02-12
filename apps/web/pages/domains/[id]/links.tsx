@@ -3,7 +3,23 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
-export default function Links({ domainId, internal, external }: any) {
+// P1-FIX: Replace `any` with proper types
+interface LinkStats {
+  orphans: number;
+  hubs: number;
+  broken: number;
+}
+interface ExternalLinkStats {
+  editorial: number;
+  affiliate: number;
+  broken: number;
+}
+interface LinksProps {
+  domainId: string;
+  internal: LinkStats;
+  external: ExternalLinkStats;
+}
+export default function Links({ domainId, internal, external }: LinksProps) {
   return (
   <AppShell>
     <DomainTabs domainId={domainId} active='links' />

@@ -101,11 +101,12 @@ function isSensitiveValue(value: unknown): boolean {
  * @returns Masked value
  */
 function maskValue(value: string): string {
-  if (value.length <= 4) {
+  // P2-FIX: Mask entire value for short secrets to prevent revealing too much
+  if (value.length <= 8) {
     return '****';
   }
-  
-  // Show first 2 and last 2 characters
+
+  // Show first 2 and last 2 characters only for longer values
   return value.substring(0, 2) + '****' + value.substring(value.length - 2);
 }
 
@@ -421,7 +422,11 @@ export class SecureLogger {
   private context: Record<string, unknown>;
   
   constructor(context: Record<string, unknown> = {}) {
-    this.context = sanitizeForLogging(context) as Record<string, unknown>;
+    // P2-FIX: Validate return type before casting instead of blind assertion
+    const sanitized = sanitizeForLogging(context);
+    this.context = (typeof sanitized === 'object' && sanitized !== null && !Array.isArray(sanitized))
+      ? sanitized as Record<string, unknown>
+      : { _context: sanitized };
   }
   
   debug(message: string, data?: Record<string, unknown>): void {
