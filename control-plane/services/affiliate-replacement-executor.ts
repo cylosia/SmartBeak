@@ -10,6 +10,7 @@ const MAX_CONTENT_VERSIONS = 1000;
 
 export interface ReplacementInput {
   intentId: string;
+  orgId: string; // P1-FIX: Added org scoping for authorization
   fromAffiliateOfferId: string;
   toAffiliateOfferId?: string;
   contentVersionIds: string[];
@@ -32,13 +33,13 @@ export interface HumanIntent {
 
 /**
 * Executes a governed affiliate offer replacement.
-* - Requires approved human intent
+* - Requires approved human intent scoped to the caller's org
 * - Creates new content versions
 * - Preserves prior versions
 * - Logs replacement
 *
 * @param pool - PostgreSQL connection pool
-* @param input - Replacement parameters
+* @param input - Replacement parameters (must include orgId for authorization)
 * @returns Result with count of affected content versions
 * @throws Error if validation fails or database operation fails
 */
@@ -56,6 +57,10 @@ export async function executeAffiliateReplacement(
   if (!input.intentId || typeof input.intentId !== 'string') {
   throw new Error('Valid intentId (string) is required');
   }
+  // P1-FIX: Require orgId for authorization
+  if (!input.orgId || typeof input.orgId !== 'string') {
+  throw new Error('Valid orgId (string) is required');
+  }
   if (!input.fromAffiliateOfferId || typeof input.fromAffiliateOfferId !== 'string') {
   throw new Error('Valid fromAffiliateOfferId (string) is required');
   }
@@ -69,12 +74,9 @@ export async function executeAffiliateReplacement(
   throw new Error('All contentVersionIds must be strings');
   }
 
-  const MAX_CONTENT_VERSIONS = 1000;
+  // P1-FIX: Removed duplicate validation check and local const shadowing module-level
   if (input.contentVersionIds.length > MAX_CONTENT_VERSIONS) {
   throw new Error(`Cannot process more than ${MAX_CONTENT_VERSIONS} content versions at once`);
-  }
-  if (input.contentVersionIds.length > MAX_CONTENT_VERSIONS) {
-  throw new Error(`contentVersionIds exceeds maximum of ${MAX_CONTENT_VERSIONS}`);
   }
 
   const client = await pool.connect();
@@ -83,51 +85,43 @@ export async function executeAffiliateReplacement(
   await client.query('BEGIN');
   await client.query('SET LOCAL statement_timeout = $1', [60000]); // 60 seconds for long-running batch operations
 
-  // Check for approved intent
+  // P1-FIX: Check for approved intent scoped to the caller's organization
   const intentResult = await client.query<HumanIntent>(
-    'SELECT * FROM human_intents WHERE id = $1 AND status = $2',
-    [input.intentId, 'approved']
+    'SELECT id, status FROM human_intents WHERE id = $1 AND status = $2 AND org_id = $3',
+    [input.intentId, 'approved', input.orgId]
   );
 
   if (intentResult.rows.length === 0) {
-    throw new Error('Approved intent required');
+    throw new Error('Approved intent required (not found or not authorized for this organization)');
   }
 
+  // P1-FIX: Batch SELECT to eliminate N+1 query pattern (was up to 2000 individual queries)
+  const existingResult = await client.query<ContentVersion>(
+    'SELECT id FROM content_versions WHERE id = ANY($1::text[])',
+    [input.contentVersionIds]
+  );
+
+  const existingIds = new Set(existingResult.rows.map(r => r["id"]));
+  const missingIds = input.contentVersionIds.filter(id => !existingIds.has(id));
+  if (missingIds.length > 0) {
+    logger.warn('Content versions not found', { missingIds });
+  }
+
+  const foundIds = input.contentVersionIds.filter(id => existingIds.has(id));
+
+  // P1-FIX: Batch INSERT for all found content versions
   let affectedCount = 0;
-
-  for (const cvId of input.contentVersionIds) {
-    const cvResult = await client.query<ContentVersion>(
-    'SELECT * FROM content_versions WHERE id = $1',
-    [cvId]
-    );
-
-    const cv = cvResult.rows[0];
-    if (!cv) {
-    logger.warn('Content version not found', { contentVersionId: cvId });
-    continue;
-    }
-
-    // Create a new version by copying and swapping affiliate_offer references
-    const newVersion = {
-    ...cv,
-    id: undefined,
-    previous_version_id: cv["id"],
-    updated_at: new Date(),
-    };
-
-    // NOTE: actual HTML/link replacement would be handled by a renderer layer.
-    // Here we only record the versioning boundary.
+  if (foundIds.length > 0) {
     const insertResult = await client.query(
     `INSERT INTO content_versions (previous_version_id, updated_at)
-    VALUES ($1, $2)
+    SELECT unnest($1::text[]), NOW()
     RETURNING id`,
-    [newVersion.previous_version_id, newVersion.updated_at]
+    [foundIds]
     );
-
-    affectedCount += insertResult.rowCount ?? 0;
+    affectedCount = insertResult.rowCount ?? 0;
   }
 
-  const affected = input.contentVersionIds.length;
+  const affected = foundIds.length;
   await client.query(
     `INSERT INTO affiliate_replacements
     (from_affiliate_offer_id, to_affiliate_offer_id, executed_intent_id, affected_content_count)
@@ -151,7 +145,7 @@ export async function executeAffiliateReplacement(
     fromAffiliateOfferId: input.fromAffiliateOfferId,
     toAffiliateOfferId: input.toAffiliateOfferId,
     affectedContentCount: affected,
-    contentVersionIds: input.contentVersionIds,
+    contentVersionIds: foundIds,
     })
     ]
   );

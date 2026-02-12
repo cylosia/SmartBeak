@@ -290,7 +290,8 @@ export async function abuseGuard(req: GuardRequest, _res: GuardResponse, next: N
         userId: validated.userId,
         ip: validated.ip,
       });
-      console.warn('[abuseGuard] High risk submission:', logData);
+      const abuseLogger = getLogger('abuseGuard');
+      abuseLogger.warn('High risk submission detected', logData);
     }
     next();
   }
@@ -355,9 +356,11 @@ export function checkAbuseDetailed(payload: unknown): AbuseCheckResult {
         ...(contentCheck.flags || []),
         ...validated.riskFlags,
       ];
+      // P1-FIX: Do not honor riskOverride in standalone function since there's
+      // no user context to verify admin role. Use the middleware version for
+      // role-checked overrides.
       return {
-        allowed: combinedRisk < 50 ||
-          (assessment.criticalFlags.length === 0 && validated.riskOverride === true),
+        allowed: combinedRisk < 50,
         reason: combinedFlags.length > 0 ? `Flags: ${combinedFlags.join(', ')}` : undefined,
         riskScore: combinedRisk,
         flags: combinedFlags.length > 0 ? combinedFlags : undefined,
