@@ -203,7 +203,7 @@ export class MultiTierCache {
     // Check if approaching limit
     const utilization = this.inFlightRequests.size / MAX_IN_FLIGHT_REQUESTS;
     if (utilization >= IN_FLIGHT_ALERT_THRESHOLD) {
-      logger.error(`ALERT: In-flight requests approaching limit`, {
+      logger.error(`ALERT: In-flight requests approaching limit`, undefined, {
         current: this.inFlightRequests.size,
         max: MAX_IN_FLIGHT_REQUESTS,
         utilization: `${(utilization * 100).toFixed(1)}%`,

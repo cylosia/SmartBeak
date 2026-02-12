@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, requireOrgAdmin, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainArchive');
 

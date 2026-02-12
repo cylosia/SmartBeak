@@ -98,7 +98,7 @@ export async function syncSubscriberToProvider(sub: EmailSubscriber): Promise<{ 
   } catch (error) {
     lastError = error instanceof Error ? error : new Error(String(error));
 
-    logger.warn(`Sync attempt ${attempt + 1}/${MAX_RETRIES} failed for subscriber ${sub.id}:`, lastError["message"]);
+    logger.warn(`Sync attempt ${attempt + 1}/${MAX_RETRIES} failed for subscriber ${sub.id}: ${lastError["message"]}`);
 
       if (attempt < MAX_RETRIES - 1) {
     const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
@@ -107,7 +107,7 @@ export async function syncSubscriberToProvider(sub: EmailSubscriber): Promise<{ 
   }
   }
 
-  logger.error(`All ${MAX_RETRIES} sync attempts failed for subscriber ${sub.id}:`, lastError);
+  logger.error(`All ${MAX_RETRIES} sync attempts failed for subscriber ${sub.id}`, lastError ?? undefined);
   throw new Error(`Failed to sync subscriber after ${MAX_RETRIES} attempts: ${lastError?.["message"]}`);
 }
 

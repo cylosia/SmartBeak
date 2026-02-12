@@ -9,7 +9,6 @@ import { getPoolInstance } from '@database/pool';
 import { validateEnv } from '@config';
 
 import { getLogger } from '@kernel/logger';
-import { getPoolInstance } from '@database/pool';
 
 import { affiliateRoutes } from './routes/affiliates';
 import { analyticsRoutes } from './routes/analytics';
@@ -324,7 +323,7 @@ app.setErrorHandler((error: unknown, request, reply) => {
   stack?: string | undefined;
   details?: unknown | undefined;
   } = {
-  error: statusCode === 500 ? 'Internal server error' : (err.message || 'An error occurred'),
+  error: statusCode === 500 ? 'Internal server error' : (errObj.message || 'An error occurred'),
   code: errorCode,
   };
 
@@ -332,7 +331,7 @@ app.setErrorHandler((error: unknown, request, reply) => {
   // Previously serialized the full raw error object which could contain
   // DB connection strings, internal paths, or secrets in error messages.
   if (isDevelopment) {
-  response.message = err.message;
+  response.message = errObj.message;
   // Never include raw error objects - they may contain sensitive data
   }
 

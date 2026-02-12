@@ -53,7 +53,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve notifications');
-      logger.error('[admin/notifications] Error:', sanitizedError);
+      logger.error(`[admin/notifications] Error: ${sanitizedError}`);
       res.status(500).send({ error: 'Failed to retrieve notifications' });
     }
   });
@@ -83,7 +83,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const errorMessage = error instanceof Error ? error.message : 'Failed to retry notification';
       const sanitizedError = sanitizeErrorMessage(errorMessage);
-      logger.error('[admin/notifications/:id/retry] Error:', sanitizedError);
+      logger.error(`[admin/notifications/:id/retry] Error: ${sanitizedError}`);
       
       // Don't expose internal errors to client
       if (errorMessage.includes('not found') || errorMessage.includes('access denied')) {
@@ -110,7 +110,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve DLQ');
-      logger.error('[admin/notifications/dlq] Error:', sanitizedError);
+      logger.error(`[admin/notifications/dlq] Error: ${sanitizedError}`);
       res.status(500).send({ error: 'Failed to retrieve DLQ' });
     }
   });
@@ -132,7 +132,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve metrics');
-      logger.error('[admin/notifications/metrics] Error:', sanitizedError);
+      logger.error(`[admin/notifications/metrics] Error: ${sanitizedError}`);
       res.status(500).send({ error: 'Failed to retrieve metrics' });
     }
   });
@@ -163,7 +163,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const errorMessage = error instanceof Error ? error.message : 'Failed to cancel notification';
       const sanitizedError = sanitizeErrorMessage(errorMessage);
-      logger.error('[admin/notifications/:id/cancel] Error:', sanitizedError);
+      logger.error(`[admin/notifications/:id/cancel] Error: ${sanitizedError}`);
       
       if (errorMessage.includes('not found') || errorMessage.includes('access denied')) {
         return res.status(404).send({ error: 'Notification not found' });

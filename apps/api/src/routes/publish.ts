@@ -86,7 +86,9 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
   const idempotencyService = new IdempotencyService(pool);
 
   // SECURITY FIX: Add authentication - this route was previously unauthenticated
-  app.addHook('preHandler', requireAuthFastify);
+  app.addHook('preHandler', async (req, res) => {
+    await requireAuthFastify(req, res, () => {});
+  });
 
   app.post('/publish/intents', async (req, res) => {
     // SECURITY FIX: Verify request is authenticated (added preHandler hook above)

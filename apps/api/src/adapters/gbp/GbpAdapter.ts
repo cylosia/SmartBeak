@@ -1,6 +1,6 @@
 import { google, mybusinessbusinessinformation_v1, mybusinessnotifications_v1, Auth } from 'googleapis';
 import { createCipheriv, randomBytes, createDecipheriv } from 'crypto';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 // P1-HIGH FIX: Import database for refresh token storage
 import { db } from '../../db';

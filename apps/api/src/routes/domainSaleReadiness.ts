@@ -5,7 +5,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { computeSaleReadiness } from '../domain/saleReadiness';
 import type { JwtPayload } from 'jsonwebtoken';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainSaleReadiness');
 

@@ -4,7 +4,7 @@ import { requireAuth, validateMethod } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
 import { getStripe, validateStripeConfig } from '../../../lib/stripe';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 // import { sanitizeForLogging } from '@security/logger';
 const sanitizeForLogging = (obj: unknown): unknown => obj;
 

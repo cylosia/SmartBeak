@@ -169,7 +169,7 @@ export async function createStripeCheckoutSession(
 */
 export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
   if (!event || !event.type) {
-  logger.error('Invalid webhook event: missing type', { event });
+  logger.error('Invalid webhook event: missing type', undefined, { eventType: String(event) });
   return;
   }
 
@@ -224,7 +224,7 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         logger.info('Unhandled event type', { eventType: event.type });
   }
   } catch (error) {
-    logger.error(`Error handling webhook ${event.type}`, { error, eventType: event.type });
+    logger.error(`Error handling webhook ${event.type}`, error instanceof Error ? error : undefined, { eventType: event.type });
   throw error;
   }
 }

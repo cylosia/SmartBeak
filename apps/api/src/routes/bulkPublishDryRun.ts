@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { extractAndVerifyToken, type JwtClaims } from '@security/jwt';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 import type { Knex } from 'knex';
 

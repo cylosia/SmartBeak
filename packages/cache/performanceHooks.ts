@@ -271,6 +271,8 @@ export class PerformanceMonitor {
         hitRate: 0,
         averageQueryTimeMs: 0,
         cachedEntries: 0,
+        versionKeys: 0,
+        versionsCleaned: 0,
       },
       memory: this.getMemoryMetrics(),
       latency: {

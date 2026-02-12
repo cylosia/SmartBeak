@@ -53,7 +53,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     const { name } = bodyResult.data;
     return await orgs.createOrg(name, ctx.userId);
   } catch (error) {
-    logger.error('[orgs] Error:', error);
+    logger.error('[orgs] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to create organization' });
   }

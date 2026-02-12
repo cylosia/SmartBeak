@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
 import { requireAuth, validateMethod, requireOrgAdmin, sendError } from '../../../lib/auth';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainCreate');
 
