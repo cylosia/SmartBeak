@@ -15,7 +15,7 @@ export interface UserFactoryOptions {
   orgId?: string;
   status?: 'active' | 'inactive' | 'pending';
   createdAt?: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export function createUser(options: UserFactoryOptions = {}) {

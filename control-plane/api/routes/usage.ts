@@ -49,7 +49,8 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin']);
-    await rateLimit('usage', 50);
+    // P1-FIX: Scope rate limit to org to prevent one user exhausting limit for all
+    await rateLimit(`usage:${ctx["orgId"]}`, 50);
 
     let stats: UsageStats;
     try {
@@ -65,10 +66,10 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
 
     return res.send(stats);
   } catch (error) {
+    // P1-FIX: Log full error server-side but never expose raw error messages to clients
     console["error"]('[usage] Unexpected error:', error);
     res.status(500).send({
-    error: 'Internal server error',
-    message: error instanceof Error ? error.message : 'Unknown error'
+    error: 'Internal server error'
     });
   }
   });

@@ -51,74 +51,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return sendError(res, 400, `reason must be less than ${MAX_REASON_LENGTH} characters`);
     }
 
-    // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify org_id matches for all content access
-    const { rows } = await pool.query(
-      `SELECT ci["id"], ci.title, ci.status, ci.org_id
-       FROM content_items ci
-       WHERE ci["id"] = $1
-       AND ci.org_id = $2
-       AND ci.domain_id IN (
-         SELECT domain_id FROM memberships m
-         JOIN domain_registry dr ON dr.org_id = m.org_id
-         WHERE m.user_id = $3
-       )`,
-      [contentId, auth["orgId"], auth.userId]
-    );
-
-    if (rows.length === 0) {
-      // SECURITY FIX: Return 404 (not 403) to prevent ID enumeration
-      console.warn(`[IDOR] User ${auth.userId} tried to unarchive content ${contentId} not in their org`);
-      return sendError(res, 404, 'Content not found');
-    }
-
-    const content = rows[0];
-
-    // Verify org_id matches
-    if (content.org_id !== auth["orgId"]) {
-      console.warn(`[IDOR] Content org_id ${content.org_id} does not match user org_id ${auth["orgId"]}`);
-      return sendError(res, 404, 'Content not found');
-    }
-
-    // Can only unarchive archived content
-    if (content.status !== 'archived') {
-      return sendError(res, 409, `Cannot unarchive content with status '${content.status}'. Only archived content can be restored.`);
-    }
-
-    const now = new Date();
-
-    // Restore to draft status with org_id verification
-    await pool.query(
-      `UPDATE content_items
-      SET status = 'draft',
-        restored_at = $1,
-        restored_reason = $2,
-        updated_at = $1,
-        archived_at = NULL
-      WHERE id = $3 AND org_id = $4`,
-      [now, reason || 'User initiated restore', contentId, auth["orgId"]]
-    );
-
-    // Record unarchive action in audit log if table exists
+    // P1-FIX: Wrap SELECT + UPDATE in a transaction with FOR UPDATE to prevent
+    // TOCTOU race conditions (concurrent requests bypassing status checks)
+    const client = await pool.connect();
     try {
-      await pool.query(
-        `INSERT INTO content_archive_audit (content_id, action, reason, performed_at, org_id)
-        VALUES ($1, $2, $3, $4, $5)`,
-        [contentId, 'unarchived', reason || 'User initiated restore', now, auth["orgId"]]
-      );
-    } catch (auditError: unknown) {
-      // Audit table may not exist yet - log but don't fail
-      const err = auditError as { code?: string; message?: string };
-      if (err.code !== '42P01') {
-        console.warn('[content/unarchive] Audit log error:', err.message);
-      }
-    }
+      await client.query('BEGIN');
 
-    res.json({
-      restored: true,
-      status: 'draft',
-      restoredAt: now.toISOString(),
-      message: 'Content has been restored to draft status.',
-    });
+      // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify org_id matches for all content access
+      const { rows } = await client.query(
+        `SELECT ci["id"], ci.title, ci.status, ci.org_id
+         FROM content_items ci
+         WHERE ci["id"] = $1
+         AND ci.org_id = $2
+         AND ci.domain_id IN (
+           SELECT domain_id FROM memberships m
+           JOIN domain_registry dr ON dr.org_id = m.org_id
+           WHERE m.user_id = $3
+         )
+         FOR UPDATE`,
+        [contentId, auth["orgId"], auth.userId]
+      );
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        // SECURITY FIX: Return 404 (not 403) to prevent ID enumeration
+        console.warn(`[IDOR] User ${auth.userId} tried to unarchive content ${contentId} not in their org`);
+        return sendError(res, 404, 'Content not found');
+      }
+
+      const content = rows[0];
+
+      // Can only unarchive archived content
+      if (content.status !== 'archived') {
+        await client.query('ROLLBACK');
+        return sendError(res, 409, `Cannot unarchive content with status '${content.status}'. Only archived content can be restored.`);
+      }
+
+      const now = new Date();
+
+      // Restore to draft status with org_id verification
+      await client.query(
+        `UPDATE content_items
+        SET status = 'draft',
+          restored_at = $1,
+          restored_reason = $2,
+          updated_at = $1,
+          archived_at = NULL
+        WHERE id = $3 AND org_id = $4`,
+        [now, reason || 'User initiated restore', contentId, auth["orgId"]]
+      );
+
+      // Record unarchive action in audit log if table exists
+      try {
+        await client.query(
+          `INSERT INTO content_archive_audit (content_id, action, reason, performed_at, org_id)
+          VALUES ($1, $2, $3, $4, $5)`,
+          [contentId, 'unarchived', reason || 'User initiated restore', now, auth["orgId"]]
+        );
+      } catch (auditError: unknown) {
+        // Audit table may not exist yet - log but don't fail
+        const err = auditError as { code?: string; message?: string };
+        if (err.code !== '42P01') {
+          console.warn('[content/unarchive] Audit log error:', err.message);
+        }
+      }
+
+      await client.query('COMMIT');
+
+      res.json({
+        restored: true,
+        status: 'draft',
+        restoredAt: now.toISOString(),
+        message: 'Content has been restored to draft status.',
+      });
+    } catch (txError) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw txError;
+    } finally {
+      client.release();
+    }
   } catch (error: unknown) {
     console.error('[content/unarchive] Error:', error);
 

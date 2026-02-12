@@ -18,7 +18,15 @@ function getEmailHashSecret(): string {
   return secret;
 }
 
-const EMAIL_HASH_SECRET = getEmailHashSecret();
+// P2-FIX: Lazy initialization to avoid module-level side effect that crashes
+// any test importing this module when EMAIL_HASH_SECRET is not set.
+let _emailHashSecret: string | undefined;
+function getSecret(): string {
+  if (!_emailHashSecret) {
+    _emailHashSecret = getEmailHashSecret();
+  }
+  return _emailHashSecret;
+}
 
 /**
 * Hash an email address for secure storage
@@ -27,7 +35,7 @@ const EMAIL_HASH_SECRET = getEmailHashSecret();
 */
 export function hashEmail(email: string): string {
   return crypto
-    .createHmac('sha256', EMAIL_HASH_SECRET)
+    .createHmac('sha256', getSecret())
     .update(email.toLowerCase().trim())
     .digest('hex');
 }
