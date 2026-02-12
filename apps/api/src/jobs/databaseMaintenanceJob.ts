@@ -12,7 +12,6 @@
 import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { maintenance } from '@database';
-import type { Knex } from 'knex';
 import { db } from '../db';
 
 const logger = getLogger('db-maintenance-job');

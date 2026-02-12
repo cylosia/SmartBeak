@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
-import { extractAndVerifyToken, type JwtClaims } from '@security/jwt';
+import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
 
 import type { Knex } from 'knex';
@@ -205,7 +205,7 @@ function processDraftBatch(draftId: string, targets: string[]): { draftId: strin
  * FIX: Alternative implementation with pagination support
  * Use this if you need to paginate results for very large datasets
  */
-async function generateSummaryPaginated(drafts: string[], targets: string[], page = 1, pageSize = 100): Promise<{
+async function _generateSummaryPaginated(drafts: string[], targets: string[], page = 1, pageSize = 100): Promise<{
   data: Array<{ draftId: string; intents: Array<{ target: string; status: string }> }>;
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 }> {
@@ -246,7 +246,7 @@ async function generateSummaryPaginated(drafts: string[], targets: string[], pag
  * FIX: Memory-efficient streaming implementation
  * Use this for very large datasets that need to be streamed
  */
-async function* generateSummaryStream(drafts: string[], targets: string[]): AsyncGenerator<{ draftId: string; intent: { target: string; status: string } }> {
+async function* _generateSummaryStream(drafts: string[], targets: string[]): AsyncGenerator<{ draftId: string; intent: { target: string; status: string } }> {
   // FIX: Yield results one at a time to minimize memory usage
   for (const draftId of drafts) {
     for (const target of targets) {

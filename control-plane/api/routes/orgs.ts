@@ -22,7 +22,7 @@ const CreateOrgSchema = z.object({
   name: z.string()
   .min(1, 'Organization name is required')
   .max(100, 'Organization name must be 100 characters or less')
-  .regex(/^[a-zA-Z0-9\s\-_\.]+$/, 'Organization name contains invalid characters')
+  .regex(/^[a-zA-Z0-9\s\-_.]+$/, 'Organization name contains invalid characters')
   .trim(),
 });
 

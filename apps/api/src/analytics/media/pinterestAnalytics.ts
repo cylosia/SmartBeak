@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import fetch from 'node-fetch';
 
 export async function ingestPinterestAnalytics(accessToken: string, pinId: string) {

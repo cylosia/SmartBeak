@@ -15,7 +15,7 @@
  * @module test/integration/security-fixes-verification
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
 import { URL } from 'url';
 
@@ -223,9 +223,6 @@ class MockClient {
 // CSRF PROTECTION IMPLEMENTATION (from apps/web/pages/api/stripe/portal.ts)
 // ============================================================================
 
-const CSRF_HEADER_NAME = 'x-csrf-token';
-const CSRF_COOKIE_NAME = 'csrf_token';
-
 /**
  * Validate CSRF token using timing-safe comparison
  * SECURITY FIX: Issue 13 - CSRF protection
@@ -278,11 +275,6 @@ const INTERNAL_IP_PATTERNS = [
   /^fc[0-9a-f]{2}:/i,
   /^fd[0-9a-f]{2}:/i,
   /^fe[89ab][0-9a-f]:/i,
-];
-
-const BLOCKED_PROTOCOLS = [
-  'file:', 'ftp:', 'ftps:', 'gopher:', 'dict:', 'ldap:', 'ldaps:',
-  'tftp:', 'sftp:', 'scp:', 'svn:', 'svn+ssh:', 'ssh:', 'telnet:',
 ];
 
 const BLOCKED_PORTS = [22, 23, 25, 53, 80, 110, 143, 443, 445, 3306, 3389, 5432, 6379, 8080];

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { ThreadSafeModuleCache, ModuleCache } from '../moduleCache';
-import { CircuitState } from '@kernel/retry';
 
 describe('ModuleCache Circuit Breaker (P1-FIX)', () => {
   describe('ThreadSafeModuleCache', () => {

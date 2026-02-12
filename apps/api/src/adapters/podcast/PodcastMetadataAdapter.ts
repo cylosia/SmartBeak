@@ -97,17 +97,17 @@ function adaptEpisodeMetadata(episode: Record<string, unknown>): EpisodeMetadata
   }
 
   // Safely parse duration as number
-  let duration: number | undefined;
+  let _duration: number | undefined;
   if (typeof episode['duration'] === 'number' && !isNaN(episode['duration']) && episode['duration'] >= 0) {
-  duration = episode['duration'];
+  _duration = episode['duration'];
   }
 
   // Safely parse publishDate as Date
-  let publishDate: Date | undefined;
+  let _publishDate: Date | undefined;
   if (isNonEmptyString(episode['publishDate'])) {
   const parsedDate = new Date(episode['publishDate']);
   if (!isNaN(parsedDate.getTime())) {
-    publishDate = parsedDate;
+    _publishDate = parsedDate;
   }
   }
 

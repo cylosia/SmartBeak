@@ -97,7 +97,7 @@ export class CacheInvalidator {
     // Tag-based invalidation strategy
     this.registerStrategy({
       name: 'tag-based',
-      handle: async (event, cache) => {
+      handle: async (event, _cache) => {
         if (event.relatedTags && event.relatedTags.length > 0) {
           await this.invalidateByTags(event.relatedTags);
         }
@@ -167,7 +167,7 @@ export class CacheInvalidator {
    */
   async invalidateByPattern(pattern: string): Promise<void> {
     // Convert pattern to regex
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+    const _regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
     
     // Note: In a real implementation, this would scan Redis keys
     // For now, we just log the pattern

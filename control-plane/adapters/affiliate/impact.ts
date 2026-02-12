@@ -67,6 +67,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res = await fetch(url, { ...options, signal: controller.signal as any });
       return res;
     } finally {

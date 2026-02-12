@@ -11,7 +11,7 @@
 import { EventEmitter } from 'events';
 import { getLogger } from '@kernel/logger';
 import { Pool } from 'pg';
-import { MetricsCollector, getMetricsCollector } from './metrics-collector';
+import { MetricsCollector } from './metrics-collector';
 
 const logger = getLogger('alerting-rules');
 
@@ -602,7 +602,7 @@ export class AlertRulesEngine extends EventEmitter {
   /**
    * Get health metric value
    */
-  private getHealthMetricValue(metric: string): number {
+  private getHealthMetricValue(_metric: string): number {
     // This would integrate with health checks
     // Returns 1 for healthy, 0 for unhealthy
     return 1; // Default to healthy
@@ -652,6 +652,7 @@ export class AlertRulesEngine extends EventEmitter {
 
     const alert: AlertInstance = {
       // P2-FIX: Use crypto.randomBytes for consistent ID generation
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       id: `alert_${Date.now()}_${require('crypto').randomBytes(6).toString('hex')}`,
       ruleId: rule.id,
       ruleName: rule.name,
@@ -935,7 +936,7 @@ export function createSlackHandler(
   webhookUrl: string
 ): NotificationHandler {
   return async (payload: NotificationPayload) => {
-    const { alert, rule } = payload;
+    const { alert, rule: _rule } = payload;
     
     const colors: Record<AlertSeverity, string> = {
       info: '#36a64f',

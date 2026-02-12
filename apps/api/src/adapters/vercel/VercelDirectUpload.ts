@@ -8,7 +8,7 @@
 
 import fetch from 'node-fetch';
 import { createHash } from 'crypto';
-import { API_VERSIONS, DEFAULT_TIMEOUTS } from '@config';
+import { API_VERSIONS } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
@@ -199,7 +199,7 @@ export class VercelDirectUploadAdapter {
     content: string,
     teamId?: string
   ): Promise<void> {
-    const context = createRequestContext('VercelDirectUpload', 'uploadFile');
+    const _context = createRequestContext('VercelDirectUpload', 'uploadFile');
 
     try {
       const url = new URL(`${this.baseUrl}/files`);
@@ -399,7 +399,7 @@ export class VercelDirectUploadAdapter {
 
       // Step 1: Calculate SHA hashes for all files
       const preparedFiles = this.prepareFiles(files);
-      const shaToContent = new Map(
+      const _shaToContent = new Map(
         files.map(f => [this.calculateSha1(f.content), f.content])
       );
 

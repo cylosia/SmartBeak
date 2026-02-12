@@ -1,3 +1,6 @@
+// P2-AUDIT-FIX: Added Quadrant union type (was untyped string) and explicit return type.
+export type Quadrant = 'invest' | 'prune' | 'double_down' | 'refresh';
+
 export type HeatmapPoint = {
   content_id: string;
   traffic: number;
@@ -5,7 +8,9 @@ export type HeatmapPoint = {
   freshness_days: number;
 };
 
-export function buildHeatmap(points: HeatmapPoint[]) {
+export type HeatmapResult = HeatmapPoint & { quadrant: Quadrant };
+
+export function buildHeatmap(points: HeatmapPoint[]): HeatmapResult[] {
   // FIX: Handle empty input array
   if (!Array.isArray(points) || points.length === 0) {
   return [];
@@ -17,7 +22,7 @@ export function buildHeatmap(points: HeatmapPoint[]) {
   const avgRoi = points.reduce((sum, p) => sum + (p.roi_12mo || 0), 0) / points.length;
 
   return points.map(p => {
-  let quadrant = 'invest';
+  let quadrant: Quadrant = 'invest';
 
   // FIX: Use safe comparisons with null/undefined handling
   const traffic = p.traffic ?? 0;

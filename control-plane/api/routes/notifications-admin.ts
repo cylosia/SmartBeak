@@ -12,15 +12,6 @@ import { isValidUUID } from '../../../packages/security/input-validator';
 
 const logger = getLogger('NotificationsAdmin');
 
-/**
- * Verify notification ownership (helper for routes)
- * @deprecated Use NotificationAdminService.verifyOwnership instead
- */
-async function verifyNotificationOwnership(orgId: string, notificationId: string, pool: Pool): Promise<boolean> {
-  const result = await pool.query('SELECT 1 FROM notifications WHERE id = $1 AND org_id = $2', [notificationId, orgId]);
-  return (result.rowCount ?? 0) > 0;
-}
-
 export interface AuthContext {
   userId: string;
   orgId: string;

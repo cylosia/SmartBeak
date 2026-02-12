@@ -2,7 +2,7 @@ import Redis from 'ioredis';
 
 import { getLogger } from '@kernel/logger';
 
-﻿import { randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 
 
 /**

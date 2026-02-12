@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { Notification, NotificationPayload } from '../domain/entities/Notification';
 import { NotificationRepository } from './ports/NotificationRepository';
 
-﻿
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -201,6 +201,7 @@ export class NotificationService {
   // Remove null bytes and control characters
   return value
     .replace(/\0/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   }
 

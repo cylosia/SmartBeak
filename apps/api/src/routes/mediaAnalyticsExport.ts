@@ -114,7 +114,7 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
 
 function escapeCsv(value: string): string {
   let sanitized = String(value).replace(/"/g, '""');
-  if (/^[=+\-\@\t\r]/.test(sanitized)) {
+  if (/^[=+\-@\t\r]/.test(sanitized)) {
     sanitized = "'" + sanitized;
   }
   return `"${sanitized}"`;

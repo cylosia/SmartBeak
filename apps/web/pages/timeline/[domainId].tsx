@@ -2,11 +2,11 @@
 import { GetServerSideProps } from 'next';
 
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function Timeline({ events }: any) {
+export default function Timeline({ events }: Record<string, unknown>) {
   return (
   <main>
     <h1>Decision Timeline</h1>
-    {events.map((e: any) => (
+    {(events as Record<string, unknown>[]).map((e: Record<string, unknown>) => (
     <section key={e.intentId}>
       <h3>{e.intentType}</h3>
       <p>{e.justification}</p>

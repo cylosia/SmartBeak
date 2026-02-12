@@ -48,7 +48,6 @@ const DEFAULT_SMTP_PORT = 587;
 
 /** Maximum subject length - MEDIUM FIX I5: Add length validation */
 const MAX_SUBJECT_LENGTH = 998; // RFC 2822 limit
-const MAX_EMAIL_LENGTH = 255;
 
 /**
 * Email configuration interface
@@ -222,7 +221,7 @@ export class EmailAdapter implements DeliveryAdapter {
   * @param input.payload - Template payload
   * @returns Delivery result with success status
   */
-  async send({ channel, to, template, payload }: SendNotificationInput): Promise<DeliveryResult> {
+  async send({ channel: _channel, to, template, payload }: SendNotificationInput): Promise<DeliveryResult> {
     const attemptedAt = new Date();
     
     try {

@@ -26,7 +26,7 @@ const AlertBodySchema = z.object({
   metric: z.string()
   .min(1, 'Metric name is required')
   .max(100, 'Metric name must be 100 characters or less')
-  .regex(/^[a-zA-Z0-9_\.]+$/, 'Metric can only contain letters, numbers, underscores, and dots'),
+  .regex(/^[a-zA-Z0-9_.]+$/, 'Metric can only contain letters, numbers, underscores, and dots'),
   threshold: z.number()
   .finite('Threshold must be a finite number')
   .safe('Threshold must be a safe number'),

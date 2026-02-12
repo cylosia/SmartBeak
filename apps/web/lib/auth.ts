@@ -1,8 +1,6 @@
-import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import crypto, { randomBytes } from 'crypto';
 import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
-import { securityConfig } from './config';
 import { getLogger } from '@kernel/logger';
 // import type { AuthContext, UserRole } from '@security/jwt';
 // SECURITY FIX: Add 'owner' role which exists in DB (CHECK role IN ('owner','admin','editor','viewer'))

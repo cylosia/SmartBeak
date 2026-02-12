@@ -41,38 +41,6 @@ const INTERNAL_IP_PATTERNS = [
 ] as const;
 
 /**
- * Blocked protocols to prevent URL-based attacks
- */
-const BLOCKED_PROTOCOLS = [
-  'file:',
-  'ftp:',
-  'ftps:',
-  'gopher:',
-  'dict:',
-  'ldap:',
-  'ldaps:',
-  'tftp:',
-  'sftp:',
-  'scp:',
-  'svn:',
-  'svn+ssh:',
-  'ssh:',
-  'telnet:',
-  'smtp:',
-  'imap:',
-  'pop3:',
-  'sip:',
-  'sips:',
-  'xmpp:',
-  'nfs:',
-  'snmp:',
-  'rtsp:',
-  'rtmp:',
-  'jar:',
-  'file://',
-] as const;
-
-/**
  * Blocked port ranges for additional security
  */
 const BLOCKED_PORTS = [
@@ -174,7 +142,7 @@ export function isInternalIp(hostname: string): boolean {
  */
 function isEncodedInternalIp(ip: string): boolean {
   // Remove brackets for IPv6
-  const cleanIp = ip.replace(/[\[\]]/g, '');
+  const cleanIp = ip.replace(/[[\]]/g, '');
 
   // Check for IPv4 in IPv6 format (::ffff:127.0.0.1)
   const ipv4Mapped = cleanIp.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
@@ -484,6 +452,7 @@ export async function validateUrlWithDns(
  */
 export function extractSafeUrl(input: string): string | null {
   // Remove whitespace and control characters
+  // eslint-disable-next-line no-control-regex
   const cleaned = input.trim().replace(/[\x00-\x1F\x7F]/g, '');
 
   // Check for URL obfuscation attempts
@@ -523,7 +492,7 @@ export function extractSafeUrl(input: string): string | null {
 export function normalizeIp(ip: string): string | null {
   try {
     // Remove brackets
-    let cleanIp = ip.replace(/[\[\]]/g, '');
+    const cleanIp = ip.replace(/[[\]]/g, '');
 
     // Handle IPv4-mapped IPv6 (::ffff:x.x.x.x)
     const ipv4Mapped = cleanIp.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);

@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 
-﻿
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -144,7 +144,7 @@ export class CustomersService {
     'SELECT COUNT(*) FROM customers WHERE org_id = $1',
     [orgId]
     );
-    const totalCount = parseInt(countResult.rows[0].count, 10);
+    const _totalCount = parseInt(countResult.rows[0].count, 10);
 
     return {
     success: true,
@@ -368,6 +368,7 @@ export class CustomersService {
   return value
     .trim()
     .replace(/\0/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   }
 }

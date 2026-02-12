@@ -1,6 +1,17 @@
 
 import React from 'react';
-export function AdminBillingDashboard({ orgs }: any) {
+
+interface Org {
+  id: string;
+  plan: string;
+  plan_status: string;
+}
+
+interface AdminBillingDashboardProps {
+  orgs: Org[];
+}
+
+export function AdminBillingDashboard({ orgs }: AdminBillingDashboardProps) {
   return (
   <div>
     <h2>Billing Overview</h2>
@@ -13,7 +24,7 @@ export function AdminBillingDashboard({ orgs }: any) {
       </tr>
     </thead>
     <tbody>
-      {orgs.map((o: any) => (
+      {orgs.map((o: Org) => (
       <tr key={o["id"]}>
         <td>{o["id"]}</td>
         <td>{o.plan}</td>

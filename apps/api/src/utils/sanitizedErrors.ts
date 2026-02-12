@@ -57,7 +57,7 @@ export function sanitizeErrorMessage(message: string): string {
   }
   
   // Remove file paths (information disclosure)
-  sanitized = sanitized.replace(/[\w\/\\]+\.(js|ts|json|env)/gi, '[FILE]');
+  sanitized = sanitized.replace(/[\w/\\]+\.(js|ts|json|env)/gi, '[FILE]');
   
   // Remove internal IP addresses
   sanitized = sanitized.replace(/\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g, '[INTERNAL_IP]');

@@ -1,4 +1,3 @@
-import pLimit from 'p-limit';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('keyword-dedup-cluster');

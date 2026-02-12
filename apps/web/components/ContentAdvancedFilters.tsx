@@ -1,4 +1,4 @@
-export function ContentAdvancedFilters({ onFilter }: { onFilter: (f: any) => void }) {
+export function ContentAdvancedFilters({ onFilter }: { onFilter: (f: Record<string, string>) => void }) {
   return (
   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
     <select onChange={(e) => onFilter({ author: (e.target as HTMLSelectElement).value })}>

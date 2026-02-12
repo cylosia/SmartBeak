@@ -59,7 +59,7 @@ export interface RequestContext {
 export function createRequestContext(
   adapterName: string,
   operation: string,
-  correlationId?: string
+  _correlationId?: string
 ): RequestContext {
   return {
     requestId: generateRequestId(),

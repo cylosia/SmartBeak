@@ -1,10 +1,9 @@
 import { z } from 'zod';
 // H06-FIX: Use the existing auth middleware instead of custom JWT verification
-import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { optionalAuthFastify } from '@security/auth';
+import { FastifyInstance } from 'fastify';
 import { getDb } from '../db';
 import { computeSaleReadiness } from '../domain/saleReadiness';
-import type { JwtPayload } from 'jsonwebtoken';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainSaleReadiness');
@@ -19,7 +18,15 @@ const ALLOWED_READINESS_FIELDS = [
   'risk_score',
   'rationale'
 ];
-// P2-21 FIX: Removed dead code (SaleReadinessQuerySchema and isValidUUID were defined but never used)
+const SaleReadinessQuerySchema = z.object({
+  domain_id: z.string().uuid('domain_id must be a valid UUID'),
+  seo: z.coerce.number().min(0).max(100).default(0),
+  freshness: z.coerce.number().min(0).max(1).default(0),
+  audience: z.coerce.number().min(0).max(1000000000).default(0),
+  growth: z.coerce.number().min(-100).max(1000).default(0),
+  revenue: z.coerce.number().min(0).max(100000000).default(0),
+  risks: z.coerce.number().min(0).max(100).default(0),
+});
 // H06-FIX: Removed custom verifyAuth — using @security/auth middleware instead
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {

@@ -40,7 +40,7 @@ function initializeKey(): void {
 /**
 * Get the encryption key (lazy initialization)
 */
-function getKey(): string {
+function _getKey(): string {
   if (key === null) {
   initializeKey();
   }

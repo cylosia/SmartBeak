@@ -38,7 +38,7 @@ function sanitizeCsvField(field: string): string {
   let sanitized = String(field).replace(/"/g, '""');
 
   // Characters that could trigger formula execution: =, +, -, @, \t, \r
-  if (/^[\=\+\-\@\t\r]/.test(sanitized)) {
+  if (/^[=+\-@\t\r]/.test(sanitized)) {
   sanitized = "'" + sanitized;  // Prefix with apostrophe to neutralize
   }
 

@@ -6,9 +6,8 @@ import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { DLQService } from '@kernel/queue/DLQService';
-import { withRetry } from '@kernel/retry';
 import { runWithContext, createRequestContext } from '@kernel/request-context';
-import { jobConfig, cacheConfig, redisConfig } from '@config';
+import { jobConfig, redisConfig } from '@config';
 
 /**
  * Job Scheduler System
@@ -236,7 +235,7 @@ export class JobScheduler extends EventEmitter {
   register<T>(
   config: JobConfig,
   handler: (data: T, job: Job) => Promise<unknown>,
-  schema?: z.ZodSchema<T>
+  _schema?: z.ZodSchema<T>
   ): void {
   // Validate config
   const validatedConfig = JobConfigSchema.parse(config);
@@ -395,7 +394,7 @@ export class JobScheduler extends EventEmitter {
       queueHandlers.get(config.queue)!.push(name);
     }
 
-    for (const [queueName, jobNames] of queueHandlers) {
+    for (const [queueName, _jobNames] of queueHandlers) {
       const worker = new Worker(
         queueName,
         async (job: Job) => {
@@ -738,7 +737,7 @@ export class JobScheduler extends EventEmitter {
     const gracefulTimeout = 10000; // 10 seconds
 
     // FIX: Abort all running jobs
-    for (const [jobId, controller] of this.abortControllers.entries()) {
+    for (const [_jobId, controller] of this.abortControllers.entries()) {
       controller.abort();
     }
     this.abortControllers.clear();

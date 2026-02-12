@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { encodeCursor, decodeCursor, CursorPaginator, CursorPaginationParams } from '../../packages/database/query-optimization/pagination';
-import { withTransaction, query, withLock, IsolationLevel } from '../../packages/database/transactions';
-import { fetchWithRetry, RetryableError, RetryOptions } from '../../packages/utils/fetchWithRetry';
+import { encodeCursor } from '../../packages/database/query-optimization/pagination';
+import { query, withLock } from '../../packages/database/transactions';
+import { RetryableError, RetryOptions } from '../../packages/utils/fetchWithRetry';
 
 describe('P1 Type Safety Fixes', () => {
   describe('1. Unsafe array access with ! - pagination.ts', () => {
@@ -157,7 +157,7 @@ describe('P1 Type Safety Fixes', () => {
       // <T extends unknown, Row extends Record<string, unknown>>
       
       type LockParams = Parameters<typeof withLock>;
-      type FnParam = LockParams[2]; // fn parameter
+      type _FnParam = LockParams[2]; // fn parameter
       
       // The function should accept Row[] with proper constraints
       const mockFn = (_client: unknown, rows: Array<Record<string, unknown>>) => {

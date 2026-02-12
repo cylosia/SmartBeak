@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { getLogger, getRequestContext } from '@kernel/logger';
-import { abuseGuardConfig } from '@config';
+import { getLogger } from '@kernel/logger';
 import { sanitizeForLogging } from '@security/logger';
 
 const logger = getLogger('abuseGuard');

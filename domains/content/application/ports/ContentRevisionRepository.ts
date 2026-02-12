@@ -2,7 +2,7 @@ import { PoolClient } from 'pg';
 
 import { ContentRevision } from '../../domain/entities/ContentRevision';
 
-﻿
+
 
 
 /**

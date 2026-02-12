@@ -1,4 +1,3 @@
-import { URL } from 'url';
 import { randomBytes } from 'crypto';
 
 import { PublishingAdapter, PublishingContent, PublishingTarget, PublishResult } from './PublishingAdapter';
@@ -220,7 +219,7 @@ export class WebPublishingAdapter extends PublishingAdapter {
           case 'bearer':
             headers['Authorization'] = `Bearer ${config.auth.token}`;
             break;
-          case 'basic':
+          case 'basic': {
             // SECURITY FIX: Issue 5 - Validate username and password are defined before Buffer.from()
             if (!config.auth.username || !config.auth.password) {
               return {
@@ -232,6 +231,7 @@ export class WebPublishingAdapter extends PublishingAdapter {
             const auth = Buffer.from(`${config.auth.username}:${config.auth.password}`).toString('base64');
             headers['Authorization'] = `Basic ${auth}`;
             break;
+          }
           case 'api-key':
             // P0-3 SECURITY FIX: Validate keyHeader against allowlist to prevent header injection
             if (config.auth.keyHeader && config.auth.token) {

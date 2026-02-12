@@ -3,7 +3,7 @@
  * Tests the actual implementations of P1 performance fixes
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // ============================================================================
 // Test: Redis KEYS → SCAN Fix
@@ -22,8 +22,8 @@ describe('Redis KEYS to SCAN Fix', () => {
     let callCount = 0;
     
     scan.mockImplementation(async (cursor: string, ...args: unknown[]) => {
-      const pattern = args[1] as string;
-      const count = args[3] as number;
+      const _pattern = args[1] as string;
+      const _count = args[3] as number;
       
       if (cursor === '0') {
         callCount++;

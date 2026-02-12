@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 
 import { renderFacebookPost } from '../../plugins/publishing-adapters/facebook/render';
 
-﻿
+
 
 
 /**

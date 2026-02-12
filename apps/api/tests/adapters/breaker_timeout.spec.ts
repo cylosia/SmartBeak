@@ -7,9 +7,9 @@ test('withTimeout rejects slow promise', async () => {
 });
 
 test('circuit breaker opens after failures', async () => {
-  let calls = 0;
+  let _calls = 0;
   const fn = async () => {
-  calls++;
+  _calls++;
   throw new Error('fail');
   };
 

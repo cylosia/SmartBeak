@@ -87,7 +87,7 @@ describe('Rate Limiting Tests', () => {
     });
 
     it('should use sliding window algorithm', async () => {
-      const now = Date.now();
+      const _now = Date.now();
       mockPipeline.exec.mockResolvedValue([
         [null, 5], // zremrangebyscore (removed 5 old entries)
         [null, 3], // zcard (3 remaining in window)

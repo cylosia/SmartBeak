@@ -1,4 +1,4 @@
-export function ContentFilters({ onFilter }: { onFilter: (f: any) => void }) {
+export function ContentFilters({ onFilter }: { onFilter: (f: Record<string, string>) => void }) {
   return (
   <div style={{ marginBottom: 16 }}>
     <select onChange={(e) => onFilter({ type: (e.target as HTMLSelectElement).value })}>

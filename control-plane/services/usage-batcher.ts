@@ -122,7 +122,7 @@ export class UsageBatcher {
   * Process batch with concurrency limit
   */
   private async processBatchWithConcurrency(batch: Increment[]): Promise<void> {
-  const results: Promise<void>[] = [];
+  const _results: Promise<void>[] = [];
   const errors: Error[] = [];
 
   // Process in chunks to limit concurrency

@@ -2,7 +2,7 @@ import { PoolClient } from 'pg';
 
 import { IndexingJob } from '../../domain/entities/IndexingJob';
 
-﻿
+
 
 
 /**

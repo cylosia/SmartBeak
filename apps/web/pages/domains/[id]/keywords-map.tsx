@@ -31,7 +31,7 @@ export default function KeywordContentMap({ domainId }: KeywordContentMapProps) 
   );
 }
 
-export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
+export async function getServerSideProps({ params, req: _req }: GetServerSidePropsContext) {
   const id = params?.['id'];
   if (typeof id !== 'string') {
     return { notFound: true };

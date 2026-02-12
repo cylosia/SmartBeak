@@ -163,7 +163,7 @@ export class PostgresSeoRepository implements SeoRepository {
     const { rows } = await this.pool.query(
     `SELECT id, title, description, updated_at as 'updatedAt'
     FROM seo_documents
-    WHERE title ILIKE $1 ESCAPE '\'
+    WHERE title ILIKE $1 ESCAPE '\\'
     ORDER BY updated_at DESC
     LIMIT $2`,
     [`%${sanitizedQuery}%`, safeLimit]
@@ -293,6 +293,7 @@ export class PostgresSeoRepository implements SeoRepository {
   // Remove null bytes and control characters
   let sanitized = query
     .replace(/\0/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1F\x7F]/g, '')
     .substring(0, 255); // Limit length
 

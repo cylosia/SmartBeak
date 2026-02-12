@@ -5,7 +5,7 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '@kerne
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
-﻿import { AbortController } from 'abort-controller';
+import { AbortController } from 'abort-controller';
 
 
 /**

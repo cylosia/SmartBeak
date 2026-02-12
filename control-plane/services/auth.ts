@@ -7,12 +7,15 @@ import {
 
 export type Role = 'admin' | 'editor' | 'viewer' | 'owner';
 
+// P1-AUDIT-FIX: Removed dual role/roles fields. Previously had both `role?: Role` and
+// `roles?: string[]`, but authFromHeader only set `roles`. Functions like requireRole
+// checked both, creating confusion and potential privilege escalation if they disagreed.
+// Unified on `roles: Role[]` with proper Role type (not string[]).
 export interface AuthContext {
   userId: string;
   orgId: string;
   domainId?: string | undefined;
-  role?: Role | undefined;
-  roles?: string[] | undefined;
+  roles: Role[];
 }
 
 /**
@@ -175,7 +178,7 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
   return {
   userId: claims.sub,
   orgId: claims["orgId"],
-  roles: [claims.role]
+  roles: [claims.role as Role],
   };
 }
 
@@ -184,15 +187,11 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
 * @throws RoleAccessError if role is not in allowed list
 */
 export function requireRole(ctx: AuthContext, allowed: Role[]): void {
-  // Check single role first if available
-  if (ctx.role && allowed.includes(ctx.role as Role)) {
+  // P1-AUDIT-FIX: Single source of truth — only check ctx.roles (typed as Role[])
+  if (ctx.roles.some(role => allowed.includes(role))) {
     return;
   }
-  // Check roles array
-  if (ctx.roles && ctx.roles.some(role => allowed.includes(role as Role))) {
-    return;
-  }
-  throw new RoleAccessError(allowed, (ctx.role ?? ctx.roles ?? []) as Role | Role[]);
+  throw new RoleAccessError(allowed, ctx.roles);
 }
 
 /**
@@ -223,10 +222,7 @@ export function requireAccess(
 * Returns boolean instead of throwing
 */
 export function hasRole(ctx: AuthContext, allowed: Role[]): boolean {
-  if (ctx.role && allowed.includes(ctx.role as Role)) {
-    return true;
-  }
-  return ctx.roles?.some(role => allowed.includes(role as Role)) ?? false;
+  return ctx.roles.some(role => allowed.includes(role));
 }
 
 /**

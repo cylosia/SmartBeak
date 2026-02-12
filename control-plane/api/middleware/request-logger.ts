@@ -5,7 +5,7 @@ import { runWithContext, createRequestContext } from '@kernel/request-context';
 
 import { AuthContext } from '../../services/auth';
 
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 
 
 /**
@@ -157,12 +157,14 @@ export async function requestLoggerMiddleware(
 * Sanitize query parameters for logging
 * Removes sensitive fields like passwords, tokens, keys
 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeQueryParams(query: Record<string, any>): Record<string, any> {
   if (!query || typeof query !== 'object') {
   return {};
   }
 
   const sensitiveFields = ['password', 'token', 'api_key', 'apiKey', 'secret', 'authorization', 'auth'];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sanitized: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(query)) {

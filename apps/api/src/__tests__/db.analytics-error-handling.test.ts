@@ -62,7 +62,7 @@ describe('Analytics DB Error Handling (P1-FIX)', () => {
       process.env['ANALYTICS_DB_URL'] = 'postgresql://invalid:5432/db';
       
       // Mock metrics emission
-      const emitCounterMock = jest.fn();
+      const _emitCounterMock = jest.fn();
       
       // The P1-FIX should emit these metrics on failure
       const expectedMetrics = [

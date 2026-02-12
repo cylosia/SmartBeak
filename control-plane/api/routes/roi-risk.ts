@@ -1,6 +1,6 @@
 
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
 import { getLogger } from '../../../packages/kernel/logger';

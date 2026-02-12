@@ -1,6 +1,17 @@
 
 import React from 'react';
-export function CompetitorInventoryView({ pages }: any) {
+
+interface CompetitorPage {
+  url: string;
+  inferred_type: string;
+  lastmod: string | null;
+}
+
+interface CompetitorInventoryViewProps {
+  pages: CompetitorPage[];
+}
+
+export function CompetitorInventoryView({ pages }: CompetitorInventoryViewProps) {
   return (
   <div>
     <h2>Competitor Content Inventory</h2>
@@ -13,7 +24,7 @@ export function CompetitorInventoryView({ pages }: any) {
       </tr>
     </thead>
     <tbody>
-      {pages.map((p: any) => (
+      {pages.map((p: CompetitorPage) => (
       <tr key={p.url}>
         <td>{p.url}</td>
         <td>{p.inferred_type}</td>

@@ -1,7 +1,6 @@
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 
-import { timeoutConfig } from '@config';
 import { API_BASE_URLS, DEFAULT_TIMEOUTS } from '../../utils/config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
 import { validateNonEmptyString } from '../../utils/validation';

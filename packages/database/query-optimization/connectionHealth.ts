@@ -8,7 +8,7 @@
  * - Connection leak detection
  */
 
-import type { Pool, PoolClient } from 'pg';
+import type { Pool } from 'pg';
 import { EventEmitter } from 'events';
 
 // ============================================================================

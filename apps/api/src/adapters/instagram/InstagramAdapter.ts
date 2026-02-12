@@ -126,7 +126,7 @@ export class InstagramAdapter {
    */
   private async createMediaContainer(
     input: InstagramPublishInput,
-    context: ReturnType<typeof createRequestContext>
+    _context: ReturnType<typeof createRequestContext>
   ): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -187,7 +187,7 @@ export class InstagramAdapter {
    */
   private async publishContainer(
     containerId: string,
-    context: ReturnType<typeof createRequestContext>
+    _context: ReturnType<typeof createRequestContext>
   ): Promise<InstagramMediaContainerResponse> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);

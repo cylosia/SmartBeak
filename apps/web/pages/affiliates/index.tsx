@@ -3,8 +3,19 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
+interface Offer {
+  id: string;
+  merchantName: string;
+  status: string;
+  riskNotes: string;
+}
+
+interface AffiliateOffersProps {
+  offers: Offer[];
+}
+
 // M1-FIX: Wrapped in AppShell for consistent navigation
-export default function AffiliateOffers({ offers }: any) {
+export default function AffiliateOffers({ offers }: AffiliateOffersProps) {
   return (
   <AppShell>
     <h1>Affiliate Offers</h1>
@@ -17,7 +28,7 @@ export default function AffiliateOffers({ offers }: any) {
       </tr>
     </thead>
     <tbody>
-      {offers.map((o: any) => (
+      {offers.map((o: Offer) => (
       <tr key={o["id"]}>
         <td>{o.merchantName}</td>
         <td>{o.status}</td>
