@@ -190,7 +190,7 @@ export class CacheWarmer {
     logger.info(`[CacheWarmer] Starting cache warming for ${this.sources.size} sources`);
     const startTime = Date.now();
 
-    const enabledSources = Array.from(this.sources.values())
+    const enabledSources = [...this.sources.values()]
       .filter(s => s.enabled !== false)
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
@@ -280,7 +280,7 @@ export class CacheWarmer {
    * Get registered sources
    */
   getSources(): WarmableDataSource[] {
-    return Array.from(this.sources.values());
+    return [...this.sources.values()];
   }
 }
 

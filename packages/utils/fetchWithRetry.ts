@@ -51,7 +51,7 @@ export async function waitForPendingCacheWrites(timeoutMs = 30000): Promise<void
     setTimeout(() => reject(new Error('Cache write wait timeout')), timeoutMs);
   });
 
-  const allWritesPromise = Promise.allSettled(Array.from(pendingCacheWrites)).then(() => {
+  const allWritesPromise = Promise.allSettled([...pendingCacheWrites]).then(() => {
     logger.debug('All pending cache writes completed');
   });
 

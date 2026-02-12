@@ -598,7 +598,7 @@ function cleanupOldestEntriesIfNeeded(): void {
     }
     // If still too large, remove oldest 10%
     if (memoryRateLimitStore.size > MAX_RATE_LIMIT_STORE_SIZE) {
-      const entries = Array.from(memoryRateLimitStore.entries());
+      const entries = [...memoryRateLimitStore.entries()];
       entries.sort((a, b) => a[1].resetTime - b[1].resetTime);
       const toRemove = Math.floor(entries.length * 0.1);
       for (let i = 0; i < toRemove; i++) {

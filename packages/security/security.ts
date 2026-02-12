@@ -137,7 +137,7 @@ export class SessionManager extends EventEmitter {
   getUserSessions(userId: string): SessionRecord[] {
   const sessionIds = this.userSessions.get(userId);
   if (!sessionIds) return [];
-  return Array.from(sessionIds)
+  return [...sessionIds]
     .map(id => this.sessions.get(id))
     .filter((s): s is SessionRecord => s !== undefined);
   }
@@ -302,7 +302,7 @@ export class SecurityAlertManager extends EventEmitter {
     'medium',
     'suspicious_login',
     `Login from new IP address: ${event["ip"]}`,
-    { newIp: event["ip"], knownIps: Array.from(knownIPs) },
+    { newIp: event["ip"], knownIps: [...knownIPs] },
     );
   }
   }

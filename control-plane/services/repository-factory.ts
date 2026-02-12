@@ -102,7 +102,7 @@ export async function clearRepositoryCache(): Promise<void> {
 
   // Close all pools and await completion
   const poolClosePromises: Promise<void>[] = [];
-  for (const [key, pool] of Array.from(poolCache.entries())) {
+  for (const [key, pool] of poolCache.entries()) {
   poolClosePromises.push(
     pool.end().catch(err => {
     logger.error('Error closing pool', err, { key });
@@ -126,7 +126,7 @@ export async function getRepositoryHealth(): Promise<{
 }> {
   const poolStats: Record<string, { total: number; idle: number; waiting: number }> = {};
 
-  for (const [key, pool] of Array.from(poolCache.entries())) {
+  for (const [key, pool] of poolCache.entries()) {
   // Key is already a SHA-256 hash prefix, safe to expose
   poolStats[key] = {
     total: pool.totalCount,

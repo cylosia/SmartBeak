@@ -226,7 +226,7 @@ export class TTLCache<T> {
   * Get all keys (useful for debugging)
   */
   keys(): string[] {
-  return Array.from(this.store.keys());
+  return [...this.store.keys()];
   }
 
   /**

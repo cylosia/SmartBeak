@@ -235,7 +235,7 @@ export class CacheInvalidator {
     }
 
     // Apply matching rules
-    const sortedRules = Array.from(this.rules.values())
+    const sortedRules = [...this.rules.values()]
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 
     for (const rule of sortedRules) {
@@ -285,7 +285,7 @@ export class CacheInvalidator {
    * Get registered rules
    */
   getRules(): InvalidationRule[] {
-    return Array.from(this.rules.values());
+    return [...this.rules.values()];
   }
 
   /**

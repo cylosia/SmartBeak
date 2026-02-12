@@ -302,5 +302,5 @@ async function processEvent(event: Stripe.Event): Promise<void> {
  * Get allowed event types (for documentation/testing)
  */
 export function getAllowedEventTypes(): string[] {
-  return Array.from(ALLOWED_EVENT_TYPES);
+  return [...ALLOWED_EVENT_TYPES];
 }
