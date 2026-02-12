@@ -177,5 +177,49 @@ describe('ingestYouTubeAnalytics', () => {
       const [url] = fetchMock.mock.calls[0] as [string];
       expect(url).toContain('youtubeanalytics.googleapis.com/v2/reports');
     });
+
+    // P3-7 FIX (audit 3): Test for response.json() throwing on malformed body
+    test('propagates error when response.json() throws on malformed body (P3-7 audit 3)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => { throw new SyntaxError('Unexpected token < in JSON at position 0'); },
+        text: async () => '<html>502 Bad Gateway</html>',
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      await expect(ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-01-01', '2024-01-31'))
+        .rejects.toThrow(SyntaxError);
+    });
+
+    // P2-5 FIX (audit 3): Test that empty first row doesn't lose valid data in subsequent rows
+    test('finds valid data in second row when first row is empty (P2-5 audit 3)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ rows: [[], [200, 20, 10]] }),
+        text: async () => '{}',
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      const result = await ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-01-01', '2024-01-31');
+      expect(result).toEqual({ views: 200, likes: 20, comments: 10 });
+    });
+
+    // P2-4 FIX (audit 3): Test token factory support
+    test('accepts a token factory function (P2-4 audit 3)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ rows: [[50, 5, 2]] }),
+        text: async () => '{}',
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      const tokenFactory = vi.fn().mockReturnValue('factory-token');
+      const result = await ingestYouTubeAnalytics(tokenFactory, 'dQw4w9WgXcQ', '2024-01-01', '2024-01-31');
+      expect(result).toEqual({ views: 50, likes: 5, comments: 2 });
+      expect(tokenFactory).toHaveBeenCalled();
+
+      const [url, options] = fetchMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect((options['headers'] as Record<string, string>)['Authorization']).toBe('Bearer factory-token');
+    });
   });
 });

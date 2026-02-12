@@ -55,7 +55,8 @@ function validateAnalyticsDate(dateStr: string, name: string): void {
     throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
   }
   // Roundtrip check catches month/day overflow (e.g., 2024-02-30 -> 2024-03-01)
-  const [y, m, d] = dateStr.split('-').map(Number);
+  // P3-6 FIX (audit 3): Explicit assertion — regex guarantees exactly 3 numeric segments
+  const [y, m, d] = dateStr.split('-').map(Number) as [number, number, number];
   if (parsed.getUTCFullYear() !== y || parsed.getUTCMonth() + 1 !== m || parsed.getUTCDate() !== d) {
     throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
   }
@@ -71,20 +72,33 @@ const YouTubeAnalyticsResponseSchema = z.object({
 
 /**
 * Ingest YouTube analytics for a video
-* @param accessToken - OAuth2 access token
+*
+* Security audit 3 fixes:
+* - P2-4: Accept token factory for OAuth token refresh in long-lived workers
+* - P2-5: Find first non-empty row instead of blindly using rows[0]
+* - P3-6: Explicit type assertion for date split with regex guarantee comment
+*
+* @param accessTokenOrFactory - OAuth2 access token or factory function for token refresh
 * @param videoId - YouTube video ID
 * @param startDate - Start date in YYYY-MM-DD format (required by YouTube Analytics API)
 * @param endDate - End date in YYYY-MM-DD format (required by YouTube Analytics API)
 * @returns Analytics data, or null if no data was returned for the video
 */
 export async function ingestYouTubeAnalytics(
-  accessToken: string,
+  accessTokenOrFactory: string | (() => string | Promise<string>),
   videoId: string,
   startDate: string,
   endDate: string,
 ): Promise<YouTubeAnalyticsData | null> {
-  if (!accessToken || typeof accessToken !== 'string') {
-    throw new Error('Invalid accessToken: must be a non-empty string');
+  // P2-4 FIX (audit 3): Resolve token from factory or validate static string
+  let resolveToken: () => string | Promise<string>;
+  if (typeof accessTokenOrFactory === 'string') {
+    if (!accessTokenOrFactory) {
+      throw new Error('Invalid accessToken: must be a non-empty string');
+    }
+    resolveToken = () => accessTokenOrFactory;
+  } else {
+    resolveToken = accessTokenOrFactory;
   }
   // P1-4 FIX: Validate videoId format to prevent filter injection
   if (!videoId || typeof videoId !== 'string') {
@@ -104,6 +118,11 @@ export async function ingestYouTubeAnalytics(
   }
 
   const data = await withRetry(async () => {
+    // P2-4 FIX (audit 3): Resolve token inside retry for fresh token on each attempt
+    const accessToken = await resolveToken();
+    if (!accessToken || typeof accessToken !== 'string') {
+      throw new Error('Invalid accessToken: factory must return a non-empty string');
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutConfig.long);
 
@@ -158,12 +177,15 @@ export async function ingestYouTubeAnalytics(
     }
   }, { maxRetries: 3 });
 
-  const row = data.rows?.[0];
-  if (!row || row.length === 0) {
+  // P2-5 FIX (audit 3): Find first row with enough columns instead of blindly
+  // using rows[0]. Protects against empty leading rows from the YouTube API.
+  const row = data.rows?.find(r => r.length >= EXPECTED_METRIC_COUNT);
+  if (!row) {
     return null;
   }
 
   // P2-10 FIX: Validate row has expected number of metric columns
+  // (redundant after find() filter above, kept as defense-in-depth)
   if (row.length < EXPECTED_METRIC_COUNT) {
     // P2-8 FIX (audit 2): Sanitize videoId in log messages
     logger.warn('YouTube Analytics row has fewer columns than expected', {
