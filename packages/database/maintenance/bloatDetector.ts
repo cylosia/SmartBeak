@@ -145,10 +145,14 @@ export async function getUnusedIndexes(
   knex: Knex,
   minAgeDays: number = 7
 ): Promise<UnusedIndexInfo[]> {
+  if (!Number.isInteger(minAgeDays) || minAgeDays < 0 || minAgeDays > 365) {
+    throw new Error('minAgeDays must be an integer between 0 and 365');
+  }
+
   const result = await knex.raw<{
     rows: UnusedIndexInfo[];
   }>(`
-    SELECT 
+    SELECT
       s.schemaname,
       s.relname as tablename,
       s.indexrelname as indexname,
@@ -162,9 +166,9 @@ export async function getUnusedIndexes(
       AND s.idx_scan = 0
       AND NOT i.indisunique
       AND NOT i.indisprimary
-      AND ci.relcreationdate < NOW() - INTERVAL '${minAgeDays} days'
+      AND ci.relcreationdate < NOW() - (? * INTERVAL '1 day')
     ORDER BY pg_relation_size(s.indexrelid) DESC
-  `);
+  `, [minAgeDays]);
   return result.rows;
 }
 
@@ -308,7 +312,9 @@ export async function runBloatAnalysis(
   const warning = allBloat.filter(b => b.status === 'WARNING');
   
   // Calculate average bloat ratio
-  const totalBloatRatio = allBloat.reduce((sum, b) => sum + b.bloat_ratio, 0) / allBloat.length;
+  const totalBloatRatio = allBloat.length > 0
+    ? allBloat.reduce((sum, b) => sum + b.bloat_ratio, 0) / allBloat.length
+    : 0;
   
   // Generate recommendations
   const recommendations: string[] = [];

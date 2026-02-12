@@ -1,6 +1,11 @@
 
 import React from 'react';
-export function BillingProviderSelector({ onSelect }: any) {
+
+interface BillingProviderSelectorProps {
+  onSelect: (provider: 'stripe' | 'paddle') => void;
+}
+
+export function BillingProviderSelector({ onSelect }: BillingProviderSelectorProps) {
   return (
   <div>
     <button onClick={() => onSelect('stripe')}>Pay with Stripe</button>

@@ -148,101 +148,117 @@ export interface PublishResult {
   error?: string;
 }
 
-// P1-FIX: Transaction wrapper for multi-step database operations
-async function publishContent(
-  draftId: string,
-  targetId: string,
+/**
+ * Batch publish all draft/target combinations in a single transaction.
+ * Replaces the previous O(n*m) sequential per-pair transaction approach
+ * with 4 queries total: 2 SELECTs, 1 batch UPDATE, 1 batch INSERT.
+ */
+async function batchPublishContent(
+  draftIds: string[],
+  targetIds: string[],
   auth: AuthContext
-): Promise<PublishResult> {
+): Promise<PublishResult[]> {
   const db = await getDbInstance();
+
   try {
-    // P1-FIX: BEGIN transaction
-    await db.raw('BEGIN');
+    return await db.transaction(async (trx) => {
+      const now = new Date();
 
-    // Get draft content with org_id verification
-    const draft = await db('content')
-      .where({ id: draftId, org_id: auth.orgId })
-      .select('id', 'title', 'body', 'domain_id', 'status')
-      .first();
+      // 1. Pre-fetch all drafts in one query
+      const allDrafts = await trx('content')
+        .whereIn('id', draftIds)
+        .where({ org_id: auth.orgId })
+        .select('id', 'title', 'body', 'domain_id', 'status');
+      const draftMap = new Map(allDrafts.map(d => [d.id, d]));
 
-    if (!draft) {
-      await db.raw('ROLLBACK');
-      return { draftId, targetId, status: 'failed', error: 'Draft not found' };
-    }
+      // 2. Pre-fetch all targets in one query
+      const allTargets = await trx('integrations')
+        .whereIn('id', targetIds)
+        .where({ org_id: auth.orgId })
+        .select('id', 'type', 'config');
+      const targetSet = new Set(allTargets.map(t => t.id));
 
-    if (draft.status !== 'draft') {
-      await db.raw('ROLLBACK');
-      return { draftId, targetId, status: 'failed', error: 'Content is not in draft status' };
-    }
+      const results: PublishResult[] = [];
+      const publishRecords: Array<Record<string, unknown>> = [];
+      const updateDraftIds: string[] = [];
 
-    // Get target integration details with org_id verification
-    const target = await db('integrations')
-      .where({ id: targetId, org_id: auth.orgId })
-      .select('id', 'type', 'config')
-      .first();
+      // 3. Build batch operations
+      for (const draftId of draftIds) {
+        const draft = draftMap.get(draftId);
+        for (const targetId of targetIds) {
+          if (!draft) {
+            results.push({ draftId, targetId, status: 'failed', error: 'Draft not found' });
+            continue;
+          }
+          if (draft.status !== 'draft') {
+            results.push({ draftId, targetId, status: 'failed', error: 'Content is not in draft status' });
+            continue;
+          }
+          if (!targetSet.has(targetId)) {
+            results.push({ draftId, targetId, status: 'failed', error: 'Target not found' });
+            continue;
+          }
 
-    if (!target) {
-      await db.raw('ROLLBACK');
-      return { draftId, targetId, status: 'failed', error: 'Target not found' };
-    }
+          publishRecords.push({
+            id: crypto.randomUUID(),
+            content_id: draftId,
+            integration_id: targetId,
+            org_id: auth.orgId,
+            published_by: auth.userId,
+            status: 'published',
+            published_at: now,
+            created_at: now,
+          });
 
-    // Update content status to published
-    await db('content')
-      .where({ id: draftId, org_id: auth.orgId })
-      .update({
-        status: 'published',
-        published_at: new Date(),
-        published_by: auth.userId,
-        integration_id: targetId,
-        updated_at: new Date(),
-      });
+          if (!updateDraftIds.includes(draftId)) {
+            updateDraftIds.push(draftId);
+          }
 
-    // Create publish record
-    await db('publish_records').insert({
-      id: crypto.randomUUID(),
-      content_id: draftId,
-      integration_id: targetId,
-      org_id: auth.orgId,
-      published_by: auth.userId,
-      status: 'published',
-      published_at: new Date(),
-      created_at: new Date(),
+          results.push({ draftId, targetId, status: 'success', publishedAt: now });
+        }
+      }
+
+      // 4. Batch update content status
+      if (updateDraftIds.length > 0) {
+        await trx('content')
+          .whereIn('id', updateDraftIds)
+          .where({ org_id: auth.orgId })
+          .update({
+            status: 'published',
+            published_at: now,
+            published_by: auth.userId,
+            updated_at: now,
+          });
+      }
+
+      // 5. Batch insert publish records (chunk to avoid query size limits)
+      if (publishRecords.length > 0) {
+        const CHUNK_SIZE = 500;
+        for (let i = 0; i < publishRecords.length; i += CHUNK_SIZE) {
+          await trx('publish_records').insert(publishRecords.slice(i, i + CHUNK_SIZE));
+        }
+      }
+
+      return results;
     });
-
-    // P1-FIX: COMMIT transaction
-    await db.raw('COMMIT');
-
-    return {
-      draftId,
-      targetId,
-      status: 'success',
-      publishedAt: new Date(),
-    };
   } catch (error) {
-    // CRITICAL FIX: ROLLBACK transaction on error with proper error handling
-    try {
-      await db.raw('ROLLBACK');
-    } catch (rollbackError) {
-      const rollbackErr = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
-      
-      // Chain errors for debugging - this is a critical failure
-      const originalErr = error instanceof Error ? error : new Error(String(error));
-      logger.error('Rollback failed', rollbackErr, { 
-        originalError: originalErr.message,
-        rollbackError: rollbackErr.message 
-      });
-    }
-    
-    logger.error('Error publishing draft to target', error instanceof Error ? error : new Error(String(error)), { 
-      draftId, 
-      targetId 
+    logger.error('Batch publish failed', error instanceof Error ? error : new Error(String(error)), {
+      draftCount: draftIds.length,
+      targetCount: targetIds.length,
     });
-    return {
-      draftId,
-      targetId,
-      status: 'failed',
-      error: error instanceof Error ? error["message"] : 'Unknown error',
-    };
+    // Return all as failed since the transaction rolled back
+    const results: PublishResult[] = [];
+    for (const draftId of draftIds) {
+      for (const targetId of targetIds) {
+        results.push({
+          draftId,
+          targetId,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Transaction failed',
+        });
+      }
+    }
+    return results;
   }
 }
 
@@ -479,13 +495,7 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
         });
       }
 
-      const publishResults: PublishResult[] = [];
-      for (const draftId of drafts) {
-        for (const targetId of targets) {
-          const result = await publishContent(draftId, targetId, auth);
-          publishResults.push(result);
-        }
-      }
+      const publishResults = await batchPublishContent(drafts, targets, auth);
 
       // Record bulk publish audit
       await recordBulkPublishAudit({
