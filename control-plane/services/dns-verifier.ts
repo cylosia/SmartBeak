@@ -113,10 +113,11 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
   const isValidationError = error instanceof Error &&
     (customError.code === 'VALIDATION_ERROR' || error.message.includes('Invalid'));
   if (!isValidationError) {
-    logger["error"](
+    // L04-FIX: Don't log the token value — only log the domain
+    logger.error(
     'DNS verification failed',
     error instanceof Error ? error : new Error(String(error)),
-    { domain, token }
+    { domain }
     );
   }
   throw error;
