@@ -2,7 +2,8 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { CommonSchemas } from '../middleware/validation';
+// P2-1 FIX: Import from packages/middleware/validation instead of deprecated legacy middleware
+import { CommonSchemas } from '@packages/middleware/validation';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
 
