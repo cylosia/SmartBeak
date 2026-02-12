@@ -90,7 +90,14 @@ export class BillingService {
     if (!data) {
     return { exists: false };
     }
-    const entry: IdempotencyEntry = JSON.parse(data);
+    let entry: IdempotencyEntry;
+    try {
+      entry = JSON.parse(data);
+    } catch {
+      logger.warn('Corrupted idempotency record, deleting and allowing retry', { key });
+      await redis.del(`${IDEMPOTENCY_PREFIX}${key}`).catch(() => {});
+      return { exists: false };
+    }
     if (entry.status === 'processing') {
       const elapsed = Date.now() - (entry.startedAt ?? 0);
       if (elapsed < IDEMPOTENCY_PROCESSING_TIMEOUT_MS) {

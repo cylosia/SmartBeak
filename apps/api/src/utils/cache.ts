@@ -190,6 +190,10 @@ function sortKeysDeep(obj: unknown, seen: WeakSet<object> = new WeakSet()): unkn
 function serializeCacheValue(value: unknown): string {
   if (value === null) return '__null__';
   if (value === undefined) return '__undefined__';
+  if (value instanceof Date) {
+  // Dates serialize with a prefix to prevent collisions with plain ISO strings
+  return `__date__${value.toISOString()}`;
+  }
   if (typeof value === 'object') {
   // Sort keys for consistency
   return JSON.stringify(sortKeysDeep(value));

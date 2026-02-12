@@ -107,12 +107,17 @@ export function checkCostAllowed(estimate: number, remainingBudget: number): Cos
     };
   }
   catch (error) {
-        return {
+    logger.warn('[checkCostAllowed] Validation failed', {
+      estimate,
+      remainingBudget,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
       allowed: false,
       estimate,
       remainingBudget,
-      shortfall: estimate,
-      percentageOfBudget: 0,
+      shortfall: undefined,
+      percentageOfBudget: undefined,
     };
   }
 }

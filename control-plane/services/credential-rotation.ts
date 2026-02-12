@@ -61,7 +61,9 @@ function validateDb(db: unknown): db is CredentialRotationDb {
 
 /**
 * Get credentials that need rotation
-* @param db - Database client
+* @param db - Database client. Must be a transaction-scoped client (e.g., from
+*             withTransaction) for FOR UPDATE SKIP LOCKED to provide concurrency safety.
+*             Passing a pool directly will still work but won't prevent concurrent processing.
 * @returns Object containing org and domain credentials needing rotation
 * @throws Error if database query fails or invalid db provided
 */
@@ -91,7 +93,8 @@ export async function getCredentialsNeedingRotation(
     orgResult = await db.query<CredentialRotationItem>(
     `SELECT id, provider, rotation_due_at FROM org_integrations
     WHERE rotation_due_at IS NOT NULL
-    AND rotation_due_at < $1`,
+    AND rotation_due_at < $1
+    FOR UPDATE SKIP LOCKED`,
     [now]
     );
   } catch (orgError) {
@@ -109,7 +112,8 @@ export async function getCredentialsNeedingRotation(
     domResult = await db.query<CredentialRotationItem>(
     `SELECT id, provider, rotation_due_at FROM domain_integrations
     WHERE rotation_due_at IS NOT NULL
-    AND rotation_due_at < $1`,
+    AND rotation_due_at < $1
+    FOR UPDATE SKIP LOCKED`,
     [now]
     );
   } catch (domError) {
