@@ -11,10 +11,15 @@
 
 import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
-import { maintenance } from '@database';
+import { maintenance, setKnexInstance } from '@database';
 import { db } from '../db';
+import type { Knex } from 'knex';
 
 const logger = getLogger('db-maintenance-job');
+
+// Ensure @database utilities reuse the app's connection pool
+// rather than initializing a separate one (dual pool guard).
+setKnexInstance(db as Knex);
 
 /** Job data schema */
 export const MaintenanceJobDataSchema = z.object({

@@ -44,10 +44,18 @@ function _getConnectionString(): string {
   return connectionString;
 }
 
+// Security: Explicit SSL configuration for production environments.
+// Defaults to rejecting unauthorized certificates (MITM protection).
+// Set DB_SSL_REJECT_UNAUTHORIZED=false only for known self-signed cert scenarios.
+const sslConfig = process.env['NODE_ENV'] === 'production'
+  ? { ssl: { rejectUnauthorized: process.env['DB_SSL_REJECT_UNAUTHORIZED'] !== 'false' } }
+  : {};
+
 const config = {
   client: 'postgresql',
   connection: {
     connectionString,
+    ...sslConfig,
     // P1-FIX #17: Terminate transactions idle for >60s. The managed pool in
     // packages/database/pool sets this, but this Knex pool didn't, allowing
     // abandoned transactions to hold locks indefinitely.
@@ -240,7 +248,10 @@ async function resetAnalyticsDb(): Promise<void> {
 async function createAnalyticsDbConnection(replicaUrl: string): Promise<Knex> {
   const instance = knex({
     ...config,
-    connection: replicaUrl,
+    connection: {
+      connectionString: replicaUrl,
+      ...sslConfig,
+    },
     pool: {
       ...config.pool,
       // F18-FIX: Use min:0 in serverless (matching main DB pattern).

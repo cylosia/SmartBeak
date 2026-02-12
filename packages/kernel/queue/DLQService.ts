@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { emitCounter } from '@kernel/metrics';
 
 import { randomUUID } from 'crypto';
 
@@ -54,12 +55,19 @@ export class DLQService {
   constructor(private readonly pool: Pool) {}
 
   /**
-  * Record a failed job with full error context
+  * Record a failed job with full error context.
+  *
+  * CONTRACT: This method THROWS on database write failure. Callers MUST NOT
+  * silently catch this error, as doing so would result in permanent job loss.
+  * The error is re-thrown after logging and metric emission to ensure
+  * upstream retry logic can handle it.
+  *
   * @param jobId - Job ID
   * @param region - Region identifier
   * @param error - Error that caused the failure
   * @param jobData - Original job data
   * @param retryCount - Number of retry attempts made
+  * @throws {Error} If the database write fails
   */
   async record(
   jobId: string,
@@ -96,6 +104,7 @@ export class DLQService {
     logger.info('Job recorded to DLQ successfully', { jobId, category });
   } catch (dbError) {
     logger["error"]('Failed to record job to DLQ', dbError as Error, { jobId });
+    emitCounter('dlq_write_failure', 1, { region, error_category: category });
     throw dbError;
   }
   }

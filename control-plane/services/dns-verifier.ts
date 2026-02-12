@@ -1,4 +1,5 @@
 import { getLogger } from '@kernel/logger';
+import { getRedis } from '@kernel/redis';
 
 /**
 * DNS Verification Service
@@ -8,6 +9,11 @@ import { getLogger } from '@kernel/logger';
 */
 
 const logger = getLogger('dns-verifier');
+
+// Negative cache: store failed DNS verification results to prevent
+// attackers from hammering the verifier with failing domains.
+const DNS_NEGATIVE_CACHE_TTL_SECONDS = 300; // 5 minutes
+const DNS_CACHE_PREFIX = 'dns:neg:';
 
 // Block localhost and private IP ranges to prevent DNS rebinding attacks
 const REBINDING_PATTERNS = [
@@ -98,7 +104,34 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
     throw new Error('Invalid domain: potential security risk');
   }
 
+  // Check negative cache to prevent DNS quota exhaustion from repeated failed lookups
+  const cacheKey = `${DNS_CACHE_PREFIX}${sanitizedDomain}`;
+  try {
+    const redis = await getRedis();
+    const cached = await redis.get(cacheKey);
+    if (cached === 'miss') {
+    logger.debug('DNS verification cache hit (negative)', { domain: sanitizedDomain });
+    return false;
+    }
+  } catch (cacheError) {
+    logger.warn('DNS negative cache read failed, proceeding with live lookup', {
+    error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+    });
+  }
+
   const result = await kernelVerifyDns(sanitizedDomain, token.trim());
+
+  // Cache negative results to prevent DNS quota exhaustion
+  if (!result) {
+    try {
+    const redis = await getRedis();
+    await redis.setex(cacheKey, DNS_NEGATIVE_CACHE_TTL_SECONDS, 'miss');
+    } catch (cacheError) {
+    logger.warn('DNS negative cache write failed', {
+      error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+    });
+    }
+  }
 
   logger.info('DNS verification completed', {
     domain: sanitizedDomain,
