@@ -31,10 +31,11 @@
     "declarationMap": true,
     "sourceMap": true,
 
-    /* Library Checking - P2-FIX #18: Changed to false. Previously set to true
-       which contradicted the comment and skipped type-checking .d.ts files,
-       hiding type mismatches between packages. */
-    "skipLibCheck": true,
+    /* Library Checking - P2-FIX #18: Set to false to enable type-checking
+       of .d.ts files and catch type mismatches between packages.
+       P1-6 FIX: Previously the comment said "Changed to false" but the
+       value was still true, defeating cross-package type safety. */
+    "skipLibCheck": false,
 
     /* Output */
     "outDir": "./dist",
