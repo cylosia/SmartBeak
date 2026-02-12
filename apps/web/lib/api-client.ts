@@ -8,11 +8,12 @@
  * - Circuit breaker pattern
  */
 
-// import { getLogger } from '@kernel/logger';
+// SECURITY FIX: Restore logging so retry failures and timeouts are not silently swallowed.
+// Using console fallback for browser compatibility (getLogger uses Node.js APIs).
 const logger = {
-  debug: (..._args: unknown[]) => {},
-  warn: (..._args: unknown[]) => {},
-  error: (..._args: unknown[]) => {},
+  debug: (...args: unknown[]) => { if (typeof process !== 'undefined' && process.env['NODE_ENV'] === 'development') console.debug('[api-client]', ...args); },
+  warn: (...args: unknown[]) => console.warn('[api-client]', ...args),
+  error: (...args: unknown[]) => console.error('[api-client]', ...args),
 };
 
 

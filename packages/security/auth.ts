@@ -317,6 +317,7 @@ export function verifyAuthHeader(authHeader: string | undefined): {
 /**
 * Role hierarchy for authorization checks
 */
+// SECURITY FIX: Add 'owner' role at highest privilege level (matches DB constraint)
 // P1-FIX #12: Added 'owner' role (level 4) which exists in database memberships
 // but was missing from the hierarchy, causing owners to fail admin permission checks.
 export const roleHierarchy: Record<UserRole, number> = {
@@ -337,7 +338,8 @@ export function hasRequiredRole(userRole: UserRole, requiredRole: UserRole): boo
 // Constants and Types
 // ============================================================================
 
-const BEARER_REGEX = /^Bearer\s+.+$/i;
+// SECURITY FIX: Strict JWT format validation (was permissive /^Bearer\s+.+$/i which accepts non-JWT tokens)
+const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 export interface AuthContext {
   userId: string;
@@ -353,6 +355,7 @@ export interface UserRoleSchema {
   admin: 'admin';
 }
 
+// SECURITY FIX: Add 'owner' role which exists in DB but was missing from types
 const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 

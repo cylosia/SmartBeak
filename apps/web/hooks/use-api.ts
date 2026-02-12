@@ -97,9 +97,10 @@ export function useDomains(): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.domains,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('domains'), { 
+      // SECURITY FIX: Use fetchWithTimeout to prevent indefinite hangs on GET requests
+      const res = await fetchWithTimeout(apiUrl('domains'), {
         credentials: 'include',
-        signal, // React Query handles cancellation
+        signal,
       });
       if (!res.ok) throw new Error('Failed to fetch domains');
       return res.json();
@@ -116,9 +117,9 @@ export function useDomain(id: string): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.domain(id),
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl(`domains/${id}`), { 
+      const res = await fetchWithTimeout(apiUrl(`domains/${id}`), {
         credentials: 'include',
-        signal, // React Query handles cancellation
+        signal,
       });
       if (!res.ok) throw new Error('Failed to fetch domain');
       return res.json();
@@ -136,7 +137,7 @@ export function useThemes(): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.themes,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('themes'), { 
+      const res = await fetchWithTimeout(apiUrl('themes'), {
         credentials: 'include',
         signal,
       });
@@ -155,7 +156,7 @@ export function useTimeline(): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.timeline,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('timeline'), { 
+      const res = await fetchWithTimeout(apiUrl('timeline'), {
         credentials: 'include',
         signal,
       });
@@ -174,7 +175,7 @@ export function useDomainTimeline(domainId: string): ReturnType<typeof useQuery>
   return useQuery({
     queryKey: queryKeys.timelineDomain(domainId),
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl(`timeline/domain/${domainId}`), { 
+      const res = await fetchWithTimeout(apiUrl(`timeline/domain/${domainId}`), {
         credentials: 'include',
         signal,
       });
@@ -194,7 +195,7 @@ export function useInvoices(): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.invoices,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('billing/invoices'), { 
+      const res = await fetchWithTimeout(apiUrl('billing/invoices'), {
         credentials: 'include',
         signal,
       });
@@ -214,7 +215,7 @@ export function useLlmModels(): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.llmModels,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('llm/models'), { 
+      const res = await fetchWithTimeout(apiUrl('llm/models'), {
         credentials: 'include',
         signal,
       });
@@ -234,7 +235,7 @@ export function useLlmPreferences(): ReturnType<typeof useQuery> {
   return useQuery({
     queryKey: queryKeys.llmPreferences,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('llm/preferences'), { 
+      const res = await fetchWithTimeout(apiUrl('llm/preferences'), {
         credentials: 'include',
         signal,
       });
@@ -282,11 +283,11 @@ export function usePortfolio() {
     queryKey: ['portfolio'],
     queryFn: async ({ signal }) => {
       const [revenueRes, riskRes] = await Promise.all([
-        fetch(apiUrl('portfolio/revenue-confidence'), { 
+        fetchWithTimeout(apiUrl('portfolio/revenue-confidence'), {
           credentials: 'include',
           signal,
         }),
-        fetch(apiUrl('portfolio/dependency-risk'), { 
+        fetchWithTimeout(apiUrl('portfolio/dependency-risk'), {
           credentials: 'include',
           signal,
         }),
@@ -315,7 +316,7 @@ export function useAffiliateOffers() {
   return useQuery({
     queryKey: queryKeys.affiliates,
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl('affiliates/offers'), { 
+      const res = await fetchWithTimeout(apiUrl('affiliates/offers'), {
         credentials: 'include',
         signal,
       });
@@ -335,7 +336,7 @@ export function useDiligence(token: string) {
   return useQuery({
     queryKey: queryKeys.diligence(token),
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl(`diligence/${token}/overview`), { 
+      const res = await fetchWithTimeout(apiUrl(`diligence/${token}/overview`), {
         credentials: 'include',
         signal,
       });
@@ -355,7 +356,7 @@ export function useRoiRisk(assetId: string) {
   return useQuery({
     queryKey: queryKeys.roiRisk(assetId),
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl(`roi-risk/${assetId}`), { 
+      const res = await fetchWithTimeout(apiUrl(`roi-risk/${assetId}`), {
         credentials: 'include',
         signal,
       });
@@ -375,7 +376,7 @@ export function useAttribution(type: 'llm' | 'buyer-safe') {
   return useQuery({
     queryKey: queryKeys.attribution(type),
     queryFn: async ({ signal }) => {
-      const res = await fetch(apiUrl(`attribution/${type}`), { 
+      const res = await fetchWithTimeout(apiUrl(`attribution/${type}`), {
         credentials: 'include',
         signal,
       });

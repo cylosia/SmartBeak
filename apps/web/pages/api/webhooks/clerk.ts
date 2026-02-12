@@ -333,28 +333,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const internalUserId = userRows[0]?.id;
 
         if (internalUserId) {
+          // SECURITY FIX: Use internalUserId (DB primary key) not userId (Clerk external ID)
+          // Previous code used Clerk ID against internal FK columns, matching zero rows (GDPR violation)
+
           // 2. Delete org memberships (user removed from all orgs)
           await client.query(
             'DELETE FROM org_memberships WHERE user_id = $1',
-            [userId]
+            [internalUserId]
           );
 
           // 3. Delete user sessions
           await client.query(
             'DELETE FROM user_sessions WHERE user_id = $1',
-            [userId]
+            [internalUserId]
           );
 
           // 4. Delete refresh tokens
           await client.query(
             'DELETE FROM refresh_tokens WHERE user_id = $1',
-            [userId]
+            [internalUserId]
           );
 
           // 5. Delete API keys
           await client.query(
             'DELETE FROM api_keys WHERE user_id = $1',
-            [userId]
+            [internalUserId]
           );
 
           // 6. Anonymize audit logs (keep structure, remove PII)
@@ -364,19 +367,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                actor_name = 'Deleted User',
                actor_ip = NULL
              WHERE actor_id = $1`,
-            [userId]
+            [internalUserId]
           );
 
           // 7. Delete email subscriptions
           await client.query(
             'DELETE FROM email_subscriptions WHERE user_id = $1',
-            [userId]
+            [internalUserId]
           );
 
           // 8. Delete notification preferences
           await client.query(
             'DELETE FROM notification_preferences WHERE user_id = $1',
-            [userId]
+            [internalUserId]
           );
         }
 
