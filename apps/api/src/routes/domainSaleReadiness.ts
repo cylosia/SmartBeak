@@ -4,6 +4,7 @@ import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { computeSaleReadiness } from '../domain/saleReadiness';
+import type { JwtPayload } from 'jsonwebtoken';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainSaleReadiness');

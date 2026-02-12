@@ -35,7 +35,7 @@ export class FlagService {
     'SELECT value FROM system_flags WHERE key=$1',
     [validatedKey]
   );
-  return rows[0]?.value ?? true;
+  return rows[0]?.value ?? false;
   }
 
   async set(key: string, value: boolean): Promise<void> {

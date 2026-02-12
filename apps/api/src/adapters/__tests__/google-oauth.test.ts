@@ -14,7 +14,7 @@ describe('Google OAuth Adapter Tests', () => {
     it('should generate valid authorization URL', () => {
       const clientId = 'test-client-id';
       const redirectUri = 'https://example.com/callback';
-      const state = 'random-state-token';
+      const state = 'abcdefghijklmnopqrstuvwxyz1234567890'; // Must be 32+ chars
 
       const authUrl = getGbpAuthUrl(clientId, redirectUri, state);
 
@@ -27,41 +27,51 @@ describe('Google OAuth Adapter Tests', () => {
     });
 
     it('should include required GBP scopes', () => {
-      const authUrl = getGbpAuthUrl('client-id', 'https://example.com/callback', 'state');
-      
+      const state = 'abcdefghijklmnopqrstuvwxyz1234567890';
+      const authUrl = getGbpAuthUrl('client-id', 'https://example.com/callback', state);
+
       GBP_OAUTH_SCOPES.forEach(scope => {
         expect(authUrl).toContain(encodeURIComponent(scope));
       });
     });
 
     it('should validate clientId format', () => {
+      const state = 'abcdefghijklmnopqrstuvwxyz1234567890';
       expect(() => {
-        getGbpAuthUrl('invalid;client;id', 'https://example.com/callback', 'state');
+        getGbpAuthUrl('invalid;client;id', 'https://example.com/callback', state);
       }).toThrow('Invalid clientId');
     });
 
     it('should require HTTPS redirect URI', () => {
+      const state = 'abcdefghijklmnopqrstuvwxyz1234567890';
       expect(() => {
-        getGbpAuthUrl('valid-client-id', 'http://example.com/callback', 'state');
+        getGbpAuthUrl('valid-client-id', 'http://example.com/callback', state);
       }).toThrow('Invalid redirectUri');
     });
 
-    it('should validate state parameter', () => {
+    it('should validate state parameter - too short', () => {
       expect(() => {
-        getGbpAuthUrl('valid-client-id', 'https://example.com/callback', 'state;injection');
+        getGbpAuthUrl('valid-client-id', 'https://example.com/callback', 'tooshort');
+      }).toThrow('Invalid state');
+    });
+
+    it('should validate state parameter - invalid characters', () => {
+      expect(() => {
+        getGbpAuthUrl('valid-client-id', 'https://example.com/callback', 'abcdefghijklmnopqrstuvwxyz123456;injection');
       }).toThrow('Invalid state');
     });
 
     it('should properly URL encode parameters', () => {
       const clientId = 'test-client-123';
       const redirectUri = 'https://example.com/callback?param=value';
-      const state = 'abc123XYZ';
+      const state = 'abcdefghijklmnopqrstuvwxyz1234567890abc123XYZ';
 
       const authUrl = getGbpAuthUrl(clientId, redirectUri, state);
 
       // Should not contain raw special characters
       expect(authUrl).not.toContain(' ');
       expect(authUrl).toContain(encodeURIComponent(redirectUri));
+      expect(authUrl).toContain(`state=${state}`);
     });
   });
 

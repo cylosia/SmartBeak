@@ -9,7 +9,7 @@ interface DomainHealthProps {
 export default function DomainHealth({ domainId }: DomainHealthProps) {
   return (
     <AppShell>
-      <DomainTabs domainId={domainId} active='overview' />
+      <DomainTabs domainId={domainId} active='health' />
       <h2>Domain Health</h2>
       <ul>
         <li>Content freshness: OK</li>

@@ -420,8 +420,9 @@ export async function shutdownMonitoring(): Promise<void> {
     const engine = getAlertRules();
     engine.stop();
     logger.info('✓ Alerting stopped');
-  } catch {
-    // Not initialized
+  } catch (error) {
+    // P2-11 FIX: Log errors during shutdown instead of silently swallowing
+    logger.warn('Alerting shutdown skipped or failed', { error: error instanceof Error ? error.message : String(error) });
   }
 
   // Stop metrics
@@ -430,8 +431,8 @@ export async function shutdownMonitoring(): Promise<void> {
     const collector = getMetricsCollector();
     collector.stop();
     logger.info('✓ Metrics stopped');
-  } catch {
-    // Not initialized
+  } catch (error) {
+    logger.warn('Metrics shutdown skipped or failed', { error: error instanceof Error ? error.message : String(error) });
   }
 
   // Cleanup health checks
@@ -440,16 +441,16 @@ export async function shutdownMonitoring(): Promise<void> {
     const registry = getHealthChecks();
     registry.cleanup();
     logger.info('✓ Health checks cleaned up');
-  } catch {
-    // Not initialized
+  } catch (error) {
+    logger.warn('Health checks cleanup skipped or failed', { error: error instanceof Error ? error.message : String(error) });
   }
 
   // Shutdown telemetry
   try {
     await shutdownTelemetry();
     logger.info('✓ Telemetry shutdown');
-  } catch {
-    // Not initialized
+  } catch (error) {
+    logger.warn('Telemetry shutdown skipped or failed', { error: error instanceof Error ? error.message : String(error) });
   }
 
   logger.info('✓ All monitoring components shutdown');

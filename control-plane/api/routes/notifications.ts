@@ -100,7 +100,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     client.release();
     }
     } catch (dbError) {
-    logger.error('[notifications] Database error:', dbError);
+    logger.error('[notifications] Database error', dbError instanceof Error ? dbError : new Error(String(dbError)));
     res.status(503).send({
     error: 'Database temporarily unavailable',
     message: 'Unable to fetch notifications. Please try again later.'
@@ -115,7 +115,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     }
     });
   } catch (error) {
-    logger.error('[notifications] Unexpected error:', error);
+    logger.error('[notifications] Unexpected error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({
     error: 'Internal server error',
@@ -144,7 +144,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     const preferences = await prefs.list(ctx.userId);
     return res.send(preferences);
   } catch (error) {
-    logger.error('[notifications/preferences] Error:', error);
+    logger.error('[notifications/preferences] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({
     error: 'Failed to fetch preferences',
@@ -187,7 +187,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     const result = await prefs.set(ctx.userId, channel, enabled, frequency ?? 'immediate');
     return res.send(result);
   } catch (error) {
-    logger.error('[notifications/preferences] Update error:', error);
+    logger.error('[notifications/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({
     error: 'Failed to update preferences',

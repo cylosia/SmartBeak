@@ -1,4 +1,4 @@
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * MEDIUM FIX M2, M3: Added validation and error handling

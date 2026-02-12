@@ -1,4 +1,7 @@
 import pLimit from 'p-limit';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('keyword-dedup-cluster');
 
 /**
 * Deterministic lexical deduplication & clustering.
@@ -19,13 +22,14 @@ export interface Database {
   keyword_clusters: {
   insert: (data: { domain_id: string; label: string; method: string }) => Promise<{ id: string }>;
   };
-  keyword_cluster_members: {
+  // P0-03: Fixed table name to match migration (cluster_keywords, not keyword_cluster_members)
+  cluster_keywords: {
   insert: (data: { cluster_id: string; keyword_id: string }) => Promise<void>;
   };
 }
 
 export interface PoolClient {
-  query: (sql: string) => Promise<void>;
+  query(sql: string, params?: unknown[]): Promise<{ rows: Array<{ id: string }> }>;
   release: () => void;
 }
 
@@ -42,16 +46,24 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
 }
 
+// P1-05: Maximum keywords to load in a single batch to prevent OOM
+const MAX_KEYWORDS_PER_QUERY = 50000;
+
 /**
 * Deduplicate and cluster keywords
+* P2-09: pool is now required for transactional safety
 */
-export async function dedupAndCluster(db: Database, domainId: string, pool?: Pool): Promise<void> {
+export async function dedupAndCluster(db: Database, domainId: string, pool: Pool): Promise<void> {
   // Validate inputs
   if (!domainId || typeof domainId !== 'string') {
   throw new Error('Valid domainId is required');
   }
 
-  const result = await db.query('SELECT id, keyword FROM keywords WHERE domain_id = $1', [domainId]);
+  // P1-05: Add LIMIT to prevent unbounded memory usage on large domains
+  const result = await db.query(
+  'SELECT id, keyword FROM keywords WHERE domain_id = $1 LIMIT $2',
+  [domainId, MAX_KEYWORDS_PER_QUERY]
+  );
   const groups: Record<string, Keyword[]> = {};
 
   for (const row of result.rows) {
@@ -76,48 +88,45 @@ export async function dedupAndCluster(db: Database, domainId: string, pool?: Poo
 /**
 * Create cluster with members in a transaction
 */
-type PoolClientWithParams = PoolClient & {
-  query(sql: string, params?: unknown[]): Promise<{ rows: Array<{ id: string }> }>;
-};
-
 async function createClusterWithMembers(
   db: Database,
-  pool: Pool | undefined,
+  pool: Pool,
   domainId: string,
   clusterGroup: ClusterGroup
 ): Promise<void> {
-  if (!pool) {
-  // Fallback to non-transactional if pool not provided
-  const cluster = await db.keyword_clusters.insert({
-    domain_id: domainId,
-    label: clusterGroup.label,
-    method: 'lexical'
-  });
-  await batchInsertClusterMembers(db, cluster["id"], clusterGroup.members);
-  return;
-  }
-
-  const client = await pool.connect() as PoolClientWithParams;
+  const client = await pool.connect();
   try {
   await client.query('BEGIN');
-  await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
+  // P1-06: SET LOCAL does not support parameterized values — use literal
+  await client.query("SET LOCAL statement_timeout = '30000'");
 
+  // P0-04: 'method' column must exist in keyword_clusters — see migration fix
   const clusterResult = await client.query(
     'INSERT INTO keyword_clusters (domain_id, label, method) VALUES ($1, $2, $3) RETURNING id',
     [domainId, clusterGroup.label, 'lexical']
   );
-  const clusterId = clusterResult.rows[0]!["id"];
+  const clusterId = clusterResult.rows[0]!.id;
 
-  const batchSize = 100;
+  // P2-05: Use multi-row INSERT instead of pLimit(5) on a single connection
+  // PostgreSQL serializes queries on a single connection anyway
+  const batchSize = 500;
   for (let i = 0; i < clusterGroup.members.length; i += batchSize) {
     const batch = clusterGroup.members.slice(i, i + batchSize);
+    if (batch.length === 0) continue;
 
-    const limit = pLimit(5);
-    await Promise.all(
-    batch.map(m => limit(() => client.query(
-    'INSERT INTO keyword_cluster_members (cluster_id, keyword_id) VALUES ($1, $2)',
-    [clusterId, m["id"]]
-    )))
+    // Build multi-row VALUES clause
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+    for (let j = 0; j < batch.length; j++) {
+    const offset = j * 2;
+    placeholders.push(`($${offset + 1}, $${offset + 2})`);
+    values.push(clusterId, batch[j].id);
+    }
+
+    // P0-03: Fixed table name to cluster_keywords (matches migration)
+    await client.query(
+    `INSERT INTO cluster_keywords (cluster_id, keyword_id) VALUES ${placeholders.join(', ')}`,
+    values
     );
   }
 
@@ -127,31 +136,11 @@ async function createClusterWithMembers(
   try {
     await client.query('ROLLBACK');
   } catch (rollbackError) {
-    // Rollback error - already in error handling, cannot recover
+    // ADVERSARIAL-04: Log rollback failure instead of silently swallowing
+    logger.error('[keyword-dedup-cluster] ROLLBACK failed during error handling:', rollbackError as Error);
   }
   throw error;
   } finally {
   client.release();
-  }
-}
-
-/**
-* Batch insert cluster members
-*/
-async function batchInsertClusterMembers(
-  db: Database,
-  clusterId: string,
-  members: Keyword[],
-  batchSize = 100
-): Promise<void> {
-  const limit = pLimit(5);
-  for (let i = 0; i < members.length; i += batchSize) {
-  const batch = members.slice(i, i + batchSize);
-  await Promise.all(
-    batch.map(m => limit(() => db.keyword_cluster_members.insert({
-    cluster_id: clusterId,
-    keyword_id: m["id"]
-    })))
-  );
   }
 }

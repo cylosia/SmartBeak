@@ -57,7 +57,7 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
     // duplicate processing of financial webhooks (double charges, duplicate plan upgrades).
     // Stripe retries with exponential backoff, so throwing here returns 500 and Stripe
     // will redeliver. Processing a charge twice is worse than delaying it.
-    logger.error('Redis unavailable for deduplication - failing closed', { error, eventId });
+    logger.error('Redis unavailable for deduplication - failing closed', error instanceof Error ? error : undefined, { eventId });
     throw new Error('Deduplication service unavailable');
   }
 }
@@ -107,7 +107,7 @@ async function verifyStripeSignatureWithRetry(
         });
         await delay(backoffDelay);
       } else {
-        logger.error('Signature verification failed after all retries', { error });
+        logger.error('Signature verification failed after all retries', error instanceof Error ? error : undefined);
         return null;
       }
     }
@@ -201,7 +201,7 @@ async function processEvent(event: Stripe.Event): Promise<void> {
       // SECURITY FIX: Issue 22 - Sanitize log message
       const sanitizedOrgId = orgId.substring(0, 8) + '...';
       const sanitizedCustomerId = stripeCustomerId.substring(0, 8) + '...';
-      logger.error('Security violation: org does not match Stripe customer', {
+      logger.error('Security violation: org does not match Stripe customer', undefined, {
         orgId: sanitizedOrgId,
         customerId: sanitizedCustomerId
       });

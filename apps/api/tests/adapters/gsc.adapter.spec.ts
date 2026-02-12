@@ -15,6 +15,6 @@ jest.mock('googleapis', () => ({
 
 test('GSC adapter returns search analytics data', async () => {
   const adapter = new GscAdapter({});
-  const res = await adapter.fetchSearchAnalytics('https://example.com', {}) as { rows?: any[] };
+  const res = await adapter.fetchSearchAnalytics('https://example.com', {}) as { rows?: Array<{ clicks?: number }> };
   expect(res.rows?.[0]?.clicks).toBe(5);
 });

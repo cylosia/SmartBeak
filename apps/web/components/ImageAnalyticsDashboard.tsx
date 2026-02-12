@@ -1,6 +1,17 @@
 
 import React from 'react';
-export function ImageAnalyticsDashboard({ rows }: any) {
+
+interface ImageAnalyticsRow {
+  platform: string;
+  ctr: number | string;
+  impressions: number | string;
+}
+
+interface ImageAnalyticsDashboardProps {
+  rows: ImageAnalyticsRow[];
+}
+
+export function ImageAnalyticsDashboard({ rows }: ImageAnalyticsDashboardProps) {
   return (
   <div>
     <h2>Image Performance</h2>
@@ -13,7 +24,7 @@ export function ImageAnalyticsDashboard({ rows }: any) {
       </tr>
     </thead>
     <tbody>
-      {rows.map((r: any, i: number) => (
+      {rows.map((r: ImageAnalyticsRow, i: number) => (
       <tr key={i}>
         <td>{r.platform}</td>
         <td>{r.ctr}</td>

@@ -29,15 +29,15 @@ export interface VercelDeployFile {
  */
 export interface VercelDirectDeployPayload {
   files: VercelDeployFile[];           // Array of files to deploy
-  name?: string;                       // Deployment name
-  target?: 'production' | 'staging';   // Deployment target
-  projectId?: string;                  // Vercel project ID (required)
-  meta?: Record<string, string>;       // Metadata
-  env?: Record<string, string>;        // Environment variables
+  name?: string | undefined;                       // Deployment name
+  target?: 'production' | 'staging' | undefined;   // Deployment target
+  projectId?: string | undefined;                  // Vercel project ID (required)
+  meta?: Record<string, string> | undefined;       // Metadata
+  env?: Record<string, string> | undefined;        // Environment variables
   build?: {
-    env?: Record<string, string>;      // Build-time env vars
-  };
-  framework?: string;                  // Framework preset (e.g., "nextjs")
+    env?: Record<string, string> | undefined;      // Build-time env vars
+  } | undefined;
+  framework?: string | undefined;                  // Framework preset (e.g., "nextjs")
 }
 
 /**
@@ -307,10 +307,10 @@ export class VercelDirectUploadAdapter {
       };
 
       if (payload.env) {
-        body.env = payload.env;
+        body['env'] = payload.env;
       }
       if (payload.build?.env) {
-        body.build = { env: payload.build.env };
+        body['build'] = { env: payload.build.env };
       }
 
       const response = await withRetry(async () => {
@@ -421,7 +421,7 @@ export class VercelDirectUploadAdapter {
         files: preparedFiles,
         projectId: options.projectId,
         target: options.target || 'production',
-        name: options.name,
+        ...(options.name !== undefined ? { name: options.name } : {}),
         meta: options.meta,
         env: options.env,
         framework: options.framework || 'nextjs',

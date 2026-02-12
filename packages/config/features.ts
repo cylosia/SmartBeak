@@ -36,11 +36,11 @@ export const featureFlags = {
   /** Enable experimental features - defaults to false for security */
   enableExperimental: parseBoolEnv('ENABLE_EXPERIMENTAL', false),
 
-  /** Enable circuit breaker pattern - defaults to false for security */
-  enableCircuitBreaker: parseBoolEnv('ENABLE_CIRCUIT_BREAKER', false),
+  /** Enable circuit breaker pattern - defaults to true (protective control) */
+  enableCircuitBreaker: parseBoolEnv('ENABLE_CIRCUIT_BREAKER', true),
 
-  /** Enable rate limiting - defaults to false for security */
-  enableRateLimiting: parseBoolEnv('ENABLE_RATE_LIMITING', false),
+  /** Enable rate limiting - defaults to true (protective control) */
+  enableRateLimiting: parseBoolEnv('ENABLE_RATE_LIMITING', true),
 } as const;
 
 /**

@@ -1,6 +1,6 @@
 import { LRUCache } from './lruCache';
 
-﻿import { getLogger } from '@kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 
 /**
@@ -122,13 +122,16 @@ export interface RetryOptions {
 
 // P1-FIX: Custom error for retryable failures
 export class RetryableError extends Error {
+  public readonly retryAfterMs: number | undefined;
   constructor(
   message: string,
   public readonly status?: number,
-  public readonly code?: string
+  public readonly code?: string,
+  retryAfterMs?: number | undefined
   ) {
   super(message);
   this.name = 'RetryableError';
+  this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -145,7 +148,8 @@ function isRetryableError(error: unknown, options: RetryOptions): boolean {
   // Check for network error codes
   if (error instanceof Error) {
   const code = (error as Error & { code?: string }).code;
-  if (code && options.retryableErrorCodes!.includes(code)) {
+  const errorCodes = options.retryableErrorCodes ?? DEFAULT_RETRY_OPTIONS.retryableErrorCodes;
+  if (code && errorCodes.includes(code)) {
     return true;
   }
 
@@ -181,12 +185,27 @@ function sleep(ms: number): Promise<void> {
 
 /**
 * Generate cache key for request
-* P1-FIX: Create unique key based on URL and relevant options
+* P0-FIX: Include Authorization header to prevent cross-user cache poisoning
+* P2-FIX: Normalize body representation for stable cache keys
 */
 function generateCacheKey(url: string, options: RequestInit): string {
   const method = options.method || 'GET';
-  const body = options.body ? JSON.stringify(options.body) : '';
-  return `${method}:${url}:${body}`;
+  const body = typeof options.body === 'string' ? options.body : '';
+  // P0-FIX: Include auth header in cache key to prevent cross-user data leakage
+  const headers = options.headers;
+  let authKey = '';
+  if (headers) {
+    if (headers instanceof Headers) {
+      authKey = headers.get('authorization') || headers.get('cookie') || '';
+    } else if (Array.isArray(headers)) {
+      const authEntry = headers.find(([k]) => k.toLowerCase() === 'authorization' || k.toLowerCase() === 'cookie');
+      authKey = authEntry ? authEntry[1] : '';
+    } else {
+      const headerRecord = headers as Record<string, string>;
+      authKey = headerRecord['Authorization'] || headerRecord['authorization'] || headerRecord['Cookie'] || headerRecord['cookie'] || '';
+    }
+  }
+  return `${method}:${url}:${body}:${authKey}`;
 }
 
 /**
@@ -229,51 +248,56 @@ export async function fetchWithRetry(
   }
   }
 
-  // P1-FIX: AbortController for timeout with proper cleanup in finally block
-  const controller = new AbortController();
-  let timeoutId: NodeJS.Timeout | null = null;
-
-  if (timeout) {
-    timeoutId = setTimeout(() => controller.abort(), timeout);
-  }
-
-  // Merge abort signals if one is provided
+  // S-1 FIX: Use per-attempt AbortController so timeout on one attempt
+  // doesn't abort subsequent retries
   const originalSignal = fetchOptions.signal;
-  let abortListener: (() => void) | null = null;
-
-  if (originalSignal) {
-    abortListener = () => controller.abort();
-    originalSignal.addEventListener('abort', abortListener);
-  }
 
   let lastError: Error | undefined;
 
-  try {
-    for (let attempt = 0; attempt <= retryOptions.maxRetries; attempt++) {
+  for (let attempt = 0; attempt <= retryOptions.maxRetries; attempt++) {
+      // Check if caller has already aborted before starting a new attempt
+      if (originalSignal?.aborted) {
+        throw new Error('Request aborted by caller');
+      }
+
+      const attemptController = new AbortController();
+      let attemptTimeoutId: NodeJS.Timeout | null = null;
+
+      if (timeout) {
+        attemptTimeoutId = setTimeout(() => attemptController.abort(), timeout);
+      }
+
+      // Forward caller's abort signal to this attempt's controller
+      let abortListener: (() => void) | null = null;
+      if (originalSignal) {
+        abortListener = () => attemptController.abort();
+        originalSignal.addEventListener('abort', abortListener);
+      }
+
       try {
         const response = await fetch(url, {
           ...fetchOptions,
-          signal: controller.signal,
+          signal: attemptController.signal,
         });
 
         // Check if response status is retryable
         if (!response.ok && retryOptions.retryableStatuses.includes(response.status)) {
           const retryAfter = response.headers.get('retry-after');
-          let delayMs: number;
+          let retryAfterMs: number | undefined;
 
           if (retryAfter) {
             // Parse Retry-After header (seconds or HTTP date)
             const seconds = parseInt(retryAfter, 10);
-            delayMs = isNaN(seconds)
-              ? new Date(retryAfter).getTime() - Date.now()
+            retryAfterMs = isNaN(seconds)
+              ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
               : seconds * 1000;
-          } else {
-            delayMs = calculateDelay(attempt, retryOptions.baseDelayMs, retryOptions.maxDelayMs);
           }
 
           throw new RetryableError(
             `HTTP ${response.status}: ${response.statusText}`,
-            response.status
+            response.status,
+            undefined,
+            retryAfterMs
           );
         }
 
@@ -298,8 +322,9 @@ export async function fetchWithRetry(
           throw error;
         }
 
-        // Calculate delay with exponential backoff
-        const delayMs = calculateDelay(attempt, retryOptions.baseDelayMs, retryOptions.maxDelayMs);
+        // Use server-specified Retry-After if available, otherwise exponential backoff
+        const serverRetryAfter = lastError instanceof RetryableError ? lastError.retryAfterMs : undefined;
+        const delayMs = serverRetryAfter ?? calculateDelay(attempt, retryOptions.baseDelayMs, retryOptions.maxDelayMs);
 
         logger.warn(`Retry attempt ${attempt + 1}/${retryOptions.maxRetries} for ${url} after ${delayMs}ms: ${lastError["message"]}`);
 
@@ -308,19 +333,18 @@ export async function fetchWithRetry(
         }
 
         await sleep(delayMs);
+      } finally {
+        // S-1 FIX: Clean up per-attempt timeout and abort listener
+        if (attemptTimeoutId) {
+          clearTimeout(attemptTimeoutId);
+        }
+        if (originalSignal && abortListener) {
+          originalSignal.removeEventListener('abort', abortListener);
+        }
       }
     }
 
-    throw lastError || new Error(`Fetch failed after ${retryOptions.maxRetries} retries`);
-  } finally {
-    // P1-FIX: Always cleanup timeout and event listeners
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    if (originalSignal && abortListener) {
-      originalSignal.removeEventListener('abort', abortListener);
-    }
-  }
+  throw lastError || new Error(`Fetch failed after ${retryOptions.maxRetries} retries`);
 }
 
 /**

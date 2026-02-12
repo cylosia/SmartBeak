@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { requireAuth, validateMethod, sendError, canAccessDomain, getRateLimitIdentifier, checkRateLimit } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
-import { getLogger } from '../../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * GET /api/exports/activity.pdf
@@ -73,7 +73,7 @@ async function recordExportAudit(params: {
     ]
   );
   } catch (error) {
-  logger.error({ error }, 'Failed to record audit event');
+  logger.error('Failed to record audit event', error instanceof Error ? error : undefined);
   }
 }
 
@@ -111,7 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (domainId) {
     const hasAccess = await canAccessDomain(auth.userId, domainId, pool);
     if (!hasAccess) {
-    logger.warn({ userId: auth.userId, domainId }, 'Unauthorized access attempt to export activity');
+    logger.warn('Unauthorized access attempt to export activity', { userId: auth.userId, domainId });
     return sendError(res, 403, 'Access denied to domain');
     }
   }
@@ -205,7 +205,7 @@ Export Date: ${new Date().toISOString()}
   res.send(Buffer.from(pdfContent));
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
-  logger.error({ error }, 'Failed to export activity PDF');
+  logger.error('Failed to export activity PDF', error instanceof Error ? error : undefined);
   sendError(res, 500, 'Failed to export activity PDF');
   }
 }

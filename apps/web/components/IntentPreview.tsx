@@ -1,4 +1,10 @@
-export function IntentPreview({ intent }: { intent: any }) {
+interface IntentDetail {
+  intentType: string;
+  justification: string;
+  intentScope: unknown;
+}
+
+export function IntentPreview({ intent }: { intent: IntentDetail }) {
   return (
   <div>
     <h2>Review Intent</h2>

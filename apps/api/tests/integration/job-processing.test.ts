@@ -140,16 +140,18 @@ describe('End-to-End Job Processing Integration Tests', () => {
         return { success: true, attempts };
       });
 
-      // Simulate job execution with retry
-      const jobFn = (scheduler as any).handlers.get('retry-job');
-      
+      // P2-11 FIX: handlers.get() returns a HandlerConfig object { config, handler, schema },
+      // not the handler function directly. Calling it as a function would throw TypeError.
+      const handlerConfig = (scheduler as any).handlers.get('retry-job');
+      const jobFn = handlerConfig.handler;
+
       // First attempt fails
       await expect(jobFn({})).rejects.toThrow('Attempt 1 failed');
-      
+
       // Simulate retry by calling again
       attempts = 2;
       const result = await jobFn({});
-      
+
       expect(result.attempts).toBe(3);
       expect(result.success).toBe(true);
     });
@@ -174,9 +176,10 @@ describe('End-to-End Job Processing Integration Tests', () => {
       };
       (scheduler as any).dlqService = mockDLQ;
 
-      // Execute failing job
-      const jobFn = (scheduler as any).handlers.get('failing-job');
-      
+      // P2-11 FIX: Access .handler from HandlerConfig object
+      const handlerConfig2 = (scheduler as any).handlers.get('failing-job');
+      const jobFn = handlerConfig2.handler;
+
       try {
         await jobFn({ test: 'data' });
       } catch {
@@ -284,12 +287,12 @@ describe('End-to-End Job Processing Integration Tests', () => {
         return { childData: 'processed' };
       });
 
-      // Execute parent
-      const parentFn = (scheduler as any).handlers.get('parent-job');
+      // P2-11 FIX: Access .handler from HandlerConfig object
+      const parentFn = (scheduler as any).handlers.get('parent-job').handler;
       const parentResult = await parentFn({});
-      
+
       // Pass result to child
-      const childFn = (scheduler as any).handlers.get('child-job');
+      const childFn = (scheduler as any).handlers.get('child-job').handler;
       await childFn(parentResult);
 
       expect(results).toHaveLength(2);
@@ -327,8 +330,8 @@ describe('End-to-End Job Processing Integration Tests', () => {
         return { completed: true };
       });
 
-      // Execute job
-      const jobFn = (scheduler as any).handlers.get('long-job');
+      // P2-11 FIX: Access .handler from HandlerConfig object
+      const jobFn = (scheduler as any).handlers.get('long-job').handler;
       const jobPromise = jobFn({});
 
       // Start shutdown while job is running

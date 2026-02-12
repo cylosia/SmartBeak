@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
-import { extractAndVerifyToken } from '@security/jwt';
-import { getLogger } from '../../../packages/kernel/logger';
+import { extractAndVerifyToken, type JwtClaims } from '@security/jwt';
+import { getLogger } from '@kernel/logger';
 
 import type { Knex } from 'knex';
 

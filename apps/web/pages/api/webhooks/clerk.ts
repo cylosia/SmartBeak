@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { requireEnv } from '../../../lib/env';
 
 const logger = getLogger('ClerkWebhook');
@@ -10,7 +10,7 @@ const logger = getLogger('ClerkWebhook');
 // a standalone connection. The standalone client had no environment-based key
 // prefix, so prod and staging shared the same dedup namespace when using the
 // same Redis instance, causing cross-environment webhook dedup collisions.
-import { getRedis } from '../../../../packages/kernel/redis';
+import { getRedis } from '@kernel/redis';
 
 /**
 * Maximum allowed payload size for webhooks (10MB)

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { generateBuyerRoiSummary } from '../roi/buyerRoiSummary';
 import { getDb } from '../db';
 import { optionalAuthFastify, FastifyAuthContext } from '@security/auth';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('BuyerRoi');
 

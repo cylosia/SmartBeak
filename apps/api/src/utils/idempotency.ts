@@ -90,6 +90,8 @@ const MAX_KEY_LENGTH = 64; // SHA256 hex length
 
 const MAX_IDEMPOTENCY_RECORDS = 100000; // Max records in cache
 const DEFAULT_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// P3-4 FIX: Pre-compiled regex for hex validation (avoids creating RegExp per call)
+const HEX_PATTERN = /^[a-f0-9]+$/i;
 
 // ============================================================================
 // Hash Algorithm Utilities
@@ -213,8 +215,8 @@ export function deterministicKeyWithOptions(
 
   return {
   key: hash,
-  algorithm: 'sha256',
-  encoding: 'hex',
+  algorithm: algorithm,
+  encoding: encoding,
   };
 }
 
@@ -275,7 +277,7 @@ export function isValidIdempotencyKey(key: string, algorithm: string = 'sha256')
   if (!expectedLength) return false;
   if (key.length !== expectedLength) return false;
 
-  return new RegExp(`^[a-f0-9]+$`, 'i').test(key);
+  return HEX_PATTERN.test(key);
 }
 
 // ============================================================================

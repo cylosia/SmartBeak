@@ -62,13 +62,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     FROM organization_integrations
     WHERE org_id = $1 AND status = 'connected'
     ORDER BY provider`,
-    [auth["orgId"]]
+    [auth.orgId]
     );
     orgIntegrations = orgResult.rows;
-  } catch (dbError: any) {
-    // Table may not exist yet - log but don't fail
-    if (dbError.code !== '42P01') {
-    console.warn('[diligence/integrations] Error fetching org integrations:', dbError.message);
+  } catch (dbError: unknown) {
+    // Table may not exist yet (42P01) - log but don't fail
+    // P2-4 FIX: Re-throw non-table-missing errors instead of silently swallowing
+    const err = dbError as { code?: string; message?: string };
+    if (err.code === '42P01') {
+    // Table doesn't exist yet - expected during development
+    } else {
+    console.error('[diligence/integrations] Error fetching org integrations:', err.message);
+    throw dbError;
     }
   }
 
@@ -85,10 +90,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [domainIdStr]
     );
     domainIntegrations = domainResult.rows;
-    } catch (dbError: any) {
-    // Table may not exist yet - log but don't fail
-    if (dbError.code !== '42P01') {
-      console.warn('[diligence/integrations] Error fetching domain integrations:', dbError.message);
+    } catch (dbError: unknown) {
+    // P2-4 FIX: Re-throw non-table-missing errors instead of silently swallowing
+    const err = dbError as { code?: string; message?: string };
+    if (err.code === '42P01') {
+      // Table doesn't exist yet - expected during development
+    } else {
+      console.error('[diligence/integrations] Error fetching domain integrations:', err.message);
+      throw dbError;
     }
     }
   }
@@ -99,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? orgIntegrations.map(i => ({
       provider: i.provider,
       status: i.status,
-      connectedAt: i.connected_at.toISOString(),
+      connectedAt: i.connected_at?.toISOString() ?? null,
       }))
     : [
       // Fallback placeholder data for development/testing
@@ -110,7 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? domainIntegrations.map(i => ({
       provider: i.provider,
       status: i.status,
-      connectedAt: i.connected_at.toISOString(),
+      connectedAt: i.connected_at?.toISOString() ?? null,
       }))
     : domainId
       ? [

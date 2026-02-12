@@ -1,6 +1,6 @@
 import { stripe, validateStripeConfig } from '../../../lib/stripe';
 import { requireAuth, validateMethod } from '../../../lib/auth';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
  * POST /api/stripe/create-checkout-session

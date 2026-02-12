@@ -1,6 +1,9 @@
 import { LRUCache } from '../utils/lruCache';
 
-﻿import { EventEmitter } from 'events';
+import { EventEmitter } from 'events';
+
+import { getLogger } from '@kernel/logger';
+const logger = getLogger('job-optimizer');
 
 
 /**
@@ -60,7 +63,11 @@ export interface JobDependency {
 
 export class JobOptimizer extends EventEmitter {
   private readonly scheduler: IJobScheduler;
-  private readonly pendingJobs = new LRUCache<string, { data: unknown; timeout: NodeJS.Timeout }>({ maxSize: 10000, ttlMs: 600000 });
+  // P1-4 FIX: Use a plain Map instead of LRUCache for pendingJobs. LRUCache silently
+  // evicts entries without calling clearTimeout on the stored timeout handles, causing
+  // both timer leaks and ghost job scheduling from stale data.
+  private readonly pendingJobs = new Map<string, { data: unknown; timeout: NodeJS.Timeout }>();
+  private readonly MAX_PENDING_JOBS = 10000;
   private readonly coalescingRules = new LRUCache<string, CoalescingRule>({ maxSize: 1000, ttlMs: undefined });
   private scheduledWindows: ScheduledWindow[] = [];
   private readonly dependencies = new LRUCache<string, JobDependency>({ maxSize: 1000, ttlMs: undefined });
@@ -76,11 +83,20 @@ export class JobOptimizer extends EventEmitter {
   /**
   * Setup default coalescing rules
   */
+  // P2-12 FIX: Safe property access helper to replace unsafe `(data as X).prop` casts
+  private static safeGet(data: unknown, key: string, fallback = 'unknown'): string {
+    if (data && typeof data === 'object' && key in data) {
+      return String((data as Record<string, unknown>)[key]);
+    }
+    return fallback;
+  }
+
   private setupDefaultRules(): void {
   // Coalesce keyword fetches for same domain
+  // P2-12 FIX: Use safe property access instead of unsafe type casts
   this.registerCoalescingRule({
     jobName: 'keyword-fetch',
-    keyExtractor: (data) => `domain:${(data as { domainId: string }).domainId}`,
+    keyExtractor: (data) => `domain:${JobOptimizer.safeGet(data, 'domainId')}`,
     windowMs: 60000, // 1 minute
     mergeStrategy: 'replace',
   });
@@ -88,7 +104,7 @@ export class JobOptimizer extends EventEmitter {
   // Coalesce content idea generation for same domain
   this.registerCoalescingRule({
     jobName: 'content-idea-generation',
-    keyExtractor: (data) => { const d = data as { domainId: string; contentType: string }; return `domain:${d.domainId}:type:${d.contentType}`; },
+    keyExtractor: (data) => `domain:${JobOptimizer.safeGet(data, 'domainId')}:type:${JobOptimizer.safeGet(data, 'contentType')}`,
     windowMs: 300000, // 5 minutes
     mergeStrategy: 'combine',
   });
@@ -96,7 +112,7 @@ export class JobOptimizer extends EventEmitter {
   // Coalesce image generation requests
   this.registerCoalescingRule({
     jobName: 'image-generation',
-    keyExtractor: (data) => { const d = data as { orgId: string; style?: string }; return `org:${d.orgId}:style:${d.style || 'default'}`; },
+    keyExtractor: (data) => `org:${JobOptimizer.safeGet(data, 'orgId')}:style:${JobOptimizer.safeGet(data, 'style', 'default')}`,
     windowMs: 10000, // 10 seconds
     mergeStrategy: 'combine',
   });
@@ -104,7 +120,7 @@ export class JobOptimizer extends EventEmitter {
   // Coalesce analytics sync
   this.registerCoalescingRule({
     jobName: 'analytics-sync',
-    keyExtractor: (data) => `domain:${(data as { domainId: string }).domainId}`,
+    keyExtractor: (data) => `domain:${JobOptimizer.safeGet(data, 'domainId')}`,
     windowMs: 300000, // 5 minutes
     mergeStrategy: 'discard',
   });
@@ -193,9 +209,36 @@ export class JobOptimizer extends EventEmitter {
   data: JobData,
   windowMs: number
   ): void {
-  const timeout = setTimeout(async () => {
+  // P1-4 FIX: Clear timeout of existing entry before overwriting to prevent leak
+  const existing = this.pendingJobs.get(key);
+  if (existing) {
+    clearTimeout(existing.timeout);
+  }
+
+  // P1-4 FIX: Enforce max size with proper timeout cleanup on eviction
+  if (this.pendingJobs.size >= this.MAX_PENDING_JOBS && !this.pendingJobs.has(key)) {
+    // Evict oldest entry (first key in Map insertion order)
+    const oldestKey = this.pendingJobs.keys().next().value;
+    if (oldestKey !== undefined) {
+      const oldEntry = this.pendingJobs.get(oldestKey);
+      if (oldEntry) clearTimeout(oldEntry.timeout);
+      this.pendingJobs.delete(oldestKey);
+    }
+  }
+
+  // P1-3 FIX: Add .catch() to prevent unhandled promise rejection from crashing
+  // the process. Previously, if schedule() threw inside the async setTimeout
+  // callback, it was an unhandled rejection (process crash in Node 15+).
+  const timeout = setTimeout(() => {
     this.pendingJobs.delete(key);
-    await this.scheduler.schedule(jobName, data);
+    this.scheduler.schedule(jobName, data).catch(err => {
+      logger.error('Failed to schedule coalesced job', {
+        jobName,
+        key,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.emit('coalescingError', { jobName, key, error: err });
+    });
   }, windowMs);
 
   this.pendingJobs.set(key, { data, timeout });
@@ -267,8 +310,12 @@ export class JobOptimizer extends EventEmitter {
     delay += 60000; // Add 1 minute
   }
 
+  // P1-6 FIX: Pass computed delay to scheduleWithCoalescing. Previously the
+  // load-based delay was computed but never passed, making the entire
+  // backpressure mechanism dead code.
   await this.scheduleWithCoalescing(jobName, data, {
     priority: optimalPriority,
+    delay,
   });
   }
 
@@ -345,7 +392,7 @@ export class JobOptimizer extends EventEmitter {
   ): Promise<void> {
   // Group items by coalescing key
   const rule = this.coalescingRules.get(jobName);
-  const groups = new Map<string, any[]>();
+  const groups = new Map<string, JobData[]>();
 
   if (rule) {
     for (const item of items) {

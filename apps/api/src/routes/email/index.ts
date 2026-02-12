@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { addSecurityHeaders, whitelistFields } from './utils';
 
 const logger = getLogger('EmailService');

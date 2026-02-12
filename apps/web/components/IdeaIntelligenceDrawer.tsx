@@ -1,6 +1,18 @@
 
 import React from 'react';
-export function IdeaIntelligenceDrawer({ advisory }: any) {
+
+interface Advisory {
+  business_objective: string;
+  lifecycle_role: string;
+  serp_intelligence?: { dominant_pattern?: string };
+  ai_confidence?: { score?: number | string };
+}
+
+interface IdeaIntelligenceDrawerProps {
+  advisory: Advisory | null;
+}
+
+export function IdeaIntelligenceDrawer({ advisory }: IdeaIntelligenceDrawerProps) {
   if (!advisory) return null;
 
   return (

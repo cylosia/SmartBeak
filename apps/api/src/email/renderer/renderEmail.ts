@@ -46,7 +46,7 @@ function sanitizeUrl(url: string | undefined): string {
   if (url.startsWith('/') && !url.startsWith('//')) {
     return url;
   }
-  logger.warn('Blocked invalid URL:', url);
+  logger.warn(`Blocked invalid URL: ${url}`);
   return '#';
   }
 }

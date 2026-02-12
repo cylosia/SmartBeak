@@ -52,7 +52,7 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
   } catch (error) {
     // P0-FIX: Fail open - allow processing if Redis is down
     // Better to process twice than lose a payment
-    logger.error('Redis error checking duplication', { error, eventId });
+    logger.error('Redis error checking duplication', error instanceof Error ? error : undefined, { eventId });
     return false;
   }
 }
