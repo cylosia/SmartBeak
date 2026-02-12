@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
+import type StripeTypes from 'stripe';
 
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
@@ -38,9 +39,9 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     // Import Stripe dynamically
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(billingConfig.stripeSecretKey, {
-    apiVersion: '2024-06-20' as Stripe.LatestApiVersion
+    const StripeSDK = (await import('stripe')).default;
+    const stripe = new StripeSDK(billingConfig.stripeSecretKey, {
+    apiVersion: '2024-06-20' as StripeTypes.LatestApiVersion
     });
 
     const invoices = await stripe.invoices.list({
@@ -102,9 +103,9 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(404).send({ error: 'No billing data found' });
     }
 
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(billingConfig.stripeSecretKey, {
-    apiVersion: '2024-06-20' as Stripe.LatestApiVersion
+    const StripeSDK = (await import('stripe')).default;
+    const stripe = new StripeSDK(billingConfig.stripeSecretKey, {
+    apiVersion: '2024-06-20' as StripeTypes.LatestApiVersion
     });
 
     const invoices = await stripe.invoices.list({

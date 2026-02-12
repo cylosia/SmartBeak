@@ -371,7 +371,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
         [orgId, customerId]
       );
       if (orgRows.length === 0) {
-        logger.error('Security violation: orgId does not belong to Stripe customer', {
+        logger.error('Security violation: orgId does not belong to Stripe customer', undefined, {
           orgId: orgId.substring(0, 8) + '...',
           customerId: customerId.substring(0, 8) + '...',
         });

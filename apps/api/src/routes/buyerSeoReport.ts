@@ -120,7 +120,7 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
   ): Promise<BuyerSeoReport | ErrorResponse> => {
   const ip = req["ip"] || 'unknown';
 
-  await optionalAuthFastify(req, reply, () => {});
+  await optionalAuthFastify(req, reply);
   const auth = req.authContext;
   if (!auth) {
     return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });

@@ -266,7 +266,8 @@ export class HealthChecksRegistry extends EventEmitter {
       if (result.status === 'fulfilled') {
         return result.value;
       }
-      const [name] = enabledChecks[index];
+      const entry = enabledChecks[index];
+      const [name] = entry ?? ['unknown'];
       return {
         name,
         status: 'unhealthy' as HealthStatus,

@@ -37,7 +37,7 @@ async function loadHandler(provider: string): Promise<((req: NextApiRequest, res
   }
   } catch (error) {
   console.error(`[Webhook] Failed to load handler for ${provider}:`, error);
-  return null as unknown as (req: NextApiRequest, res: NextApiResponse) => Promise<void> | null;
+  return null;
   }
 }
 
