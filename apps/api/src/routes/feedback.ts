@@ -11,7 +11,7 @@ const logger = getLogger('FeedbackService');
 const FeedbackQuerySchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID').optional(),
   limit: z.coerce.number().min(1).max(100).optional(),
-  offset: z.coerce.number().min(0).optional()
+  offset: z.coerce.number().min(0).max(10000).optional()
 });
 async function verifyAuth(req: FastifyRequest) {
   const authHeader = req.headers.authorization;
@@ -105,6 +105,10 @@ export async function feedbackRoutes(app: FastifyInstance) {
         }
       }
 
+      // P0-5 FIX: Always scope queries to the authenticated user's organization
+      // When domain_id is absent, results must still be scoped to auth.orgId
+      const orgScope = auth.orgId;
+
       await recordAuditEvent({
         orgId: auth.orgId,
         userId: auth.userId,
@@ -118,13 +122,13 @@ export async function feedbackRoutes(app: FastifyInstance) {
         ip,
       });
       // Return empty feedback data (placeholder for future implementation)
-      return { data: [] };
+      // NOTE: When implementing, ALL queries MUST be scoped to orgScope
+      return { data: [], orgId: orgScope };
     }
     catch (error) {
       logger.error('Error processing feedback request', error as Error);
       return reply.status(500).send({
         error: 'Internal server error',
-        ...(process.env['NODE_ENV'] === 'development' && { message: (error as Error)["message"] })
       });
     }
   });

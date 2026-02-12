@@ -1,5 +1,4 @@
 import { timeoutConfig } from '@config';
-import { AbortController } from 'abort-controller';
 import fetch from 'node-fetch';
 
 /**
@@ -76,6 +75,21 @@ function isFacebookPostResponse(data: unknown): data is { id: string } {
 }
 
 /**
+ * Type guard for Facebook page info response
+ * P1-5 FIX: Separate type guard that validates both id and name fields
+ */
+function isFacebookPageInfoResponse(data: unknown): data is { id: string; name: string | undefined } {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+  const record = data as Record<string, unknown>;
+  return (
+    typeof record['id'] === 'string' &&
+    (record['name'] === undefined || typeof record['name'] === 'string')
+  );
+}
+
+/**
  * Facebook Graph API Adapter
  * @class FacebookAdapter
  */
@@ -116,10 +130,10 @@ export class FacebookAdapter {
    * @throws Error if accessToken is empty
    */
   constructor(accessToken: string) {
-    this.accessToken = accessToken;
     if (!accessToken || typeof accessToken !== 'string') {
       throw new Error('Facebook access token is required and must be a string');
     }
+    this.accessToken = accessToken;
   }
 
   /**
@@ -143,7 +157,7 @@ export class FacebookAdapter {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ message: validatedInput["message"] }),
-        signal: controller.signal as AbortSignal,
+        signal: controller.signal,
       });
       if (!res.ok) {
         const errorBody = await res.text();
@@ -203,10 +217,11 @@ export class FacebookAdapter {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
-        signal: controller.signal as AbortSignal,
+        signal: controller.signal,
       });
-      // We expect 200 or 401 (both indicate API is reachable)
-      const healthy = res.status === 200 || res.status === 401;
+      // P1-2 FIX: Only 2xx status codes indicate healthy service
+      // A 401 means the token is expired/revoked -- not healthy
+      const healthy = res.ok;
       const result: FacebookHealthStatus = {
         healthy,
         latency: Date.now() - start,
@@ -244,21 +259,19 @@ export class FacebookAdapter {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
-        signal: controller.signal as AbortSignal,
+        signal: controller.signal,
       });
       if (!res.ok) {
         throw new Error(`Failed to get page info: ${res.status}`);
       }
       const rawData = await res.json() as unknown;
-      if (!rawData || typeof rawData !== 'object' || !isFacebookPostResponse(rawData)) {
-        throw new ApiError('Invalid response format from Facebook API', 500);
+      if (!isFacebookPageInfoResponse(rawData)) {
+        throw new ApiError('Invalid page info response format from Facebook API', 500);
       }
-      const record = rawData as Record<string, unknown>;
-      const data: { id: string; name: string | undefined } = {
-        id: record['id'] as string,
-        name: record['name'] as string | undefined,
+      return {
+        id: rawData.id,
+        name: rawData.name,
       };
-      return data;
     }
     catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

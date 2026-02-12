@@ -5,7 +5,6 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '@kerne
 import { validateNonEmptyString, isFacebookErrorResponse, isFacebookPostResponse } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
-﻿import { AbortController } from 'abort-controller';
 
 
 
@@ -53,11 +52,12 @@ export class FacebookAdapter {
   try {
     const res = await withRetry(async () => {
     const response = await fetch(
-    `${this.baseUrl}/${pageId}/feed?access_token=${this.accessToken}`,
+    `${this.baseUrl}/${pageId}/feed`,
     {
     method: 'POST',
     headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${this.accessToken}`,
     },
     body: new URLSearchParams({ message }),
     signal: controller.signal,
@@ -69,10 +69,11 @@ export class FacebookAdapter {
 
     if (response.status === 429) {
     const retryAfter = response.headers.get('retry-after');
-    const error = new Error(`Facebook rate limited: ${response.status}`);
-    (error as Error & { status: number; retryAfter?: string }).status = response.status;
-    (error as Error & { status: number; retryAfter?: string | undefined }).retryAfter = retryAfter || undefined;
-    throw error;
+    const rateLimitError = Object.assign(
+        new Error(`Facebook rate limited: ${response.status}`),
+        { status: response.status, retryAfter: retryAfter || undefined }
+    );
+    throw rateLimitError;
     }
 
     throw new Error(`Facebook publish failed: ${response.status} ${response.statusText}`);
@@ -108,9 +109,12 @@ export class FacebookAdapter {
   try {
     // Check user info as health check
     const res = await fetch(
-    `${this.baseUrl}/me?access_token=${this.accessToken}`,
+    `${this.baseUrl}/me`,
     {
     method: 'GET',
+    headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+    },
     signal: controller.signal,
     }
     );
