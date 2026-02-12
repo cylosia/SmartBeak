@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FastifyInstance, FastifyRequest as FastifyRequestType, FastifyReply } from 'fastify';
 import { csrfProtection } from '../middleware/csrf';
 import { apiRateLimit } from '../middleware/rateLimiter';
+import { requireAuthFastify } from '../../../../packages/security/auth';
 import crypto from 'crypto';
 import { Pool } from 'pg';
 import { getLogger } from '../../../../packages/kernel/logger';
@@ -84,7 +85,15 @@ class IdempotencyService {
 export async function publishRoutes(app: FastifyInstance, pool: Pool) {
   const idempotencyService = new IdempotencyService(pool);
 
+  // SECURITY FIX: Add authentication - this route was previously unauthenticated
+  app.addHook('preHandler', requireAuthFastify);
+
   app.post('/publish/intents', async (req, res) => {
+    // SECURITY FIX: Verify request is authenticated (added preHandler hook above)
+    if (!req.authContext) {
+      return res.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+    }
+
     try {
       // Validate input
       let validated;
@@ -142,6 +151,11 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
   });
   // Get publish intent status
   app.get('/publish/intents/:id', async (req, res) => {
+    // SECURITY FIX: Verify request is authenticated
+    if (!req.authContext) {
+      return res.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+    }
+
     try {
       const params = req.params as { id: string };
       const { id } = params;

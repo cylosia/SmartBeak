@@ -13,15 +13,21 @@ const nextConfig = {
   reactStrictMode: true,
 
   // SECURITY FIX (Finding 16): Use remotePatterns instead of deprecated domains config
+  // F5-FIX: Use specific hostnames instead of double-glob wildcard (**) which
+  // matches arbitrary subdomain depth and could allow open redirects via DNS takeover
   images: {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**.clerk.com',
+        hostname: 'img.clerk.com',
       },
       {
         protocol: 'https',
-        hostname: '**.stripe.com',
+        hostname: 'images.clerk.dev',
+      },
+      {
+        protocol: 'https',
+        hostname: 'files.stripe.com',
       },
     ],
   },
@@ -52,11 +58,10 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
           },
-          {
-            key: 'Content-Security-Policy',
-            // P2-FIX: Removed unsafe-inline and unsafe-eval - using nonce-based policy
-            value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://*.clerk.accounts.dev https://api.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
-          },
+          // F1-FIX: CSP header REMOVED from next.config.js
+          // CSP is exclusively set in middleware.ts with per-request nonce generation.
+          // Having CSP in both locations caused the static CSP here to override
+          // the nonce-based CSP from middleware, breaking inline scripts or defeating CSP.
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), payment=(self)',

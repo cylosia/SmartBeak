@@ -241,9 +241,10 @@ async function createAnalyticsDbConnection(replicaUrl: string): Promise<Knex> {
     connection: replicaUrl,
     pool: {
       ...config.pool,
-      // Smaller pool for read-only replica
-      min: 1,
-      max: 10,
+      // F18-FIX: Use min:0 in serverless (matching main DB pattern).
+      // Previously hardcoded min:1, eagerly creating connections on cold start.
+      min: isServerless ? 0 : 1,
+      max: isServerless ? 5 : 10,
     },
   });
   // Test connection before returning

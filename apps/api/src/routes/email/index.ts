@@ -14,6 +14,9 @@ import {
   ALLOWED_LEAD_MAGNET_FIELDS,
   ALLOWED_SEQUENCE_FIELDS,
   ALLOWED_FORM_FIELDS,
+  RESPONSE_LEAD_MAGNET_FIELDS,
+  RESPONSE_SEQUENCE_FIELDS,
+  RESPONSE_FORM_FIELDS,
 } from './types';
 import { getDb } from '../../db';
 import { recordAuditEvent } from './audit';
@@ -60,7 +63,8 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const db = await getDb();
-    const result = await db('lead_magnets').insert(data).returning('*');
+    // SECURITY FIX: Only return whitelisted fields, not returning('*') which exposes all columns
+    const result = await db('lead_magnets').insert(data).returning(RESPONSE_LEAD_MAGNET_FIELDS as unknown as string[]);
 
     await recordAuditEvent({
         orgId: auth.orgId,
@@ -179,7 +183,8 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const db = await getDb();
-    const result = await db('email_sequences').insert(data).returning('*');
+    // SECURITY FIX: Only return whitelisted fields, not returning('*') which exposes all columns
+    const result = await db('email_sequences').insert(data).returning(RESPONSE_SEQUENCE_FIELDS as unknown as string[]);
 
     await recordAuditEvent({
         orgId: auth.orgId,
@@ -298,7 +303,8 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const db = await getDb();
-    const result = await db('email_optin_forms').insert(data).returning('*');
+    // SECURITY FIX: Only return whitelisted fields, not returning('*') which exposes all columns
+    const result = await db('email_optin_forms').insert(data).returning(RESPONSE_FORM_FIELDS as unknown as string[]);
 
     await recordAuditEvent({
         orgId: auth.orgId,

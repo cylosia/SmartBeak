@@ -5,7 +5,9 @@ import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
 import { securityConfig } from './config';
 import { getLogger } from '@kernel/logger';
 // import type { AuthContext, UserRole } from '@security/jwt';
-export type UserRole = 'admin' | 'editor' | 'viewer';
+// SECURITY FIX: Add 'owner' role which exists in DB (CHECK role IN ('owner','admin','editor','viewer'))
+// but was missing from TypeScript types, causing mapRole() to throw 500 for org owners
+export type UserRole = 'owner' | 'admin' | 'editor' | 'viewer';
 export interface AuthContext {
   userId: string;
   orgId: string;
@@ -148,7 +150,7 @@ const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
  * SECURITY FIX: Don't silently default to viewer role - throw error for invalid roles
  */
 function mapRole(jwtRole: unknown): UserRole {
-  const validRoles: UserRole[] = ['admin', 'editor', 'viewer'];
+  const validRoles: UserRole[] = ['owner', 'admin', 'editor', 'viewer'];
   if (typeof jwtRole === 'string' && validRoles.includes(jwtRole as UserRole)) {
     return jwtRole as UserRole;
   }
@@ -290,9 +292,10 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
   }
   try {
 
-    const jwtKey = process.env['JWT_KEY_1'];
+    // SECURITY FIX: Consolidate to JWT_SECRET (was JWT_KEY_1, causing split-brain with packages/security/auth.ts)
+    const jwtKey = process.env['JWT_SECRET'];
     if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured');
+      logger.error('JWT_SECRET not configured');
       emitAuthAudit({
         timestamp: new Date(),
         type: 'auth.failure',
@@ -302,6 +305,11 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
       });
       res.status(500).json({ error: 'Authentication service misconfigured' });
       throw new AuthError('JWT signing key not configured');
+    }
+    if (jwtKey.length < 32) {
+      logger.error('JWT_SECRET too short (must be >= 32 characters)');
+      res.status(500).json({ error: 'Authentication service misconfigured' });
+      throw new AuthError('JWT signing key too short');
     }
     // Verify JWT token locally
     let claims: jwt.JwtPayload;
@@ -427,9 +435,10 @@ export async function optionalAuth(req: NextApiRequest): Promise<AuthResult | nu
   }
   try {
 
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured');
+    // SECURITY FIX: Consolidate to JWT_SECRET (was JWT_KEY_1, causing split-brain with packages/security/auth.ts)
+    const jwtKey = process.env['JWT_SECRET'];
+    if (!jwtKey || jwtKey.length < 32) {
+      logger.error('JWT_SECRET not configured or too short');
       return null;
     }
 

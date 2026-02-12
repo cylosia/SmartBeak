@@ -91,7 +91,16 @@ export async function validateCsrfToken(
     result |= stored.charCodeAt(i) ^ providedToken.charCodeAt(i);
   }
 
-  return result === 0;
+  const isValid = result === 0;
+
+  // F27-FIX: Invalidate token after successful validation. Previously the token
+  // remained valid for the full 1-hour TTL, allowing unlimited replay attacks.
+  // CSRF tokens MUST be single-use.
+  if (isValid) {
+    await redis.del(key);
+  }
+
+  return isValid;
 }
 
 /**
@@ -124,13 +133,19 @@ export function csrfProtection(config: CsrfConfig = {}) {
     }
 
     // Skip excluded paths
-    if (mergedConfig.excludedPaths.some(excluded => path.startsWith(excluded))) {
+    // SECURITY FIX: Use exact match or path prefix with separator to prevent bypass via
+    // crafted paths like /webhookAdmin. Check for exact match OR path + '/' prefix.
+    if (mergedConfig.excludedPaths.some(excluded => path === excluded || path.startsWith(excluded + '/'))) {
       done();
       return;
     }
 
-    // Get session ID from auth context or cookie
-    const sessionId = typeof req.headers['x-session-id'] === 'string' ? req.headers['x-session-id'] : undefined;
+    // F28-FIX: Derive session ID from authenticated JWT claims, NOT from the
+    // client-controlled x-session-id header. Using a client header allows an
+    // attacker to generate a CSRF token with their own session ID and use it
+    // against a victim's authenticated request, completely bypassing CSRF protection.
+    const authUser = (req as { auth?: { userId?: string; sessionId?: string } }).auth;
+    const sessionId = authUser?.sessionId || authUser?.userId;
 
     if (!sessionId) {
       res.status(403).send({
@@ -201,8 +216,11 @@ export async function setCsrfCookie(
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const token = await generateCsrfToken(sessionId);
 
+  // SECURITY FIX: Remove HttpOnly so client JS can read the token to send in x-csrf-token header.
+  // HttpOnly prevented JS from reading the cookie, breaking the double-submit CSRF pattern entirely.
+  // SameSite=Strict + Secure still protect against cross-origin cookie submission.
   res.header('Set-Cookie',
-    `${mergedConfig.cookieName}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600`
+    `${mergedConfig.cookieName}=${token}; Secure; SameSite=Strict; Path=/; Max-Age=3600`
   );
 
   return token;

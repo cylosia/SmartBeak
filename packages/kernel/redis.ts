@@ -48,9 +48,27 @@ export async function getRedis(): Promise<Redis> {
  */
 export async function closeRedis(): Promise<void> {
   if (redis) {
-    await redis.quit();
+    try {
+      await redis.quit();
+    } catch (err) {
+      logger.error('Error closing Redis connection', err as Error);
+    }
     redis = null;
   }
 }
+
+// F14-FIX: Register Redis shutdown handler for SIGTERM/SIGINT. Without this,
+// Redis connections leak on every deploy because closeRedis() existed
+// but was never called during graceful shutdown (unlike the DB connection
+// which is properly registered via registerShutdownHandler in db.ts).
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received - closing Redis connection');
+  await closeRedis();
+});
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received - closing Redis connection');
+  await closeRedis();
+});
 
 export { Redis };

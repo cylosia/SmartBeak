@@ -57,17 +57,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return sendError(res, 400, `Invalid type. Must be one of: ${VALID_CONTENT_TYPES.join(', ')}`);
     }
 
-    // AUTHORIZATION CHECK: Check domain access with org_id verification
-    // SECURITY FIX: P1-HIGH Issue 4 - Verify org_id matches for all content access
-    const hasAccess = await canAccessDomain(auth.userId, domainId, pool);
-    if (!hasAccess) {
-      // Security audit log for unauthorized access attempt
-      console.warn(`[IDOR] User ${auth.userId} tried to create content in domain ${domainId} not belonging to their org`);
-      return sendError(res, 403, 'Access denied to domain');
-    }
-
-    // SECURITY FIX: Verify domain belongs to user's org_id explicitly
-    // P1-FIX: Combined query with org_id verification in single atomic check
+    // SECURITY FIX: Single authorization check with org_id verification.
+    // Removed redundant canAccessDomain() call which was a separate DB round trip
+    // that didn't verify org_id. This query does userId + domainId + orgId atomically.
     const { rows: domainRows } = await pool.query(
       `SELECT dr.domain_id, dr.org_id
        FROM domain_registry dr
@@ -88,11 +80,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const contentId = randomUUID();
     const now = new Date();
 
-    // Insert into content_items table with org_id verification
+    // SECURITY FIX: Removed created_by and org_id columns which don't exist in DB schema
+    // (content_items migration only has: id, domain_id, title, body, status, content_type, publish_at, archived_at, created_at, updated_at)
+    // The org_id relationship is maintained through domain_registry.org_id (domain_id -> domain_registry -> org_id)
     await pool.query(
-      `INSERT INTO content_items (id, domain_id, title, body, status, content_type, created_at, updated_at, created_by, org_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [contentId, domainId, title, '', 'draft', type, now, now, auth.userId, auth["orgId"]]
+      `INSERT INTO content_items (id, domain_id, title, body, status, content_type, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [contentId, domainId, title, '', 'draft', type, now, now]
     );
 
     // Security audit log for content creation
