@@ -1,11 +1,10 @@
 import { getLogger } from '@kernel/logger';
 import pLimit from 'p-limit';
-
-const logger = getLogger('keyword-ingestion');
-
 import { AhrefsAdapter } from '../adapters/keywords/ahrefs';
 import { GscAdapter } from '../adapters/keywords/gsc';
 import { PaaAdapter } from '../adapters/keywords/paa';
+
+const logger = getLogger('keyword-ingestion');
 
 // Adapter factory functions that create instances on demand
 const ADAPTERS = [
@@ -60,6 +59,7 @@ export interface IngestionInput {
 
 /**
 * Run keyword ingestion
+* P2-04: Adapters are processed concurrently via Promise.allSettled
 */
 export async function runKeywordIngestion(
   db: Database,
@@ -74,39 +74,57 @@ export async function runKeywordIngestion(
   ? ADAPTERS.filter(a => a.source === input.source)
   : ADAPTERS;
 
-  for (const adapterFactory of adapters) {
+  // P2-04: Process adapters concurrently instead of sequentially
+  const results = await Promise.allSettled(
+  adapters.map(adapterFactory => processAdapter(db, input, adapterFactory))
+  );
+
+  // Log any failures
+  for (let i = 0; i < results.length; i++) {
+  const result = results[i];
+  if (result.status === 'rejected') {
+    logger.error(`Adapter ${adapters[i].source} failed unexpectedly: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+  }
+  }
+}
+
+async function processAdapter(
+  db: Database,
+  input: IngestionInput,
+  adapterFactory: typeof ADAPTERS[number]
+): Promise<void> {
   const adapter = adapterFactory.create();
   const job = await db.keyword_ingestion_jobs.insert({
-    domain_id: input.domain_id,
-    source: adapter.source,
-    status: 'running'
+  domain_id: input.domain_id,
+  source: adapter.source,
+  status: 'running'
   });
 
   try {
-    const suggestions = await adapter.fetch(input.domain_name);
+  const suggestions = await adapter.fetch(input.domain_name);
 
-    await batchInsertSuggestions(
+  await batchInsertSuggestions(
     db,
     suggestions,
     input.domain_id,
     adapterFactory.source,
-    job["id"]
-    );
+    job.id
+  );
 
-    await db.keyword_ingestion_jobs.update(job["id"], {
+  await db.keyword_ingestion_jobs.update(job.id, {
     status: 'completed',
     completed_at: new Date()
-    });
+  });
   } catch (e) {
-    await db.keyword_ingestion_jobs.update(job["id"], {
+  // P2-08: Preserve stack trace in error notes for debugging
+  const errorDetail = e instanceof Error ? (e.stack ?? e.message) : String(e);
+  await db.keyword_ingestion_jobs.update(job.id, {
     status: 'failed',
     completed_at: new Date(),
-    notes: String(e)
-    });
-    const timestamp = new Date().toISOString();
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    logger["error"](`Adapter ${adapterFactory.source} failed: ${errorMessage}`);
-  }
+    notes: errorDetail
+  });
+  const errorMessage = e instanceof Error ? e.message : String(e);
+  logger.error(`Adapter ${adapterFactory.source} failed: ${errorMessage}`);
   }
 }
 
