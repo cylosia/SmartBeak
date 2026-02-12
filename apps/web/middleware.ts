@@ -3,12 +3,15 @@ import { getAuth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// import { getLogger } from '@kernel/logger';
+// F3-FIX: Restore real logging. The no-op logger silently dropped all auth
+// security events (session invalidation, redirects, auth failures).
+// Edge Runtime cannot use Node.js-only loggers, so we use console with
+// structured JSON output that Vercel's log ingestion can parse.
 const logger = {
-  debug: (..._args: unknown[]) => {},
-  info: (..._args: unknown[]) => {},
-  warn: (..._args: unknown[]) => {},
-  error: (..._args: unknown[]) => console.error(..._args),
+  debug: (msg: string, ...args: unknown[]) => console.debug(JSON.stringify({ level: 'debug', service: 'middleware', msg, ts: Date.now() })),
+  info: (msg: string, ...args: unknown[]) => console.info(JSON.stringify({ level: 'info', service: 'middleware', msg, ts: Date.now() })),
+  warn: (msg: string, ...args: unknown[]) => console.warn(JSON.stringify({ level: 'warn', service: 'middleware', msg, ts: Date.now() })),
+  error: (msg: string, ...args: unknown[]) => console.error(JSON.stringify({ level: 'error', service: 'middleware', msg, ts: Date.now() })),
 };
 
 /**
@@ -124,8 +127,11 @@ function addSecurityHeaders(response: NextResponse): void {
   // Generate a fresh nonce for each request
   const nonce = generateCspNonce();
   response.headers.set('Content-Security-Policy', buildCspHeader(nonce));
-  // Pass nonce to the page via a custom header for <script nonce={nonce}> usage
-  response.headers.set('X-CSP-Nonce', nonce);
+  // F2-FIX: Pass nonce via request header (server-side only), NOT response header.
+  // Exposing the nonce in the response (X-CSP-Nonce) leaks it to any intermediary
+  // (CDN, proxy, browser extension), defeating CSP. Request headers are only visible
+  // server-side in Next.js Server Components via headers().
+  response.headers.set('x-nonce', nonce);
 }
 
 /**

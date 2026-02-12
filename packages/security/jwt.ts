@@ -33,7 +33,9 @@ export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer']);
 export const JwtClaimsSchema = z.object({
   sub: z.string().min(1).max(256),
   role: UserRoleSchema,
-  orgId: z.string().min(1).max(256).optional(),
+  // F31-FIX: orgId is now required. It was optional in the schema but required
+  // by getAuthContext(), causing silent auth failures for tokens without orgId.
+  orgId: z.string().min(1).max(256),
   aud: z.string().optional(),
   iss: z.string().optional(),
   jti: z.string().optional(),
@@ -59,7 +61,9 @@ export interface AuthContext {
 export interface VerifyOptions {
   audience?: string | undefined;
   issuer?: string | undefined;
-  ignoreExpiration?: boolean | undefined;
+  // F29-FIX: Removed ignoreExpiration. Allowing callers to bypass expiration
+  // checks creates indefinite session validity. Token refresh must use a
+  // dedicated flow, not a bypass flag on the general verifier.
 }
 
 // ============================================================================
@@ -201,8 +205,10 @@ function getCurrentKeys(): string[] {
   return currentKeys;
 }
 
-// For backward compatibility
-const KEYS = currentKeys;
+// F30-FIX: Removed `const KEYS = currentKeys` backward-compat export.
+// It captured the array reference at module load time and was never
+// refreshed by reloadKeys(), causing key rotation failure for any
+// code that imported KEYS directly.
 
 // ============================================================================
 // Token Verification
@@ -261,7 +267,7 @@ export function verifyToken(
         issuer: options.issuer || DEFAULT_ISSUER,
         algorithms: ['HS256'],
         clockTolerance: JWT_CLOCK_TOLERANCE,
-        ignoreExpiration: options.ignoreExpiration,
+        // F29-FIX: ignoreExpiration removed - expired tokens must always be rejected
       });
 
       // Runtime validation with Zod

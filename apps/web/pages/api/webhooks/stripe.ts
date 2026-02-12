@@ -334,6 +334,12 @@ async function processEvent(event: Stripe.Event): Promise<void> {
       break;
     }
 
+    // F19-FIX: Handle customer.deleted to prevent orphaned subscription records
+    case 'customer.deleted': {
+      await handleCustomerDeleted(event.data.object as Stripe.Customer);
+      break;
+    }
+
     default:
       logger.info('Unhandled event type', { eventType: event.type });
   }
@@ -345,6 +351,30 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   const orgId = session.metadata?.["orgId"];
   if (!orgId) {
     throw new Error('Checkout session missing orgId metadata');
+  }
+
+  // F20-FIX: Verify orgId belongs to the Stripe customer before processing.
+  // Without this check, an attacker who controls checkout metadata can upgrade
+  // any arbitrary org to a paid plan. The Fastify handler had this check but
+  // this Next.js handler did not.
+  const customerId = session.customer as string;
+  if (customerId) {
+    const verifyClient = await pool.connect();
+    try {
+      const { rows: orgRows } = await verifyClient.query(
+        'SELECT id FROM organizations WHERE id = $1 AND stripe_customer_id = $2',
+        [orgId, customerId]
+      );
+      if (orgRows.length === 0) {
+        logger.error('Security violation: orgId does not belong to Stripe customer', {
+          orgId: orgId.substring(0, 8) + '...',
+          customerId: customerId.substring(0, 8) + '...',
+        });
+        throw new Error('Org verification failed: orgId does not belong to Stripe customer');
+      }
+    } finally {
+      verifyClient.release();
+    }
   }
 
   const client = await pool.connect();
@@ -401,8 +431,68 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   }
 }
 
+// F24-FIX: Implement subscription.created handler. Previously was empty (just logged),
+// meaning subscriptions created outside checkout flow (Stripe dashboard, API) had no DB record.
 async function handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
   logger.info('Subscription created', { subscriptionId: subscription["id"] });
+
+  const customerId = subscription.customer as string;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Check if subscription already exists (idempotency)
+    const { rows: existing } = await client.query(
+      'SELECT 1 FROM subscriptions WHERE stripe_subscription_id = $1',
+      [subscription.id]
+    );
+
+    if (existing.length > 0) {
+      logger.info('Subscription already exists, skipping', { subscriptionId: subscription.id });
+      await client.query('COMMIT');
+      return;
+    }
+
+    // Find org by Stripe customer ID
+    const { rows: orgRows } = await client.query(
+      'SELECT id FROM organizations WHERE stripe_customer_id = $1',
+      [customerId]
+    );
+
+    if (orgRows.length === 0) {
+      logger.warn('No organization found for Stripe customer', { customerId: customerId.substring(0, 8) + '...' });
+      await client.query('COMMIT');
+      return;
+    }
+
+    const orgId = orgRows[0].id;
+
+    await client.query(
+      `INSERT INTO subscriptions (
+        id, org_id, stripe_customer_id, stripe_subscription_id,
+        status, plan_id, current_period_start, current_period_end,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+      [
+        subscription.id,
+        orgId,
+        customerId,
+        subscription.id,
+        subscription.status,
+        subscription.items.data[0]?.price?.id,
+        new Date(subscription.current_period_start * 1000),
+        new Date(subscription.current_period_end * 1000),
+      ]
+    );
+
+    await client.query('COMMIT');
+    logger.info('Subscription record created', { orgId, subscriptionId: subscription.id });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
@@ -566,6 +656,46 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     );
 
     await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// F19-FIX: Handle customer.deleted to clean up orphaned subscription records.
+// Without this handler, deleting a Stripe customer leaves subscriptions in the DB
+// pointing to a non-existent customer, and the org retains its active status.
+async function handleCustomerDeleted(customer: Stripe.Customer): Promise<void> {
+  logger.info('Customer deleted', { customerId: customer.id.substring(0, 8) + '...' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Cancel all subscriptions for this customer
+    await client.query(
+      `UPDATE subscriptions SET
+        status = 'cancelled',
+        cancelled_at = NOW(),
+        updated_at = NOW()
+      WHERE stripe_customer_id = $1 AND status != 'cancelled'`,
+      [customer.id]
+    );
+
+    // Set org to cancelled status
+    await client.query(
+      `UPDATE organizations
+      SET subscription_status = 'cancelled',
+        stripe_customer_id = NULL,
+        updated_at = NOW()
+      WHERE stripe_customer_id = $1`,
+      [customer.id]
+    );
+
+    await client.query('COMMIT');
+    logger.info('Customer deletion cleanup completed', { customerId: customer.id.substring(0, 8) + '...' });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

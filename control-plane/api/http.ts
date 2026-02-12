@@ -162,17 +162,29 @@ const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
 // SECURITY FIX (Finding 4): In-memory fallback rate limiter for when Redis is unavailable
 // Prevents brute force attacks even during Redis outages
+// F12-FIX: Use LRU cache with max size to prevent unbounded memory growth.
+// The previous Map only cleaned up when size > 1000, and the full iteration
+// was O(n) causing latency spikes under sustained brute force attacks.
+const MAX_RATE_LIMIT_ENTRIES = 10000;
 const inMemoryRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+// F12-FIX: Periodic cleanup on interval instead of per-request check
+const CLEANUP_INTERVAL_MS = 60000; // 1 minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of inMemoryRateLimitMap) {
+    if (v.resetAt < now) inMemoryRateLimitMap.delete(k);
+  }
+}, CLEANUP_INTERVAL_MS).unref(); // unref() so it doesn't keep the process alive
 
 function inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
   const now = Date.now();
   const entry = inMemoryRateLimitMap.get(key);
 
-  // Periodic cleanup of expired entries (every 100 checks)
-  if (inMemoryRateLimitMap.size > 1000) {
-    for (const [k, v] of inMemoryRateLimitMap) {
-      if (v.resetAt < now) inMemoryRateLimitMap.delete(k);
-    }
+  // Evict oldest entry if at capacity
+  if (inMemoryRateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES && !entry) {
+    const firstKey = inMemoryRateLimitMap.keys().next().value;
+    if (firstKey) inMemoryRateLimitMap.delete(firstKey);
   }
 
   if (!entry || entry.resetAt < now) {
@@ -262,12 +274,18 @@ app.addHook('onRequest', async (req, reply) => {
   }
 });
 
-// P1-HIGH FIX: BigInt serialization helper for JSON.stringify
-function serializeBigInt(obj: unknown): string {
-  return JSON.stringify(obj, (_, v) =>
-    typeof v === 'bigint' ? v.toString() : v
-  );
-}
+// F9-FIX: Register BigInt serialization as a Fastify preSerialization hook.
+// Previously this function existed but was never registered, causing
+// TypeError crashes on any response containing BigInt values.
+app.addHook('preSerialization', async (_request, _reply, payload) => {
+  if (typeof payload === 'object' && payload !== null) {
+    const json = JSON.stringify(payload, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v
+    );
+    return JSON.parse(json);
+  }
+  return payload;
+});
 
 // P2-FIX #19: Enhanced error handler using Fastify's native statusCode property
 // instead of fragile string matching on error.message (which misclassifies errors
@@ -310,11 +328,12 @@ app.setErrorHandler((error: unknown, request, reply) => {
   code: errorCode,
   };
 
-  // Only include detailed error info in development
+  // F8-FIX: Only include sanitized error info in development.
+  // Previously serialized the full raw error object which could contain
+  // DB connection strings, internal paths, or secrets in error messages.
   if (isDevelopment) {
   response.message = err.message;
-  response.stack = (error as Error).stack;
-  response.details = error;
+  // Never include raw error objects - they may contain sensitive data
   }
 
   reply.status(statusCode).send(response);
@@ -510,8 +529,14 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
   return { stalledJobs, failedJobs, pendingJobs };
 }
 
-// Detailed health check with container status
-app.get('/health/detailed', async () => {
+// F33-FIX: Detailed health endpoints require authentication.
+// /health is public (for load balancer checks), but /health/detailed,
+// /health/repositories, /health/sequences expose internal infrastructure state
+// (DB latency, Redis mode, stalled jobs, sequence health) useful for reconnaissance.
+app.get('/health/detailed', async (request, reply) => {
+  if (!(request as { auth?: unknown }).auth) {
+    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required for detailed health checks' });
+  }
   const containerHealth = await container.getHealth();
   return {
   status: containerHealth.services["database"] ? 'healthy' : 'degraded',
@@ -520,14 +545,20 @@ app.get('/health/detailed', async () => {
   };
 });
 
-// Repository health check
-app.get('/health/repositories', async () => {
+// F33-FIX: Require auth for repository health check
+app.get('/health/repositories', async (request, reply) => {
+  if (!(request as { auth?: unknown }).auth) {
+    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
+  }
   const { getRepositoryHealth } = await import('../services/repository-factory');
   return getRepositoryHealth();
 });
 
-// P2-MEDIUM FIX: Sequence health monitoring endpoint
+// F33-FIX: Require auth for sequence health monitoring
 app.get('/health/sequences', async (request, reply) => {
+  if (!(request as { auth?: unknown }).auth) {
+    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
+  }
   const { checkSequenceHealth } = await import('@database');
   const sequenceHealth = await checkSequenceHealth();
 
