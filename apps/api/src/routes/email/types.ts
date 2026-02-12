@@ -81,8 +81,10 @@ export const FormSchema = z.object({
 * Email send request schema
 * P2-MEDIUM FIX: Added .strict() for strict validation
 */
+// P1-API FIX: Accept both single email string and array of emails
 export const EmailSendSchema = z.object({
   to: z.union([
+    EmailSchema,
     z.array(EmailSchema).min(1).max(100)
   ]),
   subject: z.string().min(1, 'Subject is required').max(200),

@@ -43,8 +43,10 @@ export function requireIntEnv(name: string): number {
   if (!value) {
     throw new Error(`Required environment variable ${name} is not set`);
   }
-  const parsed = parseInt(value, 10);
-  if (isNaN(parsed)) {
+  // P1-TYPE FIX: Use Number() + Number.isInteger() instead of parseInt()
+  // parseInt('3.14') silently returns 3, but we want to reject floats
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
     throw new Error(`Environment variable ${name} must be a valid integer`);
   }
   return parsed;

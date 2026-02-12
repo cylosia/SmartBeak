@@ -3,9 +3,6 @@ import { DomainEventEnvelope } from '../types/domain-event';
 import { CircuitBreaker } from './retry';
 import { runSafely } from './safe-handler';
 
-﻿
-
-
 /**
 * Safe handler type for event handlers
 */
