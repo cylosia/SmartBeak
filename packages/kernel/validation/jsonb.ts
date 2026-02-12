@@ -91,11 +91,17 @@ export function fitsInJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZE): bo
  * @throws Error if data exceeds maximum size
  */
 export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZE): string {
-  const result = validateJSONBSize(data, maxSize);
-  if (!result.valid) {
-    throw new Error(result["error"]);
+  // P2-8 FIX: Serialize once instead of twice. Previously, validateJSONBSize
+  // called JSON.stringify internally, and then we called JSON.stringify again
+  // here. For large payloads, this doubled CPU and memory usage.
+  const jsonString = JSON.stringify(data);
+  const size = Buffer.byteLength(jsonString, 'utf8');
+
+  if (size > maxSize) {
+    throw new Error(`JSONB size ${size} bytes exceeds maximum of ${maxSize} bytes`);
   }
-  return JSON.stringify(data);
+
+  return jsonString;
 }
 
 /**
@@ -104,10 +110,13 @@ export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZ
  * @param maxSize - Maximum allowed size in bytes
  * @returns Truncated data
  */
-export function truncateJSONB<T extends Record<string, unknown>>(
-  data: T,
+// P2-9 FIX: Return type changed from T to Record<string, unknown>. The function
+// constructs a new object that doesn't match T's shape, so the previous `as T`
+// cast was a type-lie to callers.
+export function truncateJSONB(
+  data: Record<string, unknown>,
   maxSize: number = MAX_JSONB_SIZE
-): T {
+): Record<string, unknown> {
   const jsonString = JSON.stringify(data);
   const sizeInBytes = Buffer.byteLength(jsonString, 'utf8');
 
@@ -142,5 +151,5 @@ export function truncateJSONB<T extends Record<string, unknown>>(
     }
   }
 
-  return result as T;
+  return result;
 }
