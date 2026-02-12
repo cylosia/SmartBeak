@@ -34,15 +34,6 @@ const MAX_RETRY_ATTEMPTS = 3;
 export type ErrorCategory = 'timeout' | 'network' | 'memory' | 'validation' | 'unknown';
 
 /**
-* Assert never for exhaustiveness checking
-* @param value - Value that should never exist
-* @throws Error with the unexpected value
-*/
-function _assertNever(value: never): never {
-  throw new Error(`Unexpected value: ${String(value)}`);
-}
-
-/**
 * Categorize errors for better handling
 
 * @param error - Error to categorize
@@ -162,11 +153,16 @@ export async function runSafely(
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
   try {
     // Add timeout to prevent hanging
+    let timeoutId: NodeJS.Timeout;
     const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`Handler timed out after ${HANDLER_TIMEOUT_MS}ms`)), HANDLER_TIMEOUT_MS);
+    timeoutId = setTimeout(() => reject(new Error(`Handler timed out after ${HANDLER_TIMEOUT_MS}ms`)), HANDLER_TIMEOUT_MS);
     });
 
-    await Promise.race([handler(), timeoutPromise]);
+    try {
+      await Promise.race([handler(), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId!);
+    }
 
     // Success - exit function
     return;

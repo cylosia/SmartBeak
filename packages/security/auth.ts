@@ -1,9 +1,14 @@
+import { randomBytes, timingSafeEqual } from 'crypto';
 
 import { TokenExpiredError as JwtTokenExpiredError } from 'jsonwebtoken';
+import { z } from 'zod';
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { randomBytes, timingSafeEqual } from 'crypto';
-import { z } from 'zod';
+
+import type { AuthContext } from '@types/auth';
+import { type UserRole, roleHierarchy } from '@types/auth';
+
 import {
   verifyToken as jwtVerifyToken,
   TokenExpiredError as JwtModuleTokenExpiredError,
@@ -24,8 +29,19 @@ import {
 */
 
 // ============================================================================
-// Fastify Auth Types
+// Constants
 // ============================================================================
+
+const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
+
+// ============================================================================
+// Types (re-exported from @types/auth — single source of truth)
+// ============================================================================
+
+export type { AuthContext, UserRole };
+export { roleHierarchy };
 
 /**
 * Auth context for Fastify requests
@@ -45,6 +61,75 @@ declare module 'fastify' {
     authContext?: FastifyAuthContext;
   }
 }
+
+// ============================================================================
+// Error Classes
+// ============================================================================
+
+class TokenExpiredError extends Error {
+  constructor(message = 'Token expired') {
+    super(message);
+    this.name = 'TokenExpiredError';
+  }
+}
+
+class TokenRevokedError extends Error {
+  constructor(message = 'Token revoked') {
+    super(message);
+    this.name = 'TokenRevokedError';
+  }
+}
+
+class TokenBindingError extends Error {
+  constructor(message = 'Token binding validation failed') {
+    super(message);
+    this.name = 'TokenBindingError';
+  }
+}
+
+// ============================================================================
+// Private Helpers
+// ============================================================================
+
+// Delegates to packages/security/jwt.ts verifyToken for consistent key rotation,
+// Zod validation, and clock tolerance across all auth paths.
+function verifyToken(token: string): { sub?: string; orgId?: string; role?: string; jti?: string; exp?: number } {
+  try {
+    const claims: JwtClaims = jwtVerifyToken(token);
+    return claims;
+  } catch (error) {
+    if (error instanceof JwtModuleTokenExpiredError) {
+      throw new TokenExpiredError();
+    }
+    if (error instanceof JwtModuleTokenInvalidError) {
+      throw new Error('Invalid token');
+    }
+    throw new Error('Invalid token');
+  }
+}
+
+function generateRequestId(): string {
+  return randomBytes(16).toString('hex');
+}
+
+function validateAuthHeaderConstantTime(authHeader: string): boolean {
+  const expectedPrefix = 'Bearer ';
+  if (authHeader.length < expectedPrefix.length + 10) {
+    return false;
+  }
+  try {
+    const prefix = authHeader.slice(0, expectedPrefix.length);
+    const prefixBuffer = Buffer.from(prefix);
+    const expectedBuffer = Buffer.from(expectedPrefix);
+    return timingSafeEqual(prefixBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================================
+// Next.js Auth Functions
+// ============================================================================
 
 /**
 * Verify auth for Next.js API routes (required authentication)
@@ -85,7 +170,6 @@ export async function requireAuthNextJs(
     return null;
   }
 
-  // P1-FIX: Require role claim explicitly instead of silently defaulting to viewer
   if (!claims.role) {
     throw new Error('Token missing role claim');
   }
@@ -150,7 +234,6 @@ export async function optionalAuthNextJs(
     return null;
   }
 
-  // P1-FIX: Require role claim explicitly instead of silently defaulting to viewer
   if (!claims.role) {
     throw new Error('Token missing role claim');
   }
@@ -208,10 +291,7 @@ export async function optionalAuthFastify(
       return;
     }
 
-    // P1-FIX: Don't silently default missing role to 'viewer'. The required auth
-    // path (requireAuthNextJs line 83) throws on missing role, but optional auth
-    // was silently granting viewer access. If role is missing, don't attach auth
-    // context — treat it the same as missing sub/orgId.
+    // If role is missing, don't attach auth context
     if (!claims.role) {
       return;
     }
@@ -270,7 +350,6 @@ export async function requireAuthFastify(
       return;
     }
 
-    // P1-FIX: Reject missing role instead of silently defaulting to 'viewer'
     if (!claims.role) {
       res.status(401).send({ error: 'Unauthorized. Token missing role claim.' });
       return;
@@ -326,111 +405,10 @@ export function verifyAuthHeader(authHeader: string | undefined): {
 }
 
 /**
-* Role hierarchy for authorization checks
-*/
-// SECURITY FIX: Add 'owner' role at highest privilege level (matches DB constraint)
-// P1-FIX #12: Added 'owner' role (level 4) which exists in database memberships
-// but was missing from the hierarchy, causing owners to fail admin permission checks.
-export const roleHierarchy: Record<UserRole, number> = {
-  viewer: 1,
-  editor: 2,
-  admin: 3,
-  owner: 4,
-};
-
-/**
-* Check if user has required role level
+* Check if user has required role level (single-role comparison)
 */
 export function hasRequiredRole(userRole: UserRole, requiredRole: UserRole): boolean {
   return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
-}
-
-// ============================================================================
-// Constants and Types
-// ============================================================================
-
-// P1-FIX: Strengthened regex to validate JWT format (three base64url segments)
-const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-
-export interface AuthContext {
-  userId: string;
-  orgId: string;
-  roles: string[];
-  sessionId?: string | undefined;
-  requestId?: string | undefined;
-}
-
-// P2-FIX: Removed unused UserRoleSchema interface that shadowed the Zod schema
-// via declaration merging. The interface was never used and caused confusion.
-
-// SECURITY FIX: Add 'owner' role which exists in DB but was missing from types
-const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
-export type UserRole = z.infer<typeof UserRoleSchema>;
-
-// ============================================================================
-// Token Verification Functions
-// ============================================================================
-
-class TokenExpiredError extends Error {
-  constructor(message = 'Token expired') {
-    super(message);
-    this.name = 'TokenExpiredError';
-  }
-}
-
-class TokenRevokedError extends Error {
-  constructor(message = 'Token revoked') {
-    super(message);
-    this.name = 'TokenRevokedError';
-  }
-}
-
-class TokenBindingError extends Error {
-  constructor(message = 'Token binding validation failed') {
-    super(message);
-    this.name = 'TokenBindingError';
-  }
-}
-
-// P0-FIX: Delegate to packages/security/jwt.ts verifyToken instead of maintaining a
-// separate implementation. Previously this function only tried JWT_KEY_1 || JWT_SECRET
-// (single key, no rotation support), while jwt.ts tried all keys from getCurrentKeys()
-// (JWT_KEY_1 + JWT_KEY_2 with automatic rotation). During key rotation, tokens signed
-// with JWT_KEY_2 would be verified by jwt.ts but REJECTED here. Now both code paths
-// use the same verification logic with consistent key rotation, Zod validation, and
-// clock tolerance.
-function verifyToken(token: string): { sub?: string; orgId?: string; role?: string; jti?: string; exp?: number } {
-  try {
-    const claims: JwtClaims = jwtVerifyToken(token);
-    return claims;
-  } catch (error) {
-    if (error instanceof JwtModuleTokenExpiredError) {
-      throw new TokenExpiredError();
-    }
-    if (error instanceof JwtModuleTokenInvalidError) {
-      throw new Error('Invalid token');
-    }
-    throw new Error('Invalid token');
-  }
-}
-
-function generateRequestId(): string {
-  return randomBytes(16).toString('hex');
-}
-
-function validateAuthHeaderConstantTime(authHeader: string): boolean {
-  const expectedPrefix = 'Bearer ';
-  if (authHeader.length < expectedPrefix.length + 10) {
-    return false;
-  }
-  try {
-    const prefix = authHeader.slice(0, expectedPrefix.length);
-    const prefixBuffer = Buffer.from(prefix);
-    const expectedBuffer = Buffer.from(expectedPrefix);
-    return timingSafeEqual(prefixBuffer, expectedBuffer);
-  } catch {
-    return false;
-  }
 }
 
 // ============================================================================

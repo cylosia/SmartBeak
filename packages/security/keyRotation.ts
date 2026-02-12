@@ -1,9 +1,12 @@
 import { pbkdf2Sync, randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
 import { EventEmitter } from 'events';
-import { LRUCache } from '../utils/lruCache';
-import { Pool } from 'pg';
-import { getLogger } from '@kernel/logger';
+
 import { Mutex } from 'async-mutex';
+import { Pool } from 'pg';
+
+import { getLogger } from '@kernel/logger';
+
+import { LRUCache } from '../utils/lruCache';
 
 const logger = getLogger('keyRotation');
 
@@ -154,7 +157,7 @@ export class KeyRotationManager extends EventEmitter {
       await this.processScheduledInvalidations();
     }
     catch (error) {
-      logger.error('[KeyRotation] Initial check failed:', error as Error);
+      logger.error('[KeyRotation] Initial check failed:', error instanceof Error ? error : new Error(String(error)));
       this.emit('error', { phase: 'initialCheck', error });
     }
   }
@@ -356,7 +359,7 @@ export class KeyRotationManager extends EventEmitter {
           logger.info(`[KeyRotation] Completed invalidation for ${row.provider}`);
         }
         catch (error) {
-          logger.error(`[KeyRotation] Failed to invalidate old key for ${row.provider}:`, error as Error);
+          logger.error(`[KeyRotation] Failed to invalidate old key for ${row.provider}:`, error instanceof Error ? error : new Error(String(error)));
           this.emit('error', { phase: 'invalidation', provider: row.provider, error });
           // Alert on failure - don't silently fail
           await this.alertOnInvalidationFailure(row.provider, error);
@@ -364,7 +367,7 @@ export class KeyRotationManager extends EventEmitter {
       }
     }
     catch (error) {
-      logger.error('[KeyRotation] Error processing scheduled invalidations:', error as Error);
+      logger.error('[KeyRotation] Error processing scheduled invalidations:', error instanceof Error ? error : new Error(String(error)));
       this.emit('error', { phase: 'processScheduledInvalidations', error });
     }
   }
@@ -374,7 +377,7 @@ export class KeyRotationManager extends EventEmitter {
   private async alertOnInvalidationFailure(provider: string, error: unknown): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     // In production, integrate with alerting system (PagerDuty, Slack, etc.)
-    logger.error(`[KeyRotation] ALERT: Invalidation failed for ${provider}`, error as Error);
+    logger.error(`[KeyRotation] ALERT: Invalidation failed for ${provider}`, error instanceof Error ? error : new Error(String(error)));
     this.emit('alert', {
       severity: 'critical',
       message: `Key invalidation failed for ${provider}`,

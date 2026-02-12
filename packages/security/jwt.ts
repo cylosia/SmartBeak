@@ -55,12 +55,7 @@ export const JwtClaimsSchema = z.object({
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export type JwtClaims = z.infer<typeof JwtClaimsSchema>;
 
-export interface AuthContext {
-  userId: string;
-  orgId: string;
-  roles: string[];
-  sessionId?: string | undefined;
-}
+export type { AuthContext } from '@types/auth';
 
 export interface VerifyOptions {
   audience?: string | undefined;

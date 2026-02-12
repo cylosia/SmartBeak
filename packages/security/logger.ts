@@ -483,14 +483,3 @@ export class SecureLogger {
 
 // Export singleton for common use
 export const logger = new SecureLogger();
-
-// Default export
-export default {
-  sanitizeForLogging,
-  createLogEntry,
-  sanitizeHeaders,
-  sanitizeUrl,
-  sanitizeErrorMessage,
-  SecureLogger,
-  logger,
-};

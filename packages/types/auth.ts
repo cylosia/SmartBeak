@@ -12,8 +12,8 @@ export interface AuthContext {
   userId: string;
   orgId: string;
   roles: string[];
-  sessionId?: string;
-  requestId?: string;
+  sessionId?: string | undefined;
+  requestId?: string | undefined;
 }
 
 /**

@@ -68,7 +68,7 @@ export {
   optionalAuthFastify,
   requireAuthFastify,
   type FastifyAuthContext,
-  type UserRoleSchema as LegacyUserRoleSchema,
+  RoleSchema,
 } from './auth';
 
 // Input validation

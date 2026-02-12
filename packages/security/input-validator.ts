@@ -107,7 +107,6 @@ export function sanitizeHtmlTags(input: string): string {
   const result: string[] = [];
   let inTag = false;
   let inComment = false;
-  let _commentBuffer = '';
 
   for (let i = 0; i < input.length; i++) {
     const char = input[i];
@@ -118,17 +117,14 @@ export function sanitizeHtmlTags(input: string): string {
     if (!inTag && !inComment && char === '<' && nextChar === '!' &&
         input[i + 2] === '-' && input[i + 3] === '-') {
       inComment = true;
-      _commentBuffer = '<!--';
       i += 3;
       continue;
     }
 
     // Check for comment end -->
     if (inComment) {
-      _commentBuffer += char;
       if (char === '>' && prevChar === '-' && input[i - 2] === '-') {
         inComment = false;
-        _commentBuffer = '';
       }
       continue;
     }
@@ -563,9 +559,3 @@ export const ValidationSchemas = {
     }),
 };
 
-// ============================================================================
-// Export all utilities
-// ============================================================================
-
-export default {
-};

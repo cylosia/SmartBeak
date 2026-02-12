@@ -534,7 +534,3 @@ export function normalizeIp(ip: string): string | null {
     return null;
   }
 }
-
-// Default export
-export default {
-};

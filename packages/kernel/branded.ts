@@ -151,134 +151,32 @@ function isValidUuid(value: string): boolean {
 }
 
 /**
- * Factory function for OrgId with runtime validation
+ * Generic factory for branded UUID types.
+ * All branded ID factories share identical validation logic;
+ * only the type parameter and error message differ.
  */
-export function createOrgId(value: string): OrgId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('OrgId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`OrgId must be a valid UUID, got: ${value}`);
-  }
-  return value as OrgId;
+function createBrandedUuid<B>(typeName: string) {
+  return (value: string): Brand<string, B> => {
+    if (!value || typeof value !== 'string') {
+      throw new TypeError(`${typeName} must be a non-empty string`);
+    }
+    if (!isValidUuid(value)) {
+      throw new TypeError(`${typeName} must be a valid UUID, got: ${value}`);
+    }
+    return value as Brand<string, B>;
+  };
 }
 
-/**
- * Factory function for UserId with runtime validation
- */
-export function createUserId(value: string): UserId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('UserId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`UserId must be a valid UUID, got: ${value}`);
-  }
-  return value as UserId;
-}
-
-/**
- * Factory function for DomainId with runtime validation
- */
-export function createDomainId(value: string): DomainId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('DomainId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`DomainId must be a valid UUID, got: ${value}`);
-  }
-  return value as DomainId;
-}
-
-/**
- * Factory function for ContentId with runtime validation
- */
-export function createContentId(value: string): ContentId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('ContentId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`ContentId must be a valid UUID, got: ${value}`);
-  }
-  return value as ContentId;
-}
-
-/**
- * Factory function for EmailSubscriberId with runtime validation
- */
-export function createEmailSubscriberId(value: string): EmailSubscriberId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('EmailSubscriberId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`EmailSubscriberId must be a valid UUID, got: ${value}`);
-  }
-  return value as EmailSubscriberId;
-}
-
-/**
- * Factory function for JobId with runtime validation
- */
-export function createJobId(value: string): JobId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('JobId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`JobId must be a valid UUID, got: ${value}`);
-  }
-  return value as JobId;
-}
-
-/**
- * Factory function for PaymentId with runtime validation
- */
-export function createPaymentId(value: string): PaymentId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('PaymentId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`PaymentId must be a valid UUID, got: ${value}`);
-  }
-  return value as PaymentId;
-}
-
-/**
- * Factory function for SubscriptionId with runtime validation
- */
-export function createSubscriptionId(value: string): SubscriptionId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('SubscriptionId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`SubscriptionId must be a valid UUID, got: ${value}`);
-  }
-  return value as SubscriptionId;
-}
-
-/**
- * Factory function for MediaAssetId with runtime validation
- */
-export function createMediaAssetId(value: string): MediaAssetId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('MediaAssetId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`MediaAssetId must be a valid UUID, got: ${value}`);
-  }
-  return value as MediaAssetId;
-}
-
-/**
- * Factory function for AuditEventId with runtime validation
- */
-export function createAuditEventId(value: string): AuditEventId {
-  if (!value || typeof value !== 'string') {
-    throw new TypeError('AuditEventId must be a non-empty string');
-  }
-  if (!isValidUuid(value)) {
-    throw new TypeError(`AuditEventId must be a valid UUID, got: ${value}`);
-  }
-  return value as AuditEventId;
-}
+export const createOrgId = createBrandedUuid<'OrgId'>('OrgId');
+export const createUserId = createBrandedUuid<'UserId'>('UserId');
+export const createDomainId = createBrandedUuid<'DomainId'>('DomainId');
+export const createContentId = createBrandedUuid<'ContentId'>('ContentId');
+export const createEmailSubscriberId = createBrandedUuid<'EmailSubscriberId'>('EmailSubscriberId');
+export const createJobId = createBrandedUuid<'JobId'>('JobId');
+export const createPaymentId = createBrandedUuid<'PaymentId'>('PaymentId');
+export const createSubscriptionId = createBrandedUuid<'SubscriptionId'>('SubscriptionId');
+export const createMediaAssetId = createBrandedUuid<'MediaAssetId'>('MediaAssetId');
+export const createAuditEventId = createBrandedUuid<'AuditEventId'>('AuditEventId');
 
 /**
  * Unsafe cast for cases where validation is already done
@@ -300,22 +198,14 @@ export function isValidId(value: unknown): value is string {
 }
 
 /**
- * Type guard for OrgId
+ * Generic type guard for branded UUID types.
+ * Note: At runtime, all branded UUID guards perform the same check
+ * (typeof + UUID format). The type narrowing is compile-time only.
  */
-export function isOrgId(value: unknown): value is OrgId {
+function isBrandedUuid<B>(value: unknown): value is Brand<string, B> {
   return typeof value === 'string' && isValidUuid(value);
 }
 
-/**
- * Type guard for UserId
- */
-export function isUserId(value: unknown): value is UserId {
-  return typeof value === 'string' && isValidUuid(value);
-}
-
-/**
- * Type guard for DomainId
- */
-export function isDomainId(value: unknown): value is DomainId {
-  return typeof value === 'string' && isValidUuid(value);
-}
+export function isOrgId(value: unknown): value is OrgId { return isBrandedUuid<'OrgId'>(value); }
+export function isUserId(value: unknown): value is UserId { return isBrandedUuid<'UserId'>(value); }
+export function isDomainId(value: unknown): value is DomainId { return isBrandedUuid<'DomainId'>(value); }

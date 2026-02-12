@@ -1,10 +1,9 @@
+import crypto from 'crypto';
 import { EventEmitter } from 'events';
 
 import { getLogger, getRequestContext } from '@kernel/logger';
 
 import { LRUCache } from '../utils/lruCache';
-
-import crypto from 'crypto';
 
 
 /**
@@ -37,8 +36,7 @@ export interface SecurityAlert {
   userId?: string;
   orgId?: string;
   message: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  details: Record<string, any>;
+  details: Record<string, unknown>;
 }
 
 export type SecurityAlertType =
@@ -61,8 +59,8 @@ export class SessionManager extends EventEmitter {
   private readonly maxConcurrentSessions: number;
 
   constructor(maxConcurrentSessions: number = 5) {
-  super();
-  this.maxConcurrentSessions = maxConcurrentSessions;
+    super();
+    this.maxConcurrentSessions = maxConcurrentSessions;
   }
 
   /**
@@ -70,76 +68,76 @@ export class SessionManager extends EventEmitter {
   * SECURITY FIX: Enforce concurrent session limit
   */
   registerSession(
-  userId: string,
-  sessionId: string,
-  orgId: string,
-  deviceInfo?: DeviceInfo
+    userId: string,
+    sessionId: string,
+    orgId: string,
+    deviceInfo?: DeviceInfo
   ): boolean {
-  const userSessionIds = this.userSessions.get(userId) || new Set();
+    const userSessionIds = this.userSessions.get(userId) || new Set();
 
-  // Check if user has reached session limit
-  if (userSessionIds.size >= this.maxConcurrentSessions) {
-    this.emit('sessionLimitExceeded', {
-    currentSessions: userSessionIds.size,
-    maxSessions: this.maxConcurrentSessions,
-    });
-    return false;
-  }
+    // Check if user has reached session limit
+    if (userSessionIds.size >= this.maxConcurrentSessions) {
+      this.emit('sessionLimitExceeded', {
+        currentSessions: userSessionIds.size,
+        maxSessions: this.maxConcurrentSessions,
+      });
+      return false;
+    }
 
-  const session: SessionRecord = {
-    userId,
-    sessionId,
-    orgId,
-    createdAt: Date.now(),
-    lastActivity: Date.now(),
-    ...(deviceInfo && { deviceInfo })
-  };
+    const session: SessionRecord = {
+      userId,
+      sessionId,
+      orgId,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+      ...(deviceInfo && { deviceInfo })
+    };
 
-  this.sessions.set(sessionId, session);
-  userSessionIds.add(sessionId);
-  this.userSessions.set(userId, userSessionIds);
+    this.sessions.set(sessionId, session);
+    userSessionIds.add(sessionId);
+    this.userSessions.set(userId, userSessionIds);
 
-  this.emit('sessionCreated', { userId, sessionId, orgId });
-  return true;
+    this.emit('sessionCreated', { userId, sessionId, orgId });
+    return true;
   }
 
   /**
   * Update session activity
   */
   updateActivity(sessionId: string): void {
-  const session = this.sessions.get(sessionId);
-  if (session) {
-    session.lastActivity = Date.now();
-  }
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.lastActivity = Date.now();
+    }
   }
 
   /**
   * Terminate a session
   */
   terminateSession(sessionId: string): void {
-  const session = this.sessions.get(sessionId);
-  if (session) {
-    this.sessions.delete(sessionId);
-    const userSessions = this.userSessions.get(session["userId"]);
-    if (userSessions) {
-    userSessions.delete(sessionId);
-    if (userSessions.size === 0) {
-    this.userSessions.delete(session["userId"]);
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      this.sessions.delete(sessionId);
+      const userSessions = this.userSessions.get(session["userId"]);
+      if (userSessions) {
+        userSessions.delete(sessionId);
+        if (userSessions.size === 0) {
+          this.userSessions.delete(session["userId"]);
+        }
+      }
+      this.emit('sessionTerminated', { sessionId, userId: session["userId"] });
     }
-    }
-    this.emit('sessionTerminated', { sessionId, userId: session["userId"] });
-  }
   }
 
   /**
   * Get active sessions for a user
   */
   getUserSessions(userId: string): SessionRecord[] {
-  const sessionIds = this.userSessions.get(userId);
-  if (!sessionIds) return [];
-  return [...sessionIds]
-    .map(id => this.sessions.get(id))
-    .filter((s): s is SessionRecord => s !== undefined);
+    const sessionIds = this.userSessions.get(userId);
+    if (!sessionIds) return [];
+    return [...sessionIds]
+      .map(id => this.sessions.get(id))
+      .filter((s): s is SessionRecord => s !== undefined);
   }
 
   /**
@@ -148,19 +146,19 @@ export class SessionManager extends EventEmitter {
 
   */
   cleanupExpiredSessions(maxAgeMs: number = 24 * 60 * 60 * 1000): number {
-  const now = Date.now();
-  let cleaned = 0;
+    const now = Date.now();
+    let cleaned = 0;
 
-  // LRUCache handles TTL automatically, but we also check lastActivity for session-specific logic
-  for (const sessionId of this.sessions.keys()) {
-    const session = this.sessions.get(sessionId);
-    if (session && now - session.lastActivity > maxAgeMs) {
-    this.terminateSession(sessionId);
-    cleaned++;
+    // LRUCache handles TTL automatically, but we also check lastActivity for session-specific logic
+    for (const sessionId of this.sessions.keys()) {
+      const session = this.sessions.get(sessionId);
+      if (session && now - session.lastActivity > maxAgeMs) {
+        this.terminateSession(sessionId);
+        cleaned++;
+      }
     }
-  }
 
-  return cleaned;
+    return cleaned;
   }
 }
 
@@ -178,7 +176,7 @@ export class SecurityAlertManager extends EventEmitter {
   * Register an alert handler
   */
   onAlert(handler: (alert: SecurityAlert) => void | Promise<void>): void {
-  this.alertHandlers.push(handler);
+    this.alertHandlers.push(handler);
   }
 
   /**
@@ -186,125 +184,124 @@ export class SecurityAlertManager extends EventEmitter {
   * SECURITY FIX: Real-time security alerting
   */
   async triggerAlert(
-  severity: SecurityAlert['severity'],
-  type: SecurityAlertType,
-  message: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  details: Record<string, any> = {},
-  userId?: string,
-  orgId?: string
+    severity: SecurityAlert['severity'],
+    type: SecurityAlertType,
+    message: string,
+    details: Record<string, unknown> = {},
+    userId?: string,
+    orgId?: string
   ): Promise<void> {
-  const alert: SecurityAlert = {
-    id: generateAlertId(),
-    timestamp: new Date(),
-    severity,
-    type,
-    message,
-    details,
-    ...(userId && { userId }),
-    ...(orgId && { orgId })
-  };
+    const alert: SecurityAlert = {
+      id: generateAlertId(),
+      timestamp: new Date(),
+      severity,
+      type,
+      message,
+      details,
+      ...(userId && { userId }),
+      ...(orgId && { orgId })
+    };
 
-  // Store alert (with limit)
-  this.alerts.push(alert);
-  if (this.alerts.length > this.maxAlerts) {
-    this.alerts.shift(); // Remove oldest
-  }
-
-  const ctx = getRequestContext();
-  this.logger.warn('Security alert triggered', {
-    alertId: alert.id,
-    correlationId: ctx?.requestId,
-  });
-
-  // Emit for real-time monitoring
-  this.emit('alert', alert);
-
-  // Notify all registered handlers
-  for (const handler of this.alertHandlers) {
-    try {
-    await handler(alert);
-    } catch (error) {
-    this.logger["error"](
-    'Security alert handler error',
-    error instanceof Error ? error : undefined,
-    { alertId: alert.id }
-    );
+    // Store alert (with limit)
+    this.alerts.push(alert);
+    if (this.alerts.length > this.maxAlerts) {
+      this.alerts.shift(); // Remove oldest
     }
-  }
+
+    const ctx = getRequestContext();
+    this.logger.warn('Security alert triggered', {
+      alertId: alert.id,
+      correlationId: ctx?.requestId,
+    });
+
+    // Emit for real-time monitoring
+    this.emit('alert', alert);
+
+    // Notify all registered handlers
+    for (const handler of this.alertHandlers) {
+      try {
+        await handler(alert);
+      } catch (error) {
+        this.logger["error"](
+          'Security alert handler error',
+          error instanceof Error ? error : undefined,
+          { alertId: alert.id }
+        );
+      }
+    }
   }
 
   /**
   * Get recent alerts
   */
   getAlerts(
-  options: {
-    severity?: SecurityAlert['severity'];
-    type?: SecurityAlertType;
-    userId?: string;
-    since?: Date;
-    limit?: number;
-  } = {}
+    options: {
+      severity?: SecurityAlert['severity'];
+      type?: SecurityAlertType;
+      userId?: string;
+      since?: Date;
+      limit?: number;
+    } = {}
   ): SecurityAlert[] {
-  let filtered = this.alerts;
+    let filtered = this.alerts;
 
-  if (options.severity) {
-    filtered = filtered.filter(a => a.severity === options.severity);
-  }
-  if (options.type) {
-    filtered = filtered.filter(a => a.type === options.type);
-  }
-  if (options["userId"]) {
-    filtered = filtered.filter(a => a["userId"] === options["userId"]);
-  }
-  if (options.since) {
-    filtered = filtered.filter(a => a.timestamp >= options.since!);
-  }
+    if (options.severity) {
+      filtered = filtered.filter(a => a.severity === options.severity);
+    }
+    if (options.type) {
+      filtered = filtered.filter(a => a.type === options.type);
+    }
+    if (options["userId"]) {
+      filtered = filtered.filter(a => a["userId"] === options["userId"]);
+    }
+    if (options.since) {
+      filtered = filtered.filter(a => a.timestamp >= options.since!);
+    }
 
-  const limit = options.limit || 100;
-  return filtered.slice(-limit);
+    const limit = options.limit || 100;
+    return filtered.slice(-limit);
   }
 
   /**
   * Check for suspicious patterns
   */
-  checkSuspiciousActivity(
-  userId: string,
-  event: { type: string; ip: string; userAgent: string }
-  ): void {
-  const userAlerts = this.alerts.filter(
-    a => a["userId"] === userId && a.timestamp > new Date(Date.now() - 3600000) // Last hour
-  );
-
-  // Check for multiple failed attempts
-  const failedAttempts = userAlerts.filter(
-    a => a.type === 'multiple_failed_attempts'
-  ).length;
-
-  if (failedAttempts >= 5) {
-    this.triggerAlert(
-    'high',
-    'multiple_failed_attempts',
-    `User ${userId} has ${failedAttempts} failed attempts in the last hour`,
-    { failedAttempts, recentEvents: userAlerts },
+  async checkSuspiciousActivity(
+    userId: string,
+    event: { type: string; ip: string; userAgent: string }
+  ): Promise<void> {
+    const userAlerts = this.alerts.filter(
+      a => a["userId"] === userId && a.timestamp > new Date(Date.now() - 3600000) // Last hour
     );
-  }
 
-  // Check for unusual IP
-  const knownIPs = new Set(
-    this.alerts
-    .filter(a => a["userId"] === userId && a.details?.["ip"])
-    .map(a => a.details["ip"])
-  );
+    // Check for multiple failed attempts
+    const failedAttempts = userAlerts.filter(
+      a => a.type === 'multiple_failed_attempts'
+    ).length;
 
-  if (knownIPs.size > 0 && !knownIPs.has(event["ip"])) {
-    this.triggerAlert(
-    'medium',
-    'suspicious_login',
-    `Login from new IP address: ${event["ip"]}`,
-    { newIp: event["ip"], knownIps: [...knownIPs] },
+    if (failedAttempts >= 5) {
+      await this.triggerAlert(
+        'high',
+        'multiple_failed_attempts',
+        `User ${userId} has ${failedAttempts} failed attempts in the last hour`,
+        { failedAttempts, recentEvents: userAlerts },
+      );
+    }
+
+    // Check for unusual IP
+    const knownIPs = new Set(
+      this.alerts
+        .filter(a => a["userId"] === userId && a.details?.["ip"])
+        .map(a => a.details["ip"])
     );
-  }
+
+    if (knownIPs.size > 0 && !knownIPs.has(event.ip)) {
+      await this.triggerAlert(
+        'medium',
+        'suspicious_login',
+        `Login from new IP address: ${event.ip}`,
+        { newIp: event.ip, knownIps: [...knownIPs] },
+      );
+    }
   }
 }
 
