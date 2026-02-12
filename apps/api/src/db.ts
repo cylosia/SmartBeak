@@ -16,10 +16,20 @@ import { emitCounter } from '@kernel/metrics';
  */
 // Note: In production, these imports should use the package name: @kernel/logger
 const logger = getLogger('database');
-
-// SECURITY FIX (Finding 18): Move env validation to lazy init to prevent import-time crashes
-// Previously: module-level throw on missing CONTROL_PLANE_DB broke test imports and transitive deps
-const isServerless = process.env['VERCEL'] || process.env['AWS_LAMBDA_FUNCTION_NAME'];
+// Validate database URL
+const connectionString = process.env['CONTROL_PLANE_DB'];
+if (!connectionString) {
+  throw new Error('CONTROL_PLANE_DB environment variable is required. ' +
+    'Please set it to your PostgreSQL connection string.');
+}
+// Check for placeholder values
+if (/placeholder|example|user:password/i.test(connectionString)) {
+  throw new Error('CONTROL_PLANE_DB contains placeholder values. ' +
+    'Please set your actual database connection string.');
+}
+// P2-FIX #22: Convert to boolean. Previously evaluated to a string value (e.g. "1"),
+// which is truthy but not boolean - would fail === true checks.
+const isServerless = !!(process.env['VERCEL'] || process.env['AWS_LAMBDA_FUNCTION_NAME']);
 
 function getConnectionString(): string {
   const connectionString = process.env['CONTROL_PLANE_DB'];
@@ -37,7 +47,13 @@ function getConnectionString(): string {
 
 const config = {
   client: 'postgresql',
-  get connection() { return getConnectionString(); },
+  connection: {
+    connectionString,
+    // P1-FIX #17: Terminate transactions idle for >60s. The managed pool in
+    // packages/database/pool sets this, but this Knex pool didn't, allowing
+    // abandoned transactions to hold locks indefinitely.
+    idle_in_transaction_session_timeout: 60000,
+  },
   pool: {
     min: isServerless ? 0 : 2,  // P0-FIX: Start with 0 for serverless
     max: isServerless ? 5 : 20,  // P0-FIX: Limit to 5 for serverless
@@ -108,7 +124,11 @@ export function getDb(): Knex {
 export const db = new Proxy({} as Knex, {
   get: (_target, prop) => {
     const instance = getDb();
-    return instance[prop as keyof Knex];
+    // P2-FIX #25: Bind function properties to preserve 'this' context.
+    // Without binding, methods that use 'this' internally lose their context
+    // when called through the proxy.
+    const val = instance[prop as keyof Knex];
+    return typeof val === 'function' ? (val as Function).bind(instance) : val;
   }
 });
 /**
@@ -270,8 +290,10 @@ export async function analyticsDb(): Promise<Knex> {
   }
 
   if (replicaUrl !== analyticsDbUrl) {
-    await resetAnalyticsDb();
+    // P1-FIX #13: Set analyticsDbUrl synchronously BEFORE the async reset to prevent
+    // concurrent calls from both entering this block and creating duplicate connections.
     analyticsDbUrl = replicaUrl;
+    await resetAnalyticsDb();
   }
   // Return existing instance if available
   if (analyticsDbInstance) {

@@ -118,8 +118,10 @@ export class UsageService {
     throw new Error('Valid orgId is required');
   }
 
+  // P2-FIX #20: Select explicit columns instead of SELECT * to prevent
+  // over-fetching and leaking internal columns if the table grows.
   const { rows } = await this.pool.query(
-    'SELECT * FROM org_usage WHERE org_id=$1',
+    'SELECT org_id, domain_count, content_count, media_count, publish_count, updated_at FROM org_usage WHERE org_id=$1',
     [orgId]
   );
   return rows[0] ?? {

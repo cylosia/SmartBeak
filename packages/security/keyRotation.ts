@@ -1,4 +1,4 @@
-import { pbkdf2Sync, randomBytes, createCipheriv, createDecipheriv } from 'crypto';
+import { pbkdf2Sync, randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
 import { EventEmitter } from 'events';
 import { LRUCache } from '../utils/lruCache';
 import { Pool } from 'pg';
@@ -75,9 +75,12 @@ export class KeyRotationManager extends EventEmitter {
   cleanupInterval: NodeJS.Timeout | undefined;
   // P1-FIX: Store random salts per provider for PBKDF2
   private providerSalts = new Map<string, Buffer>();
-  
+
   constructor(db: Pool) {
     super();
+    // P2-FIX #24: Set maxListeners to prevent Node.js memory leak warnings
+    // when many providers register listeners.
+    this.setMaxListeners(50);
     this.db = db;
   }
   /**
@@ -428,9 +431,9 @@ export class KeyRotationManager extends EventEmitter {
   /**
   * Hash key for identification (not for storage)
   */
+  // P2-FIX #21: Use the ESM import (line 1) instead of CJS require('crypto').
   hashKey(key: string): string {
-    const crypto = require('crypto');
-    return crypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
+    return createHash('sha256').update(key).digest('hex').slice(0, 16);
   }
   
   /**

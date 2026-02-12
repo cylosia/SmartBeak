@@ -17,19 +17,27 @@ export const EmailSchema = z.string()
   .trim();
 
 /**
-* Allowed fields for lead magnets
+* Allowed fields for lead magnets (input)
 */
 export const ALLOWED_LEAD_MAGNET_FIELDS = ['name', 'content', 'settings', 'domain_id'] as const;
 
 /**
-* Allowed fields for sequences
+* Allowed fields for sequences (input)
 */
 export const ALLOWED_SEQUENCE_FIELDS = ['name', 'steps', 'settings', 'domain_id'] as const;
 
 /**
-* Allowed fields for forms
+* Allowed fields for forms (input)
 */
 export const ALLOWED_FORM_FIELDS = ['name', 'form_config', 'settings', 'domain_id'] as const;
+
+/**
+* SECURITY FIX: Response field whitelists to prevent over-exposure of raw DB rows.
+* Previously returning('*') sent all columns including internal metadata.
+*/
+export const RESPONSE_LEAD_MAGNET_FIELDS = ['id', 'name', 'content', 'settings', 'domain_id', 'created_at'] as const;
+export const RESPONSE_SEQUENCE_FIELDS = ['id', 'name', 'steps', 'settings', 'domain_id', 'created_at'] as const;
+export const RESPONSE_FORM_FIELDS = ['id', 'name', 'form_config', 'settings', 'domain_id', 'created_at'] as const;
 
 /**
 * Lead magnet creation schema

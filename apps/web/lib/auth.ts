@@ -5,7 +5,9 @@ import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
 import { securityConfig } from './config';
 import { getLogger } from '@kernel/logger';
 // import type { AuthContext, UserRole } from '@security/jwt';
-export type UserRole = 'admin' | 'editor' | 'viewer';
+// SECURITY FIX: Add 'owner' role which exists in DB (CHECK role IN ('owner','admin','editor','viewer'))
+// but was missing from TypeScript types, causing mapRole() to throw 500 for org owners
+export type UserRole = 'owner' | 'admin' | 'editor' | 'viewer';
 export interface AuthContext {
   userId: string;
   orgId: string;
@@ -44,10 +46,12 @@ function isValidIP(ip: string): boolean {
   return ipv4Regex.test(ip) || ipv6Regex.test(ip);
 }
 // Role hierarchy for authorization checks
+// SECURITY FIX: Add 'owner' role at highest privilege level (matches DB constraint)
 const roleHierarchy: Record<string, number> = {
   viewer: 1,
   editor: 2,
   admin: 3,
+  owner: 4,
 };
 const authAuditCallbacks: Array<(event: AuthAuditEvent) => void> = [];
 
@@ -146,7 +150,7 @@ const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
  * SECURITY FIX: Don't silently default to viewer role - throw error for invalid roles
  */
 function mapRole(jwtRole: unknown): UserRole {
-  const validRoles: UserRole[] = ['admin', 'editor', 'viewer'];
+  const validRoles: UserRole[] = ['owner', 'admin', 'editor', 'viewer'];
   if (typeof jwtRole === 'string' && validRoles.includes(jwtRole as UserRole)) {
     return jwtRole as UserRole;
   }
@@ -288,9 +292,10 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
   }
   try {
 
-    const jwtKey = process.env['JWT_KEY_1'];
+    // SECURITY FIX: Consolidate to JWT_SECRET (was JWT_KEY_1, causing split-brain with packages/security/auth.ts)
+    const jwtKey = process.env['JWT_SECRET'];
     if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured');
+      logger.error('JWT_SECRET not configured');
       emitAuthAudit({
         timestamp: new Date(),
         type: 'auth.failure',
@@ -300,6 +305,11 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
       });
       res.status(500).json({ error: 'Authentication service misconfigured' });
       throw new AuthError('JWT signing key not configured');
+    }
+    if (jwtKey.length < 32) {
+      logger.error('JWT_SECRET too short (must be >= 32 characters)');
+      res.status(500).json({ error: 'Authentication service misconfigured' });
+      throw new AuthError('JWT signing key too short');
     }
     // Verify JWT token locally
     let claims: jwt.JwtPayload;
@@ -425,9 +435,10 @@ export async function optionalAuth(req: NextApiRequest): Promise<AuthResult | nu
   }
   try {
 
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured');
+    // SECURITY FIX: Consolidate to JWT_SECRET (was JWT_KEY_1, causing split-brain with packages/security/auth.ts)
+    const jwtKey = process.env['JWT_SECRET'];
+    if (!jwtKey || jwtKey.length < 32) {
+      logger.error('JWT_SECRET not configured or too short');
       return null;
     }
 
@@ -673,28 +684,10 @@ export function checkRateLimit(req: NextApiRequest, res: NextApiResponse, identi
  * Get rate limit identifier from request (IP + optional user)
  */
 export function getRateLimitIdentifier(req: NextApiRequest, userId?: string): string {
-  // Use x-forwarded-for if behind proxy, fallback to socket.remoteAddress
-  const forwarded = req.headers['x-forwarded-for'];
-  let ip: string;
-  if (typeof forwarded === 'string') {
-
-    const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
-    ip = (ips.length > 0 ? ips[ips.length - 1] : req.socket?.remoteAddress || 'unknown') as string;
-  }
-  else if (Array.isArray(forwarded) && forwarded.length > 0) {
-    ip = forwarded[forwarded.length - 1] as string;
-  }
-  else {
-    ip = (req.socket?.remoteAddress || 'unknown') as string;
-  }
-  // Normalize IP (remove IPv6 prefix if IPv4-mapped)
-  if (ip.startsWith('::ffff:')) {
-    ip = ip.slice(7);
-  }
-  // Remove port suffix if present
-  if (ip && ip.includes(':')) {
-    ip = ip.split(':')[0] || ip;
-  }
+  // SECURITY FIX: Use getClientInfo() to extract IP consistently with auth audit logging.
+  // Previously took LAST IP from x-forwarded-for (proxy-facing), while getClientInfo() took FIRST (client-facing).
+  // This mismatch allowed rate limit bypass behind proxies while audit logged a different IP.
+  const { ip } = getClientInfo(req);
   return userId ? `${ip}:${userId}` : ip;
 }
 

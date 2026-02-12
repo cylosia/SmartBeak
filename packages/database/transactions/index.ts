@@ -74,19 +74,25 @@ export async function withTransaction<T>(
   };
 
   try {
-    await client.query('SET LOCAL statement_timeout = $1', [timeoutMs]);
-
-    const validatedIsolation = isolationLevel 
-      ? validateIsolationLevel(isolationLevel) 
+    // P0-FIX #3: BEGIN must come BEFORE SET LOCAL.
+    // SET LOCAL only takes effect within a transaction block.
+    // Previously, SET LOCAL ran before BEGIN, making it act as SET (session-scoped),
+    // which leaked the timeout to subsequent queries on the recycled connection
+    // while leaving the actual transaction unprotected.
+    const validatedIsolation = isolationLevel
+      ? validateIsolationLevel(isolationLevel)
       : DEFAULT_ISOLATION_LEVEL;
     await client.query(`BEGIN ISOLATION LEVEL ${validatedIsolation}`);
+    await client.query('SET LOCAL statement_timeout = $1', [timeoutMs]);
 
     const abortController = new AbortController();
+    let timedOut = false;
 
     // P1-FIX: Link abortController to timeout cleanup
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => {
         if (!abortController.signal.aborted) {
+          timedOut = true;
           abortController.abort();
           reject(new Error(`Transaction timeout after ${timeoutMs}ms`));
         }
@@ -114,10 +120,10 @@ export async function withTransaction<T>(
       await client.query('ROLLBACK');
     } catch (rollbackError) {
       // CRITICAL: Log rollback failure with full context
-      const rollbackErr = rollbackError instanceof Error 
-        ? rollbackError 
+      const rollbackErr = rollbackError instanceof Error
+        ? rollbackError
         : new Error(String(rollbackError));
-      
+
       logger.error(
         'Rollback failed - transaction may be in inconsistent state',
         rollbackErr,
@@ -126,15 +132,15 @@ export async function withTransaction<T>(
           originalErrorName: error instanceof Error ? error.name : 'Unknown',
         }
       );
-      
+
       // Release client with error flag to prevent reuse
       releaseClient(true);
-      
+
       // Throw TransactionError that chains both errors
-      const originalErr = error instanceof Error 
-        ? error 
+      const originalErr = error instanceof Error
+        ? error
         : new Error(String(error));
-      
+
       throw new TransactionError(
         `Transaction failed and rollback also failed: ${originalErr.message}`,
         originalErr,
@@ -144,7 +150,10 @@ export async function withTransaction<T>(
     throw error;
   } finally {
     clearTimeoutSafe();
-    releaseClient(false);
+    // P1-FIX #10: If the transaction timed out, the user's fn(client) callback may
+    // still be running and using this client. Destroy the connection (withError=true)
+    // instead of returning it to the pool where another request could get it.
+    releaseClient(timedOut);
   }
 }
 // Helper for single queries (auto-retry on connection errors)

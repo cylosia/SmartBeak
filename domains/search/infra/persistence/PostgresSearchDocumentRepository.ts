@@ -144,8 +144,12 @@ export class PostgresSearchDocumentRepository implements SearchDocumentRepositor
     for (const doc of docs) {
       validateSearchDocumentFields(doc.fields);
     }
-    const queryable = client || this.pool;
+    // P1-FIX #9: When no client is provided, acquire a dedicated client from the pool.
+    // Previously cast this.pool to PoolClient and called BEGIN on it, but Pool.query()
+    // runs each query on a random connection - so BEGIN, INSERT, and COMMIT would run
+    // on different connections, making the transaction non-atomic.
     const shouldManageTransaction = !client;
+    const queryable = client || (shouldManageTransaction ? await this.pool.connect() : this.pool);
 
     try {
       if (shouldManageTransaction) {
@@ -212,6 +216,11 @@ export class PostgresSearchDocumentRepository implements SearchDocumentRepositor
       }
       logger.error('Failed to batch upsert search documents', error as Error, { count: docs.length });
       throw error;
+    } finally {
+      // P1-FIX #9: Release the dedicated client back to the pool
+      if (shouldManageTransaction) {
+        (queryable as PoolClient).release();
+      }
     }
   }
 }

@@ -322,6 +322,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // not userId (clerk_id). FK references in related tables point to the
           // internal user ID, not the external Clerk ID. Using the wrong ID meant
           // these DELETEs found nothing, violating GDPR Article 17.
+          // SECURITY FIX: Use internalUserId (DB primary key) not userId (Clerk external ID)
+          // Previous code used Clerk ID against internal FK columns, matching zero rows (GDPR violation)
 
           // 2. Delete org memberships (user removed from all orgs)
           // Try both internal ID and clerk_id since different tables may use different FK

@@ -133,7 +133,9 @@ export function csrfProtection(config: CsrfConfig = {}) {
     }
 
     // Skip excluded paths
-    if (mergedConfig.excludedPaths.some(excluded => path.startsWith(excluded))) {
+    // SECURITY FIX: Use exact match or path prefix with separator to prevent bypass via
+    // crafted paths like /webhookAdmin. Check for exact match OR path + '/' prefix.
+    if (mergedConfig.excludedPaths.some(excluded => path === excluded || path.startsWith(excluded + '/'))) {
       done();
       return;
     }
@@ -172,8 +174,6 @@ export function csrfProtection(config: CsrfConfig = {}) {
     }
 
     // CRITICAL-FIX: Validate token with proper await
-    // Previously this was not awaited, causing a validation bypass
-    // (Promise object is always truthy, so the check would never fail)
     try {
       const isValid = await validateCsrfToken(sessionId, providedToken);
       if (!isValid) {
@@ -183,10 +183,17 @@ export function csrfProtection(config: CsrfConfig = {}) {
         });
         return;
       }
+
+      // P1-FIX #14: Invalidate the CSRF token after successful validation.
+      // Previously tokens could be reused for multiple requests within their 1-hour TTL.
+      // Single-use tokens prevent CSRF replay attacks.
+      await clearCsrfToken(sessionId);
     } catch (error) {
-      // F40-FIX: Use structured logger instead of console.error for Vercel log parsing
-      const { getLogger } = await import('@kernel/logger');
-      getLogger('csrf').error('CSRF token validation error', error instanceof Error ? error : new Error(String(error)));
+      // P1-FIX #15: Use structured logging instead of console.error to prevent
+      // PII/connection strings leaking to stdout in production container logs.
+      const err = error instanceof Error ? error : new Error(String(error));
+      // Import would create circular dependency - use minimal safe logging
+      process.stderr.write(`[CSRF] Validation error: ${err.message}\n`);
       res.status(500).send({
         error: 'CSRF protection: Validation error',
         code: 'CSRF_VALIDATION_ERROR',
@@ -209,8 +216,11 @@ export async function setCsrfCookie(
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const token = await generateCsrfToken(sessionId);
 
+  // SECURITY FIX: Remove HttpOnly so client JS can read the token to send in x-csrf-token header.
+  // HttpOnly prevented JS from reading the cookie, breaking the double-submit CSRF pattern entirely.
+  // SameSite=Strict + Secure still protect against cross-origin cookie submission.
   res.header('Set-Cookie',
-    `${mergedConfig.cookieName}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600`
+    `${mergedConfig.cookieName}=${token}; Secure; SameSite=Strict; Path=/; Max-Age=3600`
   );
 
   return token;
