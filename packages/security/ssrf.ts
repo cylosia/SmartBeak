@@ -6,6 +6,7 @@
  */
 
 import { URL } from 'url';
+import { promises as dns } from 'dns';
 
 /**
  * Internal IP patterns to block
@@ -329,7 +330,7 @@ export function validateUrl(
       };
     }
 
-    // URL is safe
+    // URL is safe (string-level check only — use validateUrlWithDns for full protection)
     return {
       allowed: true,
       sanitizedUrl: url.toString(),
@@ -340,6 +341,88 @@ export function validateUrl(
       reason: `URL validation error: ${error instanceof Error ? error["message"] : String(error)}`
     };
   }
+}
+
+/**
+ * Resolve hostname and check all resolved IPs against internal IP blocklist.
+ * P0-FIX: Prevents DNS rebinding SSRF attacks where an attacker registers
+ * a domain (e.g., evil.com) that resolves to 127.0.0.1 or 169.254.169.254.
+ * String-based hostname checks cannot detect this — DNS resolution is required.
+ *
+ * @param hostname - Hostname to resolve and validate
+ * @returns Validation result
+ */
+export async function validateResolvedIps(hostname: string): Promise<SSRFValidationResult> {
+  try {
+    // Resolve both IPv4 and IPv6 addresses
+    const [ipv4Addresses, ipv6Addresses] = await Promise.allSettled([
+      dns.resolve4(hostname),
+      dns.resolve6(hostname),
+    ]);
+
+    const allIps: string[] = [];
+    if (ipv4Addresses.status === 'fulfilled') {
+      allIps.push(...ipv4Addresses.value);
+    }
+    if (ipv6Addresses.status === 'fulfilled') {
+      allIps.push(...ipv6Addresses.value);
+    }
+
+    // If no IPs resolved, the hostname doesn't exist
+    if (allIps.length === 0) {
+      return { allowed: false, reason: 'Hostname could not be resolved' };
+    }
+
+    // Check every resolved IP against internal IP blocklist
+    for (const ip of allIps) {
+      if (isInternalIp(ip)) {
+        return {
+          allowed: false,
+          reason: `Hostname resolves to internal IP: ${ip}`,
+        };
+      }
+    }
+
+    return { allowed: true };
+  } catch {
+    return { allowed: false, reason: 'DNS resolution failed' };
+  }
+}
+
+/**
+ * Full SSRF-safe URL validation with DNS resolution.
+ * P0-FIX: Combines string-based checks with DNS resolution to prevent
+ * DNS rebinding attacks. Use this instead of validateUrl() for outbound requests.
+ *
+ * @param urlString - URL to validate
+ * @param options - Validation options
+ * @returns Validation result
+ */
+export async function validateUrlWithDns(
+  urlString: string,
+  options: {
+    allowHttp?: boolean;
+    allowedPorts?: number[];
+    requireHttps?: boolean;
+  } = {}
+): Promise<SSRFValidationResult> {
+  // First: run all synchronous string-based checks
+  const stringResult = validateUrl(urlString, options);
+  if (!stringResult.allowed) {
+    return stringResult;
+  }
+
+  // Second: resolve DNS and validate resolved IPs
+  const url = new URL(urlString);
+  const dnsResult = await validateResolvedIps(url.hostname);
+  if (!dnsResult.allowed) {
+    return dnsResult;
+  }
+
+  return {
+    allowed: true,
+    sanitizedUrl: stringResult.sanitizedUrl,
+  };
 }
 
 /**

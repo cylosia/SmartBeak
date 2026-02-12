@@ -245,7 +245,10 @@ function buildWhereClause(conditions: WhereCondition[]): { clause: string; param
       throw new Error(`Invalid operator: ${condition.operator}`);
     }
     params.push(condition.value);
-    clauses.push(`${validatedColumn} ${condition.operator} $${i + 1}`);
+    // P1-FIX: Use params.length (not loop index i+1) for placeholder.
+    // When a condition is falsy and skipped via continue, i increments
+    // but params.length doesn't, causing a parameter binding mismatch.
+    clauses.push(`${validatedColumn} ${condition.operator} $${params.length}`);
   }
 
   return {
@@ -329,7 +332,12 @@ export async function batchInsert<T extends Record<string, unknown>>(
 
   const validatedTableName = validateTableName(tableName);
 
-  const columns = Object.keys(records[0]!) as (keyof T)[];
+  // P3-FIX: Replace non-null assertion with explicit guard.
+  // records[0] is guaranteed to exist by the length check above,
+  // but the ! assertion is inconsistent with noUncheckedIndexedAccess.
+  const firstRecord = records[0];
+  if (!firstRecord) return;
+  const columns = Object.keys(firstRecord) as (keyof T)[];
   for (const record of records) {
     const recordColumns = Object.keys(record);
     if (recordColumns.length !== columns.length ||

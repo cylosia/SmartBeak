@@ -17,6 +17,31 @@
         "s3:DeleteObject"
       ],
       "Resource": "arn:aws:s3:::smartbeak-shards/*"
+    },
+    {
+      "Sid": "DenyUnencryptedUploads",
+      "Effect": "Deny",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::smartbeak-shards/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    },
+    {
+      "Sid": "DenyInsecureConnections",
+      "Effect": "Deny",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::smartbeak-shards",
+        "arn:aws:s3:::smartbeak-shards/*"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
     }
   ]
 }
