@@ -88,10 +88,12 @@ export function isConstantContactErrorsResponse(data: unknown): data is Constant
 /**
  * Type guard for ConstantContact list response
  */
+// P1-TYPE FIX: Require list_id to be present AND a string.
+// Previously any object without list_id passed (undefined === undefined is true).
 export function isConstantContactListResponse(data: unknown): data is ConstantContactListResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return obj['list_id'] === undefined || typeof obj['list_id'] === 'string';
+  return typeof obj['list_id'] === 'string';
 }
 
 // ============================================================================

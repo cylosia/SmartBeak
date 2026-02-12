@@ -1,7 +1,7 @@
 
 import jwt, { TokenExpiredError as JwtTokenExpiredError } from 'jsonwebtoken';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import type { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 
@@ -172,25 +172,21 @@ export async function optionalAuthNextJs(
 */
 export async function optionalAuthFastify(
   req: FastifyRequest,
-  res: FastifyReply,
-  done: HookHandlerDoneFunction
+  res: FastifyReply
 ): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !validateAuthHeaderConstantTime(authHeader)) {
-    done();
     return;
   }
 
   // Validate token format
   if (!BEARER_REGEX.test(authHeader)) {
-    done();
     return;
   }
 
   const token = authHeader.slice(7);
   if (!token || token.length < 10) {
-    done();
     return;
   }
 
@@ -199,12 +195,10 @@ export async function optionalAuthFastify(
 
     // Check expiration explicitly
     if (claims.exp && claims.exp * 1000 < Date.now()) {
-      done();
       return;
     }
 
     if (!claims.sub || !claims["orgId"]) {
-      done();
       return;
     }
 
@@ -219,10 +213,8 @@ export async function optionalAuthFastify(
       sessionId: claims.jti,
       requestId: generateRequestId(),
     };
-
-    done();
   } catch {
-    done();
+    // Token invalid, continue without auth context
   }
 }
 
@@ -232,8 +224,7 @@ export async function optionalAuthFastify(
 */
 export async function requireAuthFastify(
   req: FastifyRequest,
-  res: FastifyReply,
-  done: HookHandlerDoneFunction
+  res: FastifyReply
 ): Promise<void> {
   const authHeader = req.headers.authorization;
 
@@ -278,8 +269,6 @@ export async function requireAuthFastify(
       sessionId: claims.jti,
       requestId: generateRequestId(),
     };
-
-    done();
   } catch (error) {
     if (error instanceof JwtTokenExpiredError) {
       res.status(401).send({ error: 'Unauthorized. Token expired.' });

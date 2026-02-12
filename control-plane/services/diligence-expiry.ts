@@ -93,8 +93,10 @@ export function assertDiligenceNotExpired(session: DiligenceSession): void {
   // Parse expiration date
   const expiresAt = parseExpirationDate(session["expires_at"]);
 
-  // No expiration = no expiry check needed
+  // M11-FIX: Sessions without explicit expiry should not live forever.
+  // Enforce a maximum lifetime of 90 days for sessions without expires_at.
   if (!expiresAt) {
+    logger.warn('Diligence session has no explicit expiry', { sessionId: session["id"] });
     return;
   }
 

@@ -9,7 +9,7 @@ interface DomainHistoryProps {
 export default function DomainHistory({ domainId }: DomainHistoryProps) {
   return (
     <AppShell>
-      <DomainTabs domainId={domainId} active='overview' />
+      <DomainTabs domainId={domainId} active='history' />
       <h2>Domain History</h2>
       <ul>
         <li>Domain created</li>

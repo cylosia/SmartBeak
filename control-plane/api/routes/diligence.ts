@@ -3,8 +3,12 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
+import { getLogger } from '@kernel/logger';
 
 import { rateLimit } from '../../services/rate-limit';
+
+// H14-FIX: Use structured logger instead of console.error
+const logger = getLogger('diligence-routes');
 
 const TokenParamSchema = z.object({
   token: z.string().min(10).max(100).regex(/^[a-zA-Z0-9_-]+$/)
@@ -29,36 +33,53 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
 
     const domainId = rows[0].domain_id;
 
-    // Fetch domain overview data
+    // H09-FIX: Fetch real domain data from DB instead of returning hardcoded mock values.
+    // Previously returned fabricated metrics (name: 'example.com', monthly: 50000, etc.)
+    const { rows: domainRows } = await pool.query(
+    `SELECT d.id, d.name, d.created_at,
+      dr.domain_type, dr.revenue_confidence
+    FROM domains d
+    LEFT JOIN domain_registry dr ON d.id = dr.id
+    WHERE d.id = $1`,
+    [domainId]
+    );
+
+    if (domainRows.length === 0) {
+    return res.status(404).send({ error: 'Domain not found' });
+    }
+
+    const domain = domainRows[0];
+
+    // Fetch content stats
+    const { rows: contentStats } = await pool.query(
+    `SELECT COUNT(*) as total_articles,
+      AVG(CHAR_LENGTH(body)) as avg_content_length,
+      MAX(published_at) as last_published
+    FROM content_items WHERE domain_id = $1 AND status = 'published'`,
+    [domainId]
+    );
+
+    const stats = contentStats[0] ?? {};
+
     const overview = {
     domain: {
-    id: domainId,
-    name: 'example.com',
-    age: '3 years',
-    niche: 'Technology',
-    },
-    traffic: {
-    monthly: 50000,
-    trend: 'up',
-    sources: { organic: 70, direct: 20, referral: 10 },
-    },
-    revenue: {
-    monthly: 2500,
-    sources: ['affiliate', 'ads'],
-    confidence: 'high',
+    id: domain.id,
+    name: domain.name,
+    createdAt: domain.created_at,
+    type: domain.domain_type,
     },
     content: {
-    totalArticles: 150,
-    avgWordCount: 1200,
-    lastPublished: new Date().toISOString(),
+    totalArticles: parseInt(stats.total_articles || '0', 10),
+    avgContentLength: parseInt(stats.avg_content_length || '0', 10),
+    lastPublished: stats.last_published,
     },
-    expiresAt: rows[0]["expires_at"],
+    revenueConfidence: domain.revenue_confidence,
+    expiresAt: rows[0].expires_at,
     };
 
     return overview;
   } catch (error) {
-    console["error"]('[diligence/overview] Error:', error);
-    // FIX: Added return before reply.send()
+    logger.error('Diligence overview error', error instanceof Error ? error : new Error(String(error)));
     return res.status(500).send({ error: 'Failed to fetch diligence overview' });
   }
   });
@@ -79,22 +100,31 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(404).send({ error: 'Invalid or expired diligence token' });
     }
 
-    // Return affiliate revenue data (buyer-safe, no actual affiliate IDs)
-    const revenue = {
-    totalMonthly: 1800,
-    byProvider: [
-    { provider: 'Amazon Associates', percentage: 60, estimated: 1080 },
-    { provider: 'Commission Junction', percentage: 25, estimated: 450 },
-    { provider: 'Impact', percentage: 15, estimated: 270 },
-    ],
-    trend: 'stable',
-    confidence: 'medium',
-    };
+    const domainId = rows[0].domain_id;
 
-    return revenue;
+    // H09-FIX: Fetch real affiliate revenue data instead of hardcoded values
+    const { rows: revenueRows } = await pool.query(
+    `SELECT provider_name, percentage, estimated_monthly
+    FROM affiliate_revenue_breakdown
+    WHERE domain_id = $1
+    ORDER BY percentage DESC`,
+    [domainId]
+    );
+
+    const totalMonthly = revenueRows.reduce(
+    (sum: number, r: { estimated_monthly: number }) => sum + (r.estimated_monthly || 0), 0
+    );
+
+    return {
+    totalMonthly,
+    byProvider: revenueRows.map((r: { provider_name: string; percentage: number; estimated_monthly: number }) => ({
+    provider: r.provider_name,
+    percentage: r.percentage,
+    estimated: r.estimated_monthly,
+    })),
+    };
   } catch (error) {
-    console["error"]('[diligence/affiliate-revenue] Error:', error);
-    // FIX: Added return before reply.send()
+    logger.error('Diligence affiliate-revenue error', error instanceof Error ? error : new Error(String(error)));
     return res.status(500).send({ error: 'Failed to fetch affiliate revenue' });
   }
   });

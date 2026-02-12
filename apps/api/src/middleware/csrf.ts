@@ -120,15 +120,13 @@ export function csrfProtection(config: CsrfConfig = {}) {
 
   return async (
     req: FastifyRequest,
-    res: FastifyReply,
-    done: () => void
+    res: FastifyReply
   ): Promise<void> => {
     const method = req["method"]?.toUpperCase();
     const path = req["url"] || '';
 
     // Skip if method is not protected
     if (!mergedConfig.protectedMethods.includes(method)) {
-      done();
       return;
     }
 
@@ -136,7 +134,6 @@ export function csrfProtection(config: CsrfConfig = {}) {
     // SECURITY FIX: Use exact match or path prefix with separator to prevent bypass via
     // crafted paths like /webhookAdmin. Check for exact match OR path + '/' prefix.
     if (mergedConfig.excludedPaths.some(excluded => path === excluded || path.startsWith(excluded + '/'))) {
-      done();
       return;
     }
 
@@ -200,8 +197,6 @@ export function csrfProtection(config: CsrfConfig = {}) {
       });
       return;
     }
-
-    done();
   };
 }
 

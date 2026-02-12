@@ -145,15 +145,15 @@ export class StructuredLogger {
   }
 
   // Log using structured logger
-  const message = JSON.stringify(entry);
+  const serialized = JSON.stringify(entry);
   if (level === 'error') {
-    logger.error(message, new Error(message));
+    logger.error(serialized, new Error(serialized));
   } else if (level === 'warn') {
-    logger.warn(message);
+    logger.warn(serialized);
   } else if (level === 'debug') {
-    logger.debug(message);
+    logger.debug(serialized);
   } else {
-    logger.info(message);
+    logger.info(serialized);
   }
   }
 

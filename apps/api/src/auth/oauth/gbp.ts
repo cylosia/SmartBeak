@@ -31,6 +31,7 @@ export function getGbpAuthUrl(clientId: string, redirectUri: string, state: stri
   response_type: 'code',
   scope: GBP_OAUTH_SCOPES.join(' '),
   access_type: 'offline',
+  state: state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }

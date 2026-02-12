@@ -6,6 +6,9 @@ import { z } from 'zod';
 
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('domain-details');
 
 const DomainIdParamSchema = z.object({
   id: z.string().uuid()
@@ -21,13 +24,15 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
 
   try {
     // Fetch domain details
+    // C03-FIX: Removed dr.buyer_token from SELECT — secret must not be exposed to viewers
+    // A02-FIX: Fixed d["id"] → d.id (invalid PostgreSQL array subscript syntax)
     const { rows } = await pool.query(
     `SELECT
-    d["id"], d.name, d.status, d.created_at, d.updated_at,
-    dr.theme_id, dr.custom_config, dr.buyer_token
+    d.id, d.name, d.status, d.created_at, d.updated_at,
+    dr.theme_id, dr.custom_config
     FROM domains d
-    LEFT JOIN domain_registry dr ON d["id"] = dr["id"]
-    WHERE d["id"] = $1 AND d.org_id = $2`,
+    LEFT JOIN domain_registry dr ON d.id = dr.id
+    WHERE d.id = $1 AND d.org_id = $2`,
     [id, ctx["orgId"]]
     );
 
@@ -51,12 +56,11 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
 
     return {
     domain: {
-    id: domain["id"],
+    id: domain.id,
     name: domain.name,
     status: domain.status,
     themeId: domain.theme_id,
     customConfig: domain.custom_config,
-    buyerToken: domain.buyer_token,
     createdAt: domain.created_at,
     updatedAt: domain.updated_at,
     },
@@ -65,8 +69,7 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     },
     };
   } catch (error) {
-    console["error"]('[domains/:id] Error:', error);
-    // FIX: Added return before reply.send()
+    logger.error('Failed to fetch domain details', error instanceof Error ? error : new Error(String(error)));
     return res.status(500).send({ error: 'Failed to fetch domain details' });
   }
   });

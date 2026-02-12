@@ -59,7 +59,7 @@ export async function canAccessDomain(
   } catch (error) {
     // P2-MEDIUM FIX: error: unknown with proper type guard
     const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
-    logger.error('Error checking domain access:', errorMessage);
+    logger.error(`Error checking domain access: ${errorMessage}`);
     return false;
   }
 }

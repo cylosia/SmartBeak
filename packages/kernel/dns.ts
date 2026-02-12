@@ -1,6 +1,5 @@
 import dns from 'dns/promises';
-
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 
 /**
 * DNS Verification Utilities

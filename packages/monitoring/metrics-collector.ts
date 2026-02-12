@@ -293,7 +293,7 @@ export class MetricsCollector extends EventEmitter {
     if (utilization >= KEY_ALERT_THRESHOLD && 
         (now - this.lastAlertTime) > ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      logger.error('Metrics collector approaching key limit', {
+      logger.error('Metrics collector approaching key limit', undefined, {
         keyCount,
         maxKeys: this.config.maxKeys,
         utilization: `${(utilization * 100).toFixed(1)}%`,

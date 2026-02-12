@@ -105,7 +105,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     if (error instanceof RoleAccessError) {
     return res.status(403).send({ error: 'Forbidden' });
     }
-    logger.error('[roi-risk] Error:', error);
+    logger.error('[roi-risk] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to fetch ROI/Risk analysis' });
   }

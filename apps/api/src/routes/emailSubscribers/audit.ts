@@ -31,6 +31,6 @@ export async function recordAuditEvent(params: AuditEventParams): Promise<void> 
   } catch (error) {
     // P2-MEDIUM FIX: error: unknown with proper type guard
     const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
-    logger.error('Failed to record audit event:', errorMessage);
+    logger.error(`Failed to record audit event: ${errorMessage}`);
   }
 }

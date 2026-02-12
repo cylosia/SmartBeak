@@ -1,6 +1,4 @@
-import { getRequestContext } from './request-context';
-
-import { info, error, getLogger } from '@kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Health Check Module
@@ -145,27 +143,37 @@ export async function checkAllHealth(): Promise<{
   checks: HealthCheckResult[];
   timestamp: string;
 }> {
+  // P1-FIX: Run all checks in parallel to avoid cascading timeout amplification.
+  const healthChecks = Array.from(getMutableHealthChecks().entries());
+  const results = await Promise.allSettled(
+    healthChecks.map(async ([name, check]) => {
+      const result = await check.check();
+      getMutableLastResults().set(name, result);
+      return result;
+    })
+  );
+
   const checks: HealthCheckResult[] = [];
   let allHealthy = true;
 
-  for (const [name, check] of getMutableHealthChecks()) {
-  try {
-    const result = await check.check();
-    getMutableLastResults().set(name, result);
-    checks.push(result);
-    if (!result.healthy) allHealthy = false;
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const failedResult: HealthCheckResult = {
-      name,
-      healthy: false,
-      latency: 0,
-      error: errorMessage,
-    };
-    getMutableLastResults().set(name, failedResult);
-    checks.push(failedResult);
-    allHealthy = false;
-  }
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const [name] = healthChecks[i];
+    if (result.status === 'fulfilled') {
+      checks.push(result.value);
+      if (!result.value.healthy) allHealthy = false;
+    } else {
+      const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      const failedResult: HealthCheckResult = {
+        name,
+        healthy: false,
+        latency: 0,
+        error: errorMessage,
+      };
+      getMutableLastResults().set(name, failedResult);
+      checks.push(failedResult);
+      allHealthy = false;
+    }
   }
 
   return {
@@ -367,7 +375,11 @@ export function healthCheckMiddleware(
   path: string = '/health'
 ): (req: MiddlewareRequest, res: MiddlewareResponse, next?: MiddlewareNext) => Promise<void> {
   return async (req: MiddlewareRequest, res: MiddlewareResponse, next?: MiddlewareNext) => {
-    if (req.url !== path) {
+    // P1-FIX: Compare pathname only, ignoring query strings.
+    // req.url includes query string (e.g., '/health?verbose=true'),
+    // so exact match would fail for monitoring tools adding cache-busting params.
+    const pathname = req.url.split('?')[0];
+    if (pathname !== path) {
       next?.();
       return;
     }

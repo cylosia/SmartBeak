@@ -1,5 +1,6 @@
 
 import { DomainAuthError } from '../errors';
+import dns from 'dns/promises';
 
 export type DomainAuthStatus = {
   spf: boolean;
@@ -7,6 +8,7 @@ export type DomainAuthStatus = {
   dmarc: boolean;
 };
 
+// M08-FIX: Implement actual DNS checks instead of always throwing
 export async function checkDomainAuth(domain: string): Promise<DomainAuthStatus> {
 
   if (!domain || typeof domain !== 'string') {
@@ -19,7 +21,32 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuthStatus>
   throw new DomainAuthError(`Invalid domain format: ${domain}`);
   }
 
-  // DNS checks delegated to infra / provider
-  // NOTE: DNS TXT record checks for SPF, DKIM, DMARC to be implemented
-  throw new DomainAuthError('Domain authentication checks not yet implemented');
+  const status: DomainAuthStatus = { spf: false, dkim: false, dmarc: false };
+
+  try {
+  const txtRecords = await dns.resolveTxt(domain);
+  const flat = txtRecords.flat();
+  status.spf = flat.some(r => r.startsWith('v=spf1'));
+  } catch {
+  // No TXT records or DNS failure — SPF not found
+  }
+
+  try {
+  const dmarcRecords = await dns.resolveTxt(`_dmarc.${domain}`);
+  const flat = dmarcRecords.flat();
+  status.dmarc = flat.some(r => r.startsWith('v=DMARC1'));
+  } catch {
+  // No DMARC record
+  }
+
+  try {
+  // Check for default DKIM selector
+  const dkimRecords = await dns.resolveTxt(`default._domainkey.${domain}`);
+  const flat = dkimRecords.flat();
+  status.dkim = flat.some(r => r.includes('v=DKIM1'));
+  } catch {
+  // No DKIM record at default selector
+  }
+
+  return status;
 }

@@ -9,6 +9,12 @@ import { hashEmail, validateEmailFormat, sanitizeString, escapeLikePattern } fro
 
 const logger = getLogger('email-subscribers');
 
+// P1-SECURITY FIX: Whitelist response columns to prevent leaking internal DB fields
+const SUBSCRIBER_RESPONSE_FIELDS = [
+  'id', 'email_hash', 'first_name', 'last_name', 'status',
+  'tags', 'metadata', 'source', 'created_at', 'updated_at', 'last_activity_at'
+] as const;
+
 // Validation schemas
 const CreateSubscriberSchema = z.object({
   email: z.string().email('Invalid email format'),
@@ -109,8 +115,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         const escapedSearch = escapeLikePattern(sanitizedSearch);
         query = query.where(function() {
           this.where('email_hash', hashEmail(sanitizedSearch))
-            .orWhereRaw('first_name ILIKE ? ESCAPE \\', [`%${escapedSearch}%`])
-            .orWhereRaw('last_name ILIKE ? ESCAPE \\', [`%${escapedSearch}%`]);
+            .orWhereRaw("first_name ILIKE ? ESCAPE '\\'", [`%${escapedSearch}%`])
+            .orWhereRaw("last_name ILIKE ? ESCAPE '\\'", [`%${escapedSearch}%`]);
         });
       }
 
@@ -118,8 +124,13 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
       const countResult = await query.clone().count<{ count: string }>('* as count').first();
       const total = parseInt(countResult?.['count'] as string || '0', 10);
 
-      // Sort and paginate
-      const sortField = sortBy || 'createdAt';
+      // P0-SQL FIX: Map camelCase sort fields to snake_case DB column names
+      const SORT_FIELD_MAP: Record<string, string> = {
+        createdAt: 'created_at',
+        email: 'email',
+        lastActivity: 'last_activity_at',
+      };
+      const sortField = SORT_FIELD_MAP[sortBy || 'createdAt'] || 'created_at';
       const order = sortOrder || 'desc';
       query = query.orderBy(sortField, order)
         .offset((page - 1) * limit)
@@ -185,16 +196,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
       const emailHash = hashEmail(email.toLowerCase().trim());
       const db = await getDb();
 
-      // Check for existing subscriber
-      const existing = await db('email_subscribers')
-        .where('domain_id', domainId)
-        .where('email_hash', emailHash)
-        .first();
-
-      if (existing) {
-        return reply.status(409).send({ error: 'Subscriber already exists' });
-      }
-
+      // P1-CONCURRENCY FIX: Use INSERT ... ON CONFLICT to prevent TOCTOU race condition
+      // Two concurrent requests for the same email can no longer both insert
       const now = new Date();
       const subscriber = {
         domain_id: domainId,
@@ -211,9 +214,17 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         last_activity_at: now,
       };
 
-      const [result] = await db('email_subscribers')
+      const insertResult = await db('email_subscribers')
         .insert(subscriber)
-        .returning('*');
+        .onConflict(['domain_id', 'email_hash'])
+        .ignore()
+        .returning(SUBSCRIBER_RESPONSE_FIELDS as unknown as string[]);
+
+      if (insertResult.length === 0) {
+        return reply.status(409).send({ error: 'Subscriber already exists' });
+      }
+
+      const [result] = insertResult;
 
       logger.info('Subscriber created', { subscriberId: result.id, domainId });
       
@@ -242,10 +253,12 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
       }
 
       const db = await getDb();
+      // P1-SECURITY FIX: Select only whitelisted columns instead of all columns
       const subscriber = await db('email_subscribers')
         .where('id', subscriberId)
         .where('domain_id', domainId)
         .where('org_id', auth.orgId)
+        .select(SUBSCRIBER_RESPONSE_FIELDS as unknown as string[])
         .first();
 
       if (!subscriber) {
@@ -281,16 +294,9 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         });
       }
 
+      // P1-CONCURRENCY FIX: Use direct UPDATE...WHERE...RETURNING instead of
+      // check-then-act pattern to prevent TOCTOU race condition
       const db = await getDb();
-      const existing = await db('email_subscribers')
-        .where('id', subscriberId)
-        .where('domain_id', domainId)
-        .where('org_id', auth.orgId)
-        .first();
-
-      if (!existing) {
-        return reply.status(404).send({ error: 'Subscriber not found' });
-      }
 
       const updateData: Record<string, unknown> = {
         updated_at: new Date(),
@@ -312,13 +318,21 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         updateData['status'] = parseResult.data.status;
       }
 
-      const [result] = await db('email_subscribers')
+      const updateResult = await db('email_subscribers')
         .where('id', subscriberId)
+        .where('domain_id', domainId)
+        .where('org_id', auth.orgId)
         .update(updateData)
-        .returning('*');
+        .returning(SUBSCRIBER_RESPONSE_FIELDS as unknown as string[]);
+
+      if (updateResult.length === 0) {
+        return reply.status(404).send({ error: 'Subscriber not found' });
+      }
+
+      const [result] = updateResult;
 
       logger.info('Subscriber updated', { subscriberId, domainId });
-      
+
       return reply.send({ data: result });
     } catch (error) {
       logger.error('Error updating subscriber: ' + (error instanceof Error ? error.message : String(error)));
@@ -340,23 +354,21 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         return reply.status(403).send({ error: 'Access denied' });
       }
 
+      // P1-CONCURRENCY FIX: Use direct DELETE...WHERE with row count check
+      // instead of check-then-act to prevent TOCTOU race condition
       const db = await getDb();
-      const existing = await db('email_subscribers')
+      const deleteCount = await db('email_subscribers')
         .where('id', subscriberId)
         .where('domain_id', domainId)
         .where('org_id', auth.orgId)
-        .first();
+        .delete();
 
-      if (!existing) {
+      if (deleteCount === 0) {
         return reply.status(404).send({ error: 'Subscriber not found' });
       }
 
-      await db('email_subscribers')
-        .where('id', subscriberId)
-        .delete();
-
       logger.info('Subscriber deleted', { subscriberId, domainId });
-      
+
       return reply.status(204).send();
     } catch (error) {
       logger.error('Error deleting subscriber: ' + (error instanceof Error ? error.message : String(error)));

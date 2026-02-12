@@ -1,12 +1,12 @@
-import jwt from 'jsonwebtoken';
-
 import type { AuthContext, FastifyRequestLike } from './types';
+import { extractAndVerifyToken } from '@security/jwt';
 import { getDb } from '../../db';
 import { getLogger } from '../../../../../packages/kernel/logger';
 
 /**
 * Authentication Module for Email Subscribers
-* P2-MEDIUM FIX: Extracted from emailSubscribers.ts God class
+* P1-SECURITY FIX: Use centralized @security/jwt instead of raw jwt.verify
+* This ensures key rotation, timing-safe comparison, and consistent clockTolerance
 */
 
 const logger = getLogger('EmailSubscriberAuth');
@@ -29,34 +29,23 @@ export async function requireAuth(req: FastifyRequestLike): Promise<AuthContext 
   return auth;
 }
 
+// P1-SECURITY FIX: Use centralized extractAndVerifyToken from @security/jwt
+// instead of raw jwt.verify — ensures key rotation, clockTolerance, and timing-safe checks
 export async function verifyAuth(req: FastifyRequestLike): Promise<AuthContext | null> {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  const result = extractAndVerifyToken(authHeader);
+
+  if (!result.valid || !result.claims) {
     return null;
   }
 
-  const token = authHeader.slice(7);
-  try {
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-    logger.error('JWT_KEY_1 not configured');
-    return null;
-    }
+  const claims = result.claims;
 
-    const claims = jwt.verify(token, jwtKey, {
-    audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
-    issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
-    algorithms: ['HS256'],
-    }) as { sub: string; orgId: string };
-
-    if (!claims.sub || !claims.orgId) {
-    return null;
-    }
-
-    return { userId: claims.sub, orgId: claims.orgId };
-  } catch (err) {
+  if (!claims.sub || !claims.orgId) {
     return null;
   }
+
+  return { userId: claims.sub, orgId: claims.orgId };
 }
 
 /**
@@ -85,7 +74,7 @@ export async function canAccessDomain(
   } catch (error) {
     // P2-MEDIUM FIX: error: unknown with proper type guard
     const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
-    logger.error('Error checking domain access:', errorMessage);
+    logger.error(`Error checking domain access: ${errorMessage}`);
     return false;
   }
 }

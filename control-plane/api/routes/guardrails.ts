@@ -19,12 +19,7 @@ const FeatureFlagParamsSchema = z.object({
 });
 
 const FeatureFlagBodySchema = z.object({
-  value: z.union([
-  z.boolean(),
-  z.string().max(1000),
-  z.number(),
-  z.record(z.string(), z.unknown()),
-  ]),
+  value: z.boolean(),
 });
 
 const AlertBodySchema = z.object({
@@ -35,25 +30,11 @@ const AlertBodySchema = z.object({
   threshold: z.number()
   .finite('Threshold must be a finite number')
   .safe('Threshold must be a safe number'),
-  comparison: z.enum(['gt', 'gte', 'lt', 'lte', 'eq']).optional().default('gt'),
-  duration: z.number().int().min(1).max(1440).optional(), // minutes, max 24 hours
 });
 
-// Define service interfaces
-interface IFlagService {
-  isEnabled(key: string): Promise<boolean>;
-  set(key: string, value: boolean): Promise<void>;
-  get(key: string): Promise<unknown>;
-}
-
-interface IAlertService {
-  create(orgId: string, metric: string, threshold: number): Promise<void>;
-  list(orgId: string): Promise<unknown[]>;
-}
-
 export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
-  const flags = new FlagService(pool) as unknown as IFlagService;
-  const alerts = new AlertService(pool) as unknown as IAlertService;
+  const flags = new FlagService(pool);
+  const alerts = new AlertService(pool);
 
   // POST /admin/flags/:key - Set a feature flag
   app.post('/admin/flags/:key', async (req, res) => {
@@ -83,7 +64,7 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   const { key } = paramsResult.data;
   const { value } = bodyResult.data;
 
-  await flags.set(key, value as boolean);
+  await flags.set(key, value);
   return { ok: true, key };
   });
 
@@ -140,7 +121,7 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   }
 
   const { key } = paramsResult.data;
-  const value = await flags.get(key);
+  const value = await flags.isEnabled(key);
   return { key, value };
   });
 
@@ -165,7 +146,7 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
     });
   }
 
-  const alertList = await alerts.list(ctx["orgId"]);
+  const alertList = await alerts.getActiveAlerts(ctx["orgId"]);
   return { alerts: alertList };
   });
 }
