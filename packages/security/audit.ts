@@ -138,7 +138,9 @@ export class AuditLogger extends EventEmitter {
   */
   private startFlushTimer(): void {
   this.flushTimer = setInterval(() => {
-    this.flush();
+    this.flush().catch((err) => {
+    this.logger.error('Scheduled flush failed', err instanceof Error ? err : undefined);
+    });
   }, this.flushIntervalMs).unref();
   }
 

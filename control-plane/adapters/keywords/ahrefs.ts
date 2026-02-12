@@ -99,33 +99,38 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     return response;
     }, { maxRetries: 3 });
 
-    const data = await res.json() as {
-    keywords?: Array<{
-    keyword: string;
-    volume: number;
-    difficulty?: number;
-    cpc?: number;
-    position?: number;
-    url?: string;
-    }>;
-    };
+    const rawData: unknown = await res.json();
 
-    if (!data.keywords || !Array.isArray(data.keywords)) {
+    if (typeof rawData !== 'object' || rawData === null) {
+    return [];
+    }
+    const data = rawData as Record<string, unknown>;
+
+    if (!data['keywords'] || !Array.isArray(data['keywords'])) {
     return [];
     }
 
-    const suggestions = data.keywords.map((kw): KeywordSuggestion => ({
-    keyword: kw.keyword,
+    const suggestions: KeywordSuggestion[] = [];
+    for (const kw of data['keywords']) {
+    if (typeof kw !== 'object' || kw === null) continue;
+    const item = kw as Record<string, unknown>;
+    if (typeof item['keyword'] !== 'string' || typeof item['volume'] !== 'number') {
+    this.logger.warn('Skipping malformed keyword item in Ahrefs response');
+    continue;
+    }
+    suggestions.push({
+    keyword: item['keyword'],
     metrics: {
-    volume: kw.volume,
-    difficulty: kw.difficulty || 0,
-    cpc: kw.cpc || 0,
-    currentPosition: kw.position,
-    rankingUrl: kw.url,
+    volume: item['volume'],
+    difficulty: typeof item['difficulty'] === 'number' ? item['difficulty'] : 0,
+    cpc: typeof item['cpc'] === 'number' ? item['cpc'] : 0,
+    currentPosition: typeof item['position'] === 'number' ? item['position'] : undefined,
+    rankingUrl: typeof item['url'] === 'string' ? item['url'] : undefined,
     source: 'ahrefs',
     fetchedAt: new Date().toISOString(),
     },
-    }));
+    });
+    }
 
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('fetch', latency, true);
@@ -193,31 +198,37 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     return response;
     }, { maxRetries: 3 });
 
-    const data = await res.json() as {
-    ideas?: Array<{
-    keyword: string;
-    volume: number;
-    difficulty?: number;
-    cpc?: number;
-    parent_topic?: string;
-    }>;
-    };
+    const rawData: unknown = await res.json();
 
-    if (!data.ideas || !Array.isArray(data.ideas)) {
+    if (typeof rawData !== 'object' || rawData === null) {
+    return [];
+    }
+    const data = rawData as Record<string, unknown>;
+
+    if (!data['ideas'] || !Array.isArray(data['ideas'])) {
     return [];
     }
 
-    const suggestions = data.ideas.map((kw): KeywordSuggestion => ({
-    keyword: kw.keyword,
+    const suggestions: KeywordSuggestion[] = [];
+    for (const kw of data['ideas']) {
+    if (typeof kw !== 'object' || kw === null) continue;
+    const item = kw as Record<string, unknown>;
+    if (typeof item['keyword'] !== 'string' || typeof item['volume'] !== 'number') {
+    this.logger.warn('Skipping malformed keyword idea in Ahrefs response');
+    continue;
+    }
+    suggestions.push({
+    keyword: item['keyword'],
     metrics: {
-    volume: kw.volume,
-    difficulty: kw.difficulty || 0,
-    cpc: kw.cpc || 0,
-    parentTopic: kw.parent_topic,
+    volume: item['volume'],
+    difficulty: typeof item['difficulty'] === 'number' ? item['difficulty'] : 0,
+    cpc: typeof item['cpc'] === 'number' ? item['cpc'] : 0,
+    parentTopic: typeof item['parent_topic'] === 'string' ? item['parent_topic'] : undefined,
     source: 'ahrefs',
     fetchedAt: new Date().toISOString(),
     },
-    }));
+    });
+    }
 
     this.metrics.recordSuccess('fetchKeywordIdeas');
     return suggestions;
