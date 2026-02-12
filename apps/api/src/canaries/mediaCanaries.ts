@@ -22,12 +22,13 @@ const logger = getLogger('media-canary');
 * @throws Error if the health check fails
 */
 export async function runMediaCanary(name: string, fn: () => Promise<void>): Promise<void> {
+  // P3-4 FIX: Corrected indentation to match project conventions
   try {
-  await fn();
-  emitMetric({ name: 'media_canary_success', labels: { name } });
+    await fn();
+    emitMetric({ name: 'media_canary_success', labels: { name } });
   } catch (error) {
-  logger.error(`[MediaCanary] ${name} failed:`, error as Error);
-  emitMetric({ name: 'media_canary_failure', labels: { name } });
-  throw error;
+    logger.error(`[MediaCanary] ${name} failed:`, error as Error);
+    emitMetric({ name: 'media_canary_failure', labels: { name } });
+    throw error;
   }
 }

@@ -20,7 +20,10 @@
 * ```
 */
 export interface CanaryAdapter {
-  healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string }>;
+  // P1-2 FIX: error uses `string | undefined` to match HealthCheckResult
+  // under exactOptionalPropertyTypes. Implementations may omit the property
+  // or explicitly set it to undefined when healthy.
+  healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }>;
 }
 
 /**
@@ -30,7 +33,7 @@ export interface CanaryResult {
   name: string;
   healthy: boolean;
   latency: number;
-  error?: string;
+  error?: string | undefined;
 }
 
 /**

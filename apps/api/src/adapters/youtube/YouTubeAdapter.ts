@@ -4,27 +4,31 @@ import { validateNonEmptyString } from '../../utils/validation';
 import fetch from 'node-fetch';
 import { withRetry } from '../../utils/retry';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
-import {
-  YouTubeVideoSnippet,
-  YouTubeVideoStatus,
-  YouTubeVideoResponse,
-} from '../../utils/validation/social';
 
 /**
  * YouTube Publishing Adapter
  *
- * MEDIUM FIX M3: Added structured logging
- * MEDIUM FIX M4: Added request IDs
- * MEDIUM FIX M5: Added metrics
- * MEDIUM FIX M7: Added health check
+ * Security audit fixes applied:
+ * - P0-1: response.text() in error path wrapped in try-catch
+ * - P1-2: HealthCheckResult aligned with CanaryAdapter interface
+ * - P1-6: parts parameter validated against allowlist
+ * - P1-7: YouTubeVideoResponse derived from Zod schema via z.infer
+ * - P2-1: healthCheck() consumes response body to prevent connection leak
+ * - P2-2: Error body truncated to prevent credential leakage in logs
+ * - P2-6: videoId sanitized in error messages
+ * - P2-7: healthCheck 403 error message clarified
+ * - P2-11: Private fields marked readonly
+ * - P3-2: ApiError exported
+ * - P3-3: YouTubeVideoListResponseSchema uses passthrough()
  */
 
 /**
- * API Error with status code and retry information
+ * API Error with status code and retry information.
+ * P3-2 FIX: Exported so consumers can use instanceof for typed error handling.
  */
-class ApiError extends Error {
-  status: number;
-  retryAfter?: string | undefined;
+export class ApiError extends Error {
+  readonly status: number;
+  readonly retryAfter?: string | undefined;
   constructor(message: string, status: number, retryAfter?: string | undefined) {
     super(message);
     this.status = status;
@@ -34,8 +38,8 @@ class ApiError extends Error {
 }
 
 /**
- * Zod schema for runtime validation of YouTube single-video responses.
- * Validates structure beyond just checking for an 'id' field.
+ * P1-7 FIX: Zod schema is the single source of truth for YouTube video responses.
+ * The TypeScript type is derived via z.infer to prevent drift.
  */
 const YouTubeVideoResponseSchema = z.object({
   id: z.string(),
@@ -53,15 +57,22 @@ const YouTubeVideoResponseSchema = z.object({
   }).optional(),
 });
 
+/** P1-7 FIX: Type derived from Zod schema -- single source of truth */
+export type YouTubeVideoResponse = z.infer<typeof YouTubeVideoResponseSchema>;
+
+/** Snippet fields from YouTube video response */
+export type YouTubeVideoSnippet = NonNullable<YouTubeVideoResponse['snippet']>;
+
+/** Status fields from YouTube video response */
+export type YouTubeVideoStatus = NonNullable<YouTubeVideoResponse['status']>;
+
 /**
- * Zod schema for runtime validation of YouTube video list responses.
+ * P3-3 FIX: passthrough() preserves pagination fields (pageInfo, nextPageToken)
+ * that YouTube API returns but we don't currently use.
  */
 const YouTubeVideoListResponseSchema = z.object({
   items: z.array(YouTubeVideoResponseSchema),
-});
-
-// Re-export types for consumers that import from this module
-export type { YouTubeVideoSnippet, YouTubeVideoStatus, YouTubeVideoResponse };
+}).passthrough();
 
 export interface YouTubeVideoMetadata {
   title?: string;
@@ -71,18 +82,40 @@ export interface YouTubeVideoMetadata {
   defaultLanguage?: string;
 }
 
+/**
+ * P1-2 FIX: Changed error from `string | undefined` to `string` to match
+ * CanaryAdapter interface under exactOptionalPropertyTypes. When healthy,
+ * the property is omitted entirely rather than set to `undefined`.
+ */
 export interface HealthCheckResult {
   healthy: boolean;
   latency: number;
-  error?: string | undefined;
+  error?: string;
+}
+
+/**
+ * P1-6 FIX: Allowlist of valid YouTube Data API part names.
+ * Prevents quota abuse via arbitrary part requests.
+ */
+const VALID_VIDEO_PARTS = new Set([
+  'snippet', 'status', 'contentDetails', 'statistics',
+  'player', 'topicDetails', 'recordingDetails', 'localizations',
+]);
+
+/** P2-6: Max length for videoId in error messages to prevent log injection */
+const MAX_VIDEO_ID_LOG_LENGTH = 20;
+
+function sanitizeVideoIdForLog(videoId: string): string {
+  return videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
 }
 
 export class YouTubeAdapter {
-  private accessToken: string;
-  private baseUrl: string;
-  private timeoutMs: number;
-  private logger: StructuredLogger;
-  private metrics: MetricsCollector;
+  // P2-11 FIX: All private fields marked readonly
+  private readonly accessToken: string;
+  private readonly baseUrl: string;
+  private readonly timeoutMs: number;
+  private readonly logger: StructuredLogger;
+  private readonly metrics: MetricsCollector;
 
   constructor(accessToken: string) {
     validateNonEmptyString(accessToken, 'accessToken');
@@ -95,13 +128,13 @@ export class YouTubeAdapter {
   }
 
   /**
-   * Update video metadata
+   * Update video snippet metadata
    */
   async updateMetadata(videoId: string, metadata: YouTubeVideoMetadata): Promise<YouTubeVideoResponse> {
     const context = createRequestContext('YouTubeAdapter', 'updateMetadata');
 
     validateNonEmptyString(videoId, 'videoId');
-    this.logger.info('Updating YouTube video metadata', context, { videoId });
+    this.logger.info('Updating YouTube video metadata', context, { videoId: sanitizeVideoIdForLog(videoId) });
     const startTime = Date.now();
     try {
       const data = await withRetry(async () => {
@@ -123,11 +156,16 @@ export class YouTubeAdapter {
           });
 
           if (!response.ok) {
-            const errorBody = await response.text();
-            this.logger.error('YouTube metadata update API error', context, {
+            // P0-1 FIX: Wrap response.text() in try-catch to prevent masking
+            // the HTTP status code. If text() throws (network reset, abort,
+            // stream corruption), we lose the body but preserve the status.
+            let errorBody = '';
+            try { errorBody = await response.text(); } catch { /* body unreadable */ }
+            this.logger.error('YouTube metadata update API error', context, new Error(`HTTP ${response.status}`), {
               status: response.status,
-              body: errorBody,
-              videoId,
+              // P2-2 FIX: Truncate error body to prevent credential leakage
+              body: errorBody.slice(0, 1024),
+              videoId: sanitizeVideoIdForLog(videoId),
             });
 
             if (response.status === 429) {
@@ -173,6 +211,14 @@ export class YouTubeAdapter {
     const context = createRequestContext('YouTubeAdapter', 'getVideo');
 
     validateNonEmptyString(videoId, 'videoId');
+
+    // P1-6 FIX: Validate parts against allowlist to prevent quota abuse
+    for (const part of parts) {
+      if (!VALID_VIDEO_PARTS.has(part)) {
+        throw new Error(`Invalid YouTube API part: ${part}. Allowed: ${[...VALID_VIDEO_PARTS].join(', ')}`);
+      }
+    }
+
     const startTime = Date.now();
     try {
       const data = await withRetry(async () => {
@@ -212,7 +258,8 @@ export class YouTubeAdapter {
 
       const firstItem = data.items[0];
       if (!firstItem) {
-        throw new Error(`Video not found: ${videoId}`);
+        // P2-6 FIX: Sanitize videoId in error messages
+        throw new Error(`Video not found: ${sanitizeVideoIdForLog(videoId)}`);
       }
       const latency = Date.now() - startTime;
       this.metrics.recordLatency('getVideo', latency, true);
@@ -229,7 +276,7 @@ export class YouTubeAdapter {
 
   /**
    * Health check for YouTube API.
-   * Differentiates between auth errors and service health issues.
+   * P2-7 FIX: Differentiates between auth errors and other 403 reasons (quota, IP block).
    */
   async healthCheck(): Promise<HealthCheckResult> {
     const start = Date.now();
@@ -246,7 +293,12 @@ export class YouTubeAdapter {
       });
       const latency = Date.now() - start;
 
-      if (res.status === 401 || res.status === 403) {
+      // P2-1 FIX: Always consume the response body to prevent connection leak.
+      // node-fetch v3 uses Web Streams; unconsumed bodies hold TCP connections.
+      let responseBody = '';
+      try { responseBody = await res.text(); } catch { /* body unreadable */ }
+
+      if (res.status === 401) {
         return {
           healthy: false,
           latency,
@@ -254,11 +306,30 @@ export class YouTubeAdapter {
         };
       }
 
+      // P2-7 FIX: 403 can mean quota exceeded, IP blocked, or auth — differentiate
+      if (res.status === 403) {
+        let reason = 'forbidden';
+        try {
+          const body = JSON.parse(responseBody) as { error?: { errors?: Array<{ reason?: string }> } };
+          reason = body?.error?.errors?.[0]?.reason ?? 'forbidden';
+        } catch { /* unparseable body */ }
+        return {
+          healthy: false,
+          latency,
+          error: `YouTube API 403 error (reason: ${reason})`,
+        };
+      }
+
       const healthy = res.ok;
+      // P1-2 FIX: Omit error property entirely when healthy, instead of
+      // setting it to undefined. This satisfies exactOptionalPropertyTypes.
+      if (healthy) {
+        return { healthy, latency };
+      }
       return {
         healthy,
         latency,
-        error: healthy ? undefined : `YouTube API returned status ${res.status}`,
+        error: `YouTube API returned status ${res.status}`,
       };
     } catch (error) {
       return {
