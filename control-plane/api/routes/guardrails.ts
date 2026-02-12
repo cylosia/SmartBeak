@@ -1,5 +1,3 @@
-
-
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
