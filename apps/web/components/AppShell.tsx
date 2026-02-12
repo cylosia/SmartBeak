@@ -12,6 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <li><a href='/timeline'>Timeline</a></li>
       <li><a href='/sell-ready'>Sell Ready</a></li>
       <li><a href='/constitution'>Constitution</a></li>
+      <li><a href='/help'>Help</a></li>
     </ul>
     <div style={{ marginTop: 24 }}>
       <ThemeToggle />

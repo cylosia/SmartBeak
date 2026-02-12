@@ -79,7 +79,7 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
   try {
   // P1-FIX: Execute all registered handlers with error isolation
   const handlerTimeoutMs = 30000;
-  const handlerPromises = Array.from(handlers).map(async (handler, index) => {
+  const handlerPromises = [...handlers].map(async (handler, index) => {
     const handlerName = handler.name || `handler-${index}`;
     try {
     const result = handler();

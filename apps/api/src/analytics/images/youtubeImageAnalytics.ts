@@ -1,15 +1,14 @@
 
 import { z } from 'zod';
 
+/** P2-1 FIX (audit 2): .strict() rejects unexpected properties instead of silently stripping them */
 export const YouTubeCtrInputSchema = z.object({
   impressions: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   views: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
-});
+}).strict();
 
-export function computeYouTubeThumbnailCtr(input: {
-  impressions: number;
-  views: number;
-}): number {
+/** P2-10 FIX (audit 2): Parameter type derived from Zod schema to prevent drift */
+export function computeYouTubeThumbnailCtr(input: z.input<typeof YouTubeCtrInputSchema>): number {
   const validated = YouTubeCtrInputSchema.parse(input);
 
   if (validated.impressions === 0) return 0;

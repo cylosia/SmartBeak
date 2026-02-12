@@ -160,7 +160,7 @@ export async function gracefulShutdown(signal: string): Promise<void> {
 
   try {
     // Sort handlers by priority (lower = earlier)
-    const sortedHandlers = Array.from(handlers).sort((a, b) => a.priority - b.priority);
+    const sortedHandlers = [...handlers].sort((a, b) => a.priority - b.priority);
 
     // Execute all registered handlers in sequence with individual timeouts
     const handlerPromises = sortedHandlers.map(async (registration, index) => {

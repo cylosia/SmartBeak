@@ -345,7 +345,7 @@ export class PoolHealthMonitor extends EventEmitter {
     return {
       status: this.metrics.healthStatus,
       metrics: this.metrics,
-      connections: Array.from(this.connectionHealth.values()),
+      connections: [...this.connectionHealth.values()],
       recommendations,
     };
   }

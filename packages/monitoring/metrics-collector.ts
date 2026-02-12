@@ -788,7 +788,7 @@ export class MetricsCollector extends EventEmitter {
       const name = key.split('{')[0]!;
       names.add(name);
     }
-    return Array.from(names);
+    return [...names];
   }
 
   /**

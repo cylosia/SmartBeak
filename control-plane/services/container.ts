@@ -394,6 +394,10 @@ let globalContainer: Container | null = null;
 * Initialize the global container
 */
 export function initializeContainer(config: ContainerConfig): Container {
+  if (globalContainer) {
+  logger.warn('Container already initialized — disposing previous instance');
+  void globalContainer.dispose();
+  }
   globalContainer = new Container(config);
   return globalContainer;
 }

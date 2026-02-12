@@ -30,6 +30,8 @@ vi.mock('../../src/utils/validation', () => ({
   validateNonEmptyString: vi.fn(),
 }));
 
+vi.mock('../../src/canaries/types', () => ({}));
+
 vi.mock('@config', () => ({
   API_BASE_URLS: { youtube: 'https://www.googleapis.com/youtube' },
   API_VERSIONS: { youtube: 'v3' },
@@ -197,6 +199,64 @@ describe('YouTubeAdapter', () => {
       const result = await adapter.getVideo('vid456', ['snippet', 'contentDetails', 'statistics']);
       expect(result.id).toBe('vid456');
     });
+
+    // P2-9 FIX (audit 2): Tests for getVideo error responses — previously missing
+    test('throws ApiError on non-ok response (P2-9)', async () => {
+      mockFetchResponse({ error: 'quota exceeded' }, false, 403);
+
+      const adapter = new YouTubeAdapter('valid-token');
+      try {
+        await adapter.getVideo('vid123');
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(403);
+      }
+    });
+
+    test('throws ApiError with retryAfter on 429 (P2-9)', async () => {
+      mockFetchResponse({ error: 'rate limited' }, false, 429, { 'retry-after': '60' });
+
+      const adapter = new YouTubeAdapter('valid-token');
+      try {
+        await adapter.getVideo('vid123');
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(429);
+        expect((error as ApiError).retryAfter).toBe('60');
+      }
+    });
+
+    // P1-1 FIX (audit 2): Verify response body is consumed in getVideo error path
+    test('consumes response body on error to prevent connection leak (P1-1)', async () => {
+      const textFn = vi.fn().mockResolvedValue('error body');
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: async () => ({}),
+        text: textFn,
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      const adapter = new YouTubeAdapter('valid-token');
+      await expect(adapter.getVideo('vid123')).rejects.toThrow();
+      expect(textFn).toHaveBeenCalled();
+    });
+
+    test('preserves HTTP status when getVideo response body is unreadable (P1-1)', async () => {
+      mockFetchResponseWithBrokenBody(500);
+
+      const adapter = new YouTubeAdapter('valid-token');
+      try {
+        await adapter.getVideo('vid123');
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(500);
+      }
+    });
   });
 
   describe('healthCheck', () => {
@@ -271,6 +331,36 @@ describe('YouTubeAdapter', () => {
       await adapter.healthCheck();
 
       expect(textFn).toHaveBeenCalled();
+    });
+  });
+
+  // P1-2 FIX (audit 2): Token factory pattern tests
+  describe('token factory', () => {
+    test('accepts a synchronous token factory function', async () => {
+      const responseBody = { items: [{ id: 'vid789', snippet: { title: 'Test' } }] };
+      mockFetchResponse(responseBody);
+
+      const tokenFactory = vi.fn().mockReturnValue('dynamic-token');
+      const adapter = new YouTubeAdapter(tokenFactory);
+      const result = await adapter.getVideo('vid789');
+
+      expect(result.id).toBe('vid789');
+      expect(tokenFactory).toHaveBeenCalled();
+      const [, options] = fetchMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect((options['headers'] as Record<string, string>)['Authorization']).toBe('Bearer dynamic-token');
+    });
+
+    test('accepts an async token factory function', async () => {
+      const responseBody = { items: [{ id: 'vid789', snippet: { title: 'Test' } }] };
+      mockFetchResponse(responseBody);
+
+      const tokenFactory = vi.fn().mockResolvedValue('async-token');
+      const adapter = new YouTubeAdapter(tokenFactory);
+      const result = await adapter.getVideo('vid789');
+
+      expect(result.id).toBe('vid789');
+      const [, options] = fetchMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect((options['headers'] as Record<string, string>)['Authorization']).toBe('Bearer async-token');
     });
   });
 });

@@ -846,7 +846,7 @@ export class AlertRulesEngine extends EventEmitter {
    * Get all active alerts
    */
   getActiveAlerts(): AlertInstance[] {
-    return Array.from(this.activeAlerts.values());
+    return [...this.activeAlerts.values()];
   }
 
   /**
@@ -867,7 +867,7 @@ export class AlertRulesEngine extends EventEmitter {
    * Get all rules
    */
   getRules(): AlertRule[] {
-    return Array.from(this.rules.values());
+    return [...this.rules.values()];
   }
 
   // ==========================================================================

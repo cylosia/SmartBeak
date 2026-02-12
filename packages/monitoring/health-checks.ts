@@ -257,7 +257,7 @@ export class HealthChecksRegistry extends EventEmitter {
   async runAllChecks(): Promise<HealthReport> {
     // P1-FIX: Run all checks in parallel to avoid cascading timeout amplification.
     // Previously sequential: N checks * 5s timeout = N*5s worst case.
-    const enabledChecks = Array.from(this.checks.entries())
+    const enabledChecks = [...this.checks.entries()]
       .filter(([, config]) => config.enabled !== false);
 
     const results = await Promise.allSettled(
@@ -325,7 +325,7 @@ export class HealthChecksRegistry extends EventEmitter {
    * Get all registered check names
    */
   getCheckNames(): string[] {
-    return Array.from(this.checks.keys());
+    return [...this.checks.keys()];
   }
 
   /**
@@ -346,7 +346,7 @@ export class HealthChecksRegistry extends EventEmitter {
    * Check if service is ready to accept traffic
    */
   async checkReadiness(): Promise<ReadinessResult> {
-    const criticalChecks = Array.from(this.checks.entries())
+    const criticalChecks = [...this.checks.entries()]
       .filter(([, config]) => config.severity === 'critical')
       .map(([name]) => name);
 

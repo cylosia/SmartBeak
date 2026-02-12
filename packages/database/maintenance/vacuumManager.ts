@@ -486,7 +486,7 @@ export async function runVacuumMaintenance(
   const results: MaintenanceResult[] = [];
 
   if (!dryRun) {
-    for (const table of Array.from(tablesToVacuum)) {
+    for (const table of tablesToVacuum) {
       // P0-3 FIX: Validate dynamically-sourced table names from db_vacuum_statistics
       try {
         validateTableName(table);

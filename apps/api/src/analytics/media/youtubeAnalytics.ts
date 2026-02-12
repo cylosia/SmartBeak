@@ -2,9 +2,10 @@
 import fetch from 'node-fetch';
 import { z } from 'zod';
 
-import { timeoutConfig } from '@config';
+import { timeoutConfig, API_BASE_URLS } from '@config';
 import { withRetry } from '../../utils/retry';
 import { getLogger } from '@kernel/logger';
+import { ApiError } from '../../adapters/youtube/YouTubeAdapter';
 
 const logger = getLogger('youtubeAnalytics');
 
@@ -34,6 +35,31 @@ const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
 
 // P1-5 FIX: Validate YYYY-MM-DD format
 const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/** P2-8 FIX (audit 2): Sanitize videoId in log messages for defense-in-depth */
+const MAX_VIDEO_ID_LOG_LENGTH = 20;
+function sanitizeVideoIdForLog(videoId: string): string {
+  return videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
+}
+
+/**
+ * P1-5 FIX (audit 2): Semantic date validation beyond regex format check.
+ * Rejects dates like 2024-13-45 or 2024-02-30 that pass the regex.
+ */
+function validateAnalyticsDate(dateStr: string, name: string): void {
+  if (!dateStr || typeof dateStr !== 'string' || !DATE_FORMAT_REGEX.test(dateStr)) {
+    throw new Error(`Invalid ${name}: must be a string in YYYY-MM-DD format`);
+  }
+  const parsed = new Date(dateStr + 'T00:00:00Z');
+  if (isNaN(parsed.getTime())) {
+    throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
+  }
+  // Roundtrip check catches month/day overflow (e.g., 2024-02-30 -> 2024-03-01)
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (parsed.getUTCFullYear() !== y || parsed.getUTCMonth() + 1 !== m || parsed.getUTCDate() !== d) {
+    throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
+  }
+}
 
 /**
  * Zod schema for validating the YouTube Analytics API response.
@@ -67,12 +93,14 @@ export async function ingestYouTubeAnalytics(
   if (!YOUTUBE_VIDEO_ID_REGEX.test(videoId)) {
     throw new Error('Invalid videoId: must be an 11-character YouTube video ID');
   }
-  // P1-5 FIX: Validate date format
-  if (!startDate || typeof startDate !== 'string' || !DATE_FORMAT_REGEX.test(startDate)) {
-    throw new Error('Invalid startDate: must be a string in YYYY-MM-DD format');
-  }
-  if (!endDate || typeof endDate !== 'string' || !DATE_FORMAT_REGEX.test(endDate)) {
-    throw new Error('Invalid endDate: must be a string in YYYY-MM-DD format');
+  // P1-5 FIX (audit 2): Semantic date validation with roundtrip check
+  validateAnalyticsDate(startDate, 'startDate');
+  validateAnalyticsDate(endDate, 'endDate');
+
+  // P1-5 FIX (audit 2): Temporal ordering check — reversed ranges return
+  // empty data indistinguishable from "no analytics," causing silent failures.
+  if (startDate > endDate) {
+    throw new Error('Invalid date range: startDate must be <= endDate');
   }
 
   const data = await withRetry(async () => {
@@ -83,8 +111,9 @@ export async function ingestYouTubeAnalytics(
       // P0-2 FIX: Removed `dimensions: 'video'` — the filter already selects
       // the target video, and including dimensions prepends a string column
       // that breaks the numeric-only Zod schema.
+      // P1-3 FIX (audit 2): Use centralized API_BASE_URLS instead of hardcoded URL
       const res = await fetch(
-        `https://youtubeanalytics.googleapis.com/v2/reports?` +
+        `${API_BASE_URLS.youtubeAnalytics}/v2/reports?` +
         new URLSearchParams({
           ids: CHANNEL_MINE,
           metrics: 'views,likes,comments',
@@ -95,6 +124,8 @@ export async function ingestYouTubeAnalytics(
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
+            // P2-4 FIX (audit 2): Explicit Accept header for content negotiation
+            'Accept': 'application/json',
           },
           signal: controller.signal,
         },
@@ -104,22 +135,22 @@ export async function ingestYouTubeAnalytics(
         // P0-1 pattern: wrap response.text() to avoid masking the HTTP status
         let errorText = '';
         try { errorText = await res.text(); } catch { /* body unreadable */ }
+        // P2-8 FIX (audit 2): Sanitize videoId in log messages
         logger.error('YouTube Analytics API error', new Error(`HTTP ${res.status}`), {
           status: res.status,
           body: errorText.slice(0, 1024),
-          videoId,
+          videoId: sanitizeVideoIdForLog(videoId),
         });
-        // P1-3 FIX: Attach .status so withRetry can detect non-retryable errors
-        const err = new Error(`YouTube Analytics fetch failed with status ${res.status}`) as Error & { status: number };
-        err.status = res.status;
-        throw err;
+        // P2-2 FIX (audit 2): Use typed ApiError instead of monkey-patched Error
+        throw new ApiError(`YouTube Analytics fetch failed with status ${res.status}`, res.status, undefined, errorText);
       }
 
       const rawJson: unknown = await res.json();
       const parsed = YouTubeAnalyticsResponseSchema.safeParse(rawJson);
       if (!parsed.success) {
-        logger.error('Invalid YouTube Analytics response shape', new Error(parsed.error.message), { videoId });
-        throw new Error('Invalid response format from YouTube Analytics API');
+        // P2-8 FIX (audit 2): Sanitize videoId in log messages
+        logger.error('Invalid YouTube Analytics response shape', new Error(parsed.error.message), { videoId: sanitizeVideoIdForLog(videoId) });
+        throw new ApiError('Invalid response format from YouTube Analytics API', 500);
       }
       return parsed.data;
     } finally {
@@ -134,21 +165,21 @@ export async function ingestYouTubeAnalytics(
 
   // P2-10 FIX: Validate row has expected number of metric columns
   if (row.length < EXPECTED_METRIC_COUNT) {
+    // P2-8 FIX (audit 2): Sanitize videoId in log messages
     logger.warn('YouTube Analytics row has fewer columns than expected', {
-      videoId,
+      videoId: sanitizeVideoIdForLog(videoId),
       expected: EXPECTED_METRIC_COUNT,
       actual: row.length,
     });
     return null;
   }
 
-  const views = row[VIEWS_INDEX];
-  const likes = row[LIKES_INDEX];
-  const comments = row[COMMENTS_INDEX];
+  // P2-7 FIX (audit 2): Zod schema z.array(z.number()) guarantees these are
+  // numbers. Removed redundant typeof checks that silently fell back to 0,
+  // which would mask data corruption instead of failing loudly.
+  const views = row[VIEWS_INDEX]!;
+  const likes = row[LIKES_INDEX]!;
+  const comments = row[COMMENTS_INDEX]!;
 
-  return {
-    views: typeof views === 'number' ? views : 0,
-    likes: typeof likes === 'number' ? likes : 0,
-    comments: typeof comments === 'number' ? comments : 0,
-  };
+  return { views, likes, comments };
 }

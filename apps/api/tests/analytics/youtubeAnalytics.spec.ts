@@ -9,6 +9,7 @@ vi.mock('node-fetch', () => {
 
 vi.mock('@config', () => ({
   timeoutConfig: { long: 30000 },
+  API_BASE_URLS: { youtubeAnalytics: 'https://youtubeanalytics.googleapis.com' },
 }));
 
 vi.mock('../../src/utils/retry', () => ({
@@ -24,6 +25,7 @@ vi.mock('@kernel/logger', () => ({
 }));
 
 import { ingestYouTubeAnalytics } from '../../src/analytics/media/youtubeAnalytics';
+import { ApiError } from '../../src/adapters/youtube/YouTubeAdapter';
 import nodeFetch from 'node-fetch';
 
 const fetchMock = nodeFetch as unknown as ReturnType<typeof vi.fn>;
@@ -72,6 +74,34 @@ describe('ingestYouTubeAnalytics', () => {
       await expect(ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-01-01', 'Jan 31'))
         .rejects.toThrow('YYYY-MM-DD format');
     });
+
+    // P1-5 FIX (audit 2): Semantic date validation tests
+    test('rejects semantically invalid dates like month 13 (P1-5)', async () => {
+      await expect(ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-13-01', '2024-01-31'))
+        .rejects.toThrow('not a valid calendar date');
+    });
+
+    test('rejects Feb 30 overflow date (P1-5)', async () => {
+      await expect(ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-02-30', '2024-03-31'))
+        .rejects.toThrow('not a valid calendar date');
+    });
+
+    test('rejects reversed date range where startDate > endDate (P1-5)', async () => {
+      await expect(ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-12-31', '2024-01-01'))
+        .rejects.toThrow('startDate must be <= endDate');
+    });
+
+    test('accepts same start and end date', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ rows: [[10, 1, 0]] }),
+        text: async () => '{}',
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      const result = await ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-01-01', '2024-01-01');
+      expect(result).toEqual({ views: 10, likes: 1, comments: 0 });
+    });
   });
 
   describe('API interaction', () => {
@@ -115,8 +145,8 @@ describe('ingestYouTubeAnalytics', () => {
       expect(url).toContain('metrics=views%2Clikes%2Ccomments');
     });
 
-    // P1-3: Error has .status for retry logic
-    test('throws error with .status on non-ok response (P1-3)', async () => {
+    // P2-2 FIX (audit 2): Now throws ApiError instead of monkey-patched Error
+    test('throws ApiError with .status on non-ok response (P1-3, P2-2)', async () => {
       fetchMock.mockResolvedValueOnce({
         ok: false,
         status: 403,
@@ -128,8 +158,24 @@ describe('ingestYouTubeAnalytics', () => {
         await ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-01-01', '2024-01-31');
         expect.fail('Should have thrown');
       } catch (error) {
-        expect((error as Error & { status: number }).status).toBe(403);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(403);
       }
+    });
+
+    // P1-3 FIX (audit 2): Uses centralized API_BASE_URLS
+    test('uses configured youtubeAnalytics base URL (P1-3)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ rows: [[100, 10, 5]] }),
+        text: async () => '{}',
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      await ingestYouTubeAnalytics('token', 'dQw4w9WgXcQ', '2024-01-01', '2024-01-31');
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(url).toContain('youtubeanalytics.googleapis.com/v2/reports');
     });
   });
 });
