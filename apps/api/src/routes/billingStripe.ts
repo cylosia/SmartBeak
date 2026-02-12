@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { createStripeCheckoutSession } from '../billing/stripe';
 import { extractAndVerifyToken } from '@security/jwt';
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const billingStripeLogger = getLogger('billingStripe');
 import { rateLimitMiddleware } from '../middleware/rateLimiter';

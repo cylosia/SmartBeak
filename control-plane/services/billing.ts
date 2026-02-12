@@ -90,7 +90,11 @@ export class BillingService {
     if (entry.status === 'processing') {
     return { exists: true, error: 'Operation still in progress' };
     }
-    return { exists: true, result: entry.result, error: entry.error };
+    return {
+      exists: true,
+      ...(entry.result !== undefined ? { result: entry.result } : {}),
+      ...(entry.error !== undefined ? { error: entry.error } : {}),
+    };
   }
 
   private async setIdempotencyStatus(key: string, status: string, result?: unknown, error?: string): Promise<void> {

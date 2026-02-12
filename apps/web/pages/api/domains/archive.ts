@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await requireOrgAdmin(auth, res);
     } catch (adminError) {
-      logger.warn({ userId: auth.userId }, 'Non-admin user attempted to archive domain');
+      logger.warn('Non-admin user attempted to archive domain', { userId: auth.userId });
       return;
     }
 
@@ -78,7 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (domainRows.length === 0) {
       // SECURITY FIX: Return 404 (not 403) to prevent ID enumeration
-      logger.warn({ userId: auth.userId, domainId }, 'User attempted to archive non-existent or unauthorized domain');
+      logger.warn('User attempted to archive non-existent or unauthorized domain', { userId: auth.userId, domainId });
       return sendError(res, 404, 'Domain not found');
     }
 
@@ -86,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Double-check org_id matches (defense in depth)
     if (domain.org_id !== auth["orgId"]) {
-      logger.warn({ domainOrgId: domain.org_id, userOrgId: auth["orgId"] }, 'Domain org_id does not match user org_id');
+      logger.warn('Domain org_id does not match user org_id', { domainOrgId: domain.org_id, userOrgId: auth["orgId"] });
       return sendError(res, 404, 'Domain not found');
     }
 
@@ -113,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Security audit log for domain archive
-    logger.info({ domainId, userId: auth.userId, orgId: auth["orgId"], reason: reason || 'User initiated' }, 'Domain archived');
+    logger.info('Domain archived', { domainId, userId: auth.userId, orgId: auth["orgId"], reason: reason || 'User initiated' });
 
     res.json({
       archived: true,
@@ -123,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AuthError') return;
-    logger.error({ error }, 'Failed to archive domain');
+    logger.error('Failed to archive domain', error instanceof Error ? error : undefined, { error: String(error) });
 
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -32,14 +32,14 @@ export function BillingInvoices() {
   <div>
     <h2>Invoices & Receipts</h2>
     <ul>
-    {invoices.map((inv: { id: string; number: string; hostedInvoiceUrl: string; amountPaid: number }) => (
+    {invoices.map((inv) => (
       <li key={inv.id}>
       <a
-        href={inv.hostedInvoiceUrl}
+        href={inv.pdfUrl ?? '#'}
         target='_blank'
         rel='noopener noreferrer'
       >
-        {inv.number} – ${(inv.amountPaid / 100).toFixed(2)}
+        {inv.id} – ${(inv.amount / 100).toFixed(2)}
       </a>
       </li>
     ))}

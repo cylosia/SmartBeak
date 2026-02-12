@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
     await requireOrgAdmin(auth, res);
     } catch {
-    logger.warn({ userId: auth.userId }, 'Non-admin user attempted to create domain');
+    logger.warn('Non-admin user attempted to create domain', { userId: auth.userId });
     return;
     }
 
@@ -100,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Check if quota exceeded
     if (currentCount >= maxDomains) {
         await client.query('ROLLBACK');
-        logger.warn({ orgId: auth["orgId"], currentCount, maxDomains }, 'Domain quota exceeded');
+        logger.warn('Domain quota exceeded', { orgId: auth["orgId"], currentCount, maxDomains });
         return sendError(res, 403, 'Domain quota exceeded. Please upgrade your plan.');
     }
 
@@ -138,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await client.query('COMMIT');
 
     // Security audit log
-    logger.info({ domainId, name, userId: auth.userId, orgId: auth["orgId"] }, 'Domain created');
+    logger.info('Domain created', { domainId, name, userId: auth.userId, orgId: auth["orgId"] });
 
     res.status(201).json({
         id: domainId,
@@ -157,7 +157,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         await client.query('ROLLBACK');
       } catch (rollbackError) {
-        logger.error({ error: rollbackError }, 'Rollback failed');
+        logger.error('Rollback failed', rollbackError instanceof Error ? rollbackError : undefined, { error: String(rollbackError) });
         
         // Chain errors for debugging
         const originalMsg = error instanceof Error ? error.message : String(error);
@@ -176,7 +176,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
   } catch (error: unknown) {
-    logger.error({ error }, 'Failed to create domain');
+    logger.error('Failed to create domain', error instanceof Error ? error : undefined, { error: String(error) });
 
     // Sanitize error for client
     const message = error instanceof Error ? error.message : '';

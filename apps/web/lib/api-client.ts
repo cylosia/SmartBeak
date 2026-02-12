@@ -161,8 +161,7 @@ export function createApiClient(config: ApiClientConfig) {
       ...options,
       timeoutMs,
       retries,
-      // P2-FIX: Use undefined instead of null — fetch API expects AbortSignal | undefined
-      signal: requestConfig.signal ?? undefined,
+      ...(requestConfig.signal ? { signal: requestConfig.signal } : {}),
     });
 
     // Handle non-JSON responses

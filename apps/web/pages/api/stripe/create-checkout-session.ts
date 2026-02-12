@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   catch (error) {
     if (error instanceof Error && error.name === 'AuthError')
       return;
-    logger.error({ error }, 'Checkout session creation failed');
+    logger.error('Checkout session creation failed', error instanceof Error ? error : undefined);
     if (error instanceof Error && 'type' in error && error.type === 'StripeInvalidRequestError') {
       return res.status(400).json({
         error: 'Invalid request to Stripe',

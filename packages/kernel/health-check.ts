@@ -158,7 +158,9 @@ export async function checkAllHealth(): Promise<{
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
-    const [name] = healthChecks[i];
+    const entry = healthChecks[i];
+    if (!result || !entry) continue;
+    const [name] = entry;
     if (result.status === 'fulfilled') {
       checks.push(result.value);
       if (!result.value.healthy) allHealthy = false;

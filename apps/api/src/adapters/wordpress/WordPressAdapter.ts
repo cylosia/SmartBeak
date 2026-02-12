@@ -1,5 +1,5 @@
 import { getLogger } from '@kernel/logger';
-import { MetricsCollector, createRequestContext } from '../../utils/request';
+import { MetricsCollector } from '../../utils/request';
 import { withRetry } from '../../utils/retry';
 
 import { DEFAULT_TIMEOUTS } from '@config';
@@ -90,7 +90,7 @@ export async function fetchWordPressPosts(
   return posts;
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('WordPress API error', createRequestContext('WordPressAdapter', 'fetchPosts'), err, { status: (error as { status?: number }).status });
+  logger.error('WordPress API error', err, { context: 'WordPressAdapter.fetchPosts', status: (error as { status?: number }).status });
   metrics.recordError('fetchPosts', err.name);
   throw new Error('Failed to fetch WordPress posts');
   } finally {
@@ -168,7 +168,7 @@ export async function createWordPressPost(
   return created;
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('WordPress API error', createRequestContext('WordPressAdapter', 'createPost'), err, { status: (error as { status?: number }).status });
+  logger.error('WordPress API error', err, { context: 'WordPressAdapter.createPost', status: (error as { status?: number }).status });
   metrics.recordError('createPost', err.name);
   throw new Error('Failed to create WordPress post');
   } finally {
@@ -261,7 +261,7 @@ export function parseWordPressContent(htmlContent: string): { text: string; imag
   }
 
   if (iterations >= MAX_ITERATIONS) {
-  logger.warn('Regex iteration limit reached, iterations: ' + iterations, createRequestContext('WordPressAdapter', 'parseWordPressContent'));
+  logger.warn('Regex iteration limit reached, iterations: ' + iterations, { context: 'WordPressAdapter.parseWordPressContent' });
   }
 
   // Strip HTML tags for plain text
