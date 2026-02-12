@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { getDb } from '../db';
@@ -8,8 +8,9 @@ import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
 import { sanitizeError } from '../utils/sanitizedErrors';
 import { getLogger } from '../../../../packages/kernel/logger';
 
+// P1-SECURITY FIX: domain_id is required to prevent unscoped exports
 const ExportBodySchema = z.object({
-  domain_id: z.string().uuid('Domain ID must be a valid UUID').optional(),
+  domain_id: z.string().uuid('Domain ID must be a valid UUID'),
   type: z.string().min(1, 'Export type is required').optional()
 });
 
@@ -80,9 +81,9 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
 
 export async function exportRoutes(app: FastifyInstance): Promise<void> {
   // P1-FIX: Add CSRF protection for state-changing operations
-  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', csrfProtection());
 
-  app.addHook('onRequest', apiRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', apiRateLimit());
 
   app.post<{
     Body: ExportBodyType;
@@ -97,26 +98,21 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
-      // Validate input if body is provided
-      let domainId: string | undefined;
-      if (req.body && Object.keys(req.body).length > 0) {
-        const parseResult = ExportBodySchema.safeParse(req.body);
-        if (!parseResult.success) {
-          return reply.status(400).send({
-            error: 'Invalid input',
-            code: 'VALIDATION_ERROR',
-            details: parseResult.error.issues
-          });
-        }
-        domainId = parseResult.data.domain_id;
+      // P1-SECURITY FIX: Always validate and require domain_id to prevent unscoped exports
+      const parseResult = ExportBodySchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({
+          error: 'Invalid input',
+          code: 'VALIDATION_ERROR',
+          details: parseResult.error.issues
+        });
       }
+      const { domain_id: domainId } = parseResult.data;
 
-      if (domainId) {
-        const hasAccess = await canAccessDomain(auth.userId, domainId, auth.orgId);
-        if (!hasAccess) {
-          logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to export data for domain ${domainId}`);
-          return reply.status(403).send({ error: 'Access denied to domain' });
-        }
+      const hasAccess = await canAccessDomain(auth.userId, domainId, auth.orgId);
+      if (!hasAccess) {
+        logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to export data for domain ${domainId}`);
+        return reply.status(403).send({ error: 'Access denied to domain' });
       }
 
       await recordAuditEvent({

@@ -120,8 +120,9 @@ export async function getCriticalDependencies(
     [sanitizedAssetType, sanitizedAssetId]
     );
   } else {
+    // M03-FIX: Add LIMIT to prevent unbounded full table scan
     result = await db.query<CriticalDependencyBreak>(
-    `SELECT * FROM critical_dependency_breaks`
+    `SELECT * FROM critical_dependency_breaks ORDER BY detected_at DESC LIMIT 1000`
     );
   }
 

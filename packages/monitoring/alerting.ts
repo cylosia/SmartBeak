@@ -4,7 +4,7 @@ import { getLogger } from '@kernel/logger';
 
 import { LRUCache } from '../utils/lruCache';
 
-﻿import { EventEmitter } from 'events';
+import { EventEmitter } from 'events';
 import { randomBytes } from 'crypto';
 
 
@@ -62,6 +62,8 @@ export class AlertingSystem extends EventEmitter {
 
   constructor(db: Pool) {
   super();
+  // P2-FIX: Set max listeners to prevent Node.js memory leak warnings
+  this.setMaxListeners(50);
   this.db = db;
   this.loadDefaultRules();
   }

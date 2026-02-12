@@ -4,8 +4,11 @@ import crypto from 'crypto';
 const TOKEN_EXPIRY_HOURS = 24;
 
 export async function createDoubleOptin(subscriber_id: string): Promise<string> {
+  if (!subscriber_id || typeof subscriber_id !== 'string') {
+    throw new Error('Valid subscriber_id is required');
+  }
   const token = crypto.randomBytes(16).toString('hex');
-  const db = await getDb();
+  const db = getDb();
   await db('email_optin_confirmations').insert({
     subscriber_id,
     token,
@@ -15,16 +18,25 @@ export async function createDoubleOptin(subscriber_id: string): Promise<string> 
 }
 
 export async function confirmDoubleOptin(token: string): Promise<boolean> {
-  const db = await getDb();
-  const rec = await db('email_optin_confirmations')
+  if (!token || typeof token !== 'string' || token.length > 200) {
+    throw new Error('Invalid token format');
+  }
+
+  const db = getDb();
+
+  // C06-FIX: Use a single atomic UPDATE with WHERE clause to prevent TOCTOU race.
+  // Previously: read token → check conditions → update separately.
+  // Two concurrent requests could both read confirmed_at=null and both succeed.
+  // Now: single atomic UPDATE that only succeeds if token is valid, not expired, and not confirmed.
+  const updatedRows = await db('email_optin_confirmations')
     .where({ token })
-    .first();
-  if (!rec || (rec.expires_at && new Date(rec.expires_at) < new Date()) || rec.confirmed_at) {
+    .whereNull('confirmed_at')
+    .where('expires_at', '>', new Date())
+    .update({ confirmed_at: new Date() });
+
+  if (updatedRows === 0) {
     throw new Error('Invalid or expired token');
   }
-  
-  await db('email_optin_confirmations')
-    .where({ token })
-    .update({ confirmed_at: new Date() });
+
   return true;
 }

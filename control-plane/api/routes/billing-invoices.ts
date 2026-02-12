@@ -1,5 +1,3 @@
-
-
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
@@ -7,6 +5,10 @@ import { z } from 'zod';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { billingConfig } from '@config/billing';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('billing-invoices');
 
 const FormatQuerySchema = z.object({
   format: z.enum(['csv', 'pdf']).default('csv')
@@ -37,8 +39,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
 
     // Import Stripe dynamically
     const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(process.env['STRIPE_SECRET_KEY']!, {
-    apiVersion: '2024-06-20' as '2023-10-16'
+    const stripe = new Stripe(billingConfig.stripeSecretKey, {
+    apiVersion: '2024-06-20' as Stripe.LatestApiVersion
     });
 
     const invoices = await stripe.invoices.list({
@@ -67,10 +69,10 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
 
     return { invoices: formattedInvoices };
   } catch (error) {
-    console["error"]('[billing/invoices] Error:', error);
+    logger.error('Error fetching invoices', error instanceof Error ? error : new Error(String(error)));
 
     // Return empty array if Stripe is not configured
-    if ((error as any).message?.includes('Stripe')) {
+    if (error instanceof Error && error.message.includes('Stripe')) {
     return { invoices: [] };
     }
 
@@ -101,8 +103,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(process.env['STRIPE_SECRET_KEY']!, {
-    apiVersion: '2024-06-20' as '2023-10-16'
+    const stripe = new Stripe(billingConfig.stripeSecretKey, {
+    apiVersion: '2024-06-20' as Stripe.LatestApiVersion
     });
 
     const invoices = await stripe.invoices.list({
@@ -120,7 +122,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     // Escape quotes and wrap in quotes
     let sanitized = field.replace(/"/g, '""');
     // SECURITY: Prefix formulas to prevent injection
-    if (/^[=+\-@\t\r]/.test(sanitized)) {
+    if (/^[=+\-@\t\r|]/.test(sanitized)) {
         sanitized = "'" + sanitized;
     }
     return `"${sanitized}"`;
@@ -129,7 +131,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return [
     sanitize(inv.number),
     sanitize(new Date(inv.created * 1000).toISOString()),
-    String(inv.amount_paid / 100),
+    sanitize(String(inv.amount_paid / 100)),
     sanitize(inv.currency),
     sanitize(inv.status),
     sanitize(inv.description),
@@ -143,7 +145,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
 
     return res.status(400).send({ error: 'Unsupported format. Use csv.' });
   } catch (error) {
-    console["error"]('[billing/invoices/export] Error:', error);
+    logger.error('Error exporting invoices', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return res.status(500).send({ error: 'Failed to export invoices' });
   }

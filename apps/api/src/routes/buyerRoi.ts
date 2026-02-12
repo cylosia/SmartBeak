@@ -8,9 +8,6 @@ import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('BuyerRoi');
 
-// P0-FIX: Await getDb() to get the actual database instance
-const db = await getDb();
-
 const RoleRowSchema = z.object({
   role: z.string(),
 });
@@ -70,6 +67,7 @@ async function canAccessDomain(
   orgId: string
 ): Promise<boolean> {
   try {
+  const db = await getDb();
   const rowResult = await db('domain_registry')
     .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
     .where('domain_registry.domain_id', domainId)
@@ -88,6 +86,7 @@ async function canAccessDomain(
 
 async function recordAuditEvent(params: AuditEventParams): Promise<void> {
   try {
+  const db = await getDb();
   await db('audit_events').insert({
     org_id: params.orgId,
     actor_type: 'user',
@@ -139,6 +138,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(403).send({ error: 'Access denied to domain' });
     }
 
+    const db = await getDb();
     const rows = await db('content_roi_models')
     .join('content', 'content.id', 'content_roi_models.content_id')
     .where('content.domain_id', domain)
@@ -155,7 +155,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     domain_id: domain,
     result_count: rows.length,
     },
-    ip: 'unknown',
+    ip,
     });
 
     const summary = await generateBuyerRoiSummary({
@@ -169,7 +169,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     const errorResponse: ErrorResponse = {
     error: 'Internal server error',
     };
-    if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+    if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
     errorResponse["message"] = error["message"];
     }
     return reply.status(500).send(errorResponse);

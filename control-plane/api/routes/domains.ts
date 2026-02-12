@@ -85,11 +85,11 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   try {
     // H11-FIX: Filter out archived (soft-deleted) domains by default
-    let query = `
-    d["id"], d.name, d.status, d.created_at, d.updated_at,
+    let query = `SELECT
+    d.id, d.name, d.status, d.created_at, d.updated_at,
     dr.domain_type, dr.revenue_confidence, dr.replaceability
     FROM domains d
-    LEFT JOIN domain_registry dr ON d["id"] = dr["id"]
+    LEFT JOIN domain_registry dr ON d.id = dr.id
     WHERE d.org_id = $1 AND d.archived_at IS NULL
     `;
     const params: unknown[] = [ctx["orgId"]];
@@ -230,7 +230,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     `INSERT INTO org_usage (org_id, domain_count, updated_at)
     VALUES ($1, 1, NOW())
     ON CONFLICT (org_id)
-    DO UPDATE SET domain_count = org_usage["domain_count"] + 1, updated_at = NOW()`,
+    DO UPDATE SET domain_count = org_usage.domain_count + 1, updated_at = NOW()`,
     [ctx["orgId"]]
     );
 
@@ -280,11 +280,11 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { rows } = await pool.query(
     `SELECT
-    d["id"], d.name, d.status, d.created_at, d.updated_at,
+    d.id, d.name, d.status, d.created_at, d.updated_at,
     dr.domain_type, dr.revenue_confidence, dr.replaceability
     FROM domains d
-    LEFT JOIN domain_registry dr ON d["id"] = dr["id"]
-    WHERE d["id"] = $1 AND d.org_id = $2`,
+    LEFT JOIN domain_registry dr ON d.id = dr.id
+    WHERE d.id = $1 AND d.org_id = $2`,
     [domainId, ctx["orgId"]]
     );
 
@@ -353,7 +353,12 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(403).send({ error: 'Access denied to domain' });
   }
 
+  // H08-FIX: Wrap both updates in a transaction to prevent partial update
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL statement_timeout = $1', [30000]);
+
     // Build update query dynamically
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -372,8 +377,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     values.push(domainId);
 
     if (updates.length > 0) {
-    // C1-FIX: Pass values array to pool.query (was missing, causing silent update failure)
-    await pool.query(
+    await client.query(
     `UPDATE domains SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
     values
     );
@@ -381,17 +385,22 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
     // Update domain_registry if domainType provided
     if (updateData.domainType !== undefined) {
-    await pool.query(
+    await client.query(
     'UPDATE domain_registry SET domain_type = $1 WHERE id = $2',
     [updateData.domainType, domainId]
     );
     }
 
+    await client.query('COMMIT');
     return { id: domainId, updated: true };
   } catch (error) {
-    logger["error"]('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
+    await client.query('ROLLBACK').catch((rollbackError: Error) => {
+    logger.error('Rollback failed during PATCH', rollbackError);
+    });
+    logger.error('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
     return res.status(500).send({ error: 'Failed to update domain' });
+  } finally {
+    client.release();
   }
   });
 
@@ -431,7 +440,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     // H11-FIX: Also set archived_at so deleted domains are filtered from listings
     await pool.query(
     'UPDATE domains SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2',
-    ['inactive', domainId]
+    ['deleted', domainId]
     );
 
     await usage.increment(ctx["orgId"], 'domain_count', -1);

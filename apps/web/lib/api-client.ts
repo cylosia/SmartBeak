@@ -161,7 +161,8 @@ export function createApiClient(config: ApiClientConfig) {
       ...options,
       timeoutMs,
       retries,
-      signal: requestConfig.signal ?? null,
+      // P2-FIX: Use undefined instead of null — fetch API expects AbortSignal | undefined
+      signal: requestConfig.signal ?? undefined,
     });
 
     // Handle non-JSON responses
@@ -170,7 +171,9 @@ export function createApiClient(config: ApiClientConfig) {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      return response.text() as unknown as T;
+      // P2-FIX: Explicitly type non-JSON response — the double cast masked type errors
+      const text = await response.text();
+      return text as T;
     }
 
     const result = await response.json();

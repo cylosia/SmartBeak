@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { adminRateLimit } from '../middleware/rateLimiter';
@@ -77,7 +77,7 @@ async function verifyOrgMembership(adminId: string, orgId: string): Promise<bool
 
 export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void> {
 
-  app.addHook('onRequest', adminRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', adminRateLimit());
 
   app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
   try {
@@ -132,21 +132,33 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
       .limit(limit)
       .offset(offset);
 
-    // P1-FIX: Apply orgId filter if specified
-    if (orgId) {
-      // Verify admin has membership in this org before allowing filtered export
-      const adminId = req.headers['x-admin-id'] as string | undefined;
-      if (adminId) {
-        const hasMembership = await verifyOrgMembership(adminId, orgId);
-        if (!hasMembership) {
-          return reply.status(403).send({
-            error: 'Forbidden. Admin not a member of this organization.',
-            code: 'MEMBERSHIP_REQUIRED'
-          });
-        }
-      }
-      query = query.where('org_id', orgId);
+    // P0-FIX: orgId is now required — exports must be scoped to an org.
+    // P0-FIX: Always verify org membership. Previously, omitting x-admin-id
+    // header allowed bypassing the membership check entirely.
+    if (!orgId) {
+      return reply.status(400).send({
+        error: 'orgId is required for audit exports',
+        code: 'MISSING_ORG_ID'
+      });
     }
+
+    // P0-FIX: Always verify org membership regardless of x-admin-id header
+    const adminId = req.headers['x-admin-id'] as string | undefined;
+    if (!adminId) {
+      return reply.status(400).send({
+        error: 'x-admin-id header is required',
+        code: 'MISSING_ADMIN_ID'
+      });
+    }
+
+    const hasMembership = await verifyOrgMembership(adminId, orgId);
+    if (!hasMembership) {
+      return reply.status(403).send({
+        error: 'Forbidden. Admin not a member of this organization.',
+        code: 'MEMBERSHIP_REQUIRED'
+      });
+    }
+    query = query.where('org_id', orgId);
 
     const events = await query;
 

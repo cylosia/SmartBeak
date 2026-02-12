@@ -3,6 +3,19 @@ import { getDb } from '../db';
 import { adminRateLimit } from '../middleware/rateLimiter';
 import crypto from 'crypto';
 
+/**
+ * P0-FIX: Verify admin has membership in the specified organization.
+ * Implements the previously TODO org membership verification to prevent IDOR.
+ */
+async function verifyAdminOrgAccess(orgId: string): Promise<boolean> {
+  const db = await getDb();
+  const membership = await db('org_memberships')
+    .where({ org_id: orgId })
+    .whereIn('role', ['admin', 'owner'])
+    .first();
+  return !!membership;
+}
+
 const ALLOWED_AUDIT_ACTIONS = [
   'create',
   'update',
@@ -88,8 +101,6 @@ function isAuditEvent(value: unknown): value is AuditEvent {
 }
 
 export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
-  const db = getDb();
-
   app.addHook('onRequest', async (req, reply) => {
     // Check for admin authentication
     const authHeader = req.headers.authorization;
@@ -107,17 +118,22 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
       // P0-FIX: Use constant-time comparison to prevent timing attacks
-      // String comparison leaks timing info that can be used to brute-force the key
+      // Pad both buffers to max length to avoid leaking key length via early return
       const expectedKey = process.env['ADMIN_API_KEY'];
       const tokenBuf = Buffer.from(token, 'utf8');
       const expectedBuf = Buffer.from(expectedKey, 'utf8');
-      
-      if (tokenBuf.length !== expectedBuf.length) {
+      const maxLen = Math.max(tokenBuf.length, expectedBuf.length);
+      if (maxLen === 0) {
         reply.status(403).send({ error: 'Forbidden. Admin access required.' });
         return;
       }
-      
-      if (!crypto.timingSafeEqual(tokenBuf, expectedBuf)) {
+      const tokenPadded = Buffer.alloc(maxLen, 0);
+      const expectedPadded = Buffer.alloc(maxLen, 0);
+      tokenBuf.copy(tokenPadded);
+      expectedBuf.copy(expectedPadded);
+      const isEqual = crypto.timingSafeEqual(tokenPadded, expectedPadded) && tokenBuf.length === expectedBuf.length;
+
+      if (!isEqual) {
         reply.status(403).send({ error: 'Forbidden. Admin access required.' });
         return;
       }
@@ -190,11 +206,11 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: 'Invalid orgId format' });
       }
       
-      // P0-FIX: TODO - Add proper org membership verification
-      // const hasAccess = await verifyAdminOrgAccess(req.auth.userId, orgId);
-      // if (!hasAccess) {
-      //   return reply.status(403).send({ error: 'Access denied to this organization' });
-      // }
+      // P0-FIX: Org membership verification to prevent IDOR
+      const hasAccess = await verifyAdminOrgAccess(orgId);
+      if (!hasAccess) {
+        return reply.status(403).send({ error: 'Access denied to this organization' });
+      }
       
       const db = await getDb();
       let q = db('audit_events').where({ org_id: orgId });  // P0-FIX: Always filter by org_id

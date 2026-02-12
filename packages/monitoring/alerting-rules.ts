@@ -651,7 +651,8 @@ export class AlertRulesEngine extends EventEmitter {
     }
 
     const alert: AlertInstance = {
-      id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      // P2-FIX: Use crypto.randomBytes for consistent ID generation
+      id: `alert_${Date.now()}_${require('crypto').randomBytes(6).toString('hex')}`,
       ruleId: rule.id,
       ruleName: rule.name,
       severity: rule.severity,

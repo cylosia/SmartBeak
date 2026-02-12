@@ -1,6 +1,4 @@
-import { jobConfig } from '@config';
 import { z } from 'zod';
-import jwt from 'jsonwebtoken';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { extractAndVerifyToken, type JwtClaims } from '@security/jwt';
@@ -27,31 +25,18 @@ interface AuthContext {
 
 async function verifyAuth(req: FastifyRequest): Promise<AuthContext | null> {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return null;
-  }
-  const token = authHeader.slice(7);
-  try {
-    const jwtKey = process.env['JWT_KEY_1'];
-    if (!jwtKey) {
-      logger.error('JWT_KEY_1 not configured', new Error('JWT_KEY_1 not configured'));
-      return null;
-    }
+  const result = extractAndVerifyToken(authHeader);
 
-    const claims = jwt.verify(token, jwtKey, {
-      audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
-      issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
-      algorithms: ['HS256'],
-      clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
-    }) as { sub?: string; orgId?: string };
-    if (!claims.sub || !claims.orgId) {
-      return null;
-    }
-    return { userId: claims.sub, orgId: claims.orgId };
-  }
-  catch (err) {
+  if (!result.valid || !result.claims) {
     return null;
   }
+
+  const claims = result.claims;
+  if (!claims.sub || !claims.orgId) {
+    return null;
+  }
+
+  return { userId: claims.sub, orgId: claims.orgId };
 }
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string, db: Knex): Promise<boolean> {
@@ -172,7 +157,7 @@ export async function bulkPublishDryRunRoutes(app: FastifyInstance): Promise<voi
       const errorResponse: { error: string; message?: string } = {
         error: 'Internal server error'
       };
-      if (process.env['NODE_ENV'] === 'development' && error instanceof Error) {
+      if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
         errorResponse.message = error.message;
       }
       return reply.status(500).send(errorResponse);

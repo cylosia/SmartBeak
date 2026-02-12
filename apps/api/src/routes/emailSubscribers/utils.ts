@@ -5,8 +5,20 @@ import crypto from 'crypto';
 * P2-MEDIUM FIX: Extracted from emailSubscribers.ts God class
 */
 
-// Secret key for email hashing (should be from environment variable)
-const EMAIL_HASH_SECRET = process.env['EMAIL_HASH_SECRET'] || 'default-secret-change-in-production';
+// P0-SECURITY FIX: Fail fast if hash secret is not configured — prevents using a known default
+// that would allow attackers to enumerate subscriber emails by computing hashes
+function getEmailHashSecret(): string {
+  const secret = process.env['EMAIL_HASH_SECRET'];
+  if (!secret || secret === 'default-secret-change-in-production') {
+    throw new Error(
+      'EMAIL_HASH_SECRET environment variable must be set to a strong, unique secret. ' +
+      'Using a default value in production is a critical security vulnerability.'
+    );
+  }
+  return secret;
+}
+
+const EMAIL_HASH_SECRET = getEmailHashSecret();
 
 /**
 * Hash an email address for secure storage

@@ -30,16 +30,31 @@ export function startWorker(eventBus: EventBus): Worker {
     throw new Error('REDIS_URL environment variable is required for BullMQ worker');
   }
 
-  let connectionConfig: { host: string; port: number; password?: string; tls?: object };
+  let connectionConfig: { host: string; port: number; password?: string; tls?: { rejectUnauthorized: boolean } };
   try {
     const url = new URL(redisUrl);
+    const parsedPort = parseInt(url.port || '6379', 10);
+    if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      throw new Error(`Invalid Redis port in REDIS_URL: ${url.port}`);
+    }
+    let password: string | undefined;
+    if (url.password) {
+      try {
+        password = decodeURIComponent(url.password);
+      } catch {
+        throw new Error('REDIS_URL contains an invalid percent-encoded password');
+      }
+    }
     connectionConfig = {
       host: url.hostname,
-      port: parseInt(url.port || '6379', 10),
-      ...(url.password && { password: decodeURIComponent(url.password) }),
-      ...(url.protocol === 'rediss:' && { tls: {} }),
+      port: parsedPort,
+      ...(password && { password }),
+      ...(url.protocol === 'rediss:' && { tls: { rejectUnauthorized: true } }),
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Invalid Redis') || err instanceof Error && err.message.startsWith('REDIS_URL contains')) {
+      throw err;
+    }
     throw new Error('REDIS_URL is not a valid URL');
   }
 

@@ -87,7 +87,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     logger.error('Error creating lead magnet', error instanceof Error ? error : undefined, { message: errorMessage });
     return reply.status(500).send({
         error: 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' && error instanceof Error && { message: error.message })
+        ...(process.env['NODE_ENV'] === 'development' && error instanceof Error && { message: error.message })
     });
     }
   });
@@ -207,7 +207,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     logger.error('Error creating email sequence', error instanceof Error ? error : undefined, { message: errorMessage });
     return reply.status(500).send({
         error: 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' && error instanceof Error && { message: error.message })
+        ...(process.env['NODE_ENV'] === 'development' && error instanceof Error && { message: error.message })
     });
     }
   });
@@ -327,7 +327,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     logger.error('Error creating opt-in form', error instanceof Error ? error : undefined, { message: errorMessage });
     return reply.status(500).send({
         error: 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' && error instanceof Error && { message: error.message })
+        ...(process.env['NODE_ENV'] === 'development' && error instanceof Error && { message: error.message })
     });
     }
   });

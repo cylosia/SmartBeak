@@ -1,6 +1,6 @@
 import * as jwt from 'jsonwebtoken';
 import Stripe from 'stripe';
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { apiRateLimit } from '../middleware/rateLimiter';
@@ -85,7 +85,7 @@ async function verifyOrgMembership(userId: string, orgId: string): Promise<boole
 
 export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<void> {
 
-  app.addHook('onRequest', apiRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', apiRateLimit());
 
   app.addHook('onRequest', async (req, reply) => {
   const token = extractBearerToken(req);
