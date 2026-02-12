@@ -41,8 +41,10 @@ export async function acquireAdvisoryLock(lockId: string, timeoutMs = 5000): Pro
   while (Date.now() - startTime < timeoutMs) {
     const client = await pool.connect();
     try {
+      // SECURITY FIX (Finding 20): Use hashtext() to convert string to bigint
+      // pg_try_advisory_lock requires bigint, not string
       const { rows } = await client.query(
-        'SELECT pg_try_advisory_lock($1) as acquired',
+        'SELECT pg_try_advisory_lock(hashtext($1)) as acquired',
         [lockId]
       );
 
@@ -70,7 +72,9 @@ export async function acquireAdvisoryLock(lockId: string, timeoutMs = 5000): Pro
  */
 export async function releaseAdvisoryLock(client: PoolClient, lockId: string): Promise<void> {
   try {
-    await client.query('SELECT pg_advisory_unlock($1)', [lockId]);
+    // SECURITY FIX (Finding 20): Must match hashtext() used in acquire
+    await client.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
+    activeAdvisoryLocks.delete(lockId);
   } finally {
     activeAdvisoryLocks.delete(lockId);
     client.release(); // Now safe to release
@@ -93,9 +97,10 @@ export async function releaseAllAdvisoryLocks(): Promise<void> {
       logger["error"](`Failed to release advisory lock ${lockId}`, err);
     } finally {
       try {
-        originalClient.release();
-      } catch {
-        // Client may already be released
+        await client.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger["error"](`Failed to release advisory lock ${lockId}`, err);
       }
     }
   }

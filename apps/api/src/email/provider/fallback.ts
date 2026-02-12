@@ -1,9 +1,9 @@
 /**
  * P1-FIX: Email Provider with Fallback Chain
- * 
+ *
  * Implements multiple email providers with automatic failover:
  * Primary (SES) → Secondary (SendGrid/Postmark) → Tertiary (Log for manual)
- * 
+ *
  * Prevents email loss during provider outages or throttling.
  */
 
@@ -11,6 +11,25 @@ import { getLogger } from '@kernel/logger';
 import { getRedis } from '@kernel/redis';
 
 const logger = getLogger('email:fallback');
+
+// SECURITY FIX (Finding 14): Mask PII in log output
+function maskEmail(email: string | string[]): string | string[] {
+  if (Array.isArray(email)) {
+    return email.map(e => maskSingleEmail(e));
+  }
+  return maskSingleEmail(email);
+}
+
+function maskSingleEmail(email: string): string {
+  const atIndex = email.indexOf('@');
+  if (atIndex <= 0) return '***';
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+  const maskedLocal = local[0] + '***';
+  const domainParts = domain.split('.');
+  const maskedDomain = domainParts[0]?.[0] + '***.' + domainParts.slice(1).join('.');
+  return `${maskedLocal}@${maskedDomain}`;
+}
 
 export interface EmailMessage {
   to: string | string[];
@@ -24,6 +43,9 @@ export interface EmailMessage {
     contentType?: string;
   }>;
   headers?: Record<string, string>;
+  // COMPLIANCE FIX (Finding 13): Required for CAN-SPAM and Gmail/Yahoo 2024 sender requirements
+  listUnsubscribe?: string;
+  listUnsubscribePost?: string;
 }
 
 export interface EmailProvider {
@@ -76,8 +98,20 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
       this.circuit.failures = 0;
     }
 
+    // COMPLIANCE FIX (Finding 13): Inject List-Unsubscribe headers if provided
+    const enrichedMessage = { ...message };
+    if (message.listUnsubscribe) {
+      enrichedMessage.headers = {
+        ...enrichedMessage.headers,
+        'List-Unsubscribe': message.listUnsubscribe,
+      };
+      if (message.listUnsubscribePost) {
+        enrichedMessage.headers['List-Unsubscribe-Post'] = message.listUnsubscribePost;
+      }
+    }
+
     try {
-      const result = await this.provider.send(message);
+      const result = await this.provider.send(enrichedMessage);
       // Success - reset failures
       this.circuit.failures = 0;
       return result;
@@ -112,7 +146,7 @@ export class FallbackEmailSender {
 
   constructor(config: FallbackConfig) {
     this.providers = config.providers.map(
-      (p, i) => new EmailProviderWithCircuitBreaker(
+      (p, _i) => new EmailProviderWithCircuitBreaker(
         p.name,
         p,
         config.failureThreshold || 5,
@@ -124,8 +158,8 @@ export class FallbackEmailSender {
   /**
    * Send email with automatic fallback
    */
-  async send(message: EmailMessage): Promise<{ 
-    id: string; 
+  async send(message: EmailMessage): Promise<{
+    id: string;
     provider: string;
     attempts: number;
   }> {
@@ -134,8 +168,9 @@ export class FallbackEmailSender {
     for (const provider of this.providers) {
       try {
         const result = await provider.send(message);
-        logger.info(`Email sent via ${provider.name}`, { 
-          to: message.to,
+        // SECURITY FIX (Finding 14): Mask PII in logs
+        logger.info(`Email sent via ${provider.name}`, {
+          to: maskEmail(message.to),
           subject: message.subject,
         });
         return {
@@ -170,7 +205,7 @@ export class FallbackEmailSender {
   private async queueForRetry(message: EmailMessage): Promise<void> {
     try {
       const redis = await getRedis();
-      
+
       const failedMessage = {
         ...message,
         failedAt: new Date().toISOString(),
@@ -178,7 +213,8 @@ export class FallbackEmailSender {
       };
 
       await redis.lpush('email:failed', JSON.stringify(failedMessage));
-      logger.info('Email queued for manual retry', { to: message.to });
+      // SECURITY FIX (Finding 14): Mask PII in logs
+      logger.info('Email queued for manual retry', { to: maskEmail(message.to) });
     } catch (error) {
       logger.error('Failed to queue email for retry', error as Error);
     }
@@ -213,8 +249,9 @@ export function createLogProvider(): EmailProvider {
   return {
     name: 'Log',
     async send(message: EmailMessage) {
+      // SECURITY FIX (Finding 14): Mask PII in logs
       logger.info('[EMAIL-LOG] Would send email', {
-        to: message.to,
+        to: maskEmail(message.to),
         from: message.from,
         subject: message.subject,
       });

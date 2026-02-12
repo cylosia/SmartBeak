@@ -24,7 +24,13 @@ export async function getRedis(): Promise<Redis> {
       throw new Error('REDIS_URL environment variable is required');
     }
     
+    // SECURITY FIX (Finding 11): Add environment-based key prefix to prevent
+    // cross-environment key collisions when prod/staging share the same Redis
+    const env = process.env['NODE_ENV'] || 'development';
+    const prefix = process.env['CACHE_PREFIX'] || 'cache';
+
     redis = new Redis(redisUrl, {
+      keyPrefix: `${env}:${prefix}:`,
       retryStrategy: (times: number): number => Math.min(times * 50, 2000),
       maxRetriesPerRequest: 3,
     });
