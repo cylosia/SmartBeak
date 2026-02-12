@@ -94,11 +94,9 @@ export const UpdateSubscriberSchema = z.object({
 
 /**
 * Auth context type
+* P2-4 FIX: Re-export from canonical source instead of duplicating
 */
-export interface AuthContext {
-  userId: string;
-  orgId: string;
-}
+export type { AuthContext } from '../../../../../control-plane/services/auth';
 
 /**
 * Fastify request-like type for auth verification

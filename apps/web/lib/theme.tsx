@@ -24,8 +24,9 @@ const STORAGE_KEY = 'acp-theme';
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'system';
 
-  const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-  if (stored && ['light', 'dark', 'system'].includes(stored)) {
+  // P3-1 FIX: Removed unnecessary `as Theme` cast — validate before narrowing
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored === 'light' || stored === 'dark' || stored === 'system') {
     return stored;
   }
   return 'system';
@@ -159,7 +160,13 @@ export function ThemeSelector() {
   return (
     <select
       value={theme}
-      onChange={(e) => setTheme((e.target as HTMLSelectElement).value as Theme)}
+      onChange={(e) => {
+        // P3-2 FIX: Validate value instead of double-casting
+        const value = e.target.value;
+        if (value === 'light' || value === 'dark' || value === 'system') {
+          setTheme(value);
+        }
+      }}
       style={{
         padding: '8px 12px',
         borderRadius: '6px',

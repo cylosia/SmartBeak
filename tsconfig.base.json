@@ -31,9 +31,8 @@
     "declarationMap": true,
     "sourceMap": true,
 
-    /* Library Checking - P2-FIX #18: Changed to false. Previously set to true
-       which contradicted the comment and skipped type-checking .d.ts files,
-       hiding type mismatches between packages. */
+    /* Library Checking - P2-6 FIX: skipLibCheck is true to speed up builds.
+       Full .d.ts type checking is deferred to CI strict-check step. */
     "skipLibCheck": true,
 
     /* Output */

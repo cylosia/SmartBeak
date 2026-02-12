@@ -31,7 +31,8 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
   // P0-FIX: Use DOMPurify for robust XSS protection
   const config: DOMPurify.Config = {
     ALLOWED_TAGS: options.ALLOWED_TAGS || DEFAULT_ALLOWED_TAGS,
-    ALLOWED_ATTR: options.ALLOWED_ATTR || DEFAULT_ALLOWED_ATTR,
+    // P2-11 FIX: Also allow 'rel' attribute so we can enforce noopener noreferrer
+    ALLOWED_ATTR: [...(options.ALLOWED_ATTR || DEFAULT_ALLOWED_ATTR), 'rel'],
     // Prevent javascript: URLs
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout'],
     // Keep the content of removed tags
@@ -40,7 +41,20 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
     FORBID_DATA_URI: true,
   };
 
-  return DOMPurify.sanitize(html, config);
+  // P2-11 FIX: Enforce rel="noopener noreferrer" on links with target attribute
+  // to prevent tabnapping attacks
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.hasAttribute('target')) {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+
+  const result = DOMPurify.sanitize(html, config);
+
+  // Remove hook to avoid accumulation on repeated calls
+  DOMPurify.removeHook('afterSanitizeAttributes');
+
+  return result;
 }
 
 /**

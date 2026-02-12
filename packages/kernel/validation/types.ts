@@ -361,14 +361,12 @@ export type NotificationState =
   | 'bounced'
   | 'suppressed';
 
-/** User roles */
+/** User roles - P1-13 FIX: Aligned with control-plane/services/auth.ts Role type */
 export type UserRole =
+  | 'owner'
   | 'admin'
   | 'editor'
-  | 'author'
-  | 'viewer'
-  | 'billing_admin'
-  | 'security_admin';
+  | 'viewer';
 
 // ============================================================================
 // Type-Level Utilities
@@ -404,48 +402,12 @@ export type TypeMap<S extends string, T> = {
 // Error Code Types
 // ============================================================================
 
-/** Standardized error codes for the application */
-export type ErrorCode =
-  // Validation
-  | 'VALIDATION_ERROR'
-  | 'INVALID_PARAMS'
-  | 'INVALID_INPUT'
-  | 'INVALID_UUID'
-  | 'INVALID_FORMAT'
-  // Authentication
-  | 'AUTH_ERROR'
-  | 'AUTH_REQUIRED'
-  | 'INVALID_TOKEN'
-  | 'TOKEN_EXPIRED'
-  | 'INSUFFICIENT_PERMISSIONS'
-  | 'FORBIDDEN'
-  // Resource
-  | 'NOT_FOUND'
-  | 'CONTENT_NOT_FOUND'
-  | 'DOMAIN_NOT_FOUND'
-  | 'USER_NOT_FOUND'
-  // Domain/Ownership
-  | 'DOMAIN_NOT_OWNED'
-  | 'ACCESS_DENIED'
-  // Database
-  | 'DATABASE_ERROR'
-  | 'DUPLICATE_ENTRY'
-  | 'CONNECTION_ERROR'
-  | 'QUERY_TIMEOUT'
-  // Service
-  | 'INTERNAL_ERROR'
-  | 'SERVICE_UNAVAILABLE'
-  | 'RATE_LIMIT_EXCEEDED'
-  // Business Logic
-  | 'PUBLISH_FAILED'
-  | 'BILLING_ERROR'
-  | 'QUOTA_EXCEEDED'
-  // Method
-  | 'METHOD_NOT_ALLOWED'
-  | 'PAYLOAD_TOO_LARGE'
-  | 'RESOURCE_CONFLICT'
-  | 'CONFLICT'
-  | 'JSONB_SIZE_EXCEEDED';
+/**
+ * Standardized error codes for the application.
+ * P2-5 FIX: Re-exported from types-base.ts (single source of truth) to prevent drift.
+ * The manual union previously here was missing 12 codes present in types-base.ts.
+ */
+export type { ErrorCode } from './types-base';
 
 // ============================================================================
 // Base Validation Error

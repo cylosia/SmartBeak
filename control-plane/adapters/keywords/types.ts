@@ -1,6 +1,7 @@
 export type KeywordSuggestion = {
   keyword: string;
-  metrics?: Record<string, any>;
+  // P1-11 FIX: Changed from `any` to `unknown` for type safety
+  metrics?: Record<string, unknown>;
 };
 
 export interface KeywordIngestionAdapter {

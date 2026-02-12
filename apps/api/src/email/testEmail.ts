@@ -15,7 +15,8 @@ export async function sendTestEmail(
 ): Promise<{ sent: boolean; to: string; html_preview: string }> {
   const html = renderEmailHTML(message);
   // Send via configured test SMTP or export HTML for external tools
-  return { sent: true, to, html_preview: html };
+  // P1-7 FIX: This function only renders HTML, it does not actually send email
+  return { sent: false, to, html_preview: html };
 }
 
 export type InboxTestResult = {

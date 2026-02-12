@@ -4,22 +4,9 @@ import { Pool } from 'pg';
 import { getLogger } from '../../../packages/kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
+import { getAuthContext } from '../types';
 
 const logger = getLogger('Themes');
-
-﻿
-
-
-/**
-* Authenticated request interface
-*/
-export type AuthenticatedRequest = FastifyRequest & {
-  auth?: {
-  userId: string;
-  orgId: string;
-  role: string;
-  } | null | undefined;
-};
 
 /**
 * Get default themes as fallback
@@ -69,12 +56,18 @@ export async function themeRoutes(app: FastifyInstance, pool: Pool) {
   // GET /themes - List available themes
   app.get('/themes', async (req, res) => {
   try {
-    const { auth: ctx } = req as AuthenticatedRequest;
-    if (!ctx) {
+    // P0-2/P3-3 FIX: Use getAuthContext pattern (consistent with all other routes)
+    let ctx: AuthContext;
+    try {
+    ctx = getAuthContext(req);
+    } catch {
     return res.status(401).send({ error: 'Unauthorized' });
     }
-    requireRole(ctx as AuthContext, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('themes', 100);
+
+    requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+    // P2-1 FIX: Scope rate limit to organization
+    await rateLimit(`themes:${ctx.orgId}`, 100);
+
     // Fetch themes from database or use configuration
     let themes = [];
     try {
@@ -97,7 +90,8 @@ export async function themeRoutes(app: FastifyInstance, pool: Pool) {
     isDefault: row.is_default,
     }));
     } catch (dbError) {
-    logger.warn(`[themes] Database error, using defaults: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
+    // P2-2 FIX: Log at error level (not warn) to make DB failures visible in monitoring
+    logger.error('[themes] Database error, using defaults', dbError instanceof Error ? dbError : new Error(String(dbError)));
     // Fallback to configurable defaults if DB unavailable
     themes = getDefaultThemes();
     }

@@ -1,24 +1,13 @@
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { CommonSchemas } from '../middleware/validation';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
+import { getAuthContext } from '../types';
+import { getLogger } from '../../../packages/kernel/logger';
 
-﻿
-
-
-/**
-* Authenticated request interface
-*/
-export type AuthenticatedRequest = FastifyRequest & {
-  auth?: {
-  userId: string;
-  orgId: string;
-  role: string;
-  } | null | undefined;
-};
+const logger = getLogger('timeline');
 
 const DomainParamsSchema = z.object({
   domainId: z.string().uuid(),
@@ -54,14 +43,22 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
   // GET /timeline - Get organization-wide timeline
   app.get('/timeline', async (req, res) => {
   try {
-    const { auth: ctx } = req as AuthenticatedRequest;
-    requireRole(ctx as AuthContext, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('timeline', 50);
-    
-    if (!ctx || !ctx.orgId) {
+    // P0-2 FIX: Use getAuthContext (throws on missing auth) BEFORE requireRole
+    let ctx: AuthContext;
+    try {
+    ctx = getAuthContext(req);
+    } catch {
     return res.status(401).send({ error: 'Unauthorized' });
     }
-    
+
+    if (!ctx.orgId) {
+    return res.status(401).send({ error: 'Unauthorized' });
+    }
+
+    requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+    // P2-1 FIX: Scope rate limit to organization
+    await rateLimit(`timeline:${ctx.orgId}`, 50);
+
     const { orgId } = ctx;
 
     // Validate orgId using Zod schema
@@ -70,7 +67,6 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(400).send({
     error: 'Invalid organization ID',
     code: 'VALIDATION_ERROR',
-    details: orgIdResult["error"].issues,
     });
     }
 
@@ -93,7 +89,6 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     FROM activity_log al
     LEFT JOIN domains d ON al.domain_id = d["id"]
     WHERE al.org_id = $1
-    -- H3-FIX: Removed deleted_at filter (column does not exist in activity_log table)
     `;
     const params: unknown[] = [orgId];
     let paramIndex = 2;
@@ -137,22 +132,31 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     filters: { startDate, endDate, action, entityType },
     };
   } catch (error) {
-    console["error"]('[timeline] Error:', error);
-    // Return empty timeline if table doesn't exist
-    return { events: [], total: 0 };
+    // P1-5 FIX: Use structured logger instead of console.error
+    logger.error('[timeline] Error', error instanceof Error ? error : new Error(String(error)));
+    // P2-3 FIX: Return proper error response instead of masking as empty success
+    return res.status(500).send({ error: 'Internal server error' });
   }
   });
 
   // GET /timeline/domain/:domainId - Get domain-specific timeline
   app.get('/timeline/domain/:domainId', async (req, res) => {
   try {
-    const { auth: ctx } = req as AuthenticatedRequest;
-    requireRole(ctx as AuthContext, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('timeline', 50);
-
-    if (!ctx || !ctx.orgId) {
+    // P0-2 FIX: Use getAuthContext (throws on missing auth) BEFORE requireRole
+    let ctx: AuthContext;
+    try {
+    ctx = getAuthContext(req);
+    } catch {
     return res.status(401).send({ error: 'Unauthorized' });
     }
+
+    if (!ctx.orgId) {
+    return res.status(401).send({ error: 'Unauthorized' });
+    }
+
+    requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+    // P2-1 FIX: Scope rate limit to organization
+    await rateLimit(`timeline:${ctx.orgId}`, 50);
 
     const paramsResult = DomainParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
@@ -174,7 +178,6 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     });
     }
 
-    try {
     // Verify domain access
     const { rows: domainRows } = await pool.query(
     'SELECT 1 FROM domains WHERE id = $1 AND org_id = $2',
@@ -182,7 +185,8 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (domainRows.length === 0) {
-    return res.status(403).send({ error: 'Access denied to domain' });
+    // P1-6 FIX: Return 404 instead of 403 to prevent domain ID enumeration
+    return res.status(404).send({ error: 'Domain not found' });
     }
 
     // Parse and validate query params
@@ -203,7 +207,6 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     al.metadata, al.created_at
     FROM activity_log al
     WHERE al.domain_id = $1
-    -- H3-FIX: Removed deleted_at filter (column does not exist in activity_log table)
     `;
     const params: unknown[] = [domainId];
     let paramIndex = 2;
@@ -246,13 +249,11 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     total: rows.length,
     filters: { startDate, endDate, action, entityType },
     };
-    } catch (error) {
-    console["error"]('[timeline/domain] Error:', error);
-    return { domainId, events: [], total: 0 };
-    }
   } catch (error) {
-    console["error"]('[timeline/domain] Error:', error);
-    return { events: [], total: 0 };
+    // P1-5 FIX: Use structured logger instead of console.error
+    logger.error('[timeline/domain] Error', error instanceof Error ? error : new Error(String(error)));
+    // P2-3 FIX: Return proper error response instead of masking as empty success
+    return res.status(500).send({ error: 'Internal server error' });
   }
   });
 }

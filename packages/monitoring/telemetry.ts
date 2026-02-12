@@ -17,8 +17,6 @@ import {
   SimpleSpanProcessor,
   SpanExporter,
 } from '@opentelemetry/sdk-trace-base';
-// @ts-ignore - Optional dependency may not be installed
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
 import {
   SEMRESATTRS_SERVICE_NAME,
@@ -38,14 +36,20 @@ import {
 } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
-// @ts-ignore - Optional dependency may not be installed
-import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
-// @ts-ignore - Optional dependency may not be installed
-import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
-// @ts-ignore - Optional dependency may not be installed
-import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
-// @ts-ignore - Optional dependency may not be installed
-import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
+
+// P1-9 FIX: Use try/catch dynamic requires instead of @ts-ignore
+// These are optional dependencies — app still works if not installed
+let OTLPTraceExporter: (new (config: { url: string }) => SpanExporter) | null = null;
+let HttpInstrumentation: (new (config?: unknown) => unknown) | null = null;
+let PgInstrumentation: (new (config?: unknown) => unknown) | null = null;
+let RedisInstrumentation: (new (config?: unknown) => unknown) | null = null;
+let ExpressInstrumentation: (new () => unknown) | null = null;
+
+try { OTLPTraceExporter = require('@opentelemetry/exporter-trace-otlp-http').OTLPTraceExporter; } catch { /* optional */ }
+try { HttpInstrumentation = require('@opentelemetry/instrumentation-http').HttpInstrumentation; } catch { /* optional */ }
+try { PgInstrumentation = require('@opentelemetry/instrumentation-pg').PgInstrumentation; } catch { /* optional */ }
+try { RedisInstrumentation = require('@opentelemetry/instrumentation-redis').RedisInstrumentation; } catch { /* optional */ }
+try { ExpressInstrumentation = require('@opentelemetry/instrumentation-express').ExpressInstrumentation; } catch { /* optional */ }
 
 import { getLogger } from '@kernel/logger';
 
@@ -173,8 +177,8 @@ export function initTelemetry(config: TelemetryConfig): void {
     // Configure exporters
     const exporters: SpanExporter[] = [];
 
-    // OTLP HTTP exporter
-    if (config.collectorEndpoint) {
+    // OTLP HTTP exporter (P1-9 FIX: guard against missing dependency)
+    if (config.collectorEndpoint && OTLPTraceExporter) {
       const otlpExporter = new OTLPTraceExporter({
         url: config.collectorEndpoint,
       });
@@ -194,39 +198,56 @@ export function initTelemetry(config: TelemetryConfig): void {
     // Set global propagator for trace context propagation
     propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 
-    // Register automatic instrumentations
+    // P1-9 FIX: Guard each instrumentation against missing optional dependency
     if (config.autoInstrumentations !== false) {
-      registerInstrumentations({
-        instrumentations: [
-          new HttpInstrumentation({
-            requestHook: ((span: Span, request: HttpRequest) => {
-              span.setAttribute('http.request.body.size',
-                request.headers['content-length'] || 0);
-            }) as never,
-            responseHook: ((span: Span, response: HttpResponse) => {
-              span.setAttribute('http.response.body.size',
-                response.headers['content-length'] || 0);
-            }) as never,
-          }),
-          new PgInstrumentation({
-            enhancedDatabaseReporting: true,
-          }),
-          new RedisInstrumentation({
-            dbStatementSerializer: (cmd: string, args: unknown[]) => {
-              // Sanitize arguments - don't include sensitive data
-              return `${cmd} [${args.length} args]`;
-            },
-          }),
-          new ExpressInstrumentation(),
-        ],
-      });
+      const instrumentations: unknown[] = [];
+
+      if (HttpInstrumentation) {
+        instrumentations.push(new HttpInstrumentation({
+          requestHook: ((span: Span, request: HttpRequest) => {
+            span.setAttribute('http.request.body.size',
+              request.headers['content-length'] || 0);
+          }) as never,
+          responseHook: ((span: Span, response: HttpResponse) => {
+            span.setAttribute('http.response.body.size',
+              response.headers['content-length'] || 0);
+          }) as never,
+        }));
+      }
+
+      if (PgInstrumentation) {
+        instrumentations.push(new PgInstrumentation({
+          // P1-10 FIX: Disable enhanced reporting to prevent SQL query text
+          // (including WHERE clauses with emails, IDs) from leaking into trace spans
+          enhancedDatabaseReporting: false,
+        }));
+      }
+
+      if (RedisInstrumentation) {
+        instrumentations.push(new RedisInstrumentation({
+          dbStatementSerializer: (cmd: string, args: unknown[]) => {
+            // Sanitize arguments - don't include sensitive data
+            return `${cmd} [${args.length} args]`;
+          },
+        }));
+      }
+
+      if (ExpressInstrumentation) {
+        instrumentations.push(new ExpressInstrumentation());
+      }
+
+      if (instrumentations.length > 0) {
+        registerInstrumentations({ instrumentations });
+      }
     }
 
     isInitialized = true;
     logger.info('OpenTelemetry tracing initialized', {
       serviceName: config.serviceName,
       environment: config.environment,
-      collectorEndpoint: config.collectorEndpoint,
+      // SECURITY: Only log whether endpoint is configured, not the URL itself
+      // (may contain embedded auth tokens)
+      collectorConfigured: !!config.collectorEndpoint,
     });
   } catch (error) {
     logger.error('Failed to initialize telemetry', error as Error);

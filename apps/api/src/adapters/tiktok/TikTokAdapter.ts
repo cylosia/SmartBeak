@@ -169,14 +169,15 @@ export class TikTokAdapter {
 
       this.metrics.recordSuccess('getCreatorInfo');
 
+      // P1-4 FIX: Validate all returned fields with type checks and safe defaults
       return {
         creatorId: user.open_id,
         creatorName: user.display_name,
-        avatarUrl: user.avatar_url,
-        followerCount: user.follower_count,
-        followingCount: user.following_count,
-        likesCount: user.likes_count,
-        videoCount: user.video_count,
+        avatarUrl: typeof user.avatar_url === 'string' ? user.avatar_url : '',
+        followerCount: typeof user.follower_count === 'number' ? user.follower_count : 0,
+        followingCount: typeof user.following_count === 'number' ? user.following_count : 0,
+        likesCount: typeof user.likes_count === 'number' ? user.likes_count : 0,
+        videoCount: typeof user.video_count === 'number' ? user.video_count : 0,
       };
     } catch (error) {
       this.metrics.recordError('getCreatorInfo', error instanceof Error ? error.name : 'Unknown');
@@ -266,8 +267,13 @@ export class TikTokAdapter {
         publishId: data.data?.publish_id
       });
 
+      // P1-1 FIX: Throw error if publish_id is missing instead of silently returning empty string
+      if (!data.data?.publish_id) {
+        throw new ApiError('TikTok API returned no publish_id', 502);
+      }
+
       const result: TikTokPostResponse = {
-        publishId: data.data?.publish_id || '',
+        publishId: data.data.publish_id,
         shareId: undefined,
         createTime: undefined,
         status: 'processing',
@@ -350,7 +356,12 @@ export class TikTokAdapter {
         return response;
       }, { maxRetries: 3 });
 
-      const data = await res.json() as {
+      // P1-3 FIX: Add runtime validation (same pattern as getCreatorInfo)
+      const rawData = await res.json() as unknown;
+      if (!rawData || typeof rawData !== 'object') {
+        throw new ApiError('Invalid response format from TikTok upload init', 500);
+      }
+      const data = rawData as {
         data: { publish_id: string; upload_url: string } | undefined;
         error: { code: string; message: string } | undefined;
       };
@@ -359,9 +370,14 @@ export class TikTokAdapter {
         throw new Error(`TikTok error: ${data.error.code} - ${data.error["message"]}`);
       }
 
+      // P1-1 FIX: Throw error if publish_id or upload_url is missing
+      if (!data.data?.publish_id || !data.data?.upload_url) {
+        throw new ApiError('TikTok API returned incomplete upload session data', 502);
+      }
+
       return {
-        publishId: data.data?.publish_id || '',
-        uploadUrl: data.data?.upload_url || '',
+        publishId: data.data.publish_id,
+        uploadUrl: data.data.upload_url,
       };
     } finally {
       clearTimeout(timeoutId);
@@ -372,6 +388,20 @@ export class TikTokAdapter {
    * Upload video file
    */
   private async uploadVideo(uploadUrl: string, videoBuffer: Buffer): Promise<void> {
+    // P2-12 FIX: Validate upload URL points to expected TikTok domain (SSRF prevention)
+    const parsedUrl = new URL(uploadUrl);
+    const allowedHosts = ['open.tiktokapis.com', 'upload.tiktokapis.com'];
+    if (!allowedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith('.' + host))) {
+      throw new ApiError(`Untrusted upload URL host: ${parsedUrl.hostname}`, 400);
+    }
+
+    // P2-13 FIX: Validate buffer size before upload (max 4GB per TikTok API docs)
+    const MAX_VIDEO_SIZE = 4 * 1024 * 1024 * 1024; // 4GB
+    const videoSize = Buffer.byteLength(videoBuffer);
+    if (videoSize > MAX_VIDEO_SIZE) {
+      throw new ApiError(`Video size ${videoSize} bytes exceeds maximum ${MAX_VIDEO_SIZE} bytes`, 400);
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -401,32 +431,25 @@ export class TikTokAdapter {
   /**
    * Health check for TikTok API
    */
+  // P1-2 FIX: Removed dead AbortController + setTimeout that was never connected
+  // to any operation. getCreatorInfo() creates its own internal controller.
   async healthCheck(): Promise<TikTokHealthStatus> {
     const start = Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.short);
 
     try {
-      // Try to get creator info as health check
       await this.getCreatorInfo();
 
-      // SECURITY FIX: Only healthy if getCreatorInfo succeeds (returns 200)
-      const result: TikTokHealthStatus = {
+      return {
         healthy: true,
         latency: Date.now() - start,
         error: undefined,
       };
-      return result;
     } catch (error) {
-      // SECURITY FIX: Auth errors (401/403) are NOT healthy - credentials are invalid
-      const result: TikTokHealthStatus = {
+      return {
         healthy: false,
         latency: Date.now() - start,
         error: error instanceof Error ? error["message"] : 'Unknown error',
       };
-      return result;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 }
