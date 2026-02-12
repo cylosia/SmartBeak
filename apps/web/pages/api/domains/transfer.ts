@@ -61,48 +61,80 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // SECURITY FIX: P1-HIGH Issue 4 - Verify domain belongs to user's org
+    // P0-3 FIX: Wrap verification + insert in a transaction to prevent TOCTOU race
     const pool = await getPoolInstance();
-    const { rows } = await pool.query(
-      `SELECT domain_id, org_id FROM domain_registry
-       WHERE domain_id = $1
-       AND org_id = $2`,
-      [domainId, auth["orgId"]]
-    );
+    const client = await pool.connect();
 
-    if (rows.length === 0) {
-      // SECURITY: Return 404 (not 403) to prevent ID enumeration
-      logger.warn({ userId: auth.userId, domainId }, 'User attempted to transfer non-existent or unauthorized domain');
-      return res.status(404).json({ error: 'Domain not found' });
+    try {
+      await client.query('BEGIN');
+
+      // SELECT FOR UPDATE prevents concurrent transfers of the same domain
+      const { rows } = await client.query(
+        `SELECT domain_id, org_id FROM domain_registry
+         WHERE domain_id = $1
+         AND org_id = $2
+         FOR UPDATE`,
+        [domainId, auth["orgId"]]
+      );
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        // SECURITY: Return 404 (not 403) to prevent ID enumeration
+        logger.warn({ userId: auth.userId, domainId }, 'User attempted to transfer non-existent or unauthorized domain');
+        return res.status(404).json({ error: 'Domain not found' });
+      }
+
+      const domain = rows[0];
+
+      // Double-check org_id matches
+      if (domain.org_id !== auth["orgId"]) {
+        await client.query('ROLLBACK');
+        logger.warn({ domainOrgId: domain.org_id, userOrgId: auth["orgId"] }, 'Domain org_id does not match user org_id');
+        return res.status(404).json({ error: 'Domain not found' });
+      }
+
+      // Check for existing pending transfers to prevent duplicates
+      const { rows: existingTransfers } = await client.query(
+        `SELECT id FROM domain_transfers
+         WHERE domain_id = $1 AND status = 'pending'`,
+        [domainId]
+      );
+
+      if (existingTransfers.length > 0) {
+        await client.query('ROLLBACK');
+        return sendError(res, 409, 'A pending transfer already exists for this domain');
+      }
+
+      // Generate transfer receipt
+      const receipt = crypto.randomBytes(32).toString('hex');
+      const transferId = crypto.randomUUID();
+
+      // Record transfer initiation
+      await client.query(
+        `INSERT INTO domain_transfers (id, domain_id, from_user_id, to_user_id, to_org_id, receipt, status, created_at, from_org_id)
+        VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), $7)`,
+        [transferId, domainId, auth.userId, targetUserId || null, targetOrgId || null, receipt, auth["orgId"]]
+      );
+
+      await client.query('COMMIT');
+
+      // Security audit log
+      logger.info({ domainId, userId: auth.userId, orgId: auth["orgId"], transferId }, 'Domain transfer initiated');
+
+      res.json({
+        transferred: true,
+        transferId,
+        receipt,
+        status: 'pending'
+      });
+    } catch (txError) {
+      await client.query('ROLLBACK').catch((rollbackErr: unknown) => {
+        logger.error({ error: rollbackErr }, 'Failed to rollback domain transfer transaction');
+      });
+      throw txError;
+    } finally {
+      client.release();
     }
-
-    const domain = rows[0];
-
-    // Double-check org_id matches
-    if (domain.org_id !== auth["orgId"]) {
-      logger.warn({ domainOrgId: domain.org_id, userOrgId: auth["orgId"] }, 'Domain org_id does not match user org_id');
-      return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    // Generate transfer receipt
-    const receipt = crypto.randomBytes(32).toString('hex');
-    const transferId = crypto.randomUUID();
-
-    // Record transfer initiation
-    await pool.query(
-      `INSERT INTO domain_transfers (id, domain_id, from_user_id, to_user_id, to_org_id, receipt, status, created_at, from_org_id)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), $7)`,
-      [transferId, domainId, auth.userId, targetUserId || null, targetOrgId || null, receipt, auth["orgId"]]
-    );
-
-    // Security audit log
-    logger.info({ domainId, userId: auth.userId, orgId: auth["orgId"], transferId }, 'Domain transfer initiated');
-
-    res.json({
-      transferred: true,
-      transferId,
-      receipt,
-      status: 'pending'
-    });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AuthError') return;
     logger.error({ error }, 'Failed to initiate domain transfer');

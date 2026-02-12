@@ -8,14 +8,16 @@ import { EmailMessage } from './schema/emailBlocks';
 * @param message - Email message content
 * @returns Test email result
 */
+// P1-7 FIX: Return 'rendered' instead of 'sent' since this only renders HTML
+// and does NOT actually send an email. Callers must not assume delivery occurred.
 export async function sendTestEmail(
   provider: 'smtp' | 'external',
   to: string,
   message: EmailMessage
-): Promise<{ sent: boolean; to: string; html_preview: string }> {
+): Promise<{ rendered: boolean; to: string; html_preview: string }> {
   const html = renderEmailHTML(message);
-  // Send via configured test SMTP or export HTML for external tools
-  return { sent: true, to, html_preview: html };
+  // Renders email HTML for preview — actual SMTP delivery is NOT implemented
+  return { rendered: true, to, html_preview: html };
 }
 
 export type InboxTestResult = {
