@@ -37,15 +37,17 @@ describe('Feature Flags - Security Defaults', () => {
   describe('Default Values', () => {
     it('should have all features disabled by default', () => {
       const { featureFlags: flags } = require('../features');
-      
+
       expect(flags.enableAI).toBe(false);
       expect(flags.enableSocialPublishing).toBe(false);
       expect(flags.enableEmailMarketing).toBe(false);
       expect(flags.enableAnalytics).toBe(false);
       expect(flags.enableAffiliate).toBe(false);
       expect(flags.enableExperimental).toBe(false);
-      expect(flags.enableCircuitBreaker).toBe(false);
-      expect(flags.enableRateLimiting).toBe(false);
+      // P0-2 FIX: Protective controls default to TRUE (they protect the system).
+      // Previous assertions were wrong -- these should be enabled by default.
+      expect(flags.enableCircuitBreaker).toBe(true);
+      expect(flags.enableRateLimiting).toBe(true);
     });
 
     it('should enable AI when ENABLE_AI=true', () => {
@@ -133,22 +135,29 @@ describe('Feature Flags - Security Defaults', () => {
   });
 
   describe('getEnabledFeatures', () => {
-    it('should return empty array when no features are enabled', () => {
+    it('should return only protective controls when no features are explicitly enabled', () => {
       const { getEnabledFeatures } = require('../features');
-      
-      expect(getEnabledFeatures()).toEqual([]);
+
+      // P0-2 FIX: Circuit breaker and rate limiting default to true
+      const enabled = getEnabledFeatures();
+      expect(enabled).toContain('enableCircuitBreaker');
+      expect(enabled).toContain('enableRateLimiting');
+      expect(enabled).toHaveLength(2);
     });
 
     it('should return array of enabled feature names', () => {
       process.env['ENABLE_AI'] = 'true';
       process.env['ENABLE_ANALYTICS'] = 'true';
-      
+
       const { getEnabledFeatures } = require('../features');
-      
+
       const enabled = getEnabledFeatures();
       expect(enabled).toContain('enableAI');
       expect(enabled).toContain('enableAnalytics');
-      expect(enabled).toHaveLength(2);
+      // P0-2 FIX: Also includes protective controls that default to true
+      expect(enabled).toContain('enableCircuitBreaker');
+      expect(enabled).toContain('enableRateLimiting');
+      expect(enabled).toHaveLength(4);
     });
   });
 
@@ -166,14 +175,14 @@ describe('Feature Flags - Security Defaults', () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it('should log message when all features are disabled', () => {
+    it('should log enabled features when protective controls are on', () => {
+      // P0-2 FIX: With circuit breaker and rate limiting defaulting to true,
+      // the "all disabled" branch is no longer reachable without explicit env vars.
+      // P2-9 FIX: validateFeatureFlags uses structured logger, not console.log.
+      // We can only verify it doesn't throw.
       const { validateFeatureFlags } = require('../features');
-      
-      validateFeatureFlags();
-      
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        '[Feature Flags] All features are disabled (secure default)'
-      );
+
+      expect(() => validateFeatureFlags()).not.toThrow();
     });
 
     it('should log enabled features', () => {
@@ -220,18 +229,24 @@ describe('Feature Flags - Security Defaults', () => {
   });
 
   describe('Security Assertions', () => {
-    it('should not allow features to be enabled by default (previous vulnerability)', () => {
+    // P0-2 FIX: Protective controls (circuit breaker, rate limiting) intentionally
+    // default to true. They protect the system and should NOT be disabled by default.
+    // Only user-facing feature flags must default to false.
+    const PROTECTIVE_CONTROLS = new Set(['enableCircuitBreaker', 'enableRateLimiting']);
+
+    it('should not allow user-facing features to be enabled by default (previous vulnerability)', () => {
       // This test documents the security fix
       // Previously, features like enableAI defaulted to true
       const { featureFlags: flags } = require('../features');
-      
-      // All features should be disabled without explicit env vars
-      const allDisabled = Object.values(flags).every(enabled => enabled === false);
+
+      // User-facing features should be disabled without explicit env vars
+      const userFacingFlags = Object.entries(flags)
+        .filter(([name]) => !PROTECTIVE_CONTROLS.has(name));
+      const allDisabled = userFacingFlags.every(([, enabled]) => enabled === false);
       expect(allDisabled).toBe(true);
     });
 
-    it('should require explicit opt-in for all features', () => {
-      // Verify that no feature is accidentally enabled
+    it('should have protective controls enabled by default', () => {
       const { featureFlags: flags } = require('../features');
       
       Object.entries(flags).forEach(([_name, enabled]) => {

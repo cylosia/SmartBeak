@@ -23,9 +23,15 @@ export const billingConfig = {
     return key;
   },
 
-  /** Paddle API key */
+  /** Paddle API key (validated at startup) */
+  // P1-FIX: Throw on missing key instead of returning empty string
+  // (was silently sending empty API key to Paddle, causing confusing auth errors)
   get paddleApiKey(): string {
-    return process.env['PADDLE_API_KEY'] || '';
+    const key = process.env['PADDLE_API_KEY'];
+    if (!key) {
+      throw new Error('PADDLE_API_KEY environment variable is required');
+    }
+    return key;
   },
 } as const;
 

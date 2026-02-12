@@ -92,21 +92,33 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
   }
   });
 
-  // P1-FIX: Add membership verification hook
+  // P1-FIX: Membership verification hook
+  // SECURITY AUDIT FIX: Require orgId for billing routes. Previously, requests
+  // without orgId skipped the membership check entirely, allowing IDOR via
+  // a JWT with stripeCustomerId but no orgId.
   app.addHook('onRequest', async (req, reply) => {
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.user?.id;
     const orgId = authReq.user?.orgId;
-    
-    // If no org context, skip membership check (may be user-level billing)
-    if (!orgId || !userId) {
-      return;
+
+    // Require both userId and orgId for billing access
+    if (!userId) {
+      return reply.status(401).send({
+        error: 'Authentication required',
+        code: 'AUTH_REQUIRED'
+      });
     }
-    
+    if (!orgId) {
+      return reply.status(403).send({
+        error: 'Organization context required for billing access',
+        code: 'ORG_CONTEXT_REQUIRED'
+      });
+    }
+
     // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
-      return reply.status(403).send({ 
+      return reply.status(403).send({
         error: 'Forbidden',
         code: 'ORG_MEMBERSHIP_REQUIRED'
       });

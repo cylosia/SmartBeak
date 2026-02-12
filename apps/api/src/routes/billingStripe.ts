@@ -29,7 +29,8 @@ const ALLOWED_PRICE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 // with the following keys:
 // - csrf:billing:{token} -> {orgId, expires} with TTL
 
-const CSRF_TOKEN_EXPIRY_MS = 3600000; // 1 hour
+// P1-FIX: Reduced from 1 hour to 15 minutes per OWASP CSRF token lifetime recommendation
+const CSRF_TOKEN_EXPIRY_MS = 900000; // 15 minutes
 const BILLING_CSRF_PREFIX = 'csrf:billing:';
 
 /**

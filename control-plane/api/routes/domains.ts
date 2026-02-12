@@ -75,10 +75,25 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     });
   }
 
-  // Validate query params
+  // P1-2 FIX: Return 400 on validation failure instead of silent fallback to defaults
   const queryResult = DomainQuerySchema.safeParse(req.query);
-  const { status, page, limit } = queryResult.success ? queryResult.data :
-    { status: 'all', page: 1, limit: 20 };
+  if (!queryResult.success) {
+    return res.status(400).send({
+    error: 'Invalid query parameters',
+    code: 'VALIDATION_ERROR',
+    details: queryResult.error.issues,
+    });
+  }
+  const { status, page, limit } = queryResult.data;
+
+  // P0-4 FIX: Cap maximum page to prevent OFFSET DoS (deep pages cause full table scans)
+  const MAX_PAGE = 100;
+  if (page > MAX_PAGE) {
+    return res.status(400).send({
+    error: `Page number must not exceed ${MAX_PAGE}. Use cursor-based pagination for deeper access.`,
+    code: 'PAGINATION_LIMIT',
+    });
+  }
 
   const offset = (page - 1) * limit;
 
@@ -435,20 +450,35 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     return res.status(403).send({ error: 'Access denied to domain' });
   }
 
+  // P0-5 FIX: Wrap delete + usage decrement in transaction to prevent quota corruption
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL statement_timeout = $1', [30000]);
+
     // H11-FIX: Also set archived_at so deleted domains are filtered from listings
-    await pool.query(
-    'UPDATE domains SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2',
-    ['deleted', domainId]
+    await client.query(
+    'UPDATE domains SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2 AND org_id = $3',
+    ['deleted', domainId, ctx["orgId"]]
     );
 
-    await usage.increment(ctx["orgId"], 'domain_count', -1);
+    // Decrement usage count within the same transaction
+    await client.query(
+    `UPDATE org_usage SET domain_count = GREATEST(domain_count - 1, 0), updated_at = NOW()
+    WHERE org_id = $1`,
+    [ctx["orgId"]]
+    );
 
+    await client.query('COMMIT');
     return { id: domainId, deleted: true };
   } catch (error) {
-    logger["error"]('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
+    await client.query('ROLLBACK').catch((rollbackError: Error) => {
+    logger.error('Rollback failed during DELETE', rollbackError);
+    });
+    logger.error('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
     return res.status(500).send({ error: 'Failed to delete domain' });
+  } finally {
+    client.release();
   }
   });
 }

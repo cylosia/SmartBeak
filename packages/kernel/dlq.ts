@@ -351,11 +351,14 @@ export const DLQ = {
   return { total: await getDLQStorageInstance().count() };
   },
 
+  // P2-14 FIX: Batch deletion instead of serial one-by-one to avoid blocking event loop
   async purge(): Promise<void> {
   const storage = getDLQStorageInstance();
   const messages = await storage.peek(10000);
-  for (const msg of messages) {
-    await storage.delete(msg.id);
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+    const batch = messages.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(msg => storage.delete(msg.id)));
   }
   logger.info(`DLQ purged, removed ${messages.length} messages`);
   },

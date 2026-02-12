@@ -113,16 +113,22 @@ export async function getCriticalDependencies(
     const sanitizedAssetType = assetType.trim();
     const sanitizedAssetId = assetId.trim();
 
+    // P1-5 FIX: Enumerate columns instead of SELECT * to prevent over-fetching
     result = await db.query<CriticalDependencyBreak>(
-    `SELECT * FROM critical_dependency_breaks
+    `SELECT id, from_asset_type, from_asset_id, to_asset_type, to_asset_id,
+    impact_level, detected_at
+    FROM critical_dependency_breaks
     WHERE from_asset_type = $1
     AND from_asset_id = $2`,
     [sanitizedAssetType, sanitizedAssetId]
     );
   } else {
     // M03-FIX: Add LIMIT to prevent unbounded full table scan
+    // P1-5 FIX: Enumerate columns instead of SELECT *
     result = await db.query<CriticalDependencyBreak>(
-    `SELECT * FROM critical_dependency_breaks ORDER BY detected_at DESC LIMIT 1000`
+    `SELECT id, from_asset_type, from_asset_id, to_asset_type, to_asset_id,
+    impact_level, detected_at
+    FROM critical_dependency_breaks ORDER BY detected_at DESC LIMIT 1000`
     );
   }
 

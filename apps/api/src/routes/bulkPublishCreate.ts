@@ -160,7 +160,10 @@ async function batchPublishContent(
   const db = await getDbInstance();
 
   try {
+    // P1-FIX: Use SERIALIZABLE isolation to prevent dirty-read race conditions
+    // where concurrent requests both read status='draft' and both publish the same content
     return await db.transaction(async (trx) => {
+      await trx.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
       const now = new Date();
 
       // 1. Pre-fetch all drafts in one query
@@ -179,7 +182,8 @@ async function batchPublishContent(
 
       const results: PublishResult[] = [];
       const publishRecords: Array<Record<string, unknown>> = [];
-      const updateDraftIds: string[] = [];
+      // P1-FIX: Use Set instead of Array to avoid O(n) linear search in O(n*m) loop
+      const updateDraftIds = new Set<string>();
 
       // 3. Build batch operations
       for (const draftId of draftIds) {
@@ -209,18 +213,16 @@ async function batchPublishContent(
             created_at: now,
           });
 
-          if (!updateDraftIds.includes(draftId)) {
-            updateDraftIds.push(draftId);
-          }
+          updateDraftIds.add(draftId);
 
           results.push({ draftId, targetId, status: 'success', publishedAt: now });
         }
       }
 
       // 4. Batch update content status
-      if (updateDraftIds.length > 0) {
+      if (updateDraftIds.size > 0) {
         await trx('content')
-          .whereIn('id', updateDraftIds)
+          .whereIn('id', [...updateDraftIds])
           .where({ org_id: auth.orgId })
           .update({
             status: 'published',
@@ -403,6 +405,9 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
 }
 
 export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<void> {
+  // P0-FIX: Wire up rate limiting - was imported but never applied despite misleading comment
+  app.addHook('onRequest', rateLimitMiddleware('strict', undefined, { detectBots: true }));
+
   app.post<{
     Body: BulkPublishBodyType;
     Reply: BulkPublishResponse | ErrorResponse;
@@ -496,29 +501,39 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
 
       const publishResults = await batchPublishContent(drafts, targets, auth);
 
-      // Record bulk publish audit
-      await recordBulkPublishAudit({
-        orgId: auth.orgId,
-        userId: auth.userId,
-        drafts,
-        targets
-      });
+      // P1-FIX: Wrap audit calls in try/catch to prevent post-commit 500 errors.
+      // The publish transaction has already committed at this point - audit failures
+      // must not cause the client to receive a 500 for a successful operation.
+      try {
+        await recordBulkPublishAudit({
+          orgId: auth.orgId,
+          userId: auth.userId,
+          drafts,
+          targets
+        });
+      } catch (auditError) {
+        logger.error('Failed to record bulk publish audit (publish succeeded)', auditError instanceof Error ? auditError : new Error(String(auditError)));
+      }
 
-      await recordAuditEvent({
-        orgId: auth.orgId,
-        userId: auth.userId,
-        action: 'bulk_publish_initiated',
-        entityType: 'publish_intent',
-        metadata: {
-          draft_count: drafts.length,
-          target_count: targets.length,
-          draft_ids: drafts,
-          target_ids: targets,
-          results: publishResults,
-          notify,
-        },
-        ip,
-      });
+      try {
+        await recordAuditEvent({
+          orgId: auth.orgId,
+          userId: auth.userId,
+          action: 'bulk_publish_initiated',
+          entityType: 'publish_intent',
+          metadata: {
+            draft_count: drafts.length,
+            target_count: targets.length,
+            draft_ids: drafts,
+            target_ids: targets,
+            results: publishResults,
+            notify,
+          },
+          ip,
+        });
+      } catch (auditError) {
+        logger.error('Failed to record audit event (publish succeeded)', auditError instanceof Error ? auditError : new Error(String(auditError)));
+      }
 
       return {
         status: 'created',

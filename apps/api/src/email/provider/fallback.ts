@@ -20,14 +20,20 @@ function maskEmail(email: string | string[]): string | string[] {
   return maskSingleEmail(email);
 }
 
+// P2-15 FIX: Handle edge cases in email masking (single-label domains, empty local parts)
 function maskSingleEmail(email: string): string {
   const atIndex = email.indexOf('@');
   if (atIndex <= 0) return '***';
   const local = email.slice(0, atIndex);
   const domain = email.slice(atIndex + 1);
-  const maskedLocal = local[0] + '***';
+  if (!domain) return '***';
+  const maskedLocal = (local[0] ?? '') + '***';
   const domainParts = domain.split('.');
-  const maskedDomain = domainParts[0]?.[0] + '***.' + domainParts.slice(1).join('.');
+  const maskedFirstPart = (domainParts[0]?.[0] ?? '') + '***';
+  // P2-15 FIX: Handle single-label domains (e.g., "localhost") without trailing dot
+  const maskedDomain = domainParts.length > 1
+    ? maskedFirstPart + '.' + domainParts.slice(1).join('.')
+    : maskedFirstPart;
   return `${maskedLocal}@${maskedDomain}`;
 }
 
@@ -70,6 +76,13 @@ interface CircuitState {
   failures: number;
   lastFailure: number;
   isOpen: boolean;
+  // P1-1 FIX: Track half-open state to allow exactly ONE probe request
+  isHalfOpen: boolean;
+}
+
+// P2-10 FIX: Sanitize header values to prevent CRLF injection
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]/g, '');
 }
 
 class EmailProviderWithCircuitBreaker implements EmailProvider {
@@ -77,6 +90,7 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
     failures: 0,
     lastFailure: 0,
     isOpen: false,
+    isHalfOpen: false,
   };
 
   constructor(
@@ -93,34 +107,47 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
       if (timeSinceLastFailure < this.resetTimeoutMs) {
         throw new Error(`Circuit open for ${this.name}`);
       }
-      // Try to close circuit
-      this.circuit.isOpen = false;
-      this.circuit.failures = 0;
+      // P1-1 FIX: Transition to half-open state. Only one request should
+      // be allowed through as a probe. If another concurrent request arrives
+      // while already half-open, reject it to prevent flooding a recovering provider.
+      if (this.circuit.isHalfOpen) {
+        throw new Error(`Circuit half-open for ${this.name}, probe in progress`);
+      }
+      this.circuit.isHalfOpen = true;
     }
 
     // COMPLIANCE FIX (Finding 13): Inject List-Unsubscribe headers if provided
+    // P2-10 FIX: Sanitize header values to prevent CRLF injection
     const enrichedMessage = { ...message };
     if (message.listUnsubscribe) {
       enrichedMessage.headers = {
         ...enrichedMessage.headers,
-        'List-Unsubscribe': message.listUnsubscribe,
+        'List-Unsubscribe': sanitizeHeaderValue(message.listUnsubscribe),
       };
       if (message.listUnsubscribePost) {
-        enrichedMessage.headers['List-Unsubscribe-Post'] = message.listUnsubscribePost;
+        enrichedMessage.headers['List-Unsubscribe-Post'] = sanitizeHeaderValue(message.listUnsubscribePost);
       }
     }
 
     try {
       const result = await this.provider.send(enrichedMessage);
-      // Success - reset failures
+      // Success - reset failures and close circuit
       this.circuit.failures = 0;
+      // P1-1 FIX: Close circuit fully on successful probe
+      this.circuit.isOpen = false;
+      this.circuit.isHalfOpen = false;
       return result;
     } catch (error) {
       // Failure - increment counter
       this.circuit.failures++;
       this.circuit.lastFailure = Date.now();
 
-      if (this.circuit.failures >= this.failureThreshold) {
+      // P1-1 FIX: If half-open probe failed, re-open circuit immediately
+      if (this.circuit.isHalfOpen) {
+        this.circuit.isOpen = true;
+        this.circuit.isHalfOpen = false;
+        logger.error(`Circuit re-opened for ${this.name} after failed probe`);
+      } else if (this.circuit.failures >= this.failureThreshold) {
         this.circuit.isOpen = true;
         logger.error(`Circuit opened for ${this.name} after ${this.circuit.failures} failures`);
       }
@@ -150,12 +177,14 @@ export class FallbackEmailSender {
   private providers: EmailProviderWithCircuitBreaker[];
 
   constructor(config: FallbackConfig) {
+    // P1-11 FIX: Use ?? instead of || to prevent falsy gotcha.
+    // Previously, failureThreshold: 0 (immediate open) silently defaulted to 5.
     this.providers = config.providers.map(
       (p, _i) => new EmailProviderWithCircuitBreaker(
         p.name,
         p,
-        config.failureThreshold || 5,
-        config.resetTimeoutMs || 60000
+        config.failureThreshold ?? 5,
+        config.resetTimeoutMs ?? 60000
       )
     );
   }

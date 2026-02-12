@@ -17,8 +17,10 @@ const TokenParamSchema = z.object({
 export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /diligence/:token/overview - Get diligence overview for buyer
   app.get('/diligence/:token/overview', async (req, res) => {
-  await rateLimit('diligence', 30);
+  // P1-4 FIX: Validate token BEFORE rate limiting to prevent attackers from
+  // burning the global rate limit budget with invalid tokens
   const { token } = TokenParamSchema.parse(req.params);
+  await rateLimit('diligence', 30);
 
   try {
     // Validate token and get domain info
@@ -86,8 +88,9 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
 
   // GET /diligence/:token/affiliate-revenue - Get affiliate revenue breakdown
   app.get('/diligence/:token/affiliate-revenue', async (req, res) => {
-  await rateLimit('diligence', 30);
+  // P1-4 FIX: Validate before rate limiting
   const { token } = TokenParamSchema.parse(req.params);
+  await rateLimit('diligence', 30);
 
   try {
     // Validate token
@@ -103,11 +106,13 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     const domainId = rows[0].domain_id;
 
     // H09-FIX: Fetch real affiliate revenue data instead of hardcoded values
+    // P1-3 FIX: Add LIMIT to prevent unbounded result sets (OOM risk)
     const { rows: revenueRows } = await pool.query(
     `SELECT provider_name, percentage, estimated_monthly
     FROM affiliate_revenue_breakdown
     WHERE domain_id = $1
-    ORDER BY percentage DESC`,
+    ORDER BY percentage DESC
+    LIMIT 1000`,
     [domainId]
     );
 

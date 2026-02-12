@@ -84,7 +84,8 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
     logger.info('Domain export job aborted', { jobId: job?.id });
   };
   
-  if (job) {
+  // P1-6 FIX: Add runtime check instead of unsafe double cast through unknown
+  if (job && typeof (job as Record<string, unknown>)['on'] === 'function') {
     (job as unknown as { on: (event: string, listener: () => void) => void }).on('cancel', abortListener);
   }
 
@@ -142,7 +143,8 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
   return result;
   } finally {
     // P2-FIX: Clean up abort listener
-    if (job) {
+    // P1-6 FIX: Add runtime check instead of unsafe double cast
+    if (job && typeof (job as Record<string, unknown>)['off'] === 'function') {
       (job as unknown as { off: (event: string, listener: () => void) => void }).off('cancel', abortListener);
     }
   }
@@ -328,10 +330,12 @@ function escapeCSVValue(val: unknown) {
   if (val === null || val === undefined) {
     return '';
   }
-  const str = String(val);
-  // A03-FIX: Prevent CSV formula injection by prefixing dangerous characters
-  if (/^[+=\-@]/.test(str)) {
-    return `'${str}`;
+  let str = String(val);
+  // P1-7 SECURITY FIX: Prevent CSV formula injection by prefixing dangerous characters.
+  // Added tab (\t), carriage return (\r), and pipe (|) which also trigger DDE in spreadsheets.
+  // Previously returned early before comma/quote escaping — now applies both sanitizations.
+  if (/^[+=\-@\t\r|]/.test(str)) {
+    str = "'" + str;
   }
   // Escape values containing commas, quotes, or newlines
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {

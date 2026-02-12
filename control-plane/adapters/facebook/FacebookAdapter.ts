@@ -46,11 +46,18 @@ export class FacebookAdapter {
 
   const startTime = Date.now();
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+  // P1-3 FIX: AbortController was previously created OUTSIDE withRetry.
+  // Once the timeout fired on the first attempt and aborted the signal,
+  // all subsequent retries would instantly throw AbortError because they
+  // shared the same permanently-aborted signal. Now each retry attempt
+  // gets its own AbortController with a fresh timeout.
 
   try {
     const res = await withRetry(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
     const response = await fetch(
     `${this.baseUrl}/${pageId}/feed`,
     {
@@ -80,24 +87,38 @@ export class FacebookAdapter {
     }
 
     return response;
+    } finally {
+    clearTimeout(timeoutId);
+    }
     }, { maxRetries: 3 });
 
-    const data = await res.json() as FacebookPostResponse;
+    const rawData = await res.json() as unknown;
+
+    // P1-4 FIX: Validate response shape with type guard instead of raw cast.
+    // Previously used `as FacebookPostResponse` which silently accepted any JSON.
+    // If Facebook returns unexpected data (e.g., { error: ... } on 200), this
+    // would produce malformed data downstream.
+    if (!isFacebookPostResponse(rawData)) {
+    throw new Error('Invalid response format from Facebook API');
+    }
+
+    const data: FacebookPostResponse = {
+    id: rawData.id,
+    post_id: (rawData as Record<string, unknown>)['post_id'] as string | undefined,
+    };
 
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('publishPagePost', latency, true);
     this.metrics.recordSuccess('publishPagePost');
-    this.logger.info('Successfully published to Facebook', context, { postId: data["id"] });
+    this.logger.info('Successfully published to Facebook', context, { postId: data.id });
 
     return data;
   } catch (error) {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('publishPagePost', latency, false);
     this.metrics.recordError('publishPagePost', error instanceof Error ? error.name : 'Unknown');
-    this.logger["error"]('Failed to publish to Facebook', context, error as Error);
+    this.logger.error('Failed to publish to Facebook', context, error as Error);
     throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
   }
 

@@ -139,6 +139,10 @@ export async function getUnusedIndexes(
     throw new Error('minAgeDays must be an integer between 0 and 365');
   }
 
+  // P2-FIX: pg_class does not have a 'relcreationdate' column in standard PostgreSQL.
+  // Use pg_stat_user_tables stats_reset as a proxy for table age, or filter on
+  // last_idx_scan instead. Here we use the index scan count + pg_stat_user_tables
+  // last_analyze time as a reasonable proxy for index staleness.
   const result = await knex.raw<{
     rows: UnusedIndexInfo[];
   }>(`
@@ -148,15 +152,15 @@ export async function getUnusedIndexes(
       s.indexrelname as indexname,
       pg_size_pretty(pg_relation_size(s.indexrelid)) as index_size,
       s.idx_scan,
-      EXTRACT(DAY FROM NOW() - ci.relcreationdate)::int as index_age_days
+      COALESCE(EXTRACT(DAY FROM NOW() - st.last_analyze), 0)::int as index_age_days
     FROM pg_stat_user_indexes s
     JOIN pg_index i ON s.indexrelid = i.indexrelid
-    JOIN pg_class ci ON s.indexrelid = ci.oid
+    LEFT JOIN pg_stat_user_tables st ON s.relid = st.relid
     WHERE s.schemaname = 'public'
       AND s.idx_scan = 0
       AND NOT i.indisunique
       AND NOT i.indisprimary
-      AND ci.relcreationdate < NOW() - (? * INTERVAL '1 day')
+      AND (st.last_analyze IS NULL OR st.last_analyze < NOW() - (? * INTERVAL '1 day'))
     ORDER BY pg_relation_size(s.indexrelid) DESC
   `, [minAgeDays]);
   return result.rows;

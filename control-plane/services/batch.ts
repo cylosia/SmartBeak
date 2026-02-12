@@ -2,9 +2,13 @@
 // Type Definitions
 // ============================================================================
 
-import { getLogger } from '../../packages/kernel/logger';
+// P2-FIX: Use @kernel alias instead of fragile relative path crossing package boundaries
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('BatchService');
+
+// P2-FIX: Enforce maximum concurrency ceiling to prevent unbounded parallel operations
+const MAX_BATCH_CONCURRENCY = 100;
 
 /**
 * Result of batch processing
@@ -42,6 +46,10 @@ export async function processInBatches<T>(
   }
   if (typeof batchSize !== 'number' || !Number.isInteger(batchSize) || batchSize < 1) {
   throw new Error('batchSize must be a positive integer');
+  }
+  // P2-FIX: Enforce concurrency ceiling to prevent unbounded parallel operations
+  if (batchSize > MAX_BATCH_CONCURRENCY) {
+  throw new Error(`batchSize must not exceed ${MAX_BATCH_CONCURRENCY}`);
   }
   if (typeof fn !== 'function') {
   throw new Error('fn must be a function');
@@ -102,6 +110,9 @@ export async function processInBatchesStrict<T>(
   }
   if (typeof batchSize !== 'number' || !Number.isInteger(batchSize) || batchSize < 1) {
   throw new Error('batchSize must be a positive integer');
+  }
+  if (batchSize > MAX_BATCH_CONCURRENCY) {
+  throw new Error(`batchSize must not exceed ${MAX_BATCH_CONCURRENCY}`);
   }
   if (typeof fn !== 'function') {
   throw new Error('fn must be a function');
@@ -168,6 +179,9 @@ export async function mapInBatches<T, R>(
   }
   if (typeof batchSize !== 'number' || !Number.isInteger(batchSize) || batchSize < 1) {
   throw new Error('batchSize must be a positive integer');
+  }
+  if (batchSize > MAX_BATCH_CONCURRENCY) {
+  throw new Error(`batchSize must not exceed ${MAX_BATCH_CONCURRENCY}`);
   }
   if (typeof fn !== 'function') {
   throw new Error('fn must be a function');

@@ -158,11 +158,13 @@ export class DomainActivityService {
     );
     }
 
+    // P2-17 FIX: Add LIMIT to prevent unbounded result sets for large deployments
     const { rows } = await this.pool.query<DomainActivityRow>(
     `SELECT domain_id
     FROM domain_activity
     WHERE coalesce(last_publish_at, last_content_update_at, now() - interval '100 years')
-        < now() - make_interval(days => $1)`,
+        < now() - make_interval(days => $1)
+    LIMIT 10000`,
     [days]
     );
 

@@ -163,4 +163,4 @@ export interface AuditEventParams {
   ip: string;
 }
 
-export type SaleReadinessQueryType = z.infer<typeof SaleReadinessQuerySchema>;
+// P2-21 FIX: Removed SaleReadinessQueryType (referenced deleted SaleReadinessQuerySchema)

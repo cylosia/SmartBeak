@@ -85,7 +85,8 @@ export class DLQService {
     jobId,
     region,
     error["message"],
-    error["stack"] ?? null,
+    // P2-16 SECURITY FIX: Truncate stack traces to prevent leaking file paths and secrets
+    error["stack"] ? error["stack"].split('\n').slice(0, 5).join('\n') : null,
     category,
     JSON.stringify(jobData),
     retryCount,
@@ -172,31 +173,39 @@ export class DLQService {
 
   /**
   * Get entries by error category for targeted remediation
+  * P0-2 FIX: Fixed single-quoted aliases to double-quoted (PostgreSQL standard)
+  * P0-3 SECURITY FIX: Added orgId parameter for tenant isolation
+  * @param orgId - Organization ID for tenant isolation (required)
   * @param category - Error category to filter by
   * @param limit - Maximum number of entries to return (default: 100)
   * @param offset - Number of entries to skip (default: 0)
   * @returns Array of DLQ entries
   */
-  async listByCategory(category: ErrorCategory, limit = 100, offset = 0): Promise<DLQEntry[]> {
+  async listByCategory(orgId: string, category: ErrorCategory, limit = 100, offset = 0): Promise<DLQEntry[]> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required for tenant isolation');
+  }
   // P0-CRITICAL FIX: Cap offset to prevent unbounded pagination
   const MAX_SAFE_OFFSET = 10000;
   const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
-  logger.debug('Listing DLQ entries by category', { category, limit, offset: safeOffset });
+  logger.debug('Listing DLQ entries by category', { orgId, category, limit, offset: safeOffset });
 
+  // P0-2 FIX: Changed single-quoted aliases to double-quoted (PostgreSQL identifier syntax)
+  // P0-3 FIX: Added org_id filter for tenant isolation
   const { rows } = await this["pool"].query(
     `SELECT
-    id, publishing_job_id as 'jobId', region,
-    error_message as 'errorMessage',
-    error_stack as 'errorStack',
-    error_category as 'errorCategory',
-    job_data as 'jobData',
-    retry_count as 'retryCount',
-    created_at as 'createdAt'
+    id, publishing_job_id as "jobId", region,
+    error_message as "errorMessage",
+    error_stack as "errorStack",
+    error_category as "errorCategory",
+    job_data as "jobData",
+    retry_count as "retryCount",
+    created_at as "createdAt"
     FROM publishing_dlq
-    WHERE error_category = $1
+    WHERE org_id = $1 AND error_category = $2
     ORDER BY created_at DESC
-    LIMIT $2 OFFSET $3`,
-    [category, limit, safeOffset]
+    LIMIT $3 OFFSET $4`,
+    [orgId, category, limit, safeOffset]
   );
 
   return rows.map(row => ({
@@ -278,29 +287,40 @@ export class DLQService {
 
   /**
   * Get retry statistics
+  * P0-3 SECURITY FIX: Added orgId parameter for tenant isolation
+  * @param orgId - Organization ID for tenant isolation (required)
   * @returns DLQ statistics including totals and breakdowns
   */
-  async getStats(): Promise<{
+  async getStats(orgId?: string): Promise<{
   total: number;
   byCategory: Record<ErrorCategory, number>;
   byRegion: Record<string, number>;
   }> {
-  logger.debug('Getting DLQ stats');
+  logger.debug('Getting DLQ stats', { orgId });
+
+  // P0-3 FIX: Filter by org_id when provided to prevent cross-tenant data leakage
+  const orgFilter = orgId ? 'WHERE org_id = $1' : '';
+  const orgParams = orgId ? [orgId] : [];
 
   const { rows: totalRows } = await this["pool"].query(
-    'SELECT COUNT(*) as count FROM publishing_dlq'
+    `SELECT COUNT(*) as count FROM publishing_dlq ${orgFilter}`,
+    orgParams
   );
 
   const { rows: categoryRows } = await this["pool"].query(
     `SELECT error_category, COUNT(*) as count
     FROM publishing_dlq
-    GROUP BY error_category`
+    ${orgFilter}
+    GROUP BY error_category`,
+    orgParams
   );
 
   const { rows: regionRows } = await this["pool"].query(
     `SELECT region, COUNT(*) as count
     FROM publishing_dlq
-    GROUP BY region`
+    ${orgFilter}
+    GROUP BY region`,
+    orgParams
   );
 
   const byCategory: Record<string, number> = {};
