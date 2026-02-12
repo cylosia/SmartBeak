@@ -102,25 +102,29 @@ export async function nextActionsAdvisorRoutes(app: FastifyInstance): Promise<vo
     return;
     }
 
-    // Set statement timeout for query
-    await db.raw('SET statement_timeout = ?', [QUERY_TIMEOUT_MS]);
-
+    // P1-FIX: Use SET LOCAL within a transaction so statement_timeout does not
+    // persist on the pooled connection after it's returned (session-level pollution).
     let rows: ContentRow[];
     try {
-    rows = await db('content')
+    rows = await db.transaction(async (trx) => {
+    await trx.raw('SET LOCAL statement_timeout = ?', [QUERY_TIMEOUT_MS]);
+    return trx('content')
     .leftJoin('content_roi_models', 'content.id', 'content_roi_models.content_id')
     .leftJoin('page_seo_profiles', 'content.id', 'page_seo_profiles.page_id')
     .where('content.domain_id', domain_id)
-    .where('content.org_id', auth.orgId)           .select(
+    .where('content.org_id', auth.orgId)
+    .select(
     'content.id as content_id',
     'content.traffic as traffic',
     'content_roi_models.roi_12mo as roi_12mo',
-    db.raw('extract(day from now() - page_seo_profiles.last_reviewed_at) as freshness_days'),
+    trx.raw('extract(day from now() - page_seo_profiles.last_reviewed_at) as freshness_days'),
     'content.impressions_30d',
     'content.impressions_prev_30d',
     'content.serp_volatility'
     )
-    .limit(limit)           .offset(offset);
+    .limit(limit)
+    .offset(offset);
+    });
     } catch (dbError) {
         logger.error('Database error', dbError as Error);
     res.status(503).send({
@@ -170,10 +174,11 @@ export async function nextActionsAdvisorRoutes(app: FastifyInstance): Promise<vo
     });
     }
 
+    // P1-FIX: Removed error.message leak — internal details (SQL errors, stack traces)
+    // must not be sent to clients. Full error is already logged above.
     return res.status(500).send({
     error: 'Internal server error',
     code: 'INTERNAL_ERROR',
-    message: error instanceof Error ? error["message"] : 'Unknown error'
     });
   }
   });

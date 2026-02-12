@@ -105,7 +105,9 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       // SECURITY FIX: Issue 3 - Add namespace prefix for rate limit key
       await rateLimit(`admin:notifications:dlq:${ctx["orgId"]}`, 40, 'admin');
       
-      const result = await dlq.list(ctx["orgId"] as unknown as number);
+      // P1-FIX: Removed unsafe `as unknown as number` double-cast that passed orgId string
+      // as the limit parameter (causing NaN → PostgreSQL error). DLQ.list() now accepts orgId.
+      const result = await dlq.list(ctx["orgId"]);
       return res.send(result);
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages

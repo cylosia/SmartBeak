@@ -89,16 +89,19 @@ export class NotificationAdminService {
       throw new Error('Organization ID is required');
     }
 
-    // SECURITY FIX: Verify ownership before updating
-    const hasAccess = await this.verifyOwnership(notificationId, orgId);
-    if (!hasAccess) {
-      throw new Error('Notification not found or access denied');
-    }
-
-    await this.pool.query(
-      `UPDATE notifications SET status='pending' WHERE id=$1 AND org_id=$2`,
+    // P1-FIX: Atomic ownership check + status guard in a single UPDATE.
+    // Previously used separate SELECT (verifyOwnership) then UPDATE — TOCTOU race.
+    // Also added status='failed' guard: only failed notifications can be retried.
+    // Without this, an admin could reset a 'delivered' notification to 'pending',
+    // causing duplicate delivery.
+    const { rowCount } = await this.pool.query(
+      `UPDATE notifications SET status='pending'
+       WHERE id=$1 AND org_id=$2 AND status='failed'`,
       [notificationId, orgId]
     );
+    if (!rowCount) {
+      throw new Error('Notification not found, access denied, or not in failed state');
+    }
     return { ok: true };
   }
 
@@ -163,19 +166,17 @@ export class NotificationAdminService {
       throw new Error('Notification ID and Organization ID are required');
     }
 
-    // SECURITY FIX: Verify ownership before updating
-    const hasAccess = await this.verifyOwnership(notificationId, orgId);
-    if (!hasAccess) {
-      throw new Error('Notification not found or access denied');
-    }
-
+    // P1-FIX: Atomic ownership check + status guard in single UPDATE (eliminates TOCTOU race).
     const { rowCount } = await this.pool.query(
-      `UPDATE notifications 
-      SET status='cancelled' 
+      `UPDATE notifications
+      SET status='cancelled'
       WHERE id=$1 AND org_id=$2 AND status='pending'`,
       [notificationId, orgId]
     );
-    
-    return { ok: (rowCount || 0) > 0 };
+
+    if (!rowCount) {
+      throw new Error('Notification not found, access denied, or not in pending state');
+    }
+    return { ok: true };
   }
 }

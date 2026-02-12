@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 
 import { AppShell } from '../../components/AppShell';
 import { apiUrl } from '../../lib/api-client';
+import { fetchWithCsrf } from '../../lib/csrf';
 
 export default function NewDomain() {
   const router = useRouter();
@@ -18,7 +19,8 @@ export default function NewDomain() {
     setSubmitting(true);
 
     try {
-      const res = await fetch(apiUrl('domains'), {
+      // P1-FIX: Use fetchWithCsrf to include X-CSRF-Token header
+      const res = await fetchWithCsrf(apiUrl('domains'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
