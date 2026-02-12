@@ -7,7 +7,7 @@ import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 
-export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
+export async function attributionRoutes(app: FastifyInstance, _pool: Pool) {
   // GET /attribution/llm - LLM attribution report
   app.get('/attribution/llm', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS

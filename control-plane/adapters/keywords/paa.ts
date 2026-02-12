@@ -7,7 +7,7 @@ import { withRetry } from '@kernel/retry';
 
 import { KeywordIngestionAdapter, KeywordSuggestion } from './types';
 
-﻿import { AbortController } from 'abort-controller';
+import { AbortController } from 'abort-controller';
 
 
 /**
@@ -220,7 +220,7 @@ export class PaaAdapter implements KeywordIngestionAdapter {
   /**
   * Fetch from DataForSEO
   */
-  private async fetchFromDataForSeo(keyword: string): Promise<KeywordSuggestion[]> {
+  private async fetchFromDataForSeo(_keyword: string): Promise<KeywordSuggestion[]> {
   const login = process.env['DATAFORSEO_LOGIN'];
   const password = process.env['DATAFORSEO_PASSWORD'];
 

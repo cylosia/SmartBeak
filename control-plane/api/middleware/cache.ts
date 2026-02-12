@@ -75,6 +75,7 @@ export function setCacheHeaders(
 * Returns 304 Not Modified if content hasn't changed
 */
 export function withETagCache(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler: (req: FastifyRequest, res: FastifyReply) => Promise<any>,
   options: {
   maxAge?: number;

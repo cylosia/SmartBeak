@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing-related operations
-import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { extractAndVerifyToken, type JwtClaims } from '@security/jwt';
 import { getDb } from '../db';
 
@@ -46,7 +45,7 @@ const RoleRowSchema = z.object({
 // Use JwtClaims type from @security/jwt, not redefined locally
 export type DraftInfo = z.infer<typeof DraftInfoSchema>;
 
-function validateJwtClaims(payload: unknown): JwtClaims {
+function _validateJwtClaims(payload: unknown): JwtClaims {
   const result = LocalJwtClaimsSchema.safeParse(payload);
   if (!result.success) {
     throw new Error(`Invalid JWT claims: ${result.error["message"]}`);

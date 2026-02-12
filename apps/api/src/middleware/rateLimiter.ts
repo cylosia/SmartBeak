@@ -370,7 +370,7 @@ export class RateLimiter {
     }
 
     const key = `ratelimit:${provider}`;
-    const failureKey = `ratelimit:${provider}:failures`;
+    const _failureKey = `ratelimit:${provider}:failures`;
     const cooldownKey = `ratelimit:${provider}:cooldown`;
 
     // Check if in cooldown
@@ -705,7 +705,7 @@ interface RateLimitMiddlewareOptions {
 }
 
 // P0-FIX: Import distributed rate limiter
-import { checkRateLimit as checkRateLimitRedis, RateLimitConfig as RedisRateLimitConfig } from '@kernel/rateLimiterRedis';
+import { checkRateLimit as checkRateLimitRedis } from '@kernel/rateLimiterRedis';
 
 // P1-FIX: Removed dead in-memory rateLimitStore Map and checkRateLimit() function.
 // They were replaced by checkRateLimitDistributed() (Redis-based) but never deleted,

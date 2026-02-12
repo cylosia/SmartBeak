@@ -1,4 +1,4 @@
-import { getRequestContext, RequestContext } from './request-context';
+import { getRequestContext } from './request-context';
 
 /**
 * Structured Logger
@@ -195,7 +195,7 @@ function redactSensitiveData(obj: Record<string, unknown> | undefined): Record<s
 * @param entry - Log entry to output
 */
 function consoleHandler(entry: LogEntry): void {
-  const { timestamp, level, message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
+  const { timestamp: _timestamp, level, message: _message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
 
   // P0-FIX: Use stderr for all log levels to ensure structured logs don't pollute stdout
   // This is important for CLI tools and proper log aggregation

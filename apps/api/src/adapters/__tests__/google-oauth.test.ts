@@ -5,7 +5,7 @@
  * token exchange, and error handling.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GBP_OAUTH_SCOPES, getGbpAuthUrl } from '../../auth/oauth/gbp';
 import { getLinkedInAuthUrl } from '../../auth/oauth/linkedin';
 

@@ -237,7 +237,7 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
     method: 'HEAD'
   });
 
-  const latency = Date.now() - start;
+  const _latency = Date.now() - start;
 
   // Only 200-299 status codes indicate a healthy service
   const healthy = response.ok;

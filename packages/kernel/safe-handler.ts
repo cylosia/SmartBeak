@@ -1,6 +1,6 @@
 import { getRequestContext } from './request-context';
 
-﻿import { getLogger } from '@kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Enhanced safe handler with validation and error handling
@@ -38,7 +38,7 @@ export type ErrorCategory = 'timeout' | 'network' | 'memory' | 'validation' | 'u
 * @param value - Value that should never exist
 * @throws Error with the unexpected value
 */
-function assertNever(value: never): never {
+function _assertNever(value: never): never {
   throw new Error(`Unexpected value: ${String(value)}`);
 }
 
@@ -173,7 +173,7 @@ export async function runSafely(
   } catch (error) {
     lastError = error;
 
-    const { category, retryable } = categorizeError(error);
+    const { category: _category, retryable } = categorizeError(error);
 
     logger["error"](
     `Handler execution failed (attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS})`,

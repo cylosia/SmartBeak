@@ -312,7 +312,7 @@ async function insertBatch(
   batch: ContentIdea[],
   domainId: string,
   idempotencyKey: string | undefined,
-  batchIndex: number
+  _batchIndex: number
 ): Promise<void> {
 
   const tableName = validateTableName(ALLOWED_TABLES.CONTENT_IDEAS);
@@ -357,7 +357,7 @@ async function insertBatch(
   });
 }
 
-function generateTitle(keyword: string, type: string, tone: string): string {
+function generateTitle(keyword: string, type: string, _tone: string): string {
   const templates: Record<string, string[]> = {
   article: [
     `The Complete Guide to ${keyword}`,

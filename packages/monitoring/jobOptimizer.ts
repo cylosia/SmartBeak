@@ -181,13 +181,14 @@ export class JobOptimizer extends EventEmitter {
     this.emit('coalesced', { jobName, key, strategy: 'replace' });
     break;
 
-    case 'combine':
+    case 'combine': {
     // Merge data
     const mergedData = this.mergeData(existing["data"] as JobData, data as JobData);
     clearTimeout(existing.timeout);
     this.scheduleCoalesced(key, jobName, mergedData, rule.windowMs);
     this.emit('coalesced', { jobName, key, strategy: 'combine' });
     break;
+    }
 
     case 'discard':
     // Don't schedule new job
@@ -409,7 +410,7 @@ export class JobOptimizer extends EventEmitter {
   }
 
   // Schedule batches
-  for (const [key, groupItems] of groups) {
+  for (const [_key, groupItems] of groups) {
     for (let i = 0; i < groupItems.length; i += batchSize) {
     const batch = groupItems.slice(i, i + batchSize);
     await this.scheduleWithCoalescing(

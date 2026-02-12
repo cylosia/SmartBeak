@@ -247,6 +247,7 @@ export function getShardDeploymentConfig() {
     deploymentTimeoutMs: parseInt(process.env['SHARD_DEPLOYMENT_TIMEOUT_MS'] || '300000', 10),
     versioningEnabled: process.env['SHARD_VERSIONING_ENABLED'] !== 'false',
     maxVersionsPerSite: parseInt(process.env['SHARD_MAX_VERSIONS_PER_SITE'] || '10', 10),
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     tempDir: process.env['SHARD_TEMP_DIR'] || require('os').tmpdir(),
   };
 }

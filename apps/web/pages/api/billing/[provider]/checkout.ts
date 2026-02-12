@@ -10,9 +10,6 @@ import { requireAuth, validateMethod, sendError } from '../../../../lib/auth';
 // Valid billing providers
 const VALID_PROVIDERS = ['stripe', 'paddle'];
 
-// UUID validation regex (for plan IDs that might be UUIDs)
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // P0-1 FIX: Validate URLs against allowlist of trusted origins to prevent open redirect
 const ALLOWED_ORIGINS = [
   process.env['NEXT_PUBLIC_APP_URL'],
@@ -125,10 +122,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sessionId: session.id,
       provider: 'stripe',
       });
-    } catch (stripeError: any) {
+    } catch (stripeError: unknown) {
       console.error('[billing/checkout] Stripe error:', stripeError);
 
-      if (stripeError.type === 'StripeInvalidRequestError') {
+      if (stripeError instanceof Error && 'type' in stripeError && (stripeError as Record<string, unknown>).type === 'StripeInvalidRequestError') {
       // P1-13 FIX: Do not leak Stripe error details (may contain API key prefixes, config info)
       return sendError(res, 400, 'Invalid payment request. Please check your plan selection.');
       }
@@ -174,7 +171,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       checkoutUrl: paddleCheckoutUrl.toString(),
       provider: 'paddle',
       });
-    } catch (paddleError: any) {
+    } catch (paddleError: unknown) {
       console.error('[billing/checkout] Paddle error:', paddleError);
       throw paddleError;
     }

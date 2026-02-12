@@ -5,7 +5,7 @@ import { MediaRepository } from '../ports/MediaRepository';
 import { MediaUploadCompleted } from '../../domain/events/MediaUploadCompleted';
 import { MediaUploadCompletedPayload } from '../../domain/events/MediaUploadCompleted';
 
-﻿
+
 
 
 /**

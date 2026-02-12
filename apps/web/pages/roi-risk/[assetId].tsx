@@ -3,7 +3,7 @@ import { GetServerSideProps } from 'next';
 
 import { RiskAdjustedROI } from '../../components/RiskAdjustedROI';
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function RoiRiskPage({ roi }: any) {
+export default function RoiRiskPage({ roi }: Record<string, unknown>) {
   return (
   <main>
     <h1>Risk-adjusted ROI</h1>

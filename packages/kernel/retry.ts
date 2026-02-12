@@ -268,10 +268,12 @@ export async function withRetry<T>(
 * @param options - Partial retry options
 * @returns Retryable function
 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function makeRetryable<T extends (...args: any[]) => Promise<any>>(
   fn: T,
   options: Partial<RetryOptions> = {}
 ): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (async (...args: any[]) => {
   return withRetry(() => fn(...args), options);
   }) as T;

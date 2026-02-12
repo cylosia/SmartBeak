@@ -80,7 +80,7 @@ describe('MultiTierCache Memory Leak Prevention', () => {
       });
 
       // Start a slow computation
-      const promise = shortTimeoutCache.getOrCompute(
+      const _promise = shortTimeoutCache.getOrCompute(
         'slow_key',
         async () => {
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -94,7 +94,7 @@ describe('MultiTierCache Memory Leak Prevention', () => {
 
       // The original request should still be in-flight
       // But new requests should see it timed out
-      const stats = shortTimeoutCache.getStats();
+      const _stats = shortTimeoutCache.getStats();
       expect(stats.inFlightTimeouts).toBeGreaterThanOrEqual(0);
 
       shortTimeoutCache.stopInFlightCleanup();
@@ -134,7 +134,7 @@ describe('MultiTierCache Memory Leak Prevention', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Cleanup should have run
-      const stats = cacheWithShortCleanup.getStats();
+      const _stats = cacheWithShortCleanup.getStats();
       // InFlightCleaned tracks cleaned entries
 
       cacheWithShortCleanup.stopInFlightCleanup();
@@ -148,7 +148,7 @@ describe('MultiTierCache Memory Leak Prevention', () => {
       });
 
       // Create a request
-      const promise = cacheWithMonitoring.getOrCompute(
+      const _promise = cacheWithMonitoring.getOrCompute(
         'age_test_key',
         async () => {
           await new Promise(resolve => setTimeout(resolve, 200));

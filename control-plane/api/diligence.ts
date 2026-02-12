@@ -1,5 +1,5 @@
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 export interface TokenParams {

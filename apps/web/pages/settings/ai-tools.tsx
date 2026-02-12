@@ -2,7 +2,7 @@
 import { GetServerSideProps } from 'next';
 
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function AiTools({ models, prefs }: any) {
+export default function AiTools({ models, prefs }: Record<string, unknown>) {
   return (
   <main>
     <h1>AI Tools</h1>

@@ -86,10 +86,6 @@ export class UnsupportedAlgorithmError extends IdempotencyError {
 
 const DEFAULT_ALGORITHM = 'sha256';
 const DEFAULT_ENCODING: BinaryToTextEncoding = 'hex';
-const MAX_KEY_LENGTH = 64; // SHA256 hex length
-
-const MAX_IDEMPOTENCY_RECORDS = 100000; // Max records in cache
-const DEFAULT_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 // P3-4 FIX: Pre-compiled regex for hex validation (avoids creating RegExp per call)
 const HEX_PATTERN = /^[a-f0-9]+$/i;
 
@@ -194,7 +190,7 @@ export function deterministicKeyWithOptions(
   const encoding = validateEncoding(validatedOptions.encoding);
 
   // Build key parts with optional prefix/suffix
-  let keyParts: string[] = [];
+  const keyParts: string[] = [];
 
   if (validatedOptions.prefix) {
   keyParts.push(validatedOptions.prefix);

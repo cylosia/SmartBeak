@@ -1,8 +1,6 @@
 
 import Stripe from 'stripe';
 
-import { requireEnv } from './env';
-
 /**
 * Stripe configuration
 * Server-side only - never expose secret keys to client

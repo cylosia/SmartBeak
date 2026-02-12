@@ -14,7 +14,7 @@ import { WebhookAdapter } from '../../plugins/notification-adapters/webhook-adap
 
 const logger = getLogger('notifications-hook');
 
-﻿
+
 
 
 /**

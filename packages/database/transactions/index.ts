@@ -166,7 +166,7 @@ export async function query(text: string, params?: unknown[], timeoutMs?: number
 
   const startTime = Date.now();
   const { getConnectionMetrics } = await import('../pool');
-  const metrics = getConnectionMetrics();
+  const _metrics = getConnectionMetrics();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -287,7 +287,7 @@ function validateTableName(tableName: string): AllowedTable {
  * Execute query with row locking
  * P1-FIX: Add proper generic constraints for type safety
  */
-export async function withLock<T extends unknown, Row extends Record<string, unknown> = Record<string, unknown>>(
+export async function withLock<T, Row extends Record<string, unknown> = Record<string, unknown>>(
   tableName: string,
   whereConditions: WhereCondition[],
   fn: (client: PoolClient, rows: Row[]) => Promise<T>,

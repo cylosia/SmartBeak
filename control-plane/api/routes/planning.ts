@@ -2,7 +2,6 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
-import { z } from 'zod';
 
 import { PlanningOverviewService } from '../../../domains/planning/application/PlanningOverviewService';
 import { rateLimit } from '../../services/rate-limit';

@@ -1,7 +1,5 @@
 import { z } from 'zod';
-import { FastifyInstance, FastifyRequest as FastifyRequestType, FastifyReply } from 'fastify';
-import { csrfProtection } from '../middleware/csrf';
-import { apiRateLimit } from '../middleware/rateLimiter';
+import { FastifyInstance } from 'fastify';
 import { requireAuthFastify } from '../../../../packages/security/auth';
 import crypto from 'crypto';
 import { Pool } from 'pg';

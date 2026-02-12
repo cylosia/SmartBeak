@@ -178,7 +178,7 @@ export async function optionalAuthNextJs(
 */
 export async function optionalAuthFastify(
   req: FastifyRequest,
-  res: FastifyReply
+  _res: FastifyReply
 ): Promise<void> {
   const authHeader = req.headers.authorization;
 

@@ -2,7 +2,7 @@ import { LRUCache } from 'lru-cache';
 
 import { getLogger } from '@kernel/logger';
 
-import { RedisRateLimiter, RateLimitConfig, getRateLimitConfig } from './rate-limiter-redis';
+import { RedisRateLimiter, getRateLimitConfig } from './rate-limiter-redis';
 
 /**
  * Rate Limiting Service
@@ -46,7 +46,7 @@ const TRUSTED_PROXIES = process.env['TRUSTED_PROXIES']?.split(',').map(p => p.tr
  * @param request - Fastify request object
  * @returns Client IP address
  */
-function getClientIP(request: { ip: string; headers: Record<string, string | string[]> }): string {
+function _getClientIP(request: { ip: string; headers: Record<string, string | string[]> }): string {
   const trustedProxies = process.env['TRUSTED_PROXIES']?.split(',') || [];
   const forwarded = request.headers['x-forwarded-for'];
   

@@ -10,7 +10,6 @@ import { getLogger } from '@kernel/logger';
 import { PostgresPublishAttemptRepository } from '../infra/persistence/PostgresPublishAttemptRepository';
 import { PublishAdapter } from './ports/PublishAdapter';
 import { PublishingFailed } from '../domain/events/PublishingFailed';
-import { PublishingJob } from '../domain/entities/PublishingJob';
 import { PublishingJobRepository } from './ports/PublishingJobRepository';
 import { PublishingStarted } from '../domain/events/PublishingStarted';
 import { PublishingSucceeded } from '../domain/events/PublishingSucceeded';
@@ -260,6 +259,7 @@ export class PublishingWorker {
     }
 
     // Sanitize value - remove control characters
+    // eslint-disable-next-line no-control-regex
     sanitized[key] = value.replace(/[\x00-\x1F\x7F]/g, '');
   }
 

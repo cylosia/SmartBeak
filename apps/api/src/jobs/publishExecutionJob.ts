@@ -6,7 +6,7 @@ import { getLogger } from '@kernel/logger';
 import { withRetry, CircuitBreaker } from '@kernel/retry';
 import { acquireLock, releaseLock } from '@kernel/redlock';  // P0-FIX: Distributed locking
 
-import { publishingConfig, cacheConfig, jobConfig } from '@config';
+import { publishingConfig, cacheConfig } from '@config';
 import { getDb } from '../db';
 import { deterministicKey } from '../utils/idempotency';
 import { JobScheduler } from './JobScheduler';
@@ -64,7 +64,7 @@ export async function publishExecutionJob(payload: unknown): Promise<void> {
   throw error;
   }
 
-  const { intentId, adapter, orgId, retryOptions } = validatedPayload;
+  const { intentId, adapter, orgId, retryOptions: _retryOptions } = validatedPayload;
   const key = deterministicKey(['publish', intentId]);
 
   logger.info('Starting publish execution', { intentId, adapter: adapter.name, orgId });

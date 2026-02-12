@@ -8,7 +8,7 @@
  * - Query optimization hints
  */
 
-import type { Pool, QueryResult } from 'pg';
+import type { Pool } from 'pg';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('query-plan');
@@ -190,7 +190,7 @@ export class QueryPlanAnalyzer {
   /**
    * Safe plan analysis (estimated stats only)
    */
-  private analyzePlanSafe(node: QueryPlanNode, query: string): Partial<PlanAnalysis> {
+  private analyzePlanSafe(node: QueryPlanNode, _query: string): Partial<PlanAnalysis> {
     const analysis: Partial<PlanAnalysis> = {
       estimatedCost: node?.['Total Cost'] ?? 0,
       sequentialScans: [],

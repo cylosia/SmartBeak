@@ -35,7 +35,7 @@ export type AuthenticatedRequest = FastifyRequest & {
 * Notification routes
 */
 export async function notificationRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
-  const repo = new PostgresNotificationRepository(pool);
+  const _repo = new PostgresNotificationRepository(pool);
   const prefRepo = new PostgresNotificationPreferenceRepository(pool);
   const prefs = new NotificationPreferenceService(prefRepo);
 

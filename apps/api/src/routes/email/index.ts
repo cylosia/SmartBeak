@@ -23,11 +23,6 @@ import { getDb } from '../../db';
 import { recordAuditEvent } from './audit';
 import { verifyAuth, canAccessDomain } from './auth';
 
-interface AuthContext {
-  userId: string;
-  orgId: string;
-}
-
 export async function emailRoutes(app: FastifyInstance): Promise<void> {
   // P2-SECURITY FIX: Add CSRF protection for state-changing POST endpoints
   app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
@@ -414,7 +409,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
         });
     }
 
-    const { to, subject, body, from, reply_to, cc, bcc } = parseResult.data;
+    const { to, subject, body, from: _from, reply_to: _reply_to, cc: _cc, bcc: _bcc } = parseResult.data;
 
     const recipients = Array.isArray(to) ? to : [to];
 

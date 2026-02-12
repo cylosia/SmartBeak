@@ -7,7 +7,7 @@ import { withRetry } from '@kernel/retry';
 
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
 
-﻿import { AbortController } from 'abort-controller';
+import { AbortController } from 'abort-controller';
 
 
 /**
@@ -200,7 +200,7 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
   /**
   * Fetch affiliate reports (placeholder - requires manual CSV import)
   */
-  async fetchReports(input: {
+  async fetchReports(_input: {
   startDate: Date;
   endDate: Date;
   credentialsRef: string;

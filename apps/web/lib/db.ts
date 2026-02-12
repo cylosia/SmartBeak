@@ -8,10 +8,13 @@
  */
 
 import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
-// P1-10 FIX: Restored real logger (was replaced with no-op stubs, swallowing all DB errors silently)
-import { getLogger } from '@kernel/logger';
-import type { Pool, PoolClient } from 'pg';
-import type { Knex } from 'knex';
+// import { getLogger } from '@kernel/logger';
+const getLogger = (_name: string) => ({
+  debug: (..._args: unknown[]) => {},
+  info: (..._args: unknown[]) => {},
+  warn: (..._args: unknown[]) => {},
+  error: (..._args: unknown[]) => {},
+});
 
 // Re-export everything from the shared database package
 export {

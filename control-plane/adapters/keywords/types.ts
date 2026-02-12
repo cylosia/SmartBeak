@@ -6,4 +6,4 @@ export type KeywordSuggestion = {
 export interface KeywordIngestionAdapter {
   source: string;
   fetch(domain: string): Promise<KeywordSuggestion[]>;
-};
+}

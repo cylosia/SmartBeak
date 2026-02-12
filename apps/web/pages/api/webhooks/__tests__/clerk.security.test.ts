@@ -49,7 +49,7 @@ describe('Clerk Webhook Security Tests', () => {
       mockReq = {
         method: 'POST',
         headers: {},
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' }, type: 'user.created' })));
           }
@@ -78,7 +78,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': String(Math.floor(Date.now() / 1000)),
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ 
               data: { id: 'test' }, 
@@ -113,7 +113,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': String(Math.floor(Date.now() / 1000)),
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ 
               data: { id: 'test' }, 
@@ -146,7 +146,7 @@ describe('Clerk Webhook Security Tests', () => {
       mockReq = {
         method: 'POST',
         headers: {},
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' } })));
           }
@@ -172,7 +172,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': oldTimestamp,
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' } })));
           }
@@ -197,7 +197,7 @@ describe('Clerk Webhook Security Tests', () => {
           'svix-timestamp': futureTimestamp,
           'svix-signature': 'v1,invalid',
         },
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             callback(Buffer.from(JSON.stringify({ data: { id: 'test' } })));
           }
@@ -224,7 +224,7 @@ describe('Clerk Webhook Security Tests', () => {
         method: 'POST',
         headers: {},
         destroy: destroyMock,
-        on: jest.fn((event: string, callback: Function) => {
+        on: jest.fn((event: string, callback: (...args: unknown[]) => void) => {
           if (event === 'data') {
             // Simulate large payload
             const largeChunk = Buffer.alloc(11 * 1024 * 1024); // 11MB

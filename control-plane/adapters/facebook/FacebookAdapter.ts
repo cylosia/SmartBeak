@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 
 import { apiConfig, timeoutConfig } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
-import { validateNonEmptyString, isFacebookErrorResponse, isFacebookPostResponse } from '@kernel/validation';
+import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
 
@@ -72,7 +72,7 @@ export class FacebookAdapter {
     );
 
     if (!response.ok) {
-    const errorBody = await response.text();
+    const _errorBody = await response.text();
 
     if (response.status === 429) {
     const retryAfter = response.headers.get('retry-after');

@@ -1,7 +1,7 @@
 
 
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
@@ -10,7 +10,6 @@ import { getLogger } from '@kernel/logger';
 import { PostgresSeoRepository } from '../../../domains/seo/infra/persistence/PostgresSeoRepository';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
-import { resolveDomainDb } from '../../services/domain-registry';
 import { UpdateSeo } from '../../../domains/seo/application/handlers/UpdateSeo';
 
 const logger = getLogger('seo-routes');

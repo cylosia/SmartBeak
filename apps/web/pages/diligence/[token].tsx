@@ -2,7 +2,7 @@
 import { GetServerSideProps } from 'next';
 
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function DiligenceOverview({ snapshot }: any) {
+export default function DiligenceOverview({ snapshot }: Record<string, unknown>) {
   if (!snapshot) return <div>Invalid or expired diligence session</div>;
 
   return (

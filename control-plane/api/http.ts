@@ -170,7 +170,7 @@ const inMemoryRateLimitCache = new LRUCache<string, { count: number; resetAt: nu
   ttl: AUTH_RATE_LIMIT_WINDOW,
 });
 
-function inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
+function _inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
   const now = Date.now();
   const entry = inMemoryRateLimitCache.get(key);
 

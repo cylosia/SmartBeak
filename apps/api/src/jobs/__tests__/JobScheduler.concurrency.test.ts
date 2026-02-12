@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { JobScheduler, HandlerConfig } from '../JobScheduler';
+import { JobScheduler } from '../JobScheduler';
 import { Job } from 'bullmq';
 import Redis from 'ioredis';
 
@@ -55,7 +55,7 @@ describe('JobScheduler - Async/Concurrency Tests', () => {
   let scheduler: JobScheduler;
   let mockRedis: any;
   let mockWorker: any;
-  let eventHandlers: Map<string, Function[]>;
+  let eventHandlers: Map<string, ((...args: unknown[]) => void)[]>;
 
   beforeEach(() => {
     eventHandlers = new Map();
@@ -63,13 +63,13 @@ describe('JobScheduler - Async/Concurrency Tests', () => {
 
     // Create mock worker that captures event handlers
     mockWorker = {
-      on: vi.fn().mockImplementation((event: string, handler: Function) => {
+      on: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
         if (!eventHandlers.has(event)) {
           eventHandlers.set(event, []);
         }
         eventHandlers.get(event)!.push(handler);
       }),
-      off: vi.fn().mockImplementation((event: string, handler: Function) => {
+      off: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
         const handlers = eventHandlers.get(event);
         if (handlers) {
           const index = handlers.indexOf(handler);
@@ -205,10 +205,10 @@ describe('JobScheduler - Async/Concurrency Tests', () => {
     });
 
     it('should cancel job when abort is triggered', async () => {
-      let receivedSignal: AbortSignal | undefined;
+      let _receivedSignal: AbortSignal | undefined;
       
       const slowHandler = vi.fn().mockImplementation(async (data: unknown, job: Job, signal?: AbortSignal) => {
-        receivedSignal = signal;
+        _receivedSignal = signal;
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(resolve, 5000);
           signal?.addEventListener('abort', () => {
@@ -247,7 +247,7 @@ describe('JobScheduler - Async/Concurrency Tests', () => {
       }, handler);
 
       // Simulate job execution with abort controller
-      const mockJob = {
+      const _mockJob = {
         id: 'job-456',
         name: 'cleanup-test-job',
         data: { test: 'data' },

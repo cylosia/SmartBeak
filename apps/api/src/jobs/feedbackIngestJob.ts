@@ -16,7 +16,6 @@ export type WindowSize = typeof WINDOWS[number];
 
 // Maximum entities to process per job
 const MAX_ENTITIES = 100;
-const BATCH_SIZE = 10;
 
 // Zod validation schema
 const FeedbackIngestInputSchema = z.object({
@@ -228,8 +227,8 @@ async function processEntityWindow(
  * can detect and avoid scheduling the job until integration is complete.
  */
 async function fetchFeedbackMetrics(
-  _entityId: string,
-  _window: WindowSize,
+  entityId: string,
+  window: WindowSize,
   _source: string,
   _orgId: string
 ): Promise<FeedbackWindow['metrics']> {
@@ -262,7 +261,7 @@ class NotImplementedError extends Error {
 */
 async function storeFeedbackMetrics(
   windows: FeedbackWindow[],
-  orgId: string
+  _orgId: string
 ): Promise<void> {
   const db = await getDb();
 

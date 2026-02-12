@@ -1,7 +1,7 @@
 import { knex, Knex } from 'knex';
 import { getLogger } from '@kernel/logger';
 
-const logger = getLogger('database:knex');
+const _logger = getLogger('database:knex');
 
 let knexInstance: Knex | null = null;
 let knexInitializing = false;

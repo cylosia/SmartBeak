@@ -79,13 +79,15 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     let models: LlmModel[];
     try {
     // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
+    let models: LlmModel[] = [];
+    try {
     const result = await pool.query(
-    `SELECT id, name, provider, capabilities, cost_per_1k_tokens as "costPer1kTokens",
-        max_tokens as "maxTokens", available
-    FROM llm_models
-    WHERE available = true AND org_id = $1
-    ORDER BY provider, name`,
-    [ctx.orgId]
+      `SELECT id, name, provider, capabilities, cost_per_1k_tokens as "costPer1kTokens",
+          max_tokens as "maxTokens", available
+      FROM llm_models
+      WHERE available = true AND org_id = $1
+      ORDER BY provider, name`,
+      [ctx.orgId]
     );
     models = result.rows;
     } catch (dbError) {

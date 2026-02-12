@@ -632,8 +632,8 @@ export function createExternalApiHealthCheck(
 // thresholds entirely, and always returned 'healthy'.
 export function createDiskHealthCheck(
   name: string = 'disk',
-  warningThresholdPercent: number = 80,
-  criticalThresholdPercent: number = 90
+  _warningThresholdPercent: number = 80,
+  _criticalThresholdPercent: number = 90
 ): HealthCheckFn {
   return async (): Promise<HealthCheckResult> => {
     const start = Date.now();

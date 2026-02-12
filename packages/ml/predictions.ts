@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { Pool } from 'pg';
 
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 
 /**
 * ML-Based Predictions & Anomaly Detection
@@ -422,7 +422,7 @@ export class MLPredictionEngine extends EventEmitter {
   */
   async calculateSeasonality(
   domainId: string,
-  metric: string
+  _metric: string
   ): Promise<{
   dayOfWeekPattern: number[];
   monthlyPattern: number[];

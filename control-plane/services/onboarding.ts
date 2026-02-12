@@ -1,6 +1,6 @@
 
 // Valid onboarding steps
-import { Pool, PoolClient } from 'pg';
+import { Pool } from 'pg';
 
 const VALID_STEPS = ['profile', 'billing', 'team'] as const;
 export type OnboardingStep = typeof VALID_STEPS[number];
