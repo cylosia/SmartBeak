@@ -2,7 +2,8 @@ import './styles.css';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-  <html>
+  <html lang="en">
+    <head><meta charSet="utf-8" /></head>
     <body>
     <header><h1>Authority Site</h1></header>
     <main>{children}</main>

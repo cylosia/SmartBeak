@@ -39,7 +39,7 @@ export interface LlmPreferences {
   };
 }
 
-// Validation schemas
+// P1-FIX: Add .strict() to reject unknown properties
 const UpdatePreferencesSchema = z.object({
   defaultModel: z.string().optional(),
   fallbackModel: z.string().optional(),
@@ -47,12 +47,12 @@ const UpdatePreferencesSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().min(1).max(8000).optional(),
-  }).optional(),
+  }).strict().optional(),
   costLimits: z.object({
   monthly: z.number().min(0).optional(),
   alertThreshold: z.number().min(0).max(100).optional(),
-  }).optional(),
-});
+  }).strict().optional(),
+}).strict();
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -73,17 +73,17 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('llm', 30, req, res);
+    // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
+    try { await rateLimit('llm', 30, req, res); } catch { return; }
 
-    // Fetch models from database
-    let models: LlmModel[];
-    try {
+    // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
     const result = await pool.query(
-    `SELECT id, name, provider, capabilities, cost_per_1k_tokens as 'costPer1kTokens',
-        max_tokens as 'maxTokens', available
+    `SELECT id, name, provider, capabilities, cost_per_1k_tokens as "costPer1kTokens",
+        max_tokens as "maxTokens", available
     FROM llm_models
-    WHERE available = true
-    ORDER BY provider, name`
+    WHERE available = true AND org_id = $1
+    ORDER BY provider, name`,
+    [ctx.orgId]
     );
     models = result.rows;
     } catch (dbError) {
@@ -92,8 +92,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     models = [];
     }
 
-    // If no models in DB or table doesn't exist, return empty array
-    // Client should handle this gracefully
     return res.send({ models });
   } catch (error) {
     logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
@@ -113,7 +111,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
-    await rateLimit('llm', 30, req, res);
+    try { await rateLimit('llm', 30, req, res); } catch { return; }
 
     const preferences: LlmPreferences = {
     defaultModel: 'gpt-4',
@@ -153,23 +151,29 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin']);
-    await rateLimit('llm', 30, req, res);
+    try { await rateLimit('llm', 30, req, res); } catch { return; }
 
     // Validate input
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
+    // P3-FIX: Sanitize validation error details
     res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues
+    details: parseResult["error"].issues.map(i => ({ path: i.path, message: i.message }))
     });
     return;
     }
 
     const updates = parseResult.data;
 
-    // In production, save to database
-    // Await pool.query('UPDATE org_llm_prefs SET ... WHERE org_id = $1', [orgId]);
+    // P1-FIX: Actually persist preferences to database
+    await pool.query(
+    `INSERT INTO org_llm_prefs (org_id, preferences, updated_at)
+    VALUES ($1, $2, NOW())
+    ON CONFLICT (org_id) DO UPDATE SET preferences = $2, updated_at = NOW()`,
+    [ctx.orgId, JSON.stringify(updates)]
+    );
 
     return res.send({ updated: true, preferences: updates });
   } catch (error) {
