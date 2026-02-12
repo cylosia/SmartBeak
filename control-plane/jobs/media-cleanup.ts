@@ -52,9 +52,10 @@ export async function runMediaCleanup(pool: Pool, signal?: AbortSignal): Promise
   errors: [],
   };
 
-  // Create timeout promise
+  // P1-5 FIX: Track timeout timer ID so it can be cleared when cleanup finishes
+  let timeoutId: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
-  setTimeout(() => {
+  timeoutId = setTimeout(() => {
     reject(new Error(`Media cleanup job timeout after ${JOB_TIMEOUT_MS}ms`));
   }, JOB_TIMEOUT_MS);
   });
@@ -65,9 +66,12 @@ export async function runMediaCleanup(pool: Pool, signal?: AbortSignal): Promise
   await Promise.race([cleanupPromise, timeoutPromise]);
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger["error"]('Media cleanup failed or timed out', err);
+  logger.error('Media cleanup failed or timed out', err);
   result.errors.push(err.message);
   throw error;
+  } finally {
+  // P1-5 FIX: Always clear the timeout to prevent resource leak
+  clearTimeout(timeoutId!);
   }
 
   logger.info('Media cleanup completed', {
@@ -96,12 +100,13 @@ export async function runMediaCleanup(pool: Pool, signal?: AbortSignal): Promise
     {
     maxRetries: 3,
     initialDelayMs: 1000,
-    retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'timeout'],
+    // P1-9 FIX: Added PostgreSQL deadlock/serialization error codes
+    retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'timeout', '40P01', '40001'],
     }
     );
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger["error"]('Failed to find cold media candidates', err);
+    logger.error('Failed to find cold media candidates', err);
     throw err;
   }
 
@@ -126,14 +131,15 @@ export async function runMediaCleanup(pool: Pool, signal?: AbortSignal): Promise
             {
             maxRetries: 3,
             initialDelayMs: 500,
-            retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT'],
+            // P1-9 FIX: Added PostgreSQL deadlock/serialization error codes
+    retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', '40P01', '40001'],
             }
         );
         result.coldMoved++;
         logger.debug('Marked media as cold', { mediaId: id });
         } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        logger["error"]('Failed to mark media as cold', err, { mediaId: id });
+        logger.error('Failed to mark media as cold', err, { mediaId: id });
         result.errors.push(`Cold media ${id}: ${err.message}`);
         }
     })
@@ -150,12 +156,13 @@ export async function runMediaCleanup(pool: Pool, signal?: AbortSignal): Promise
     {
     maxRetries: 3,
     initialDelayMs: 1000,
-    retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'timeout'],
+    // P1-9 FIX: Added PostgreSQL deadlock/serialization error codes
+    retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'timeout', '40P01', '40001'],
     }
     );
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger["error"]('Failed to find orphaned media', err);
+    logger.error('Failed to find orphaned media', err);
     throw err;
   }
 
@@ -180,14 +187,15 @@ export async function runMediaCleanup(pool: Pool, signal?: AbortSignal): Promise
             {
             maxRetries: 3,
             initialDelayMs: 500,
-            retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT'],
+            // P1-9 FIX: Added PostgreSQL deadlock/serialization error codes
+    retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', '40P01', '40001'],
             }
         );
         result.orphanedDeleted++;
         logger.debug('Deleted orphaned media', { mediaId: id });
         } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        logger["error"]('Failed to delete orphaned media', err, { mediaId: id });
+        logger.error('Failed to delete orphaned media', err, { mediaId: id });
         result.errors.push(`Orphaned media ${id}: ${err.message}`);
         }
     })

@@ -27,18 +27,11 @@ export class ModuleCache<T> {
     return this.promise;
   }
 
-  // P1-FIX: Double-checked locking pattern - recheck after acquiring flag
-  if (this.isLoading) {
-    // Wait for the promise to be set by the loading call
-    while (this.isLoading) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    // After waiting, return the promise (which must now exist)
-    if (this.promise) {
+  // P2-10 FIX: Replaced busy-wait polling loop with shared Promise pattern.
+  // The old while(isLoading) { await setTimeout(10) } loop burned CPU and
+  // could stack overflow via recursive this.get() calls.
+  if (this.isLoading && this.promise) {
     return this.promise;
-    }
-    // Race condition handled: another caller cleared the cache, retry
-    return this.get();
   }
 
   // P1-FIX: Atomic initialization - set flag BEFORE creating promise
