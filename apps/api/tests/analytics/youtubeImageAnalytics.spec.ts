@@ -47,4 +47,29 @@ describe('YouTubeCtrInputSchema', () => {
   test('rejects missing fields', () => {
     expect(() => YouTubeCtrInputSchema.parse({ impressions: 100 })).toThrow();
   });
+
+  // P3-2 FIX (audit 2): MAX_SAFE_INTEGER boundary tests
+  test('accepts MAX_SAFE_INTEGER values', () => {
+    const result = computeYouTubeThumbnailCtr({
+      impressions: Number.MAX_SAFE_INTEGER,
+      views: Number.MAX_SAFE_INTEGER,
+    });
+    expect(result).toBe(100);
+  });
+
+  test('rejects values above MAX_SAFE_INTEGER', () => {
+    expect(() => computeYouTubeThumbnailCtr({
+      impressions: Number.MAX_SAFE_INTEGER + 1,
+      views: 0,
+    })).toThrow();
+  });
+
+  // P3-3 FIX (audit 2): .strict() rejects extra properties
+  test('rejects extra properties with .strict() (P2-1)', () => {
+    expect(() => YouTubeCtrInputSchema.parse({
+      impressions: 100,
+      views: 50,
+      clicks: 30,
+    })).toThrow();
+  });
 });

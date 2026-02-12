@@ -59,6 +59,8 @@ export const apiConfig = {
     soundcloud: 'https://api.soundcloud.com',
     serpapi: 'https://serpapi.com',
     ahrefs: 'https://api.ahrefs.com/v3',
+    /** P1-3 FIX (audit 2): YouTube Analytics is a separate API from YouTube Data */
+    youtubeAnalytics: 'https://youtubeanalytics.googleapis.com',
   } as const,
 } as const;
 
