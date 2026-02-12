@@ -4,7 +4,7 @@
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing
 
 import crypto from 'crypto';
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { createStripeCheckoutSession } from '../billing/stripe';
@@ -13,11 +13,6 @@ import { getLogger } from '@kernel/logger';
 
 const billingStripeLogger = getLogger('billingStripe');
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
-import { 
-  generateCsrfToken as generateSecureCsrfToken,
-  validateCsrfToken as validateSecureCsrfToken,
-  clearCsrfToken
-} from '../middleware/csrf';
 import { getRedis } from '@kernel/redis';
 import { getDb } from '../db';
 
@@ -119,7 +114,7 @@ export interface CheckoutRouteParams {
   Body: CheckoutBody;
 }
 
-function validatePriceId(priceId: string): boolean {
+function _validatePriceId(priceId: string): boolean {
   return ALLOWED_PRICE_ID_PATTERN.test(priceId);
 }
 

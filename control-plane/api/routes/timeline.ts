@@ -1,15 +1,13 @@
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-// P2-1 FIX: Import from packages/middleware/validation instead of deprecated legacy middleware
-import { CommonSchemas } from '@packages/middleware/validation';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, type AuthContext } from '../../services/auth';
-import { getAuthContext, type AuthenticatedRequest } from '../types';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { getLogger } from '@kernel/logger';
 
-const logger = getLogger('timeline');
+const _logger = getLogger('timeline');
 
 const DomainParamsSchema = z.object({
   domainId: z.string().uuid(),

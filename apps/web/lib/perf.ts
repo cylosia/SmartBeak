@@ -4,8 +4,10 @@ export interface CacheEntry<V> {
   timestamp: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function memoize<T extends (...args: any[]) => any>(fn: T, maxSize = 1000): T {
   const cache = new Map<string, CacheEntry<ReturnType<T>>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ((...args: any[]) => {
   const key = JSON.stringify(args);
   const now = Date.now();

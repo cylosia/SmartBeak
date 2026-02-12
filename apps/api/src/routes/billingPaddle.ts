@@ -3,7 +3,7 @@
 
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { createPaddleCheckout } from '../billing/paddle';

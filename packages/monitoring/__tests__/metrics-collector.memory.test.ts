@@ -5,7 +5,7 @@
  * LRU eviction to prevent unbounded memory growth.
  */
 
-import { MetricsCollector, AggregationConfig } from '../metrics-collector';
+import { MetricsCollector } from '../metrics-collector';
 
 describe('MetricsCollector Memory Leak Prevention', () => {
   let collector: MetricsCollector;

@@ -1,4 +1,11 @@
-export function DecisionTimeline({ events }: { events: any[] }) {
+interface TimelineEvent {
+  intentId: string;
+  intentType: string;
+  justification: string;
+  requestedAt: string;
+}
+
+export function DecisionTimeline({ events }: { events: TimelineEvent[] }) {
   return (
   <ol>
     {events.map(e => (

@@ -1,6 +1,7 @@
 
+import React from 'react';
 import { ThemeToggle } from '../lib/theme';
-export function AppShell({ children }: { children: any }) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   return (
   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr' }}>
     <nav style={{ borderRight: '1px solid var(--border)', padding: 16 }}>

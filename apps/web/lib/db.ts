@@ -9,14 +9,12 @@
 
 import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
 // import { getLogger } from '@kernel/logger';
-const getLogger = (name: string) => ({
+const getLogger = (_name: string) => ({
   debug: (..._args: unknown[]) => {},
   info: (..._args: unknown[]) => {},
   warn: (..._args: unknown[]) => {},
   error: (..._args: unknown[]) => {},
 });
-import type { Pool, PoolClient } from 'pg';
-import type { Knex } from 'knex';
 
 // Re-export everything from the shared database package
 export {

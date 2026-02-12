@@ -3,7 +3,7 @@
  * Tests for P1 performance and memory issue fixes
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // ============================================================================
 // Test 1: Redis KEYS -> SCAN fix
@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('Redis SCAN instead of KEYS', () => {
   it('should use SCAN for iterating Redis keys', async () => {
-    const mockKeys: string[] = [];
+    const _mockKeys: string[] = [];
     
     // Simulate SCAN behavior
     const scan = async (cursor: number): Promise<[number, string[]]> => {

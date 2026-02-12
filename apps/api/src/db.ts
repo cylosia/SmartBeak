@@ -1,6 +1,5 @@
 import { knex, Knex } from 'knex';
 import { registerShutdownHandler, setupShutdownHandlers } from './utils/shutdown';
-import { createDatabaseHealthCheck } from '@kernel/health-check';
 import { getLogger } from '@kernel/logger';
 import { emitCounter } from '@kernel/metrics';
 
@@ -31,7 +30,7 @@ if (/placeholder|example|user:password/i.test(connectionString)) {
 // which is truthy but not boolean - would fail === true checks.
 const isServerless = !!(process.env['VERCEL'] || process.env['AWS_LAMBDA_FUNCTION_NAME']);
 
-function getConnectionString(): string {
+function _getConnectionString(): string {
   const connectionString = process.env['CONTROL_PLANE_DB'];
   if (!connectionString) {
     throw new Error('CONTROL_PLANE_DB environment variable is required. ' +
@@ -128,7 +127,7 @@ export const db = new Proxy({} as Knex, {
     // Without binding, methods that use 'this' internally lose their context
     // when called through the proxy.
     const val = instance[prop as keyof Knex];
-    return typeof val === 'function' ? (val as Function).bind(instance) : val;
+    return typeof val === 'function' ? (val as (...args: unknown[]) => unknown).bind(instance) : val;
   }
 });
 /**
@@ -199,7 +198,7 @@ const MAX_RETRY_COUNT = 5;
 /**
  * Calculate backoff delay with exponential backoff + jitter
  */
-function getRetryBackoff(): number {
+function _getRetryBackoff(): number {
   const baseDelay = Math.min(30000, 1000 * Math.pow(2, analyticsRetryCount));
   const jitter = Math.random() * 1000;
   return baseDelay + jitter;

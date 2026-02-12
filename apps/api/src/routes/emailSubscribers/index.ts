@@ -1,10 +1,8 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getDb } from '../../db';
 import { getLogger } from '@kernel/logger';
-import { rateLimitMiddleware } from './rateLimit';
-import { authenticate, requireAuth as requireAuthHandler } from './auth';
-import { SubscriberCreateInput, SubscriberUpdateInput, SubscriberQueryParams } from './types';
+import { authenticate } from './auth';
 import { hashEmail, validateEmailFormat, sanitizeString, escapeLikePattern } from './utils';
 
 const logger = getLogger('email-subscribers');
@@ -45,14 +43,10 @@ const QueryParamsSchema = z.object({
 });
 
 // Types
-interface AuthContext {
+interface _AuthContext {
   orgId: string;
   userId: string;
   roles: string[];
-}
-
-interface AuthenticatedRequest extends FastifyRequest {
-  auth?: AuthContext;
 }
 
 // P1-SECURITY FIX: Validate domainId from URL params as UUID instead of unsafe cast

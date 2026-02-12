@@ -77,12 +77,10 @@ jest.mock('@kernel/logger', () => ({
 // Import after mocking
 import { 
   RateLimiter, 
-  adminRateLimit, 
-  apiRateLimit, 
+  adminRateLimit,
+  apiRateLimit,
   rateLimitMiddleware,
-  DEFAULT_RATE_LIMITS,
   detectBot,
-  type RateLimitConfig,
 } from '../rateLimiter';
 
 // Mock the distributed rate limiter

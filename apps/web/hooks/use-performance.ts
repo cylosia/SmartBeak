@@ -245,7 +245,7 @@ export function useInteractionTracking(
     [onInteraction]
   );
 
-  const startTracking = useCallback(
+  const _startTracking = useCallback(
     (type: InteractionMetrics['type']) => (event: React.SyntheticEvent) => {
       const target = event.target as HTMLElement;
       const targetName = target.tagName + (target.id ? `#${target.id}` : '');

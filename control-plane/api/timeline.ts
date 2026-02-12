@@ -6,7 +6,7 @@ import { rateLimit } from '../services/rate-limit';
 import { requireRole } from '../services/auth';
 import { getAuthContext } from './types';
 
-const logger = getLogger('timeline');
+const _logger = getLogger('timeline');
 
 export interface DomainParams {
   domainId: string;

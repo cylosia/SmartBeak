@@ -4,7 +4,7 @@ import { GetServerSideProps } from 'next';
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
 // M1-FIX: Wrapped in AppShell for consistent navigation
-export default function Portfolio({ revenue, risk }: any) {
+export default function Portfolio({ revenue, risk }: Record<string, unknown>) {
   return (
   <AppShell>
     <h1>Portfolio Overview</h1>

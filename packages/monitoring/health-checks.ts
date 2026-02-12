@@ -591,8 +591,8 @@ export function createExternalApiHealthCheck(
  */
 export function createDiskHealthCheck(
   name: string = 'disk',
-  warningThresholdPercent: number = 80,
-  criticalThresholdPercent: number = 90
+  _warningThresholdPercent: number = 80,
+  _criticalThresholdPercent: number = 90
 ): HealthCheckFn {
   return async (): Promise<HealthCheckResult> => {
     const start = Date.now();
@@ -602,7 +602,7 @@ export function createDiskHealthCheck(
 
       // P1-FIX: Removed require('path') — CJS require() throws in ESM, and it was unused.
       // Get stats for root directory
-      const stats = await fs.stat('/');
+      const _stats = await fs.stat('/');
       
       // On Windows, we'd need a different approach
       // For now, return healthy with basic info

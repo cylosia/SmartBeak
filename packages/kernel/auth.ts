@@ -102,7 +102,7 @@ export interface VerifyTokenOptions {
  * @returns Decoded claims
  * @throws {TokenInvalidError} When token is invalid
  */
-export function verifyToken(token: string, options: VerifyTokenOptions = {}): unknown {
+export function verifyToken(token: string, _options: VerifyTokenOptions = {}): unknown {
   // This is a placeholder - actual implementation would verify JWT signature
   // and return decoded claims
   throw new TokenInvalidError('Token verification not implemented in kernel package. Use packages/security/auth.ts');

@@ -16,7 +16,6 @@ export type WindowSize = typeof WINDOWS[number];
 
 // Maximum entities to process per job
 const MAX_ENTITIES = 100;
-const BATCH_SIZE = 10;
 
 // Zod validation schema
 const FeedbackIngestInputSchema = z.object({
@@ -206,8 +205,8 @@ async function processEntityWindow(
 async function fetchFeedbackMetrics(
   entityId: string,
   window: WindowSize,
-  source: string,
-  orgId: string
+  _source: string,
+  _orgId: string
 ): Promise<FeedbackWindow['metrics']> {
   // Calculate date range for window
   const endDate = new Date();
@@ -227,7 +226,7 @@ async function fetchFeedbackMetrics(
 */
 async function storeFeedbackMetrics(
   windows: FeedbackWindow[],
-  orgId: string
+  _orgId: string
 ): Promise<void> {
   const db = await getDb();
 

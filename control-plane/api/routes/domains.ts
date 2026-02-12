@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 
 import { BillingService } from '../../services/billing';
-import { enforceDomainLimit } from '../../services/quota';
 import { getAuthContext } from '../types';
 import { PricingUXService } from '../../services/pricing-ux';
 import { requireRole } from '../../services/auth';

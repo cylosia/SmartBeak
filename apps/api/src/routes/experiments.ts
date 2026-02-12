@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { getDb } from '../db';
 import { csrfProtection } from '../middleware/csrf';
 import { apiRateLimit } from '../middleware/rateLimiter';
-import { sanitizeError } from '../utils/sanitizedErrors';
 import { extractAndVerifyToken } from '@security/jwt';
 import { FastifyInstance, FastifyReply, FastifyRequest as FRequest, HookHandlerDoneFunction } from 'fastify';
 import { validateExperiment } from '../domain/experiments/validateExperiment';

@@ -1,6 +1,6 @@
 
 // Valid quota fields
-import { BillingService, ActivePlanResult } from './billing';
+import { BillingService } from './billing';
 import { UsageService } from './usage';
 
 const VALID_QUOTA_FIELDS = ['domain_count', 'content_count', 'media_count'] as const;

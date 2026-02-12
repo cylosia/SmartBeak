@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { ErrorCodes } from './types-base';
+import {} from './types-base';
 
 /** URL validation regex - MEDIUM FIX I3: Add URL encoding validation */
 const URL_REGEX = /^https?:\/\/(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?::\d{1,5})?(?:\/[^\s]*)?$/;

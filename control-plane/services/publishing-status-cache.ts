@@ -10,7 +10,6 @@ export interface JobCacheEntry {
 
 // P1-FIX: Added max size limits and proper cleanup for large array values
 const MAX_JOBS_PER_DOMAIN = 1000;
-const MAX_ENTRY_SIZE_BYTES = 1024 * 1024; // 1MB per entry
 
 function calculateEntrySize(jobs: JobCacheEntry[]): number {
   // Rough estimate: each job entry is approximately 200 bytes
@@ -25,7 +24,7 @@ const cache = new LRUCache<string, JobCacheEntry[]>({
   // P1-FIX: Add size calculation and maxSize for proper memory management
   maxSize: 100 * 1024 * 1024, // 100MB total cache limit
   sizeCalculation: (jobs) => calculateEntrySize(jobs),
-  dispose: (value, key) => {
+  dispose: (value, _key) => {
   // P1-FIX: Proper cleanup for large array values
   if (value && Array.isArray(value)) {
     value.length = 0; // Clear array to help GC

@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '../../../packages/kernel/logger';
-import { OnboardingService, OnboardingStep } from '../../services/onboarding';
+import { OnboardingService } from '../../services/onboarding';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 

@@ -8,6 +8,7 @@ import Location from './location';
 import Post from './post';
 import Review from './review';
 import Service from './service';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const templateMap: Record<string, any> = {
   article: Article,
   guide: Guide,

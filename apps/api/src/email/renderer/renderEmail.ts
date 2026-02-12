@@ -70,9 +70,10 @@ export function renderEmailHTML(message: EmailMessage): string {
     }
     case 'paragraph':
     return `<p style='${style['p']}'>${escape(b.text)}</p>`;
-    case 'image':
+    case 'image': {
     const img = `<img src='${sanitizeUrl(b.src)}' alt='${escape(b.alt)}' style='${style['img']}'/>`;
     return b.link ? `<a href='${sanitizeUrl(b.link)}'>${img}</a>` : img;
+    }
     case 'button':
     return `<a href='${sanitizeUrl(b['url'])}' style='${style['btn']}'>${escape(b.text)}</a>`;
     case 'divider':

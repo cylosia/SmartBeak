@@ -5,7 +5,7 @@
  * @security P1-CRITICAL
  */
 
-import { featureFlags, isFeatureEnabled, getEnabledFeatures, validateFeatureFlags } from '../features';
+import '../features';
 
 describe('Feature Flags - Security Defaults', () => {
   const originalEnv = process.env;
@@ -234,7 +234,7 @@ describe('Feature Flags - Security Defaults', () => {
       // Verify that no feature is accidentally enabled
       const { featureFlags: flags } = require('../features');
       
-      Object.entries(flags).forEach(([name, enabled]) => {
+      Object.entries(flags).forEach(([_name, enabled]) => {
         expect(enabled).toBe(false);
       });
     });

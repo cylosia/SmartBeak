@@ -134,7 +134,7 @@ describe('MultiTierCache Memory Leak Prevention', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Cleanup should have run
-      const stats = cacheWithShortCleanup.getStats();
+      const _stats = cacheWithShortCleanup.getStats();
       // InFlightCleaned tracks cleaned entries
 
       cacheWithShortCleanup.stopInFlightCleanup();

@@ -1,10 +1,9 @@
 import { z } from 'zod';
 // H06-FIX: Use the existing auth middleware instead of custom JWT verification
-import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { optionalAuthFastify } from '@security/auth';
+import { FastifyInstance } from 'fastify';
 import { getDb } from '../db';
 import { computeSaleReadiness } from '../domain/saleReadiness';
-import type { JwtPayload } from 'jsonwebtoken';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('DomainSaleReadiness');
@@ -28,13 +27,6 @@ const SaleReadinessQuerySchema = z.object({
   revenue: z.coerce.number().min(0).max(100000000).default(0),
   risks: z.coerce.number().min(0).max(100).default(0),
 });
-/**
- * Validate UUID format
- */
-function isValidUUID(str: string) {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
 // H06-FIX: Removed custom verifyAuth — using @security/auth middleware instead
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {

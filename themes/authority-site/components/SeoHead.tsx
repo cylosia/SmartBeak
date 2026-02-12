@@ -1,4 +1,8 @@
-export default function SeoHead({ seo }: any) {
+interface SeoHeadProps {
+  seo: { title?: string; description?: string; canonical?: string; ogImage?: string };
+}
+
+export default function SeoHead({ seo }: SeoHeadProps) {
   return (
   <>
     <title>{seo.title}</title>

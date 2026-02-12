@@ -7,8 +7,8 @@
  * - Thread-safe state transitions
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CircuitBreaker, CircuitOpenError } from '../resilience';
+import { describe, it, expect, vi } from 'vitest';
+import { CircuitBreaker } from '../resilience';
 
 describe('Circuit Breaker - Async/Concurrency Tests', () => {
   describe('State Read Mutex Protection', () => {
@@ -50,7 +50,7 @@ describe('Circuit Breaker - Async/Concurrency Tests', () => {
 
     it('should handle concurrent state reads during state transition', async () => {
       const fn = vi.fn().mockResolvedValue('success');
-      const breaker = new CircuitBreaker(fn, {
+      const _breaker = new CircuitBreaker(fn, {
         failureThreshold: 3,
         resetTimeoutMs: 50,
         name: 'test-breaker',
@@ -213,9 +213,9 @@ describe('Circuit Breaker - Async/Concurrency Tests', () => {
     });
 
     it('should properly transition from open to half-open after timeout', async () => {
-      let callCount = 0;
+      let _callCount = 0;
       const fn = vi.fn().mockImplementation(() => {
-        callCount++;
+        _callCount++;
         return Promise.reject(new Error('Fail'));
       });
 
@@ -226,8 +226,8 @@ describe('Circuit Breaker - Async/Concurrency Tests', () => {
       });
 
       // Open the circuit
-      try { await breaker.execute(); } catch { }
-      try { await breaker.execute(); } catch { }
+      try { await breaker.execute(); } catch { /* expected */ }
+      try { await breaker.execute(); } catch { /* expected */ }
 
       // Wait for reset timeout
       await new Promise(resolve => setTimeout(resolve, 150));

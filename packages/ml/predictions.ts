@@ -422,7 +422,7 @@ export class MLPredictionEngine extends EventEmitter {
   */
   async calculateSeasonality(
   domainId: string,
-  metric: string
+  _metric: string
   ): Promise<{
   dayOfWeekPattern: number[];
   monthlyPattern: number[];

@@ -1,10 +1,10 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { getDb } from '../db';
 import { apiRateLimit } from '../middleware/rateLimiter';
 import { csrfProtection } from '../middleware/csrf';
-import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
+import { optionalAuthFastify } from '@security/auth';
 import { sanitizeError } from '../utils/sanitizedErrors';
 import { getLogger } from '../../../../packages/kernel/logger';
 
@@ -89,7 +89,7 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     Body: ExportBodyType;
     Reply: ExportResponse | ErrorResponse;
   }>('/exports', async (req, reply) => {
-    const ip = req["ip"] || req.socket?.remoteAddress || 'unknown';
+    const _ip = req["ip"] || req.socket?.remoteAddress || 'unknown';
 
     await optionalAuthFastify(req, reply);
     const auth = req.authContext;

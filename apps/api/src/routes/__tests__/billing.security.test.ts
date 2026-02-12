@@ -144,8 +144,8 @@ describe('Billing Routes Security Tests', () => {
 
     it('should verify membership before export', async () => {
       await app.register(billingInvoiceExportRoutes);
-      
-      const response = await app.inject({
+
+      const _response = await app.inject({
         method: 'GET',
         url: '/billing/invoices/export',
         headers: {
@@ -189,8 +189,8 @@ describe('Billing Routes Security Tests', () => {
 
     it('should verify membership before paddle checkout', async () => {
       await app.register(billingPaddleRoutes);
-      
-      const response = await app.inject({
+
+      const _response = await app.inject({
         method: 'POST',
         url: '/billing/paddle/checkout',
         headers: {
@@ -270,8 +270,8 @@ describe('Billing Routes Security Tests', () => {
 
     it('should verify membership before stripe checkout', async () => {
       await app.register(billingStripeRoutes);
-      
-      const response = await app.inject({
+
+      const _response = await app.inject({
         method: 'POST',
         url: '/billing/stripe/checkout',
         headers: {
@@ -315,8 +315,8 @@ describe('Billing Routes Security Tests', () => {
 
     it('should verify membership before generating CSRF token', async () => {
       await app.register(billingStripeRoutes);
-      
-      const response = await app.inject({
+
+      const _response = await app.inject({
         method: 'GET',
         url: '/billing/stripe/csrf-token',
         headers: {

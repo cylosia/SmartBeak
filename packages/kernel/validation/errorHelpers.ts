@@ -251,10 +251,11 @@ export async function attemptRecovery<T>(
       config.onRecovery?.(error, 'retry');
       throw error;
     
-    default:
+    default: {
       // Exhaustiveness check
       const _exhaustiveCheck: never = config.strategy;
       throw error;
+    }
   }
 }
 

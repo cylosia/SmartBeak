@@ -23,6 +23,7 @@ export interface CostEntry {
   currency: string;
   tokens?: number;
   requestId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>;
   timestamp: Date;
 }
@@ -123,7 +124,7 @@ export class CostTracker extends EventEmitter {
   orgId: string,
   model: string,
   tokens: { prompt: number; completion: number },
-  requestId?: string
+  _requestId?: string
   ): Promise<void> {
   // Pricing per 1K tokens (as of 2024)
   const pricing: Record<string, { input: number; output: number }> = {
@@ -157,7 +158,7 @@ export class CostTracker extends EventEmitter {
   orgId: string,
   model: string,
   steps: number,
-  requestId?: string
+  _requestId?: string
   ): Promise<void> {
   // Pricing per image
   const pricing: Record<string, number> = {
@@ -187,7 +188,7 @@ export class CostTracker extends EventEmitter {
   orgId: string,
   provider: 'ahrefs' | 'gsc' | 'paa',
   requests: number,
-  requestId?: string
+  _requestId?: string
   ): Promise<void> {
   // Approximate costs
   const pricing: Record<string, number> = {
@@ -372,7 +373,7 @@ export class CostTracker extends EventEmitter {
     [orgId]
   );
 
-  const monthlyCost = parseFloat(rows[0]?.total || 0);
+  const _monthlyCost = parseFloat(rows[0]?.total || 0);
 
   return {
     orgId,

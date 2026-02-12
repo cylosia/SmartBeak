@@ -10,16 +10,6 @@
 import type { Knex } from 'knex';
 import type { TableBloat, IndexUsageStats, MaintenanceResult } from './types';
 
-/** Bloat ratio thresholds */
-const BLOAT_THRESHOLDS = {
-  CRITICAL: 0.30, // 30% bloat
-  WARNING: 0.15,  // 15% bloat
-};
-
-/** Minimum dead tuples to consider for critical status */
-const MIN_DEAD_TUPLES_CRITICAL = 10000;
-const MIN_DEAD_TUPLES_WARNING = 5000;
-
 /**
  * Get bloat information for all tables
  */

@@ -5,8 +5,6 @@ import type { Knex } from 'knex';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
-import { withRetry } from '@kernel/retry';
-
 import { getDb } from '../db';
 
 const TransferTokenSchema = z.object({
@@ -29,10 +27,6 @@ function validateTransferToken(row: unknown): TransferToken {
 }
 
 const logger = getLogger('domain-transfer');
-
-// Token expiration time in hours
-/** Token expiration time in hours (48 hours = 2 days) */
-const TRANSFER_TOKEN_TTL_HOURS = 48;
 
 /** Maximum retries for acquiring transfer token */
 const MAX_ACQUIRE_RETRIES = 3;

@@ -5,7 +5,7 @@ import { AppShell } from '../../components/AppShell';
 import { DecisionTimeline } from '../../components/DecisionTimeline';
 import { authFetch, apiUrl } from '../../lib/api-client';
 // M1-FIX: Wrapped in AppShell for consistent navigation
-export default function Timeline({ events }: any) {
+export default function Timeline({ events }: Record<string, unknown>) {
   return (
   <AppShell>
     <h1>Decision Timeline</h1>

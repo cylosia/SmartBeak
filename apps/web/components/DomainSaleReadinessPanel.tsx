@@ -1,6 +1,19 @@
 
 import React from 'react';
-export function DomainSaleReadinessPanel({ data }: any) {
+
+interface DomainSaleReadinessPanelProps {
+  data: {
+    score: number;
+    seo_score: number;
+    content_score: number;
+    audience_score: number;
+    revenue_score: number;
+    risk_score: number;
+    rationale: string[];
+  };
+}
+
+export function DomainSaleReadinessPanel({ data }: DomainSaleReadinessPanelProps) {
   return (
   <div>
     <h2>Domain Sale Readiness</h2>

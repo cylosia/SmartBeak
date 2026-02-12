@@ -456,7 +456,7 @@ export function createCacheEntry<T>(
   key: string,
   value: T,
   ttlMs?: number,
-  tags?: string[]
+  _tags?: string[]
 ): TypedCacheEntry<T> {
   const now = new Date();
   const entry: TypedCacheEntry<T> = {

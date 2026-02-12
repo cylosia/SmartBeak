@@ -1,6 +1,15 @@
 
 import React from 'react';
-export function ContentRoiPanel({ roi }: any) {
+
+interface ContentRoiPanelProps {
+  roi: {
+    monthly_revenue_estimate: number;
+    payback_months: number | null;
+    roi_12mo: number;
+  };
+}
+
+export function ContentRoiPanel({ roi }: ContentRoiPanelProps) {
   return (
   <div>
     <h3>Content ROI & Payback</h3>

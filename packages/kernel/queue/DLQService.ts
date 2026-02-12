@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 
-﻿import { randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 
 
 /**

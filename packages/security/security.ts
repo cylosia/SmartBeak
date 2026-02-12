@@ -37,6 +37,7 @@ export interface SecurityAlert {
   userId?: string;
   orgId?: string;
   message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details: Record<string, any>;
 }
 
@@ -188,6 +189,7 @@ export class SecurityAlertManager extends EventEmitter {
   severity: SecurityAlert['severity'],
   type: SecurityAlertType,
   message: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details: Record<string, any> = {},
   userId?: string,
   orgId?: string

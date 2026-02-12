@@ -17,8 +17,8 @@ vi.mock('@kernel/redis', () => ({
 describe('End-to-End Job Processing Integration Tests', () => {
   let scheduler: JobScheduler;
   let mockRedis: any;
-  let processedJobs: Array<{ name: string; data: any; result: any }>;
-  let failedJobs: Array<{ name: string; data: any; error: Error }>;
+  let _processedJobs: Array<{ name: string; data: any; result: any }>;
+  let _failedJobs: Array<{ name: string; data: any; error: Error }>;
 
   beforeAll(async () => {
     // Setup mock Redis for testing
@@ -47,8 +47,8 @@ describe('End-to-End Job Processing Integration Tests', () => {
   });
 
   beforeEach(() => {
-    processedJobs = [];
-    failedJobs = [];
+    _processedJobs = [];
+    _failedJobs = [];
     scheduler = new JobScheduler('redis://localhost:6379');
   });
 
@@ -61,13 +61,13 @@ describe('End-to-End Job Processing Integration Tests', () => {
   describe('Job Scheduling and Execution', () => {
     it('should schedule and execute a simple job', async () => {
       const jobData = { message: 'Hello, World!' };
-      let executedData: any = null;
+      let _executedData: any = null;
 
       scheduler.register({
         name: 'test-job',
         queue: 'test-queue',
       }, async (data) => {
-        executedData = data;
+        _executedData = data;
         return { success: true };
       });
 
@@ -194,14 +194,14 @@ describe('End-to-End Job Processing Integration Tests', () => {
 
   describe('Rate-Limited Job Processing', () => {
     it('should enforce rate limits across distributed instances', async () => {
-      let requestCount = 0;
+      let _requestCount = 0;
 
       scheduler.register({
         name: 'rate-limited-job',
         queue: 'rate-limit-queue',
         rateLimit: { max: 5, duration: 60000 },
       }, async () => {
-        requestCount++;
+        _requestCount++;
         return { processed: true };
       });
 

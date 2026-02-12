@@ -5,7 +5,7 @@ export type SerpSnapshot = {
 
 export function computeSerpVolatility(prev: SerpSnapshot, curr: SerpSnapshot): number {
   const prevSet = new Set(prev.urls);
-  const currSet = new Set(curr.urls);
+  const _currSet = new Set(curr.urls);
 
   let changes = 0;
   curr.urls.forEach(u => {

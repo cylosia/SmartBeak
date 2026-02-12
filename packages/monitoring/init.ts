@@ -382,7 +382,7 @@ export function createMetricsMiddleware(
     const output: string[] = [];
     const aggregations = metricsCollector.getAllAggregations();
 
-    for (const [key, agg] of aggregations) {
+    for (const [_key, agg] of aggregations) {
       output.push(`# HELP ${agg.name} Metric`);
       output.push(`# TYPE ${agg.name} gauge`);
       output.push(`${agg.name}{aggregation="avg"} ${agg.avg}`);

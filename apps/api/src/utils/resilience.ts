@@ -1,11 +1,8 @@
-import { LRUCache } from 'lru-cache';
 import { Mutex } from 'async-mutex';
-import { ErrorCodes } from '@kernel/validation';
-import { circuitBreakerConfig, timeoutConfig, cacheConfig } from '@config';
 import { emitMetric } from '../ops/metrics';
 import { getLogger } from '@kernel/logger';
 
-const logger = getLogger('resilience');
+const _logger = getLogger('resilience');
 // ============================================================================
 // Timeout Function
 // ============================================================================

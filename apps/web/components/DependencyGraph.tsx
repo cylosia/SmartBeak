@@ -1,4 +1,8 @@
-export function DependencyGraph({ nodes }: { nodes: any[] }) {
+interface GraphNode {
+  label: string;
+}
+
+export function DependencyGraph({ nodes }: { nodes: GraphNode[] }) {
   return (
   <svg width='600' height='300'>
     {nodes.map((n, i) => (

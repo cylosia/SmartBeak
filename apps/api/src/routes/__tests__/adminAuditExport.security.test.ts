@@ -105,7 +105,7 @@ describe('Admin Audit Export Security Tests', () => {
       const orgId = '550e8400-e29b-41d4-a716-446655440000';
       const adminId = 'admin-123';
       
-      const response = await app.inject({
+      const _response = await app.inject({
         method: 'GET',
         url: `/admin/audit/export?orgId=${orgId}`,
         headers: {

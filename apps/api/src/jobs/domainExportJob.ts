@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import path from 'path';
 import { TIME } from '@kernel/constants';
-import { getDb } from '../db';
 import { randomUUID } from 'crypto';
 import { withRetry } from '@kernel/retry';
-import { exportConfig, jobConfig } from '@config';
 import { JobScheduler } from './JobScheduler';
 import { createModuleCache } from '../utils/moduleCache';
 import { getLogger } from '@kernel/logger';
@@ -384,7 +382,7 @@ async function saveExport(data: Buffer | string, destination: DomainExportInput[
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
   const fileSize = buffer.length;
   switch (destination.type) {
-    case 'local':
+    case 'local': {
       if (!destination.path) {
         throw new Error('Local path required for local export');
       }
@@ -407,6 +405,7 @@ async function saveExport(data: Buffer | string, destination: DomainExportInput[
         localPath,
         expiresAt: new Date(Date.now() + 7 * TIME.DAY), // 7 days
       };
+    }
     case 's3':
       // S3 upload would go here
       throw new Error('S3 export not yet implemented');

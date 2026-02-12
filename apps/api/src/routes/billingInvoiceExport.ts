@@ -1,6 +1,6 @@
 import * as jwt from 'jsonwebtoken';
 import Stripe from 'stripe';
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { apiRateLimit } from '../middleware/rateLimiter';
@@ -23,7 +23,7 @@ function sanitizeCsvField(field: string | number | null | undefined): string {
   let sanitized = String(field ?? '');
 
   // Characters that could trigger formula execution: =, +, -, @, \t, \r
-  if (/^[\=\+\-\@\t\r]/.test(sanitized)) {
+  if (/^[=+\-@\t\r]/.test(sanitized)) {
   sanitized = "'" + sanitized;  // Prefix with apostrophe to neutralize
   }
 

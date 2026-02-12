@@ -117,7 +117,7 @@ describe('JobScheduler - P0 Critical Tests', () => {
       };
       (scheduler as any).queues.set('test', mockQueue);
 
-      const job = await scheduler.schedule('priority-job', { data: 'test' });
+      const _job = await scheduler.schedule('priority-job', { data: 'test' });
 
       expect(mockQueue.add).toHaveBeenCalledWith(
         'priority-job',

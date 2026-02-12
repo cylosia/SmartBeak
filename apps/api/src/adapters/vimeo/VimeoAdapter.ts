@@ -111,7 +111,7 @@ export class VimeoAdapter {
 
     // Check res.ok
     if (!response.ok) {
-    const errorBody = await response.text();
+    const _errorBody = await response.text();
 
     // Check for rate limiting
     if (response.status === 429) {

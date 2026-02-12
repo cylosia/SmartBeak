@@ -2,7 +2,7 @@
 import { GetServerSideProps } from 'next';
 
 import { authFetch, apiUrl } from '../../../lib/api-client';
-export default function BuyerDiligence({ overview, revenue }: any) {
+export default function BuyerDiligence({ overview, revenue }: Record<string, unknown>) {
   return (
   <main>
     <h1>Buyer Diligence</h1>

@@ -418,7 +418,7 @@ export default function Home() {
 }`;
 }
 
-function generateAppWrapper(config: ThemeConfig): string {
+function generateAppWrapper(_config: ThemeConfig): string {
   return `import type { AppProps } from 'next/app';
 import './styles/globals.css';
 
