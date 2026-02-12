@@ -95,7 +95,8 @@ const BLOCKED_PORTS = [
   53, // DNS
   69, // TFTP
   79, // Finger
-  80, // HTTP (redirect to HTTPS instead)
+  // P0-FIX #6: Removed port 80 - standard HTTP port needed for legitimate outbound requests.
+  // Blocking 80 caused validateUrl() to reject all standard HTTP URLs.
   88, // Kerberos
   110, // POP3
   111, // RPC
@@ -110,7 +111,8 @@ const BLOCKED_PORTS = [
   161, // SNMP
   162, // SNMP Trap
   389, // LDAP
-  443, // HTTPS (use explicit 443 if needed)
+  // P0-FIX #6: Removed port 443 - standard HTTPS port needed for all secure outbound requests.
+  // Blocking 443 caused validateUrl('https://api.example.com') to fail.
   445, // SMB
   513, // Rlogin
   514, // Syslog/Shell
@@ -352,12 +354,14 @@ export function extractSafeUrl(input: string): string | null {
   const cleaned = input.trim().replace(/[\x00-\x1F\x7F]/g, '');
 
   // Check for URL obfuscation attempts
+  // P1-FIX #11: Removed /\/\//g pattern - it matched the :// in every URL's protocol,
+  // causing extractSafeUrl() to return null for ALL valid URLs.
+  // Protocol-relative URLs are already handled by the protocol allowlist check below.
   const suspiciousPatterns = [
     /@/g,           // Credentials in URL
     /#.*@/g,       // Fragment with @
     /\\/g,         // Backslash (Windows path / auth bypass)
     /\.\./g,       // Path traversal
-    /\/\//g,       // Double slash (protocol-relative)
   ];
 
   for (const pattern of suspiciousPatterns) {

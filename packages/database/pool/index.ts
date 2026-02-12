@@ -23,8 +23,11 @@ export function validateSortColumn(column: string): ValidSortColumn {
   return column as ValidSortColumn;
 }
 
-// P1-FIX: Track advisory locks for cleanup
-const activeAdvisoryLocks = new Set<string>();
+// P0-FIX #4: Track advisory locks WITH their client connections.
+// Advisory locks are session-scoped in PostgreSQL - they can only be released
+// on the same connection that acquired them. Previously, releaseAllAdvisoryLocks()
+// acquired a NEW connection and tried to release locks, which silently failed.
+const activeAdvisoryLocks = new Map<string, PoolClient>();
 
 /**
  * Acquire advisory lock with tracking
@@ -46,7 +49,7 @@ export async function acquireAdvisoryLock(lockId: string, timeoutMs = 5000): Pro
       );
 
       if (rows[0].acquired) {
-        activeAdvisoryLocks.add(lockId);
+        activeAdvisoryLocks.set(lockId, client);
         return client; // Return client, DON'T release - caller must hold connection
       }
       // Only release if we didn't get the lock
@@ -73,6 +76,7 @@ export async function releaseAdvisoryLock(client: PoolClient, lockId: string): P
     await client.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
     activeAdvisoryLocks.delete(lockId);
   } finally {
+    activeAdvisoryLocks.delete(lockId);
     client.release(); // Now safe to release
   }
 }
@@ -81,14 +85,17 @@ export async function releaseAdvisoryLock(client: PoolClient, lockId: string): P
  * Release all tracked advisory locks
  * P1-FIX: Cleanup function for shutdown
  */
+// P0-FIX #4: Release locks on their ORIGINAL connections (session-scoped locks).
 export async function releaseAllAdvisoryLocks(): Promise<void> {
   if (activeAdvisoryLocks.size === 0) return;
 
-  const pool = await getPool();
-  const client = await pool.connect();
-
-  try {
-    for (const lockId of activeAdvisoryLocks) {
+  for (const [lockId, originalClient] of activeAdvisoryLocks) {
+    try {
+      await originalClient.query('SELECT pg_advisory_unlock($1)', [lockId]);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger["error"](`Failed to release advisory lock ${lockId}`, err);
+    } finally {
       try {
         await client.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
       } catch (error) {
@@ -96,10 +103,8 @@ export async function releaseAllAdvisoryLocks(): Promise<void> {
         logger["error"](`Failed to release advisory lock ${lockId}`, err);
       }
     }
-    activeAdvisoryLocks.clear();
-  } finally {
-    client.release();
   }
+  activeAdvisoryLocks.clear();
 }
 
 // P1-FIX: Pool initialization tracking for validation
