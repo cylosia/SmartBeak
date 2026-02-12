@@ -13,10 +13,11 @@ export function EmailComplianceHelper({ compliance }: { compliance: ComplianceDa
   return (
   <div>
     <h4>Email Compliance Suggestions</h4>
-    <textarea readOnly value={compliance.can_spam_footer} />
-    <textarea readOnly value={compliance.gdpr_notice} />
-    <textarea readOnly value={compliance.unsubscribe_copy} />
-    <textarea readOnly value={compliance.data_usage_summary} />
+    {/* P2-TYPE FIX: Default to empty string to prevent React uncontrolled-to-controlled warning */}
+    <textarea readOnly value={compliance.can_spam_footer ?? ''} />
+    <textarea readOnly value={compliance.gdpr_notice ?? ''} />
+    <textarea readOnly value={compliance.unsubscribe_copy ?? ''} />
+    <textarea readOnly value={compliance.data_usage_summary ?? ''} />
   </div>
   );
 }
