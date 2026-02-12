@@ -124,7 +124,9 @@ export function csrfProtection(config: CsrfConfig = {}) {
     }
 
     // Skip excluded paths
-    if (mergedConfig.excludedPaths.some(excluded => path.startsWith(excluded))) {
+    // SECURITY FIX: Use exact match or path prefix with separator to prevent bypass via
+    // crafted paths like /webhookAdmin. Check for exact match OR path + '/' prefix.
+    if (mergedConfig.excludedPaths.some(excluded => path === excluded || path.startsWith(excluded + '/'))) {
       done();
       return;
     }
@@ -194,8 +196,11 @@ export async function setCsrfCookie(
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const token = await generateCsrfToken(sessionId);
 
+  // SECURITY FIX: Remove HttpOnly so client JS can read the token to send in x-csrf-token header.
+  // HttpOnly prevented JS from reading the cookie, breaking the double-submit CSRF pattern entirely.
+  // SameSite=Strict + Secure still protect against cross-origin cookie submission.
   res.header('Set-Cookie',
-    `${mergedConfig.cookieName}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600`
+    `${mergedConfig.cookieName}=${token}; Secure; SameSite=Strict; Path=/; Max-Age=3600`
   );
 
   return token;
