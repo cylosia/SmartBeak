@@ -1,45 +1,51 @@
 
-import { YouTubeAdapter } from '../../src/adapters/youtube/YouTubeAdapter';
+import { vi, describe, test, expect, beforeEach } from 'vitest';
 
 // Properly mock node-fetch (not global.fetch) so the import is intercepted
-jest.mock('node-fetch', () => {
-  const fn = jest.fn();
+vi.mock('node-fetch', () => {
+  const fn = vi.fn();
   return { __esModule: true, default: fn };
 });
 
-// Properly mock abort-controller since it's no longer imported but just in case
-jest.mock('../../src/utils/request', () => ({
-  StructuredLogger: jest.fn().mockImplementation(() => ({
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-  })),
-  createRequestContext: jest.fn().mockReturnValue({ requestId: 'test-req-id' }),
-  MetricsCollector: jest.fn().mockImplementation(() => ({
-    recordLatency: jest.fn(),
-    recordSuccess: jest.fn(),
-    recordError: jest.fn(),
-  })),
+// Properly mock request utilities so the import is intercepted
+vi.mock('../../src/utils/request', () => {
+  class MockStructuredLogger {
+    info = vi.fn();
+    error = vi.fn();
+    warn = vi.fn();
+  }
+  class MockMetricsCollector {
+    recordLatency = vi.fn();
+    recordSuccess = vi.fn();
+    recordError = vi.fn();
+  }
+  return {
+    StructuredLogger: MockStructuredLogger,
+    createRequestContext: vi.fn().mockReturnValue({ requestId: 'test-req-id' }),
+    MetricsCollector: MockMetricsCollector,
+  };
+});
+
+vi.mock('../../src/utils/validation', () => ({
+  validateNonEmptyString: vi.fn(),
 }));
 
-jest.mock('../../src/utils/validation', () => ({
-  validateNonEmptyString: jest.fn(),
-}));
-
-jest.mock('@config', () => ({
+vi.mock('@config', () => ({
   API_BASE_URLS: { youtube: 'https://www.googleapis.com/youtube' },
   API_VERSIONS: { youtube: 'v3' },
   DEFAULT_TIMEOUTS: { short: 5000, long: 30000 },
 }));
 
-jest.mock('../../src/utils/retry', () => ({
-  withRetry: jest.fn().mockImplementation(async (fn: () => Promise<unknown>) => fn()),
+vi.mock('../../src/utils/retry', () => ({
+  withRetry: vi.fn().mockImplementation(async (fn: () => Promise<unknown>) => fn()),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const fetchMock = require('node-fetch').default as jest.Mock;
+import { YouTubeAdapter, ApiError } from '../../src/adapters/youtube/YouTubeAdapter';
+import nodeFetch from 'node-fetch';
 
-function mockFetchResponse(body: unknown, ok = true, status = 200) {
+const fetchMock = nodeFetch as unknown as ReturnType<typeof vi.fn>;
+
+function mockFetchResponse(body: unknown, ok = true, status = 200, headers?: Record<string, string | null>) {
   fetchMock.mockResolvedValueOnce({
     ok,
     status,
@@ -47,13 +53,27 @@ function mockFetchResponse(body: unknown, ok = true, status = 200) {
     json: async () => body,
     text: async () => JSON.stringify(body),
     headers: {
-      get: jest.fn().mockReturnValue(null),
+      get: vi.fn().mockImplementation((name: string) => headers?.[name] ?? null),
+    },
+  });
+}
+
+/** Mock a response where .text() throws (P0-1 scenario) */
+function mockFetchResponseWithBrokenBody(status: number) {
+  fetchMock.mockResolvedValueOnce({
+    ok: false,
+    status,
+    statusText: 'Error',
+    json: async () => { throw new Error('body stream interrupted'); },
+    text: async () => { throw new Error('body stream interrupted'); },
+    headers: {
+      get: vi.fn().mockReturnValue(null),
     },
   });
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('YouTubeAdapter', () => {
@@ -98,6 +118,35 @@ describe('YouTubeAdapter', () => {
       await expect(adapter.updateMetadata('vid123', { title: 'Test' }))
         .rejects.toThrow('YouTube metadata update failed: 403');
     });
+
+    // P0-1 FIX: Test that response.text() failure preserves the HTTP status
+    test('preserves HTTP status when response body is unreadable (P0-1)', async () => {
+      mockFetchResponseWithBrokenBody(403);
+
+      const adapter = new YouTubeAdapter('valid-token');
+      try {
+        await adapter.updateMetadata('vid123', { title: 'Test' });
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(403);
+      }
+    });
+
+    // P2-4: Test for 429 rate limiting with retry-after header
+    test('throws ApiError with retryAfter on 429', async () => {
+      mockFetchResponse({ error: 'rate limited' }, false, 429, { 'retry-after': '30' });
+
+      const adapter = new YouTubeAdapter('valid-token');
+      try {
+        await adapter.updateMetadata('vid123', { title: 'Test' });
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(429);
+        expect((error as ApiError).retryAfter).toBe('30');
+      }
+    });
   });
 
   describe('getVideo', () => {
@@ -120,7 +169,7 @@ describe('YouTubeAdapter', () => {
 
       const adapter = new YouTubeAdapter('valid-token');
       await expect(adapter.getVideo('nonexistent'))
-        .rejects.toThrow('Video not found: nonexistent');
+        .rejects.toThrow(/Video not found/);
     });
 
     test('throws on invalid response format', async () => {
@@ -129,6 +178,24 @@ describe('YouTubeAdapter', () => {
       const adapter = new YouTubeAdapter('valid-token');
       await expect(adapter.getVideo('vid123'))
         .rejects.toThrow('Invalid response format from YouTube API');
+    });
+
+    // P1-6 FIX: Test parts allowlist validation
+    test('throws on invalid part name (P1-6)', async () => {
+      const adapter = new YouTubeAdapter('valid-token');
+      await expect(adapter.getVideo('vid123', ['snippet', 'INVALID_PART']))
+        .rejects.toThrow('Invalid YouTube API part: INVALID_PART');
+    });
+
+    test('accepts valid part names', async () => {
+      const responseBody = {
+        items: [{ id: 'vid456', snippet: { title: 'Video' } }],
+      };
+      mockFetchResponse(responseBody);
+
+      const adapter = new YouTubeAdapter('valid-token');
+      const result = await adapter.getVideo('vid456', ['snippet', 'contentDetails', 'statistics']);
+      expect(result.id).toBe('vid456');
     });
   });
 
@@ -155,15 +222,28 @@ describe('YouTubeAdapter', () => {
       expect(result.error).toContain('401');
     });
 
-    test('returns unhealthy with auth error for 403', async () => {
-      mockFetchResponse({}, false, 403);
+    // P2-7 FIX: 403 now differentiates between auth and quota errors
+    test('returns 403 error with reason from response body', async () => {
+      const errorBody = { error: { errors: [{ reason: 'quotaExceeded' }] } };
+      mockFetchResponse(errorBody, false, 403);
 
-      const adapter = new YouTubeAdapter('forbidden-token');
+      const adapter = new YouTubeAdapter('valid-token');
       const result = await adapter.healthCheck();
 
       expect(result.healthy).toBe(false);
-      expect(result.error).toContain('authentication error');
       expect(result.error).toContain('403');
+      expect(result.error).toContain('quotaExceeded');
+    });
+
+    test('returns 403 error with fallback reason when body is unparseable', async () => {
+      mockFetchResponse('not json', false, 403);
+
+      const adapter = new YouTubeAdapter('valid-token');
+      const result = await adapter.healthCheck();
+
+      expect(result.healthy).toBe(false);
+      expect(result.error).toContain('403');
+      expect(result.error).toContain('forbidden');
     });
 
     test('returns unhealthy on network error', async () => {
@@ -175,6 +255,22 @@ describe('YouTubeAdapter', () => {
       expect(result.healthy).toBe(false);
       expect(result.error).toBe('ECONNREFUSED');
       expect(result.latency).toBeGreaterThanOrEqual(0);
+    });
+
+    // P2-1: Verify response body is consumed (connection leak fix)
+    test('consumes response body on success to prevent connection leak', async () => {
+      const textFn = vi.fn().mockResolvedValue('{}');
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: textFn,
+        headers: { get: vi.fn().mockReturnValue(null) },
+      });
+
+      const adapter = new YouTubeAdapter('valid-token');
+      await adapter.healthCheck();
+
+      expect(textFn).toHaveBeenCalled();
     });
   });
 });

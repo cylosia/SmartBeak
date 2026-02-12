@@ -13,5 +13,8 @@ export function computeYouTubeThumbnailCtr(input: {
   const validated = YouTubeCtrInputSchema.parse(input);
 
   if (validated.impressions === 0) return 0;
-  return Math.round((validated.views / validated.impressions) * 1000) / 10;
+  // P2-3 FIX: Cap CTR at 100% — views can exceed impressions due to
+  // YouTube analytics data timing differences, producing nonsensical values.
+  const rawCtr = Math.round((validated.views / validated.impressions) * 1000) / 10;
+  return Math.min(rawCtr, 100);
 }
