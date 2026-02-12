@@ -3,7 +3,7 @@
  * React Query hooks for billing and subscription management
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useApi } from './use-api';
 
 export interface BillingInfo {

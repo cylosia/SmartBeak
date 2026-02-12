@@ -77,7 +77,7 @@ export class EventBus {
   * @param eventName - Name of the event to unsubscribe from
   * @param plugin - Name of the plugin unsubscribing
   */
-  unsubscribe<T>(eventName: string, plugin: string): void {
+  unsubscribe<_T>(eventName: string, plugin: string): void {
   const existing = this.handlers.get(eventName);
   if (!existing) return;
 

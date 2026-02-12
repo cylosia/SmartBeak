@@ -49,13 +49,13 @@ describe('Paddle Webhook Tests', () => {
       
       // Calculate expected signature
       const crypto = require('crypto');
-      const expectedSignature = crypto
+      const _expectedSignature = crypto
         .createHmac('sha256', secret)
         .update(rawBody)
         .digest('hex');
 
       // Access the internal function through the module
-      const verifyFn = (handlePaddleWebhook as any).verifyPaddleSignature || verifyPaddleSignature;
+      const _verifyFn = (handlePaddleWebhook as any).verifyPaddleSignature || verifyPaddleSignature;
       
       // Note: In actual implementation, we'd need to export verifyPaddleSignature
       // For now, we'll test through handlePaddleWebhook
@@ -220,7 +220,7 @@ describe('Paddle Webhook Tests', () => {
       (getRedis as any).mockResolvedValue(mockRedis);
 
       const payload = { event_type: 'subscription.created', org_id: 'org-123' };
-      const rawBody = Buffer.from(JSON.stringify(payload));
+      const _rawBody = Buffer.from(JSON.stringify(payload));
 
       // Mock signature verification to pass
       vi.spyOn(crypto, 'createHmac').mockReturnValue({

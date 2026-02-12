@@ -8,10 +8,10 @@
  */
 
 import type { Knex } from 'knex';
-import { runSequenceMonitoring, acknowledgeAlert } from './sequenceMonitor';
+import { runSequenceMonitoring } from './sequenceMonitor';
 import { runVacuumMaintenance, vacuumHighChurnTables } from './vacuumManager';
 import { runBloatAnalysis, createBloatAlertMessage } from './bloatDetector';
-import type { MaintenanceResult } from './types';
+import type {} from './types';
 
 /** Maintenance task types */
 export type MaintenanceTaskType = 
@@ -130,7 +130,7 @@ export async function executeMaintenanceTask(
         break;
       }
         
-      case 'vacuum_high_churn':
+      case 'vacuum_high_churn': {
         const vacuumResults = await vacuumHighChurnTables(knex);
         results = vacuumResults;
         const failedVacuums = vacuumResults.filter(r => !r.success);
@@ -138,7 +138,8 @@ export async function executeMaintenanceTask(
           errors.push(`Failed to vacuum ${failedVacuums.length} tables`);
         }
         break;
-        
+      }
+
       case 'vacuum_bloated':
         results = await runVacuumMaintenance(knex, {
           minDeadTupleRatio: options['minDeadTupleRatio'] as number ?? 10,

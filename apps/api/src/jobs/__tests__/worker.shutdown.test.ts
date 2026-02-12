@@ -1,22 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 describe('Worker Shutdown Handler (P1-FIX)', () => {
-  let processOnSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
+  let _processOnSpy: jest.SpyInstance;
+  let _processExitSpy: jest.SpyInstance;
   let setTimeoutSpy: jest.SpyInstance;
-  let originalProcess: NodeJS.Process;
+  let _originalProcess: NodeJS.Process;
 
   beforeEach(() => {
     // Store original process
-    originalProcess = global.process;
+    _originalProcess = global.process;
     
     // Mock process.exit
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
+    _processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
       throw new Error('process.exit called');
     });
     
     // Track process.on handlers
-    processOnSpy = jest.spyOn(process, 'on');
+    _processOnSpy = jest.spyOn(process, 'on');
     setTimeoutSpy = jest.spyOn(global, 'setTimeout');
   });
 
@@ -133,7 +133,7 @@ describe('Worker Shutdown Handler (P1-FIX)', () => {
   });
 
   // Helper function to extract handlers from process.on calls
-  function getHandlerForEvent(event: string): Function | undefined {
+  function getHandlerForEvent(_event: string): ((...args: unknown[]) => void) | undefined {
     // This is a simplified check - in real tests you'd need to 
     // actually load the worker module and inspect registered handlers
     // For now, we verify the structure exists

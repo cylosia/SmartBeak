@@ -17,7 +17,7 @@ import {
   SimpleSpanProcessor,
   SpanExporter,
 } from '@opentelemetry/sdk-trace-base';
-// @ts-ignore - Optional dependency may not be installed
+// @ts-expect-error - Optional dependency may not be installed
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
 import {
@@ -32,19 +32,18 @@ import {
   SpanStatusCode,
   SpanKind,
   Context,
-  TraceFlags,
   propagation,
   ROOT_CONTEXT,
 } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
-// @ts-ignore - Optional dependency may not be installed
+// @ts-expect-error - Optional dependency may not be installed
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
-// @ts-ignore - Optional dependency may not be installed
+// @ts-expect-error - Optional dependency may not be installed
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
-// @ts-ignore - Optional dependency may not be installed
+// @ts-expect-error - Optional dependency may not be installed
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
-// @ts-ignore - Optional dependency may not be installed
+// @ts-expect-error - Optional dependency may not be installed
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 
 import { getLogger } from '@kernel/logger';
@@ -508,7 +507,7 @@ export function Trace(
             'method.args.count': args.length,
           },
         },
-        async (span) => {
+        async (_span) => {
           addSpanAnnotation({
             name: 'method.start',
             attributes: { args: JSON.stringify(args.map(a => typeof a)) },

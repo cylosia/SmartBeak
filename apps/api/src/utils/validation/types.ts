@@ -2,8 +2,6 @@
  * Shared validation types
  */
 
-import type { FastifyReply } from 'fastify';
-import type { ZodError } from 'zod';
 
 /**
  * Validation Error class

@@ -19,11 +19,11 @@ export class StripeAdapter {
   return { subscriptionId: `sub_${customerId}_${planId}` };
   }
 
-  async cancelSubscription(subscriptionId: string): Promise<boolean> {
+  async cancelSubscription(_subscriptionId: string): Promise<boolean> {
   return true;
   }
 
-  async deleteCustomer(customerId: string): Promise<boolean> {
+  async deleteCustomer(_customerId: string): Promise<boolean> {
   return true;
   }
 }

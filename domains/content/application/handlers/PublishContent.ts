@@ -4,9 +4,9 @@ import { ContentItem } from '../../domain/entities/ContentItem';
 import { ContentPublished } from '../../domain/events/ContentPublished';
 import { ContentRepository } from '../ports/ContentRepository';
 
-const logger = getLogger('PublishContent');
+const _logger = getLogger('PublishContent');
 
-﻿
+
 
 /**
 * Result type for PublishContent command

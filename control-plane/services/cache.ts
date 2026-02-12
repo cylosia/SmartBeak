@@ -13,7 +13,7 @@ export interface ClearableCache<T> {
   clear(): void;
 }
 
-function isClearableCache<T>(cache: unknown): cache is ClearableCache<T> {
+function _isClearableCache<T>(cache: unknown): cache is ClearableCache<T> {
   return (
   typeof cache === 'object' &&
   cache !== null &&

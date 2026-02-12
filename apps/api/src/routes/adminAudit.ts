@@ -1,6 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
-import { adminRateLimit } from '../middleware/rateLimiter';
 import { isValidUUID } from '../../../../packages/security/input-validator';
 import crypto from 'crypto';
 

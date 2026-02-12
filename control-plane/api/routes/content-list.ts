@@ -10,8 +10,6 @@ import { ListContent } from '../../../domains/content/application/handlers/ListC
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 
-const VALID_STATUSES: ContentStatus[] = ['draft', 'scheduled', 'published', 'archived'];
-
 const QuerySchema = z.object({
   status: z.enum(['draft', 'scheduled', 'published', 'archived']).default('draft'),
   limit: z.coerce.number().min(1).max(100).default(20),

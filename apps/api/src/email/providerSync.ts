@@ -115,7 +115,7 @@ export async function syncSubscriberToProvider(sub: EmailSubscriber): Promise<{ 
 * MEDIUM FIX M1: Actual provider sync implementation
 * (Placeholder for actual provider integration)
 */
-async function performProviderSync(sub: EmailSubscriber): Promise<void> {
+async function performProviderSync(_sub: EmailSubscriber): Promise<void> {
   // NOTE: Provider sync implementation is pending
   // This is a placeholder that always succeeds
   // Replace with actual integration (e.g., Mailchimp, SendGrid, etc.)

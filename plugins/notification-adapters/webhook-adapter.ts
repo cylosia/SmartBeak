@@ -112,7 +112,7 @@ export class WebhookAdapter implements DeliveryAdapter {
   * @param input.payload - Payload data
   * @returns Delivery result with success status
   */
-  async send({ channel, to, template, payload }: SendNotificationInput): Promise<DeliveryResult> {
+  async send({ channel: _channel, to, template: _template, payload }: SendNotificationInput): Promise<DeliveryResult> {
     const attemptedAt = new Date();
     
     try {

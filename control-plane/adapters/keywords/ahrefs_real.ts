@@ -1,8 +1,6 @@
-import fetch from 'node-fetch';
-
 import { KeywordIngestionAdapter } from './types';
 
-﻿
+
 
 
 /**
@@ -18,7 +16,7 @@ class NotImplementedError extends Error {
 
 export const AhrefsRealAdapter: KeywordIngestionAdapter = {
   source: 'ahrefs',
-  async fetch(domain: string): Promise<never> {
+  async fetch(_domain: string): Promise<never> {
   // NOTE: Ahrefs API call implementation pending
   // Endpoint example (subject to plan):
   // GET https://apiv2.ahrefs.com?from=keywords_for_site&target=${domain}

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { withTransaction, query } from '../../../packages/database/transactions';
+import { withTransaction, query as _query } from '../../../packages/database/transactions';
 import { getRedis } from '../../../packages/kernel/redis';
 import { checkRateLimit } from '../../../packages/kernel/rateLimiterRedis';
 import { getAuthContext } from '../../../packages/security/jwt';

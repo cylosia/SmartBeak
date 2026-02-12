@@ -240,7 +240,7 @@ export class Container {
   get indexingJobRepository(): import('../../domains/search/application/ports/IndexingJobRepository').IndexingJobRepository {
   return this.get('indexingJobRepository', () => {
     // Import dynamically to avoid circular dependencies
-    // Eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { PostgresIndexingJobRepository } = require('../../domains/search/infra/persistence/PostgresIndexingJobRepository');
     return new PostgresIndexingJobRepository(this.db);
   });

@@ -333,7 +333,7 @@ export const pool = new Proxy({} as Pool, {
       throw new Error('Pool not initialized. Use getPoolInstance() async function instead.');
     }
     const value = poolInstance[prop as keyof Pool];
-    return typeof value === 'function' ? (value as Function).bind(poolInstance) : value;
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(poolInstance) : value;
   }
 });
 

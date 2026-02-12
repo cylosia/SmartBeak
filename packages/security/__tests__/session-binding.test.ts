@@ -4,7 +4,7 @@
  * Tests session binding to prevent token theft and replay attacks.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
 
 describe('Session Binding Tests', () => {

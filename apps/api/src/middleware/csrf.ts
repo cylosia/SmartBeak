@@ -48,7 +48,7 @@ const DEFAULT_CONFIG: Required<CsrfConfig> = {
  * P1-FIX: Clean expired tokens from Redis
  * Uses TTL in Redis, so no manual cleanup needed
  */
-async function cleanupExpiredTokens(): Promise<void> {
+async function _cleanupExpiredTokens(): Promise<void> {
   // Redis automatically expires keys with TTL
   // This function kept for API compatibility
 }

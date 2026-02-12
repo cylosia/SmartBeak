@@ -1,6 +1,15 @@
 
 import React from 'react';
-export function DomainAuthStatusPanel({ status }: any) {
+
+interface DomainAuthStatusPanelProps {
+  status: {
+    spf: boolean;
+    dkim: boolean;
+    dmarc: boolean;
+  };
+}
+
+export function DomainAuthStatusPanel({ status }: DomainAuthStatusPanelProps) {
   return (
   <div>
     <h4>Email Domain Authentication</h4>

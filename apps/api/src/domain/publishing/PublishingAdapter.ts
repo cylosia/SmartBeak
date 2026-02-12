@@ -60,14 +60,14 @@ export abstract class PublishingAdapter implements IPublishingAdapter {
   /**
   * Unpublish content (optional)
   */
-  async unpublish?(publishedId: string, target: PublishingTarget): Promise<boolean> {
+  async unpublish?(_publishedId: string, _target: PublishingTarget): Promise<boolean> {
   throw new Error('Unpublish not implemented');
   }
 
   /**
   * Update published content (optional)
   */
-  async update?(publishedId: string, content: PublishingContent, target: PublishingTarget): Promise<PublishResult> {
+  async update?(_publishedId: string, _content: PublishingContent, _target: PublishingTarget): Promise<PublishResult> {
   throw new Error('Update not implemented');
   }
 

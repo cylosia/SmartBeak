@@ -12,7 +12,7 @@
 * Lazy validation state
 */
 let envValidated = false;
-let envValidationError: Error | null = null;
+let _envValidationError: Error | null = null;
 
 /**
 * Perform environment validation on first use
@@ -33,14 +33,14 @@ function performEnvValidation(): void {
   const publishableKey = process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'];
 
   if (!secretKey || !publishableKey) {
-    envValidationError = new Error(
+    _envValidationError = new Error(
     'Missing required Clerk environment variables: ' +
     (!secretKey ? 'CLERK_SECRET_KEY ' : '') +
     (!publishableKey ? 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY' : '')
     );
   }
   } catch (error) {
-  envValidationError = error as Error;
+  _envValidationError = error as Error;
   }
 }
 

@@ -3,7 +3,7 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function DomainDetail({ domain, themes }: any) {
+export default function DomainDetail({ domain, themes }: Record<string, unknown>) {
   return (
   <AppShell>
     <h1>{domain.name}</h1>
@@ -18,7 +18,7 @@ export default function DomainDetail({ domain, themes }: any) {
     <h2>Theme</h2>
     <form>
       <select>
-      {themes.map((t: any) => (
+      {(themes as Record<string, unknown>[]).map((t: Record<string, unknown>) => (
         <option key={t.id} value={t.id}>{t.name}</option>
       ))}
       </select>

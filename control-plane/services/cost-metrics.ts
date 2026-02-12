@@ -1,6 +1,6 @@
 import { getLogger } from '@kernel/logger';
 
-﻿import { Pool } from 'pg';
+import { Pool } from 'pg';
 
 
 /**

@@ -141,9 +141,9 @@ describe('Redis/Cache Tests', () => {
       process.env.REDIS_CLUSTER = 'true';
       process.env.REDIS_CLUSTER_NODES = 'redis1:6379,redis2:6379,redis3:6379';
 
-      const cluster = createRedisCluster();
-      
-      expect(cluster).toBeDefined();
+      const _cluster = createRedisCluster();
+
+      expect(_cluster).toBeDefined();
       const RedisModule = require('ioredis');
       expect(RedisModule.Cluster).toHaveBeenCalled();
     });
@@ -151,7 +151,7 @@ describe('Redis/Cache Tests', () => {
     it('should handle cluster node failure', () => {
       process.env.REDIS_CLUSTER = 'true';
       
-      const cluster = createRedisCluster({
+      const _cluster = createRedisCluster({
         nodes: [
           { host: 'redis1', port: 6379 },
           { host: 'redis2', port: 6379 },

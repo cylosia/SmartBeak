@@ -56,8 +56,7 @@ export async function assertOrgCapacity(db: Database, orgId: string): Promise<vo
 
   const countResult = await db('job_executions')
   .where({ status: 'started' })
-  .andWhere({ entity_id: orgId })
-  ["count"]();
+  .andWhere({ entity_id: orgId })["count"]();
 
   // P2-2 FIX: Check array is non-empty before accessing index 0
   if (!countResult.length) {
@@ -104,8 +103,7 @@ export async function checkOrgCapacity(db: Database, orgId: string): Promise<boo
 export async function getOrgActiveJobCount(db: Database, orgId: string): Promise<number> {
   const countResult = await db('job_executions')
   .where({ status: 'started' })
-  .andWhere({ entity_id: orgId })
-  ["count"]();
+  .andWhere({ entity_id: orgId })["count"]();
 
   // P2-2 FIX: Check array is non-empty before accessing index 0
   if (!countResult.length) {

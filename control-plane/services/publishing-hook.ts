@@ -184,7 +184,7 @@ async function handleContentPublished(
   eventBus: EventBus,
   dlq: DLQService,
   pool: Pool,
-  retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
+  _retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
 ): Promise<void> {
   // Retry the job creation if it fails (e.g., due to DB transient errors)
   const created = await withRetry(

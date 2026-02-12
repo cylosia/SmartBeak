@@ -155,7 +155,7 @@ export class InviteService {
   * MEDIUM FIX: Add correlation IDs and use structured logger
   */
   private async auditLog(action: string, orgId: string, details: Record<string, unknown>, requestId?: string): Promise<void> {
-  const correlationId = requestId || this.generateRequestId();
+  const _correlationId = requestId || this.generateRequestId();
   logger.info(`[AUDIT][invite] ${action}`, {
     ...details,
     timestamp: new Date().toISOString(),

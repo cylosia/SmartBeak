@@ -1,13 +1,13 @@
 
 // Validation schemas
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
-import { Pool, PoolClient } from 'pg';
+import { FastifyInstance } from 'fastify';
+import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { PublishingUIService } from '../../services/publishing-ui';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, RoleAccessError, type AuthContext } from '../../services/auth';
+import { requireRole, type AuthContext } from '../../services/auth';
 
 const TargetBodySchema = z.object({
   type: z.enum(['wordpress', 'webhook', 'api']),

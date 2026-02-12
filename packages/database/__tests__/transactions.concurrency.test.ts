@@ -26,11 +26,11 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     query: ReturnType<typeof vi.fn>;
     release: ReturnType<typeof vi.fn>;
   };
-  let timeoutCallbacks: Map<string, Function[]>;
+  let _timeoutCallbacks: Map<string, Array<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    timeoutCallbacks = new Map();
+    _timeoutCallbacks = new Map();
     vi.useFakeTimers();
 
     mockClient = {
@@ -63,7 +63,7 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
   describe('Transaction Timeout Race Conditions', () => {
     it('should abort and reject when timeout is exceeded', async () => {
       // Mock a slow transaction
-      const slowTransaction = async (client: PoolClient) => {
+      const slowTransaction = async (_client: PoolClient) => {
         await new Promise(resolve => setTimeout(resolve, 200));
         return { success: true };
       };
@@ -79,7 +79,7 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     it('should not reject if transaction completes before timeout', async () => {
       mockClient.query.mockResolvedValue({});
 
-      const fastTransaction = async (client: PoolClient) => {
+      const fastTransaction = async (_client: PoolClient) => {
         return { data: 'success' };
       };
 
@@ -89,11 +89,11 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     });
 
     it('should handle race between commit and timeout', async () => {
-      let commitStarted = false;
+      let _commitStarted = false;
       
       mockClient.query.mockImplementation((sql: string) => {
         if (sql === 'COMMIT') {
-          commitStarted = true;
+          _commitStarted = true;
           // Simulate slow commit
           return new Promise(resolve => setTimeout(() => resolve({}), 150));
         }
@@ -114,10 +114,10 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
 
   describe('AbortController Linked to Timeout Cleanup', () => {
     it('should abort controller when timeout fires', async () => {
-      let capturedController: AbortController | undefined;
+      let _capturedController: AbortController | undefined;
       
       const testTransaction = async (client: PoolClient, signal?: AbortSignal) => {
-        capturedController = signal ? { signal } as any : undefined;
+        _capturedController = signal ? { signal } as any : undefined;
         await new Promise(resolve => setTimeout(resolve, 500));
         return 'success';
       };
@@ -238,13 +238,13 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     });
 
     it('should not leak timeout between concurrent transactions', async () => {
-      let timeoutIds: (NodeJS.Timeout | undefined)[] = [];
+      const _timeoutIds: (NodeJS.Timeout | undefined)[] = [];
       
       // Track timeout IDs created
       const originalSetTimeout = global.setTimeout;
       vi.spyOn(global, 'setTimeout').mockImplementation((callback: any, ms?: number) => {
         const id = originalSetTimeout(callback, ms);
-        timeoutIds.push(id as unknown as NodeJS.Timeout);
+        _timeoutIds.push(id as unknown as NodeJS.Timeout);
         return id;
       });
 
@@ -257,7 +257,7 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
       await Promise.all(transactions);
 
       // All timeouts should have been cleaned up
-      expect(timeoutIds.length).toBeGreaterThan(0);
+      expect(_timeoutIds.length).toBeGreaterThan(0);
     });
 
     it('should handle mixed success/failure in concurrent transactions', async () => {
@@ -318,7 +318,7 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     });
 
     it('should abort controller in finally block', async () => {
-      let abortedInFinally = false;
+      const _abortedInFinally = false;
       
       // Note: We can't easily test this without exposing internals,
       // but we can verify the transaction completes without issues

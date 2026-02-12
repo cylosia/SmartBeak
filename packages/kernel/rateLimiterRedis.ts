@@ -126,11 +126,11 @@ export async function checkBurstRateLimit(
   burstSize: number,
   windowMs: number
 ): Promise<RateLimitResult> {
-  const redis = await getRedis();
-  const burstKey = `ratelimit:burst:${key}`;
-  const baseKey = `ratelimit:base:${key}`;
+  const _redis = await getRedis();
+  const _burstKey = `ratelimit:burst:${key}`;
+  const _baseKey = `ratelimit:base:${key}`;
   const now = Date.now();
-  const windowStart = now - windowMs;
+  const _windowStart = now - windowMs;
 
   // Check burst allowance first
   const burstResult = await checkRateLimit(key, {

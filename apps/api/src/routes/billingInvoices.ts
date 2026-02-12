@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { verifyToken, extractBearerToken as extractTokenFromHeader, TokenExpiredError, TokenInvalidError, } from '@security/jwt';
@@ -143,7 +143,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     });
     }
 
-    const { limit, startingAfter } = queryResult.data;
+    const { limit: _limit, startingAfter } = queryResult.data;
     const customerId = authReq.user?.stripeCustomerId;
     if (!customerId) {
       return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });

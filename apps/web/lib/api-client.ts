@@ -20,7 +20,6 @@ const logger = {
 
 // P1-FIX: Default timeout values
 const DEFAULT_TIMEOUT_MS = 10000; // 10 seconds
-const MAX_TIMEOUT_MS = 30000; // 30 seconds
 
 export interface ApiClientConfig {
   baseUrl: string;
@@ -219,7 +218,7 @@ export const apiUrl = (path: string): string => {
   return `${base.replace(/\/$/, '')}/${normalizedPath}`;
 };
 
-export const authFetch = async <T = unknown>(
+export const authFetch = async (
   urlOrPath: string,
   options?: RequestInit & { timeoutMs?: number; retries?: number; ctx?: { req?: { headers?: { cookie?: string | undefined } } } }
 ): Promise<Response> => {

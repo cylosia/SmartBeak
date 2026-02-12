@@ -116,8 +116,6 @@ export class ThreadSafeModuleCache<T> {
 
     this.cache.set(key, promise);
     return promise;
-  } catch (error) {
-    throw error;
   } finally {
     // P0-FIX: Always release lock, even if loader throws
     this.locks.delete(key);

@@ -35,7 +35,7 @@ export default function Keywords({ domainId }: KeywordsProps) {
   );
 }
 
-export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
+export async function getServerSideProps({ params, req: _req }: GetServerSidePropsContext) {
   const id = params?.['id'];
   if (typeof id !== 'string') {
     return { notFound: true };

@@ -1,18 +1,31 @@
 
 import React from 'react';
-const colors: any = {
+
+interface HeatmapPoint {
+  content_id: string;
+  quadrant: string;
+  traffic: number;
+  roi_12mo: number;
+  freshness_days: number;
+}
+
+interface ContentPortfolioHeatmapProps {
+  points: HeatmapPoint[];
+}
+
+const colors: Record<string, string> = {
   invest: '#60a5fa',
   double_down: '#22c55e',
   refresh: '#f59e0b',
   prune: '#ef4444'
 };
 
-export function ContentPortfolioHeatmap({ points }: any) {
+export function ContentPortfolioHeatmap({ points }: ContentPortfolioHeatmapProps) {
   return (
   <div>
     <h2>Content Portfolio Heatmap</h2>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-    {points.map((p: any) => (
+    {points.map((p: HeatmapPoint) => (
       <div
       key={p.content_id}
       style={{

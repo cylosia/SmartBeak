@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('Worker - Async/Concurrency Tests', () => {
   let processExitSpy: ReturnType<typeof vi.spyOn>;
-  let processOnHandlers: Map<string, (...args: unknown[]) => void> = new Map();
+  const processOnHandlers: Map<string, (...args: unknown[]) => void> = new Map();
 
   beforeEach(() => {
     vi.clearAllMocks();

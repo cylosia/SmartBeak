@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { generateBuyerSeoReport, BuyerSeoReport } from '../seo/buyerReport';
 import { getDb } from '../db';
-import { optionalAuthFastify, type FastifyAuthContext } from '@security/auth';
+import { optionalAuthFastify } from '@security/auth';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('BuyerSeoReport');
@@ -118,7 +118,7 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
   req: FastifyRequest<{ Querystring: SeoReportQueryType }>,
   reply: FastifyReply
   ): Promise<BuyerSeoReport | ErrorResponse> => {
-  const ip = req["ip"] || 'unknown';
+  const _ip = req["ip"] || 'unknown';
 
   await optionalAuthFastify(req, reply);
   const auth = req.authContext;

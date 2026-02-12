@@ -49,7 +49,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
   const offset = (page - 1) * limit;
 
   // P0-FIX: Pass auth context to search service for tenant isolation
-  const results = await svc.search(q, limit, offset, ctx);
+  const _results = await svc.search(q, limit, offset, ctx);
 
   // P0-FIX: Pass orgId to searchCount for tenant isolation
   const total = await svc.searchCount(q, ctx.orgId);

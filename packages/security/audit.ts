@@ -3,7 +3,6 @@ import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 
-import { getRequestContext } from '../kernel/request-context';
 
 import crypto from 'crypto';
 
@@ -211,6 +210,7 @@ export class AuditLogger extends EventEmitter {
   type: 'auth.login' | 'auth.logout' | 'auth.failed',
   actor: AuditEvent['actor'],
   result: 'success' | 'failure',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details?: Record<string, any>
   ): Promise<void> {
   await this.log({
@@ -228,6 +228,7 @@ export class AuditLogger extends EventEmitter {
   actor: AuditEvent['actor'],
   resource: AuditEvent['resource'],
   action: 'read' | 'write' | 'delete' | 'export',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   details?: Record<string, any>
   ): Promise<void> {
   await this.log({

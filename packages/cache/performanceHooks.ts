@@ -354,7 +354,7 @@ export interface UsePerformanceMonitoringOptions {
  */
 export function createPerformanceHook(
   monitor: PerformanceMonitor,
-  options: UsePerformanceMonitoringOptions = {}
+  _options: UsePerformanceMonitoringOptions = {}
 ) {
   return {
     usePerformanceMetrics: () => {

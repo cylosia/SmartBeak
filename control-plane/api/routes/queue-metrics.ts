@@ -1,6 +1,6 @@
 
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
 import { rateLimit } from '../../services/rate-limit';

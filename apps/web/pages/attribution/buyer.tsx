@@ -2,7 +2,7 @@
 import { GetServerSideProps } from 'next';
 
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function BuyerAttribution({ rows }: any) {
+export default function BuyerAttribution({ rows }: Record<string, unknown>) {
   return (
   <main>
     <h1>Content Creation Patterns (Aggregated)</h1>

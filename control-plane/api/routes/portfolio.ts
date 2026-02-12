@@ -1,12 +1,11 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
-import { z } from 'zod';
 
 import { generateETag, setCacheHeaders } from '../middleware/cache';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError } from '../../services/auth';
 
-﻿
+
 
 
 /**
@@ -76,7 +75,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     await rateLimit('analytics', 50);
-    const { orgId } = ctx;
+    const { orgId: _orgId } = ctx;
 
     // H2-FIX: Removed queries to non-existent tables (traffic_dependencies, portfolio_risks)
     // TODO: Create these tables via migrations and populate real data

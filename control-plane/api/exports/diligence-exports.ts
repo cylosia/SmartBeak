@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 
-const logger = getLogger('diligence-exports');
+const _logger = getLogger('diligence-exports');
 
 export interface TokenParams {
   token: string;

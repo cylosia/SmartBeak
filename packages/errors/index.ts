@@ -171,7 +171,7 @@ export class ValidationError extends AppError {
   /**
   * Create ValidationError from Zod error issues
   */
-  static fromZodIssues(issues: Array<{ path: (string | number)[]; message: string; code: string }>, requestId?: string): ValidationError {
+  static fromZodIssues(issues: Array<{ path: (string | number)[]; message: string; code: string }>, _requestId?: string): ValidationError {
   return new ValidationError(
     'Validation failed',
     issues.map(issue => ({
@@ -254,17 +254,17 @@ export class DatabaseError extends AppError {
   static fromDBError(error: Error): DatabaseError {
   const message = error.message.toLowerCase();
   let sanitizedMessage = 'An unexpected database error occurred';
-  let code: string = ErrorCodes.DATABASE_ERROR;
+  let _code: string = ErrorCodes.DATABASE_ERROR;
 
   if (message.includes('connection') || message.includes('econnrefused') || message.includes('enotfound')) {
     sanitizedMessage = 'Database connection error. Please try again later.';
-    code = ErrorCodes.CONNECTION_ERROR;
+    _code = ErrorCodes.CONNECTION_ERROR;
   } else if (message.includes('timeout')) {
     sanitizedMessage = 'Database query timeout. Please try a more specific query.';
-    code = ErrorCodes.QUERY_TIMEOUT;
+    _code = ErrorCodes.QUERY_TIMEOUT;
   } else if (message.includes('unique constraint') || message.includes('duplicate key')) {
     sanitizedMessage = 'A record with this information already exists.';
-    code = ErrorCodes.DUPLICATE_ENTRY;
+    _code = ErrorCodes.DUPLICATE_ENTRY;
   }
 
   return new DatabaseError(sanitizedMessage, { originalError: process.env['NODE_ENV'] === 'development' ? error.message : undefined });

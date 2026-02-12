@@ -1,6 +1,4 @@
 
-import { PoolClient } from 'pg';
-
 import { NotificationPreference } from '../../domain/entities/NotificationPreference';
 
 /**

@@ -16,9 +16,9 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 // @ts-expect-error -- @aws-sdk/s3-request-presigner not yet installed; tracked as tech debt
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'crypto';
-import { writeFile, mkdir, rm, readFile } from 'fs/promises';
+import { writeFile, mkdir, rm } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join, resolve, normalize } from 'path';
+import { join, resolve } from 'path';
 // @ts-expect-error -- Should use getKnex() async; needs refactor to support lazy init
 import { knex } from '../../packages/database';
 import { VercelAdapter } from '../../apps/api/src/adapters/vercel/VercelAdapter';

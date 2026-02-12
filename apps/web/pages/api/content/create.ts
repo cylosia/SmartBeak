@@ -2,7 +2,7 @@
 import { randomUUID } from 'crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-import { requireAuth, validateMethod, canAccessDomain, sendError } from '../../../lib/auth';
+import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
 

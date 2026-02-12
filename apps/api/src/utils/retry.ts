@@ -109,7 +109,7 @@ export async function withRetry<T>(
   baseDelayMs = retryConfig.baseDelayMs,
   maxDelayMs = retryConfig.maxDelayMs,
   retryableStatuses = [...retryConfig.retryableStatuses],
-  onRetry,
+  onRetry: _onRetry,
   } = options;
 
   let lastError: Error | undefined;

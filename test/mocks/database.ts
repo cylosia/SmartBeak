@@ -56,7 +56,7 @@ export function createMockDatabase(options: MockDbOptions = {}) {
     if (normalizedSql.startsWith('update')) {
       const tableMatch = normalizedSql.match(/update\s+(\w+)/);
       if (tableMatch) {
-        const tableName = tableMatch[1];
+        const _tableName = tableMatch[1];
         // Simple update logic - in real tests, use actual query parsing
         return { rowCount: 1 };
       }
@@ -103,7 +103,7 @@ export function createMockDatabase(options: MockDbOptions = {}) {
     options: { max: 10 },
   };
 
-  const knexBuilder = (tableName: string) => ({
+  const knexBuilder = (_tableName: string) => ({
     where: vi.fn().mockReturnThis(),
     whereIn: vi.fn().mockReturnThis(),
     select: vi.fn().mockImplementation(async () => {
@@ -148,7 +148,7 @@ export function createMockDatabase(options: MockDbOptions = {}) {
 
   const mockKnex = vi.fn().mockImplementation((tableName: string) => knexBuilder(tableName));
   Object.assign(mockKnex, {
-    raw: vi.fn().mockImplementation(async (sql: string, bindings?: any[]) => {
+    raw: vi.fn().mockImplementation(async (_sql: string, _bindings?: any[]) => {
       return { rows: [] };
     }),
     transaction: vi.fn().mockImplementation(async (callback: any) => {

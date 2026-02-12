@@ -1,6 +1,20 @@
 
 import React, { useState } from 'react';
-export function AdminAuditView({ events, onFilter }: any) {
+
+interface AuditEvent {
+  id: string;
+  createdAt: string;
+  actorType: string;
+  action: string;
+  metadata: Record<string, unknown>;
+}
+
+interface AdminAuditViewProps {
+  events: AuditEvent[];
+  onFilter: (filter: { action: string; from: string; to: string }) => void;
+}
+
+export function AdminAuditView({ events, onFilter }: AdminAuditViewProps) {
   const [action, setAction] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -40,7 +54,7 @@ export function AdminAuditView({ events, onFilter }: any) {
       </tr>
     </thead>
     <tbody>
-      {events.map((e: any) => (
+      {events.map((e: AuditEvent) => (
       <tr key={e["id"]}>
         <td>{e.createdAt}</td>
         <td>{e.actorType}</td>

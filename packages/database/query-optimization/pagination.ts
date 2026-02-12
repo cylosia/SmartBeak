@@ -366,7 +366,7 @@ export function buildKeysetWhereClause(
   sortColumns: Array<{ column: string; order: 'asc' | 'desc' }>,
   direction: 'next' | 'prev'
 ): { clause: string; params: string[] } {
-  const conditions: string[] = [];
+  const _conditions: string[] = [];
   const params: string[] = [];
 
   // Build row comparison for keyset pagination

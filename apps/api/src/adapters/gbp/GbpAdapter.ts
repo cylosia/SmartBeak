@@ -42,7 +42,7 @@ function encryptToken(token: string): string {
  * @returns The decrypted token
  * @throws Error if decryption fails or data is malformed
  */
-function decryptToken(encryptedData: string): string {
+function _decryptToken(encryptedData: string): string {
   try {
     const parts = encryptedData.split(':');
     if (parts.length !== 3) {

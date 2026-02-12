@@ -315,8 +315,8 @@ export function signToken(claimsInput: SignTokenInput): string {
   // Validate input
   const validated = JwtClaimsInputSchema.parse(claimsInput);
 
-  const aud = validated.aud || DEFAULT_AUDIENCE;
-  const iss = validated.iss || DEFAULT_ISSUER;
+  const _aud = validated.aud || DEFAULT_AUDIENCE;
+  const _iss = validated.iss || DEFAULT_ISSUER;
 
   // SECURITY FIX: Enforce maximum token lifetime of 24 hours
   const expiresInMs = calculateExpiration(validated.expiresIn);
@@ -375,7 +375,7 @@ function recordFailure(error: unknown): void {
 * @param jti - Token ID to check
 * @returns Whether the token is revoked
 */
-async function isTokenRevoked(jti: string): Promise<boolean> {
+async function _isTokenRevoked(jti: string): Promise<boolean> {
   // Check if circuit breaker is open
   if (isCircuitOpen()) {
   logger.warn('Circuit breaker open, allowing token (Redis unavailable)');
@@ -528,7 +528,7 @@ export function getTokenInfo(token: string): TokenInfo | null {
  * attacker to craft an arbitrary JWT payload and get it re-signed with a valid key.
  * Now uses jwt.verify() to ensure the old token was legitimately signed.
  */
-export function refreshToken(token: string, expiresIn?: string): string {
+export function refreshToken(token: string, _expiresIn?: string): string {
   // P0-1 FIX: VERIFY the token cryptographically instead of just decoding it.
   // jwt.decode() performs NO signature verification - an attacker could craft
   // any payload and get it signed with a valid production key.

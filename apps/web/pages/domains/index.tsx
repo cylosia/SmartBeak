@@ -3,7 +3,7 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function Domains({ domains }: any) {
+export default function Domains({ domains }: Record<string, unknown>) {
   return (
   <AppShell>
     <h1>Domains</h1>
@@ -20,7 +20,7 @@ export default function Domains({ domains }: any) {
       </tr>
     </thead>
     <tbody>
-      {domains.map((d: any) => (
+      {(domains as Record<string, unknown>[]).map((d: Record<string, unknown>) => (
       <tr key={d["id"]}>
         <td><a href={`/domains/${d["id"]}`}>{d.name}</a></td>
         <td>{d.status}</td>

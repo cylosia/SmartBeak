@@ -58,8 +58,8 @@ const stateStore: StateStore = {
 };
 
 // Read-only access functions
-const getHealthChecks = (): ReadonlyMap<string, HealthCheck> => stateStore.healthChecks;
-const getLastResults = (): ReadonlyMap<string, HealthCheckResult> => stateStore.lastResults;
+const _getHealthChecks = (): ReadonlyMap<string, HealthCheck> => stateStore.healthChecks;
+const _getLastResults = (): ReadonlyMap<string, HealthCheckResult> => stateStore.lastResults;
 
 // Internal mutable access
 const getMutableHealthChecks = (): Map<string, HealthCheck> => stateStore.healthChecks;

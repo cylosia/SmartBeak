@@ -3,8 +3,7 @@
 
 
 import cors from '@fastify/cors';
-import Fastify, { FastifyRequest } from 'fastify';
-import { Pool } from 'pg';
+import Fastify from 'fastify';
 import { getPoolInstance } from '@database/pool';
 import { validateEnv } from '@config';
 
@@ -176,7 +175,7 @@ setInterval(() => {
   }
 }, CLEANUP_INTERVAL_MS).unref(); // unref() so it doesn't keep the process alive
 
-function inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
+function _inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
   const now = Date.now();
   const entry = inMemoryRateLimitMap.get(key);
 

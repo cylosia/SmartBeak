@@ -2,9 +2,7 @@ import type { GetServerSidePropsContext } from 'next';
 
 import { AppShell } from '../../../../components/AppShell';
 import { DomainTabs } from '../../../../components/DomainTabs';
-import { AudioEditor } from '../../../../components/editors/AudioEditor';
 import { ImageEditor } from '../../../../components/editors/ImageEditor';
-import { SocialEditor } from '../../../../components/editors/SocialEditor';
 import { VideoEditor } from '../../../../components/editors/VideoEditor';
 import { WebEditor } from '../../../../components/editors/WebEditor';
 import { authFetch, apiUrl } from '../../../../lib/api-client';
@@ -15,7 +13,7 @@ interface ContentDetailProps {
   contentType: string;
 }
 
-export default function ContentDetail({ domainId, contentId, contentType }: ContentDetailProps) {
+export default function ContentDetail({ domainId, contentId: _contentId, contentType }: ContentDetailProps) {
   const renderEditor = () => {
     switch (contentType) {
       case 'image': return <ImageEditor />;

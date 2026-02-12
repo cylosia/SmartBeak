@@ -4,9 +4,9 @@ import { ContentItem } from '../../domain/entities/ContentItem';
 import { ContentRepository } from '../ports/ContentRepository';
 import { ContentScheduled } from '../../domain/events/ContentScheduled';
 
-const logger = getLogger('ScheduleContent');
+const _logger = getLogger('ScheduleContent');
 
-﻿
+
 
 /**
 * Result type for ScheduleContent command

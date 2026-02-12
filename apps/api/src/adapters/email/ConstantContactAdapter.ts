@@ -1,7 +1,6 @@
 import fetch from 'node-fetch';
 import { LRUCache } from 'lru-cache';
 
-import { timeoutConfig, circuitBreakerConfig } from '@config';
 import { API_VERSIONS, API_BASE_URLS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '../../utils/config';
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
