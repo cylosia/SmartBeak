@@ -5,6 +5,7 @@
  * with automatic invalidation and stale-while-revalidate pattern.
  */
 
+import { createHash } from 'crypto';
 import { LRUCache } from 'lru-cache';
 import type { Pool, QueryResult, QueryResultRow } from 'pg';
 import { getLogger } from '@kernel/logger';
@@ -79,6 +80,7 @@ export class DbQueryCache {
 
   /**
    * Generate cache key from query and params
+   * SECURITY FIX P1-4: Use SHA-256 instead of 32-bit DJB2 hash to prevent collisions
    */
   private generateKey(query: string, params: unknown[]): string {
     const normalizedQuery = query.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -86,16 +88,11 @@ export class DbQueryCache {
   }
 
   /**
-   * Simple hash function
+   * SHA-256 hash function for cache key generation
+   * SECURITY FIX P1-4: Replaced 32-bit DJB2 hash with SHA-256 to eliminate collision risk
    */
   private hashString(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
+    return createHash('sha256').update(str).digest('hex').substring(0, 16);
   }
 
   /**
@@ -170,7 +167,9 @@ export class DbQueryCache {
             // Only trigger refresh if not already in flight
             if (!this.inFlightRefreshes.has(cacheKey)) {
               this.inFlightRefreshes.add(cacheKey);
+              // SECURITY FIX P1-5: Add .catch() to prevent unhandled rejection and key leak
               this.backgroundRefresh<T>(pool, queryText, params, ttlMs, cacheKey)
+                .catch(() => { /* error handled inside backgroundRefresh */ })
                 .finally(() => this.inFlightRefreshes.delete(cacheKey));
             }
           }
@@ -231,13 +230,18 @@ export class DbQueryCache {
   private shouldCache<T extends QueryResultRow>(query: string, result: QueryResult<T>): boolean {
     // Don't cache non-SELECT queries
     if (!/^\s*SELECT/i.test(query)) return false;
-    
+
     // Don't cache empty results
     if (!result.rowCount || result.rowCount === 0) return false;
-    
-    // Don't cache very large results (>10MB)
-    const estimatedSize = JSON.stringify(result.rows).length;
-    if (estimatedSize > 10 * 1024 * 1024) return false;
+
+    // PERFORMANCE FIX P2-3: Estimate size from a sample instead of serializing the entire result
+    // This avoids temporarily doubling memory for large result sets
+    const sampleSize = Math.min(result.rows.length, 10);
+    if (sampleSize > 0) {
+      const sampleBytes = JSON.stringify(result.rows.slice(0, sampleSize)).length;
+      const estimatedSize = (sampleBytes / sampleSize) * result.rows.length;
+      if (estimatedSize > 10 * 1024 * 1024) return false;
+    }
 
     return true;
   }
