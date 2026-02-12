@@ -208,8 +208,14 @@ export async function optionalAuthFastify(
       return;
     }
 
-    // Validate role and convert to array
-    const roles = claims.role ? [claims.role] : ['viewer'];
+    // P1-FIX: Don't silently default missing role to 'viewer'. The required auth
+    // path (requireAuthNextJs line 83) throws on missing role, but optional auth
+    // was silently granting viewer access. If role is missing, don't attach auth
+    // context — treat it the same as missing sub/orgId.
+    if (!claims.role) {
+      return;
+    }
+    const roles = [claims.role];
 
     // Attach auth context to request
     req.authContext = {
@@ -264,8 +270,12 @@ export async function requireAuthFastify(
       return;
     }
 
-    // Validate role and convert to array
-    const roles = claims.role ? [claims.role] : ['viewer'];
+    // P1-FIX: Reject missing role instead of silently defaulting to 'viewer'
+    if (!claims.role) {
+      res.status(401).send({ error: 'Unauthorized. Token missing role claim.' });
+      return;
+    }
+    const roles = [claims.role];
 
     // Attach auth context to request
     req.authContext = {

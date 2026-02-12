@@ -464,25 +464,43 @@ export class AuditLogger extends EventEmitter {
   lastValidEvent?: AuditEvent;
   firstInvalidEvent?: AuditEvent;
   invalidCount: number;
+  checkedCount: number;
   }> {
-  let query = 'SELECT * FROM audit_logs ORDER BY timestamp';
+  // P2-FIX: Paginate verification instead of loading ALL rows into memory.
+  // Previously: SELECT * FROM audit_logs ORDER BY timestamp (no LIMIT) which
+  // causes OOM on production databases with millions of audit events.
+  // Now processes in batches of 1000 rows using cursor-based pagination.
+  const BATCH_SIZE = 1000;
+  let query: string;
   const params: unknown[] = [];
 
   if (since) {
-    query = 'SELECT * FROM audit_logs WHERE timestamp >= $1 ORDER BY timestamp';
+    query = 'SELECT * FROM audit_logs WHERE timestamp >= $1 ORDER BY timestamp LIMIT $2 OFFSET $3';
     params.push(since);
+  } else {
+    query = 'SELECT * FROM audit_logs ORDER BY timestamp LIMIT $1 OFFSET $2';
   }
 
-  const { rows } = await this.db.query(query, params);
+  let offset = 0;
+  let hasMore = true;
 
   let previousHash = '';
   let invalidCount = 0;
+  let checkedCount = 0;
   let firstInvalid: AuditEvent | undefined;
   let lastValid: AuditEvent | undefined;
 
-  for (const row of rows) {
-    // P0-FIX: Reconstruct full event including ALL fields used by calculateHash
-    // Previously missing: severity, sessionId, requestId, changes, actor.email/ip/userAgent, resource.name
+  while (hasMore) {
+    const batchParams = since
+    ? [params[0], BATCH_SIZE, offset]
+    : [BATCH_SIZE, offset];
+
+    const { rows } = await this.db.query(query, batchParams);
+    hasMore = rows.length === BATCH_SIZE;
+    offset += rows.length;
+
+    for (const row of rows) {
+    checkedCount++;
     const event: AuditEvent = {
     id: row.id,
     timestamp: row.timestamp,
@@ -531,6 +549,7 @@ export class AuditLogger extends EventEmitter {
     }
 
     previousHash = event.hash;
+    }
   }
 
   return {
@@ -538,6 +557,7 @@ export class AuditLogger extends EventEmitter {
     ...(lastValid !== undefined && { lastValidEvent: lastValid }),
     ...(firstInvalid !== undefined && { firstInvalidEvent: firstInvalid }),
     invalidCount,
+    checkedCount,
   };
   }
 

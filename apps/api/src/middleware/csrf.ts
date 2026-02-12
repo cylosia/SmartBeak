@@ -8,6 +8,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { timingSafeEqual } from 'crypto';
 import { getRedis } from '@kernel/redis';
 
 // Secure token generation using crypto
@@ -81,17 +82,20 @@ export async function validateCsrfToken(
     return false;
   }
 
-  // Constant-time comparison to prevent timing attacks
-  if (stored.length !== providedToken.length) {
+  // P1-FIX: Use crypto.timingSafeEqual with Buffer padding for true constant-time
+  // comparison. The previous implementation had an early return on length mismatch
+  // (stored.length !== providedToken.length) that leaked token length via timing.
+  const storedBuf = Buffer.from(stored, 'utf8');
+  const providedBuf = Buffer.from(providedToken, 'utf8');
+  const maxLen = Math.max(storedBuf.length, providedBuf.length);
+  if (maxLen === 0) {
     return false;
   }
-
-  let result = 0;
-  for (let i = 0; i < stored.length; i++) {
-    result |= stored.charCodeAt(i) ^ providedToken.charCodeAt(i);
-  }
-
-  const isValid = result === 0;
+  const storedPadded = Buffer.alloc(maxLen, 0);
+  const providedPadded = Buffer.alloc(maxLen, 0);
+  storedBuf.copy(storedPadded);
+  providedBuf.copy(providedPadded);
+  const isValid = timingSafeEqual(storedPadded, providedPadded) && storedBuf.length === providedBuf.length;
 
   // F27-FIX: Invalidate token after successful validation. Previously the token
   // remained valid for the full 1-hour TTL, allowing unlimited replay attacks.
@@ -181,10 +185,9 @@ export function csrfProtection(config: CsrfConfig = {}) {
         return;
       }
 
-      // P1-FIX #14: Invalidate the CSRF token after successful validation.
-      // Previously tokens could be reused for multiple requests within their 1-hour TTL.
-      // Single-use tokens prevent CSRF replay attacks.
-      await clearCsrfToken(sessionId);
+      // P2-FIX: Removed redundant clearCsrfToken call. validateCsrfToken already
+      // deletes the token on success (line 100), so calling clearCsrfToken here was
+      // a double-delete — a harmless but wasteful extra Redis DEL command per request.
     } catch (error) {
       // P1-FIX #15: Use structured logging instead of console.error to prevent
       // PII/connection strings leaking to stdout in production container logs.
