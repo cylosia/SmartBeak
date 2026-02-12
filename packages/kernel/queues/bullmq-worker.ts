@@ -1,6 +1,7 @@
 
 
 
+
 import { Worker, Job } from 'bullmq';
 
 import { EventBus } from '../event-bus';
@@ -15,6 +16,7 @@ const logger = getLogger('BullMQWorker');
 * Start the BullMQ worker singleton
 * Prevents multiple worker instances from being created
 * P0-FIX: Added correlation ID propagation for request context tracking
+* SECURITY FIX (Finding 10): Added stalled job detection and lock configuration
 */
 export function startWorker(eventBus: EventBus): Worker {
   if (worker) {
@@ -41,6 +43,14 @@ export function startWorker(eventBus: EventBus): Worker {
         throw error;
       }
     });
+  }, {
+    // SECURITY FIX (Finding 10): Stalled job detection and lock management
+    // Without these settings, crashed jobs stay "active" forever, blocking concurrency slots
+    stalledInterval: 30000,   // Check for stalled jobs every 30 seconds
+    lockDuration: 30000,      // Job lock expires after 30 seconds if not renewed
+    lockRenewTime: 15000,     // Renew lock every 15 seconds (must be < lockDuration)
+    maxStalledCount: 3,       // Allow 3 stall recoveries before marking as failed
+    concurrency: 5,           // Process up to 5 jobs concurrently
   });
 
   worker.on('failed', (job, err) => {
@@ -49,6 +59,11 @@ export function startWorker(eventBus: EventBus): Worker {
 
   worker.on('error', (err) => {
     logger.error('Worker error', err);
+  });
+
+  // SECURITY FIX (Finding 10): Log stalled jobs for monitoring/alerting
+  worker.on('stalled', (jobId: string) => {
+    logger.error(`Job ${jobId} stalled - possible worker crash or deadlock`);
   });
 
   return worker;

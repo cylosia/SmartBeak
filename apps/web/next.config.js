@@ -12,10 +12,18 @@ const nextConfig = {
   // Security: Enable strict mode for React
   reactStrictMode: true,
 
-  // Security: Configure images
+  // SECURITY FIX (Finding 16): Use remotePatterns instead of deprecated domains config
   images: {
-    domains: ['localhost'],
-    // Add production domains as needed
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.clerk.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.stripe.com',
+      },
+    ],
   },
 
   // Security headers for all routes
