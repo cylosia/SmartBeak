@@ -1,4 +1,5 @@
-import { google, mybusinessbusinessinformation_v1, mybusinessnotifications_v1, Auth } from 'googleapis';
+import { google } from 'googleapis';
+import type { mybusinessbusinessinformation_v1, mybusinessnotifications_v1, Auth } from 'googleapis';
 import { createCipheriv, randomBytes, createDecipheriv } from 'crypto';
 import { getLogger } from '@kernel/logger';
 
@@ -12,6 +13,13 @@ function getEncryptionKey(): string {
     _ENCRYPTION_KEY = process.env['GBP_TOKEN_ENCRYPTION_KEY'];
     if (!_ENCRYPTION_KEY) {
       throw new Error('GBP_TOKEN_ENCRYPTION_KEY environment variable is required');
+    }
+    // AES-256 requires a 256-bit (32-byte) key, which is 64 hex characters
+    if (!/^[0-9a-fA-F]{64}$/.test(_ENCRYPTION_KEY)) {
+      _ENCRYPTION_KEY = undefined;
+      throw new Error(
+        'GBP_TOKEN_ENCRYPTION_KEY must be exactly 64 hex characters (256-bit key for AES-256-GCM)'
+      );
     }
   }
   return _ENCRYPTION_KEY;

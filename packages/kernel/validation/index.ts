@@ -167,6 +167,16 @@ export {
 } from './schemas';
 
 // ============================================================================
+// API Response Type Guards (third-party integrations)
+// ============================================================================
+export {
+  isAWeberErrorResponse,
+  isAWeberListResponse,
+  isConstantContactErrorsResponse,
+  isConstantContactListResponse,
+} from './apiGuards';
+
+// ============================================================================
 // Email Validation
 // ============================================================================
 export {
