@@ -3,6 +3,7 @@ import { useState, useEffect, ChangeEvent } from 'react';
 
 import { AppShell } from '../../components/AppShell';
 import { apiUrl } from '../../lib/api-client';
+import { fetchWithCsrf } from '../../lib/csrf';
 
 interface Preference {
   channel: string;
@@ -10,20 +11,29 @@ interface Preference {
   frequency?: string;
 }
 
+// P1-FIX: Channel IDs must match backend ALLOWED_CHANNELS in NotificationPreferenceService
+// Previous values (affiliate_terminated, monetization_decay, pending_intents) were notification
+// event types, not delivery channels, causing every POST to fail server-side validation silently.
 const CHANNELS = [
-  { id: 'affiliate_terminated', label: 'Affiliate offer terminated' },
-  { id: 'monetization_decay', label: 'Monetization decay' },
-  { id: 'pending_intents', label: 'Pending intents' },
+  { id: 'email', label: 'Email notifications' },
+  { id: 'sms', label: 'SMS notifications' },
+  { id: 'push', label: 'Push notifications' },
+  { id: 'webhook', label: 'Webhook notifications' },
 ];
 
 // H7-FIX: Connected notification preferences to GET/POST /notifications/preferences API
 export default function NotificationSettings() {
   const [preferences, setPreferences] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
+    // P2-FIX: No longer silently swallowing fetch errors — surface them to the user
     fetch(apiUrl('notifications/preferences'), { credentials: 'include' })
-      .then(res => res.ok ? res.json() : [])
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load preferences');
+        return res.json();
+      })
       .then((prefs: Preference[]) => {
         const map: Record<string, boolean> = {};
         if (Array.isArray(prefs)) {
@@ -31,7 +41,7 @@ export default function NotificationSettings() {
         }
         setPreferences(map);
       })
-      .catch(() => {});
+      .catch(() => { setLoadError('Unable to load notification preferences. Please try again later.'); });
   }, []);
 
   const handleToggle = async (channel: string, e: ChangeEvent<HTMLInputElement>) => {
@@ -40,7 +50,8 @@ export default function NotificationSettings() {
     setSaving(true);
 
     try {
-      await fetch(apiUrl('notifications/preferences'), {
+      // P1-FIX: Use fetchWithCsrf to include X-CSRF-Token header
+      await fetchWithCsrf(apiUrl('notifications/preferences'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -56,6 +67,7 @@ export default function NotificationSettings() {
   return (
   <AppShell>
     <h1>Notification Preferences</h1>
+    {loadError && <p style={{ color: 'red' }}>{loadError}</p>}
     {CHANNELS.map(ch => (
       <label key={ch.id} style={{ display: 'block', marginBottom: 8 }}>
         <input
