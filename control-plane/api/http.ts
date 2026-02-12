@@ -3,7 +3,9 @@
 
 
 import cors from '@fastify/cors';
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest } from 'fastify';
+import { LRUCache } from 'lru-cache';
+import { Pool } from 'pg';
 import { getPoolInstance } from '@database/pool';
 import { validateEnv } from '@config';
 
@@ -12,7 +14,7 @@ import { getLogger } from '@kernel/logger';
 import { affiliateRoutes } from './routes/affiliates';
 import { analyticsRoutes } from './routes/analytics';
 import { attributionRoutes } from './routes/attribution';
-import { authFromHeader } from '../services/auth';
+import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
 import { billingInvoiceRoutes } from './routes/billing-invoices';
 import { billingRoutes } from './routes/billing';
 // C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
@@ -160,33 +162,20 @@ const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
 // SECURITY FIX (Finding 4): In-memory fallback rate limiter for when Redis is unavailable
 // Prevents brute force attacks even during Redis outages
-// F12-FIX: Use LRU cache with max size to prevent unbounded memory growth.
-// The previous Map only cleaned up when size > 1000, and the full iteration
-// was O(n) causing latency spikes under sustained brute force attacks.
-const MAX_RATE_LIMIT_ENTRIES = 10000;
-const inMemoryRateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-// F12-FIX: Periodic cleanup on interval instead of per-request check
-const CLEANUP_INTERVAL_MS = 60000; // 1 minute
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of inMemoryRateLimitMap) {
-    if (v.resetAt < now) inMemoryRateLimitMap.delete(k);
-  }
-}, CLEANUP_INTERVAL_MS).unref(); // unref() so it doesn't keep the process alive
+// P0-AUDIT-FIX: Replaced plain Map with actual LRU cache. The previous Map used FIFO eviction
+// (keys().next().value), allowing attackers rotating IPs to evict rate-limited entries.
+// LRU eviction ensures the least-recently-seen IPs are evicted, not the most-recently-rate-limited.
+const inMemoryRateLimitCache = new LRUCache<string, { count: number; resetAt: number }>({
+  max: 10000,
+  ttl: AUTH_RATE_LIMIT_WINDOW,
+});
 
 function _inMemoryRateLimit(key: string, max: number, windowMs: number): { allowed: boolean; retryAfter: number } {
   const now = Date.now();
-  const entry = inMemoryRateLimitMap.get(key);
-
-  // Evict oldest entry if at capacity
-  if (inMemoryRateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES && !entry) {
-    const firstKey = inMemoryRateLimitMap.keys().next().value;
-    if (firstKey) inMemoryRateLimitMap.delete(firstKey);
-  }
+  const entry = inMemoryRateLimitCache.get(key);
 
   if (!entry || entry.resetAt < now) {
-    inMemoryRateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    inMemoryRateLimitCache.set(key, { count: 1, resetAt: now + windowMs });
     return { allowed: true, retryAfter: 0 };
   }
 
@@ -197,11 +186,19 @@ function _inMemoryRateLimit(key: string, max: number, windowMs: number): { allow
   return { allowed: true, retryAfter: 0 };
 }
 
+// P0-AUDIT-FIX: Use explicit path set for auth endpoints instead of startsWith/regex.
+// Previous startsWith('/auth') matched /authors, /authorization etc.
+// Previous regex /(login|signin|signup|password-reset)$/ didn't match URLs with query strings.
+const AUTH_ENDPOINT_PATHS = new Set([
+  '/login', '/signin', '/signup', '/password-reset',
+  '/auth/login', '/auth/signin', '/auth/signup', '/auth/password-reset',
+]);
+
 app.addHook('onRequest', async (req, reply) => {
   // Check if this is an auth endpoint that needs stricter rate limiting
-  const isAuthEndpoint = req.url?.startsWith('/login') ||
-                         req.url?.startsWith('/auth') ||
-                         req.url?.match(/\/(login|signin|signup|password-reset)$/);
+  // Use pathname (strip query string) for reliable matching
+  const pathname = req.url?.split('?')[0] ?? '';
+  const isAuthEndpoint = AUTH_ENDPOINT_PATHS.has(pathname);
 
   if (isAuthEndpoint) {
     const clientIp = req.ip || 'unknown';
@@ -248,9 +245,11 @@ app.addHook('onRequest', async (req, reply) => {
     const authHeader = req.headers.authorization;
 
     // Check if route is marked as public (via route config or path pattern)
+    // P0-AUDIT-FIX: Use strict path boundary matching. Previous startsWith('/health')
+    // matched /healthadmin, /healthy etc. Now requires exact match or path separator.
     const isPublicRoute = (req.routeOptions?.config as { public?: boolean })?.public === true ||
-                         req.url?.startsWith('/health') ||
-                         req.url?.startsWith('/webhooks/');
+                         pathname === '/health' || pathname.startsWith('/health/') ||
+                         pathname.startsWith('/webhooks/');
 
     if (!authHeader) {
       if (isPublicRoute) {
@@ -275,23 +274,26 @@ app.addHook('onRequest', async (req, reply) => {
 });
 
 // F9-FIX: Register BigInt serialization as a Fastify preSerialization hook.
-// Previously this function existed but was never registered, causing
-// TypeError crashes on any response containing BigInt values.
-// P1-FIX: Only perform BigInt serialization when needed, not on every response.
-// Previously double-serialized every response payload (O(n) memory + CPU overhead).
+// P1-AUDIT-FIX: Replaced double-stringify approach (which serialized every response just to
+// detect BigInt, wasting O(n) CPU+memory) with a recursive walk that only triggers the
+// replacer path when BigInt values are actually found.
+function containsBigInt(obj: unknown, depth: number = 0): boolean {
+  if (depth > 20) return false; // Guard against deeply nested objects
+  if (typeof obj === 'bigint') return true;
+  if (typeof obj !== 'object' || obj === null) return false;
+  if (Array.isArray(obj)) return obj.some(item => containsBigInt(item, depth + 1));
+  for (const val of Object.values(obj)) {
+    if (containsBigInt(val, depth + 1)) return true;
+  }
+  return false;
+}
+
 app.addHook('preSerialization', async (_request, _reply, payload) => {
-  if (typeof payload === 'object' && payload !== null) {
-    try {
-      // Fast path: standard serialization (succeeds if no BigInt values)
-      JSON.stringify(payload);
-      return payload;
-    } catch {
-      // Slow path: only if standard serialization fails (BigInt present)
-      const json = JSON.stringify(payload, (_, v) =>
-        typeof v === 'bigint' ? v.toString() : v
-      );
-      return JSON.parse(json);
-    }
+  if (typeof payload === 'object' && payload !== null && containsBigInt(payload)) {
+    const json = JSON.stringify(payload, (_, v) =>
+      typeof v === 'bigint' ? v.toString() : v
+    );
+    return JSON.parse(json);
   }
   return payload;
 });
@@ -443,7 +445,13 @@ app.get('/health', async (request, reply) => {
 
   // Return 503 if unhealthy, 200 if healthy or degraded
   const statusCode = health.status === 'unhealthy' ? 503 : 200;
-  return reply.status(statusCode).send(health);
+
+  // P1-AUDIT-FIX: Public endpoint returns only status — no latencies, modes, or job counts.
+  // Detailed data is available at /health/detailed (authenticated, admin-only).
+  return reply.status(statusCode).send({
+    status: health.status,
+    timestamp: health.timestamp,
+  });
 });
 
 // Health check result types
@@ -470,7 +478,12 @@ interface HealthStatus {
  */
 async function checkDatabase(): Promise<{ latency: number }> {
   const start = Date.now();
-  const client = await pool.connect();
+  // P1-AUDIT-FIX: Add 5s timeout to pool.connect() so health checks don't hang
+  // indefinitely during pool exhaustion (the exact scenario health checks should detect).
+  const connectTimeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Database connect timeout (5s)')), 5000)
+  );
+  const client = await Promise.race([pool.connect(), connectTimeout]);
   try {
     await client.query('SELECT 1');
     return { latency: Date.now() - start };
@@ -534,9 +547,12 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
 // /health/repositories, /health/sequences expose internal infrastructure state
 // (DB latency, Redis mode, stalled jobs, sequence health) useful for reconnaissance.
 app.get('/health/detailed', async (request, reply) => {
-  if (!(request as { auth?: unknown }).auth) {
+  const auth = (request as { auth?: AuthContext | null }).auth;
+  if (!auth) {
     return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required for detailed health checks' });
   }
+  // P0-AUDIT-FIX: Require admin/owner role — previously any authenticated user could access
+  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
   const containerHealth = await container.getHealth();
   return {
   status: containerHealth.services["database"] ? 'healthy' : 'degraded',
@@ -547,18 +563,24 @@ app.get('/health/detailed', async (request, reply) => {
 
 // F33-FIX: Require auth for repository health check
 app.get('/health/repositories', async (request, reply) => {
-  if (!(request as { auth?: unknown }).auth) {
+  const auth = (request as { auth?: AuthContext | null }).auth;
+  if (!auth) {
     return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
   }
+  // P0-AUDIT-FIX: Require admin/owner role
+  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
   const { getRepositoryHealth } = await import('../services/repository-factory');
   return getRepositoryHealth();
 });
 
 // F33-FIX: Require auth for sequence health monitoring
 app.get('/health/sequences', async (request, reply) => {
-  if (!(request as { auth?: unknown }).auth) {
+  const auth = (request as { auth?: AuthContext | null }).auth;
+  if (!auth) {
     return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
   }
+  // P0-AUDIT-FIX: Require admin/owner role
+  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
   const { checkSequenceHealth } = await import('@database');
   const sequenceHealth = await checkSequenceHealth();
 
@@ -573,7 +595,7 @@ app.get('/health/sequences', async (request, reply) => {
 async function start(): Promise<void> {
   try {
   await registerRoutes();
-  const port = parseInt(process.env['PORT'] || '3000');
+  const port = parseInt(process.env['PORT'] || '3000', 10);
   await app.listen({ port, host: '0.0.0.0' });
   logger.info(`Server started on port ${port}`);
   } catch (error) {
@@ -584,4 +606,6 @@ async function start(): Promise<void> {
 
 start();
 
-export { app, pool };
+// P2-AUDIT-FIX: Removed pool export — consumers should import from @database/pool
+// to ensure connection monitoring, exhaustion alerts, and metrics are active.
+export { app };

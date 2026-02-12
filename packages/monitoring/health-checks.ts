@@ -227,7 +227,8 @@ export class HealthChecksRegistry extends EventEmitter {
       };
 
       this.results.set(name, enrichedResult);
-      this.emit('check', enrichedResult);
+      // P1-AUDIT-FIX: Wrap emit in try/catch — a throwing listener must not crash health checks
+      try { this.emit('check', enrichedResult); } catch (e) { logger.warn('Health check event listener error', { error: e }); }
 
       return enrichedResult;
     } catch (error) {
@@ -242,8 +243,8 @@ export class HealthChecksRegistry extends EventEmitter {
       };
 
       this.results.set(name, failedResult);
-      this.emit('check', failedResult);
-      this.emit('failure', failedResult);
+      try { this.emit('check', failedResult); } catch (e) { logger.warn('Health check event listener error', { error: e }); }
+      try { this.emit('failure', failedResult); } catch (e) { logger.warn('Health check failure listener error', { error: e }); }
 
       return failedResult;
     }
@@ -308,7 +309,7 @@ export class HealthChecksRegistry extends EventEmitter {
       summary,
     };
 
-    this.emit('report', report);
+    try { this.emit('report', report); } catch (e) { logger.warn('Health report listener error', { error: e }); }
     return report;
   }
 
@@ -348,16 +349,28 @@ export class HealthChecksRegistry extends EventEmitter {
       .filter(([, config]) => config.severity === 'critical')
       .map(([name]) => name);
 
+    // P1-AUDIT-FIX: Run critical checks in parallel (was sequential with for-await).
+    // Sequential: N checks * 5s timeout = N*5s worst case (exceeds K8s probe timeout).
+    // Parallel: max(timeouts) = 5s worst case.
+    const settled = await Promise.allSettled(
+      criticalChecks.map(name => this.runCheck(name))
+    );
+
     const results: HealthCheckResult[] = [];
     const dependencies: { name: string; ready: boolean }[] = [];
 
-    for (const name of criticalChecks) {
-      const result = await this.runCheck(name);
-      results.push(result);
-      dependencies.push({
-        name,
-        ready: result.status === 'healthy',
-      });
+    for (let i = 0; i < settled.length; i++) {
+      const outcome = settled[i];
+      const checkName = criticalChecks[i] ?? 'unknown';
+      if (outcome && outcome.status === 'fulfilled') {
+        results.push(outcome.value);
+        dependencies.push({ name: checkName, ready: outcome.value.status === 'healthy' });
+      } else if (outcome) {
+        const msg = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+        const failedResult: HealthCheckResult = { name: checkName, status: 'unhealthy', message: msg, latencyMs: 0, timestamp: new Date().toISOString() };
+        results.push(failedResult);
+        dependencies.push({ name: checkName, ready: false });
+      }
     }
 
     const ready = dependencies.every(d => d.ready);
@@ -393,10 +406,35 @@ export class HealthChecksRegistry extends EventEmitter {
     readiness: ReadinessResult;
     liveness: LivenessResult;
   }> {
-    const [health, readiness] = await Promise.all([
-      this.runAllChecks(),
-      this.checkReadiness(),
-    ]);
+    // P1-AUDIT-FIX: Run all checks once, then derive readiness from results.
+    // Previously ran runAllChecks() and checkReadiness() in parallel, which
+    // executed critical checks twice (doubling DB/Redis load per probe).
+    const health = await this.runAllChecks();
+
+    // Derive readiness from already-executed results
+    const criticalChecks = Array.from(this.checks.entries())
+      .filter(([, config]) => config.severity === 'critical')
+      .map(([name]) => name);
+
+    const readinessChecks: HealthCheckResult[] = [];
+    const dependencies: { name: string; ready: boolean }[] = [];
+
+    for (const name of criticalChecks) {
+      const result = this.results.get(name);
+      if (result) {
+        readinessChecks.push(result);
+        dependencies.push({ name, ready: result.status === 'healthy' });
+      } else {
+        dependencies.push({ name, ready: false });
+      }
+    }
+
+    const readiness: ReadinessResult = {
+      ready: dependencies.every(d => d.ready),
+      timestamp: new Date().toISOString(),
+      checks: readinessChecks,
+      dependencies,
+    };
 
     return {
       health,
@@ -589,6 +627,9 @@ export function createExternalApiHealthCheck(
 /**
  * Create a disk space health check
  */
+// P1-AUDIT-FIX: Rewritten to actually check disk space using fs.statfs (Node 18.15+).
+// Previous implementation was a no-op: called fs.stat('/') (inode metadata), ignored
+// thresholds entirely, and always returned 'healthy'.
 export function createDiskHealthCheck(
   name: string = 'disk',
   _warningThresholdPercent: number = 80,
@@ -597,22 +638,46 @@ export function createDiskHealthCheck(
   return async (): Promise<HealthCheckResult> => {
     const start = Date.now();
     try {
-      // Use Node.js fs to check disk space
       const fs = await import('fs').then(m => m.promises);
 
-      // P1-FIX: Removed require('path') — CJS require() throws in ESM, and it was unused.
-      // Get stats for root directory
-      const _stats = await fs.stat('/');
-      
-      // On Windows, we'd need a different approach
-      // For now, return healthy with basic info
+      // statfs returns filesystem stats including bfree/blocks (Node 18.15+)
+      if (typeof fs.statfs !== 'function') {
+        return {
+          name,
+          status: 'unknown',
+          message: 'fs.statfs not available (requires Node 18.15+)',
+          latencyMs: Date.now() - start,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      const stats = await fs.statfs('/');
+      const totalBytes = stats.blocks * stats.bsize;
+      const freeBytes = stats.bfree * stats.bsize;
+      const usedPercent = totalBytes > 0 ? ((totalBytes - freeBytes) / totalBytes) * 100 : 0;
       const latencyMs = Date.now() - start;
-      
+
+      let status: HealthStatus = 'healthy';
+      let message = `Disk usage: ${usedPercent.toFixed(1)}%`;
+
+      if (usedPercent >= criticalThresholdPercent) {
+        status = 'unhealthy';
+        message = `Disk usage critical: ${usedPercent.toFixed(1)}% (threshold: ${criticalThresholdPercent}%)`;
+      } else if (usedPercent >= warningThresholdPercent) {
+        status = 'degraded';
+        message = `Disk usage high: ${usedPercent.toFixed(1)}% (threshold: ${warningThresholdPercent}%)`;
+      }
+
       return {
         name,
-        status: 'healthy',
-        message: 'Disk space check completed',
+        status,
+        message,
         latencyMs,
+        metadata: {
+          totalBytes,
+          freeBytes,
+          usedPercent,
+        },
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -630,28 +695,68 @@ export function createDiskHealthCheck(
 /**
  * Create a memory health check
  */
+// P1-AUDIT-FIX: Rewritten to use RSS vs container memory limit instead of V8 heap percentage.
+// Previous calculation used heapTotal+external as "total" — but V8 dynamically grows heapTotal,
+// so the percentage stayed low even as absolute memory grew toward OOM.
 export function createMemoryHealthCheck(
   name: string = 'memory',
   warningThresholdPercent: number = 80,
   criticalThresholdPercent: number = 90
 ): HealthCheckFn {
+  // Try to detect container memory limit at registration time
+  let containerLimitBytes: number | null = null;
+  const memLimitEnv = process.env['MEMORY_LIMIT'];
+  if (memLimitEnv) {
+    containerLimitBytes = parseInt(memLimitEnv, 10);
+  }
+  // Fallback: try cgroup v2 then v1 limit files (async on first call)
+  let cgroupLimitChecked = false;
+
   return async (): Promise<HealthCheckResult> => {
     const usage = process.memoryUsage();
-    const total = usage.heapTotal + usage.external;
-    const used = usage.heapUsed + usage.external;
-    const percentUsed = (used / total) * 100;
-    
+
+    // Attempt cgroup detection once
+    if (!containerLimitBytes && !cgroupLimitChecked) {
+      cgroupLimitChecked = true;
+      try {
+        const fs = await import('fs').then(m => m.promises);
+        // cgroup v2
+        const v2 = await fs.readFile('/sys/fs/cgroup/memory.max', 'utf-8').catch(() => null);
+        if (v2 && v2.trim() !== 'max') {
+          containerLimitBytes = parseInt(v2.trim(), 10);
+        } else {
+          // cgroup v1
+          const v1 = await fs.readFile('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'utf-8').catch(() => null);
+          if (v1) {
+            const parsed = parseInt(v1.trim(), 10);
+            // Ignore absurdly large values (unbounded)
+            if (parsed < 1024 * 1024 * 1024 * 100) { // < 100GB
+              containerLimitBytes = parsed;
+            }
+          }
+        }
+      } catch {
+        // Not in a container or no cgroup access
+      }
+    }
+
+    // Use container limit if available, otherwise os.totalmem()
+    const os = await import('os');
+    const totalMemory = containerLimitBytes || os.totalmem();
+    const rss = usage.rss;
+    const percentUsed = totalMemory > 0 ? (rss / totalMemory) * 100 : 0;
+
     let status: HealthStatus = 'healthy';
     let message: string;
-    
+
     if (percentUsed > criticalThresholdPercent) {
       status = 'unhealthy';
-      message = `Memory usage critical: ${percentUsed.toFixed(1)}%`;
+      message = `Memory usage critical: ${percentUsed.toFixed(1)}% (RSS: ${(rss / 1024 / 1024).toFixed(0)}MB)`;
     } else if (percentUsed > warningThresholdPercent) {
       status = 'degraded';
-      message = `Memory usage high: ${percentUsed.toFixed(1)}%`;
+      message = `Memory usage high: ${percentUsed.toFixed(1)}% (RSS: ${(rss / 1024 / 1024).toFixed(0)}MB)`;
     } else {
-      message = 'Memory usage normal';
+      message = `Memory usage normal: ${percentUsed.toFixed(1)}%`;
     }
 
     return {
@@ -660,10 +765,13 @@ export function createMemoryHealthCheck(
       message,
       latencyMs: 0,
       metadata: {
+        rss: usage.rss,
         heapUsed: usage.heapUsed,
         heapTotal: usage.heapTotal,
         external: usage.external,
+        totalMemory,
         percentUsed,
+        source: containerLimitBytes ? 'container_limit' : 'os_total',
       },
       timestamp: new Date().toISOString(),
     };
