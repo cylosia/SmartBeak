@@ -1,6 +1,8 @@
 /**
  * Video platform validations
  * Vimeo, SoundCloud
+ *
+ * P2-5 FIX: Type guards now validate all required fields, not just minimal properties.
  */
 
 // ============================================================================
@@ -31,11 +33,19 @@ export interface VimeoVideoResponse {
 
 /**
  * Type guard for Vimeo video response
+ * P2-5 FIX: Validate all required fields and check optional field types
  */
 export function isVimeoVideoResponse(data: unknown): data is VimeoVideoResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return typeof obj['uri'] === 'string';
+  return (
+    typeof obj['uri'] === 'string' &&
+    (obj['name'] === undefined || typeof obj['name'] === 'string') &&
+    (obj['description'] === undefined || typeof obj['description'] === 'string') &&
+    (obj['link'] === undefined || typeof obj['link'] === 'string') &&
+    (obj['player_embed_url'] === undefined || typeof obj['player_embed_url'] === 'string') &&
+    (obj['status'] === undefined || typeof obj['status'] === 'string')
+  );
 }
 
 // ============================================================================
@@ -54,9 +64,18 @@ export interface SoundCloudTrackResponse {
 
 /**
  * Type guard for SoundCloud track response
+ * P2-5 FIX: Validate all required fields (id, uri, title) instead of only id and uri
  */
 export function isSoundCloudTrackResponse(data: unknown): data is SoundCloudTrackResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return typeof obj['id'] === 'number' && typeof obj['uri'] === 'string';
+  return (
+    typeof obj['id'] === 'number' &&
+    typeof obj['uri'] === 'string' &&
+    typeof obj['title'] === 'string' &&
+    (obj['permalink_url'] === undefined || typeof obj['permalink_url'] === 'string') &&
+    (obj['artwork_url'] === undefined || typeof obj['artwork_url'] === 'string') &&
+    (obj['stream_url'] === undefined || typeof obj['stream_url'] === 'string') &&
+    (obj['status'] === undefined || typeof obj['status'] === 'string')
+  );
 }

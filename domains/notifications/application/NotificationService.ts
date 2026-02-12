@@ -209,7 +209,14 @@ export class NotificationService {
   * @param obj - Object to sanitize
   * @returns Sanitized object
   */
-  private sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
+  // P2-FIX: Added depth parameter to prevent stack overflow from deeply nested payloads
+  private static readonly MAX_SANITIZE_DEPTH = 10;
+
+  private sanitizeObject(obj: Record<string, unknown>, depth = 0): Record<string, unknown> {
+  if (depth >= NotificationService.MAX_SANITIZE_DEPTH) {
+    return {}; // Truncate overly nested objects
+  }
+
   const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
@@ -224,8 +231,7 @@ export class NotificationService {
     } else if (value === null) {
     sanitized[sanitizedKey] = null;
     } else if (typeof value === 'object' && !Array.isArray(value)) {
-    // Recursively sanitize nested objects (with depth limit)
-    sanitized[sanitizedKey] = this.sanitizeObject(value as Record<string, unknown>);
+    sanitized[sanitizedKey] = this.sanitizeObject(value as Record<string, unknown>, depth + 1);
     } else {
     // Arrays and other types - convert to string
     sanitized[sanitizedKey] = String(value);

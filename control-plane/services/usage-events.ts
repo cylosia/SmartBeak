@@ -1,6 +1,5 @@
 import { UsageService } from './usage';
-
-﻿import { EventBus } from '@kernel/event-bus';
+import { EventBus } from '@kernel/event-bus';
 
 
 /**
@@ -9,9 +8,12 @@ import { UsageService } from './usage';
 
 /**
 * Content published event structure
+* P0-FIX: Added orgId field — usage tracking requires org-level granularity,
+* not domain-level. The org_usage table expects org_id, not domain_id.
 */
 export interface ContentPublishedEvent {
   meta: {
+  orgId: string;
   domainId: string;
   };
 }
@@ -24,12 +26,19 @@ export interface ContentPublishedEvent {
 export function registerUsageEventHandlers(eventBus: EventBus, usage: UsageService): void {
   eventBus.subscribe('content.published', 'usage', async (event: ContentPublishedEvent) => {
   try {
+    // P0-FIX: Require orgId for correct usage tracking against org_usage table.
+    // Previously used domainId which created orphaned rows in org_usage.
+    if (!event?.["meta"]?.["orgId"]) {
+    const timestamp = new Date().toISOString();
+    process.stderr.write(`[${timestamp}] [ERROR] [usage-events] Invalid event: missing orgId\n`);
+    return;
+    }
     if (!event?.["meta"]?.["domainId"]) {
     const timestamp = new Date().toISOString();
     process.stderr.write(`[${timestamp}] [ERROR] [usage-events] Invalid event: missing domainId\n`);
     return;
     }
-    await usage.increment(event["meta"]["domainId"], 'publish_count', 1);
+    await usage.increment(event["meta"]["orgId"], 'publish_count', 1);
   } catch (error) {
     const timestamp = new Date().toISOString();
     const errorMessage = error instanceof Error ? error.message : String(error);

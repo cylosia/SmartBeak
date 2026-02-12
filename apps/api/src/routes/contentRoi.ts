@@ -144,6 +144,9 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
 }
 
 export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
+  // P1-8 FIX: Apply CSRF protection (was imported but never used)
+  app.addHook('onRequest', csrfProtection);
+
   app.post('/content/roi', async (req, reply) => {
     const ip = (req as unknown as { ip?: string }).ip || (req.socket?.remoteAddress) || 'unknown';
     try {
@@ -184,7 +187,8 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const db = await getDb();
-      const contentExists = await db('content')
+      // P0-7 FIX: Wrong table name — schema uses 'content_items', not 'content'
+      const contentExists = await db('content_items')
         .where({ id: content_id, domain_id })
         .first();
       if (!contentExists) {

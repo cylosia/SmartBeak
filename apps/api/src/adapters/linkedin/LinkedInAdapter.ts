@@ -138,11 +138,23 @@ function validateLinkedInProfile(data: unknown): ValidatedLinkedInProfile {
 /**
  * Validates media registration response
  */
+// P1-FIX: Actually validate structure instead of blind type assertion
 function validateMediaRegistrationResponse(data: unknown): MediaRegistrationResponse {
   if (!data || typeof data !== 'object') {
     throw new ApiError('Invalid media registration response', 500);
   }
-  return data as MediaRegistrationResponse;
+  const record = data as Record<string, unknown>;
+  const value = record['value'];
+  if (value && typeof value === 'object') {
+    const valueRecord = value as Record<string, unknown>;
+    return {
+      value: {
+        uploadUrl: typeof valueRecord['uploadUrl'] === 'string' ? valueRecord['uploadUrl'] : undefined,
+        asset: typeof valueRecord['asset'] === 'string' ? valueRecord['asset'] : undefined,
+      },
+    };
+  }
+  return { value: undefined };
 }
 
 export class LinkedInAdapter {
@@ -165,39 +177,40 @@ export class LinkedInAdapter {
   async getProfile(): Promise<ValidatedLinkedInProfile> {
     const context = createRequestContext('LinkedInAdapter', 'getProfile');
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
+    // P1-FIX: Move AbortController + json() INSIDE withRetry callback
     try {
-      const res = await withRetry(async () => {
-        const response = await fetch(
-          `${this.baseUrl}/me?projection=(id,firstName,lastName,vanityName)`,
-          {
-            headers: {
-              'Authorization': `Bearer ${this.accessToken}`,
-              'X-Restli-Protocol-Version': '2.0.0',
-              'Accept': 'application/json',
-            },
-            signal: controller.signal as AbortSignal,
-          }
-        );
+      const validatedProfile = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
+        try {
+          const response = await fetch(
+            `${this.baseUrl}/me?projection=(id,firstName,lastName,vanityName)`,
+            {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0',
+                'Accept': 'application/json',
+              },
+              signal: controller.signal as AbortSignal,
+            }
+          );
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
+            }
+
+            throw new Error(`LinkedIn API error: ${response.status} ${response.statusText}`);
           }
 
-          throw new Error(`LinkedIn API error: ${response.status} ${response.statusText}`);
+          const rawData = await response.json() as unknown;
+          return validateLinkedInProfile(rawData);
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        return response;
       }, { maxRetries: 3 });
-
-      const rawData = await res.json() as unknown;
-
-      // Use runtime validation instead of type assertion
-      const validatedProfile = validateLinkedInProfile(rawData);
 
       this.metrics.recordSuccess('getProfile');
 
@@ -207,8 +220,6 @@ export class LinkedInAdapter {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error('Failed to get LinkedIn profile', context, err);
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
@@ -262,68 +273,73 @@ export class LinkedInAdapter {
       },
     };
 
-    // Add media if provided
+    // P1-FIX: Handle all media types in a single pass to avoid overwrites
     if (post.media && post.media.length > 0) {
-      const mediaAssets = await Promise.all(
-        post.media.map(m => this.registerMedia(authorUrn, m))
-      );
+      const articleMedia = post.media.filter(m => m.type === 'ARTICLE');
+      const uploadableMedia = post.media.filter(m => m.type !== 'ARTICLE');
 
       const specificContent = requestBody['specificContent'] as Record<string, Record<string, unknown>>;
       const shareContent = specificContent['com.linkedin.ugc.ShareContent'];
-      if (shareContent && post.media && post.media.length > 0) {
-        shareContent['shareMediaCategory'] = (post.media![0]!.type === 'VIDEO') ? 'VIDEO' : 'IMAGE';
-        shareContent['media'] = mediaAssets;
-      }
-    }
 
-    // Add article share if URL provided
-    if (post.media?.some(m => m.type === 'ARTICLE')) {
-      const article = post.media?.find(m => m.type === 'ARTICLE');
-      const specificContent = requestBody['specificContent'] as Record<string, Record<string, unknown>>;
-      const shareContent = specificContent['com.linkedin.ugc.ShareContent'];
-      if (shareContent) {
+      if (articleMedia.length > 0 && shareContent) {
+        // Articles are handled inline, not via registerMedia
+        const article = articleMedia[0];
         shareContent['shareMediaCategory'] = 'ARTICLE';
         shareContent['media'] = [{
           status: 'READY',
           originalUrl: article?.["url"],
           title: { text: article?.["title"] || '' },
           description: { text: article?.["description"] || '' },
-          thumbnails: article?.["thumbnailUrl"] ? [{ url: article!.thumbnailUrl }] : undefined,
+          thumbnails: article?.["thumbnailUrl"] ? [{ url: article.thumbnailUrl }] : undefined,
         }];
+      } else if (uploadableMedia.length > 0 && shareContent) {
+        const mediaAssets = await Promise.all(
+          uploadableMedia.map(m => this.registerMedia(authorUrn, m))
+        );
+        const firstMedia = uploadableMedia[0];
+        shareContent['shareMediaCategory'] = firstMedia?.type === 'VIDEO' ? 'VIDEO' : 'IMAGE';
+        shareContent['media'] = mediaAssets;
       }
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
+    // P1-FIX: AbortController inside retry + only retry transport errors for non-idempotent POST
     try {
-      const res = await withRetry(async () => {
-        const response = await fetch(`${this.baseUrl}/ugcPosts`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal as AbortSignal,
-        });
+      const { postId, activityUrn } = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
+        try {
+          const response = await fetch(`${this.baseUrl}/ugcPosts`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0',
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal as AbortSignal,
+          });
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
+            }
+
+            // P1-FIX: Mark HTTP errors as non-retryable for non-idempotent POST
+            const err = new Error(`LinkedIn UGC post failed: ${response.status} ${response.statusText}`);
+            (err as Error & { noRetry: boolean }).noRetry = true;
+            throw err;
           }
 
-          throw new Error(`LinkedIn UGC post failed: ${response.status} ${response.statusText}`);
+          return {
+            postId: response.headers.get('x-restli-id') || response.headers.get('X-RestLi-Id') || '',
+            activityUrn: response.headers.get('x-linkedin-id') || response.headers.get('X-LinkedIn-Id') || '',
+          };
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        return response;
-      }, { maxRetries: 3 });
-
-      // LinkedIn returns the URN in the X-RestLi-Id header (case-insensitive lookup)
-      const postId = res.headers.get('x-restli-id') || res.headers.get('X-RestLi-Id') || '';
-      const activityUrn = res.headers.get('x-linkedin-id') || res.headers.get('X-LinkedIn-Id') || '';
+      }, { maxRetries: 3, shouldRetry: (err) => !(err as Error & { noRetry?: boolean }).noRetry });
 
       const permalink = activityUrn
         ? `https://www.linkedin.com/feed/update/${activityUrn}/`
@@ -348,8 +364,6 @@ export class LinkedInAdapter {
       const err = error instanceof Error ? error : new Error(String(error));
       this.logger.error('Failed to create LinkedIn post', context, err);
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 

@@ -360,11 +360,8 @@ export interface AuthContext {
   requestId?: string | undefined;
 }
 
-export interface UserRoleSchema {
-  viewer: 'viewer';
-  editor: 'editor';
-  admin: 'admin';
-}
+// P2-FIX: Removed unused UserRoleSchema interface that shadowed the Zod schema
+// via declaration merging. The interface was never used and caused confusion.
 
 // SECURITY FIX: Add 'owner' role which exists in DB but was missing from types
 const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);

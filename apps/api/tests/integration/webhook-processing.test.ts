@@ -26,9 +26,16 @@ vi.mock('@kernel/redis', () => ({
 describe('Webhook Processing Flow Integration Tests', () => {
   let mockDb: any;
 
+  // P3-2 FIX: Store original env vars to restore after each test
+  const originalEnv: Record<string, string | undefined> = {};
+
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
+    // P3-2 FIX: Save env vars that tests may modify
+    originalEnv['PADDLE_WEBHOOK_SECRET'] = process.env.PADDLE_WEBHOOK_SECRET;
+    originalEnv['CLERK_WEBHOOK_SECRET'] = process.env.CLERK_WEBHOOK_SECRET;
+
     mockDb = {
       where: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
@@ -41,6 +48,17 @@ describe('Webhook Processing Flow Integration Tests', () => {
 
     const { getDb } = require('../../src/db');
     (getDb as any).mockResolvedValue(mockDb);
+  });
+
+  // P3-2 FIX: Restore env vars after each test to prevent pollution
+  afterEach(() => {
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   describe('Paddle Webhook Flow', () => {
@@ -219,11 +237,13 @@ describe('Webhook Processing Flow Integration Tests', () => {
       };
     };
 
+    // P3-1 FIX: Moved `res` declaration before return to fix scoping bug.
+    // Previously `let res: any` was declared after `return`, making it always undefined.
     const createMockResponse = () => {
       const jsonData: any = {};
       const statusCode: { value?: number } = {};
-      
-      return {
+
+      const res: any = {
         status: vi.fn().mockImplementation((code: number) => {
           statusCode.value = code;
           return res;
@@ -235,8 +255,8 @@ describe('Webhook Processing Flow Integration Tests', () => {
         _jsonData: jsonData,
         _statusCode: statusCode,
       };
-      
-      let res: any;
+
+      return res;
     };
 
     it('should process user lifecycle webhooks', async () => {

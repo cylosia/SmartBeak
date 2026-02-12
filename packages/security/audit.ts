@@ -154,7 +154,10 @@ export class AuditLogger extends EventEmitter {
   try {
     await this.flush();
   } catch (error) {
-    console["error"]('[AuditLogger] Final flush failed:', error);
+    // P2-FIX: Use stderr with safe serialization instead of console.error,
+    // which bypasses structured logging and may leak PII in container logs.
+    const err = error instanceof Error ? error : new Error(String(error));
+    process.stderr.write(`[AuditLogger] Final flush failed: ${err.message}\n`);
   }
   }
 
@@ -249,7 +252,10 @@ export class AuditLogger extends EventEmitter {
     severity: 'critical',
     actor,
     resource: { type: 'api_key', id: provider },
-    action: type.split('.')[2] as string,
+    // P1-FIX: Changed [2] to [1]. For 'api.key_create', split('.') produces
+    // ['api', 'key_create'] (2 elements). Index [2] was always undefined,
+    // storing null in the action column for all API key audit events.
+    action: type.split('.')[1] as string,
     result,
     details: { provider },
   });

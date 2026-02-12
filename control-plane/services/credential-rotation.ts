@@ -86,8 +86,10 @@ export async function getCredentialsNeedingRotation(
   // Query org integrations
   let orgResult: QueryResult<CredentialRotationItem>;
   try {
+    // P1-6 FIX: Select only needed columns instead of SELECT * to avoid
+    // fetching encrypted credentials, access tokens, and secrets into memory.
     orgResult = await db.query<CredentialRotationItem>(
-    `SELECT * FROM org_integrations
+    `SELECT id, provider, rotation_due_at FROM org_integrations
     WHERE rotation_due_at IS NOT NULL
     AND rotation_due_at < $1`,
     [now]
@@ -103,8 +105,9 @@ export async function getCredentialsNeedingRotation(
   // Query domain integrations
   let domResult: QueryResult<CredentialRotationItem>;
   try {
+    // P1-6 FIX: Select only needed columns instead of SELECT *
     domResult = await db.query<CredentialRotationItem>(
-    `SELECT * FROM domain_integrations
+    `SELECT id, provider, rotation_due_at FROM domain_integrations
     WHERE rotation_due_at IS NOT NULL
     AND rotation_due_at < $1`,
     [now]

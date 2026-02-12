@@ -1,4 +1,7 @@
-import { getLogger, getRequestContext } from '@kernel/logger';
+import { getLogger } from '@kernel/logger';
+
+// P1-10 FIX: Use structured logger instead of console.log/warn/error
+const logger = getLogger('ops-metrics');
 
 /**
  * Enhanced metrics with validation and error handling
@@ -12,6 +15,8 @@ const MAX_LABELS = 10;
 const MAX_LABEL_LENGTH = 100;
 const RATE_LIMIT_WINDOW_MS = 1000;
 const MAX_METRICS_PER_WINDOW = 1000;
+// P2-8 FIX: Added max buffer size to prevent unbounded growth
+const MAX_BUFFER_SIZE = 10000;
 const metricBuffer: MetricBuffer = {
   metrics: [],
   lastFlush: Date.now(),
@@ -107,23 +112,33 @@ export function emitMetric(metric: Metric) {
         validateMetricName(metric.name);
     validateLabels(metric.labels);
         if (!checkRateLimit()) {
-      console.warn('[emitMetric] Rate limit exceeded, dropping metric:', metric.name);
+      // P1-10 FIX: Use structured logger
+      logger.warn('[emitMetric] Rate limit exceeded, dropping metric', { metricName: metric.name });
       return;
     }
         const enrichedMetric = {
       ...metric,
       timestamp: metric.timestamp || Date.now(),
     };
-        metricBuffer.metrics.push(enrichedMetric);
+
+    // P2-8 FIX: Enforce max buffer size to prevent unbounded memory growth
+    if (metricBuffer.metrics.length >= MAX_BUFFER_SIZE) {
+      // Drop oldest metrics when buffer is full
+      metricBuffer.metrics = metricBuffer.metrics.slice(-Math.floor(MAX_BUFFER_SIZE / 2));
+      logger.warn('[emitMetric] Buffer overflow, dropped oldest metrics');
+    }
+
+    metricBuffer.metrics.push(enrichedMetric);
         const now = Date.now();
     if (metricBuffer.metrics.length >= 100 || now - metricBuffer.lastFlush > 5000) {
       flushMetrics();
     }
-    // Hook for Prometheus / Datadog / CloudWatch
-    console.log('[METRIC]', enrichedMetric.name, enrichedMetric.labels ?? {}, enrichedMetric.value ?? 1);
+    // P1-10 FIX: Use structured logger for metric emission
+    logger.debug('[METRIC]', { name: enrichedMetric.name, labels: enrichedMetric.labels, value: enrichedMetric.value ?? 1 });
   }
   catch (error) {
-        console.error('[emitMetric] Error emitting metric:', error);
+    // P1-10 FIX: Use structured logger
+    logger.error('[emitMetric] Error emitting metric:', error instanceof Error ? error : new Error(String(error)));
   }
 }
 /**
@@ -134,12 +149,13 @@ function flushMetrics() {
     return;
   try {
     // In production, this would send to metrics backend
-    console.log(`[METRICS_FLUSH] Flushing ${metricBuffer.metrics.length} metrics`);
+    logger.debug(`[METRICS_FLUSH] Flushing ${metricBuffer.metrics.length} metrics`);
     // Clear buffer
     metricBuffer.metrics = [];
     metricBuffer.lastFlush = Date.now();
   }
   catch (error) {
-    console.error('[flushMetrics] Error flushing metrics:', error);
+    // P1-10 FIX: Use structured logger
+    logger.error('[flushMetrics] Error flushing metrics:', error instanceof Error ? error : new Error(String(error)));
   }
 }

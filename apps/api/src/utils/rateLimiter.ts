@@ -193,8 +193,12 @@ export class RateLimiter {
 
     if allowed then
     tokens = tokens - cost
+    end
 
-    -- Update Redis
+    -- AUDIT-FIX P0-06: Always update state (moved outside if block).
+    -- Previously the 'end' keyword was missing, so Redis writes only
+    -- happened when allowed=true. Denied requests never advanced
+    -- last_updated, causing unbounded token refill on next allowed request.
     redis.call('set', tokens_key, tokens)
     redis.call('set', last_updated_key, now)
     redis.call('expire', tokens_key, interval_seconds * 2)

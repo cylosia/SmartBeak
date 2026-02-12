@@ -261,9 +261,25 @@ export class MultiTierCache {
       try {
         const l2Value = await this.redis.get(fullKey);
         if (l2Value) {
+          // P2-7 FIX: Wrap JSON.parse in try/catch to handle corrupted Redis data
+          let parsed: CacheEntry<T>;
+          try {
+            parsed = JSON.parse(l2Value) as CacheEntry<T>;
+          } catch (parseError) {
+            logger.warn('L2 cache contains corrupted data, treating as miss', {
+              key: fullKey,
+              error: parseError instanceof Error ? parseError.message : String(parseError),
+            });
+            // Delete corrupted entry
+            await this.redis.del(fullKey).catch(() => {});
+            this.stats.l2Misses++;
+            if (factory) {
+              return this.set(key, await factory(), options);
+            }
+            return undefined;
+          }
+
           this.stats.l2Hits++;
-          const parsed = JSON.parse(l2Value) as CacheEntry<T>;
-          
           // Promote to L1
           this.l1Cache.set(fullKey, parsed);
           return parsed.value;
@@ -441,19 +457,24 @@ export class MultiTierCache {
     }
   ): Promise<T> {
     const timeoutMs = options?.timeoutMs ?? this.options.inFlightTtlMs;
-    
+
+    // P1-6 FIX: Track timeout timer so it can be cleared when factory resolves first
+    let timeoutId: NodeJS.Timeout | undefined;
     try {
       const value = await Promise.race([
         factory(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Cache computation timeout for key: ${key}`)), timeoutMs)
-        ),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`Cache computation timeout for key: ${key}`)), timeoutMs);
+        }),
       ]);
 
       await this.set(key, value, options);
       return value;
-    } catch (error) {
-      throw error;
+    } finally {
+      // P1-6 FIX: Always clear timeout to prevent timer leak
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
   }
 
@@ -660,10 +681,14 @@ export function Cacheable(options?: {
     descriptor: PropertyDescriptor
   ) {
     const originalMethod = descriptor.value;
-    const cache = getGlobalCache();
 
     descriptor.value = async function (...args: unknown[]) {
-      const cacheKey = options?.key 
+      // P2-12 FIX: Resolve cache at call time, not decoration time.
+      // If resetGlobalCache() is called (e.g., in tests), a stale reference
+      // captured at decoration time would point to a destroyed cache.
+      const cache = getGlobalCache();
+
+      const cacheKey = options?.key
         ? `${options.key}:${JSON.stringify(args)}`
         : `${target.constructor.name}:${propertyKey}:${JSON.stringify(args)}`;
 

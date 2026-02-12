@@ -203,7 +203,7 @@ export function centsToDollars(cents: number): number {
  * MEDIUM FIX I6: Add format validation
  */
 export const UrlSchema = z.string()
-  ["url"]()
+  .url()
   .max(2000)
   .refine((url) => URL_REGEX.test(url), {
     message: 'Invalid URL format'

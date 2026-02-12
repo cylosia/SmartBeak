@@ -127,7 +127,11 @@ export function csrfProtection(config: CsrfConfig = {}) {
     res: FastifyReply
   ): Promise<void> => {
     const method = req["method"]?.toUpperCase();
-    const path = req["url"] || '';
+    // P1-FIX: Strip query parameters before path comparison.
+    // Fastify's req.url includes query params (e.g., '/webhook?token=xyz').
+    // Without stripping, excluded paths like '/webhook' fail to match when
+    // query params are present, causing CSRF to block legitimate webhook POSTs.
+    const path = (req["url"] || '').split('?')[0] || '';
 
     // Skip if method is not protected
     if (!mergedConfig.protectedMethods.includes(method)) {

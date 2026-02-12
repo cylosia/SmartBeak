@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
@@ -6,7 +7,7 @@ import { PostgresContentRepository } from '../../domains/content/infra/persisten
 import { PostgresContentRevisionRepository } from '../../domains/content/infra/persistence/PostgresContentRevisionRepository';
 import { resolveDomainDb } from './domain-registry';
 
-﻿import { LRUCache } from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 
 
 
@@ -27,12 +28,26 @@ const poolCache = new LRUCache<string, Pool>({
 });
 
 /**
+ * AUDIT-FIX P0-07: Hash connection string for use as cache key to prevent
+ * credential leakage through health endpoints or log output.
+ */
+function hashConnectionString(connectionString: string): string {
+  return createHash('sha256').update(connectionString).digest('hex').slice(0, 16);
+}
+
+/**
 * Get or create a connection pool for a database
 */
 export function getPool(connectionString: string): Pool {
-  let pool = poolCache.get(connectionString);
+  // AUDIT-FIX P0-07: Use hashed key instead of raw connection string
+  const cacheKey = hashConnectionString(connectionString);
+  let pool = poolCache.get(cacheKey);
   if (!pool) {
+  // AUDIT-FIX P2-09: Pass connectionString to Pool constructor.
+  // Previously omitted, causing all pools to connect to the default
+  // PGHOST/PGPORT instead of the domain-specific database.
   pool = new Pool({
+    connectionString,
     max: 20, // Maximum pool size
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,  // P1-FIX: Increased from 2000ms to prevent timeouts under load
@@ -42,7 +57,7 @@ export function getPool(connectionString: string): Pool {
     logger.error('Pool error', err);
   });
 
-  poolCache.set(connectionString, pool);
+  poolCache.set(cacheKey, pool);
   }
   return pool;
 }
@@ -101,6 +116,8 @@ export async function clearRepositoryCache(): Promise<void> {
 
 /**
 * Get repository health status
+* AUDIT-FIX P0-07: Pool cache keys are now hashed, so health endpoint
+* no longer leaks connection strings with credentials.
 */
 export async function getRepositoryHealth(): Promise<{
   pools: number;
@@ -110,6 +127,7 @@ export async function getRepositoryHealth(): Promise<{
   const poolStats: Record<string, { total: number; idle: number; waiting: number }> = {};
 
   for (const [key, pool] of Array.from(poolCache.entries())) {
+  // Key is already a SHA-256 hash prefix, safe to expose
   poolStats[key] = {
     total: pool.totalCount,
     idle: pool.idleCount,

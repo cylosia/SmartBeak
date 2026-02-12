@@ -1,14 +1,15 @@
 
 import { z } from 'zod';
-const YouTubeCtrInputSchema = z.object({
+
+export const YouTubeCtrInputSchema = z.object({
   impressions: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   views: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
 });
 
-export async function computeYouTubeThumbnailCtr(input: {
+export function computeYouTubeThumbnailCtr(input: {
   impressions: number;
   views: number;
-}) {
+}): number {
   const validated = YouTubeCtrInputSchema.parse(input);
 
   if (validated.impressions === 0) return 0;

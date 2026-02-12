@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { z, ZodSchema, ZodError } from 'zod';
+import crypto from 'crypto';
 
 import { isValidUUID } from '../security/input-validator';
 import { sanitizeErrorMessage } from '../security/logger';
@@ -24,9 +25,10 @@ export interface ErrorResponse {
 
 /**
  * Generate request ID for error tracking
+ * P1-12 FIX: Use crypto.randomUUID() instead of predictable Math.random()
  */
 function generateRequestId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  return crypto.randomUUID();
 }
 
 /**
@@ -36,19 +38,17 @@ function generateRequestId(): string {
 export function createErrorResponse(
   error: string,
   code?: string,
-  details?: unknown
+  _details?: unknown
 ): ErrorResponse {
-  const isDevelopment = process.env['NODE_ENV'] === 'development';
-  const response: ErrorResponse = { 
+  // P1-13 FIX: Never expose internal validation details to clients, even in development.
+  // Details (e.g., Zod schema paths) reveal internal schema structure and aid reconnaissance.
+  // Log details server-side instead.
+  const response: ErrorResponse = {
     error,
     code: code || 'INTERNAL_ERROR',
     requestId: generateRequestId(),
   };
-  
-  if (details && isDevelopment) {
-    response.details = details;
-  }
-  
+
   return response;
 }
 

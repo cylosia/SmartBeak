@@ -74,7 +74,7 @@ export class AuthorsService {
 
   try {
     const { rows } = await this.pool.query(
-    `SELECT id, name, email, bio, created_at as 'createdAt'
+    `SELECT id, name, email, bio, created_at as "createdAt"
     FROM authors
     WHERE id = $1`,
     [id]
@@ -117,7 +117,7 @@ export class AuthorsService {
   try {
     // Use pagination to limit results
     const { rows } = await this.pool.query(
-    `SELECT id, name, email, bio, created_at as 'createdAt'
+    `SELECT id, name, email, bio, created_at as "createdAt"
     FROM authors
     ORDER BY created_at DESC
     LIMIT $1 OFFSET $2`,
@@ -164,7 +164,7 @@ export class AuthorsService {
     const { rows } = await this.pool.query(
     `INSERT INTO authors (id, name, email, bio, created_at)
     VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, name, email, bio, created_at as 'createdAt'`,
+    RETURNING id, name, email, bio, created_at as "createdAt"`,
     [crypto.randomUUID(), sanitizedName, sanitizedEmail, sanitizedBio, new Date()]
     );
 
@@ -246,7 +246,8 @@ export class AuthorsService {
     `UPDATE authors
     SET ${updates.join(', ')}
     WHERE id = $${paramIndex}
-    RETURNING id, name, email, bio, created_at as 'createdAt'`,
+    RETURNING id, name, email, bio, created_at as "createdAt"`,
+    values
     );
 
     if (!rows[0]) {

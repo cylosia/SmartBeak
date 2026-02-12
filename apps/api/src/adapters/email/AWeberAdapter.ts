@@ -239,7 +239,8 @@ export class AWeberAdapter implements EmailProviderAdapter {
    */
   private async _addSubscriberInternal(email: string, listId: string): Promise<void> {
     if (!validateEmail(email)) {
-      throw new Error(`Invalid email format: ${email}`);
+      // P1-FIX: Do not include PII (email) in error message to prevent leakage to logs/error tracking
+      throw new Error('Invalid email format');
     }
     validateNonEmptyString(listId, 'listId');
     const url = `${this.baseUrl}/accounts/${this.accountId}/lists/${listId}/subscribers`;

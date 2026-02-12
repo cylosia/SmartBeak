@@ -1,8 +1,12 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
 import { AuthContext } from '../types/fastify';
 import { rateLimit } from '../utils/rateLimit';
+
+// P1-10 FIX: Use structured logger instead of console.error
+const logger = getLogger('mediaAnalyticsExport');
 
 function requireRole(auth: AuthContext, allowedRoles: string[]): void {
   const hasRole = auth.roles.some(role => allowedRoles.includes(role));
@@ -30,21 +34,16 @@ export interface ExportRouteParams {
 }
 
 export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<void> {
-  app.get<ExportRouteParams>('/media/analytics/export', async (
+  // P1-12 FIX: Changed from GET to POST. GET requests should not have bodies
+  // per RFC 7231; many proxies and clients strip GET bodies.
+  app.post<ExportRouteParams>('/media/analytics/export', async (
     req: FastifyRequest<ExportRouteParams>,
     reply: FastifyReply
   ): Promise<void> => {
     try {
-      const parseResult = ExportRequestSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        reply.status(400).send({
-          error: 'Invalid request body',
-          code: 'VALIDATION_ERROR',
-          details: parseResult.error.issues
-        });
-        return;
-      }
-
+      // P1-13 FIX: Auth check BEFORE validation to prevent information leakage.
+      // Unauthenticated users should not be able to probe valid request schemas
+      // through validation error messages.
       const auth = req.auth;
       if (!auth) {
         reply.status(401).send({
@@ -55,6 +54,16 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
       }
 
       requireRole(auth, ['owner', 'admin', 'editor']);
+
+      const parseResult = ExportRequestSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        reply.status(400).send({
+          error: 'Invalid request body',
+          code: 'VALIDATION_ERROR',
+          details: parseResult.error.issues
+        });
+        return;
+      }
 
       await rateLimit('media:analytics:export', 10, req, reply);
 
@@ -79,7 +88,8 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
         .header('Content-Disposition', "attachment; filename='media_analytics.csv'")
         .send(header + body);
     } catch (error) {
-      console.error('[mediaAnalyticsExport] Error:', error);
+      // P1-10 FIX: Use structured logger
+      logger.error('[mediaAnalyticsExport] Error:', error instanceof Error ? error : new Error(String(error)));
 
       const errWithCode = error as Error & { code?: string };
       const hasPermissionError = error instanceof Error &&
@@ -93,10 +103,10 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
         return;
       }
 
+      // P1-1 FIX: Do not leak internal error details to clients
       return reply.status(500).send({
         error: 'Export failed',
-        code: 'EXPORT_ERROR',
-        message: error instanceof Error ? error["message"] : 'Unknown error'
+        code: 'EXPORT_ERROR'
       });
     }
   });

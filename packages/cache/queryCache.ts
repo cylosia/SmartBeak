@@ -10,6 +10,7 @@
  * automatic cleanup of old versions.
  */
 
+import { createHash } from 'crypto';
 import { MultiTierCache } from './multiTierCache';
 
 // ============================================================================
@@ -140,16 +141,11 @@ export class QueryCache {
   }
 
   /**
-   * Simple hash function for strings
+   * SHA-256 hash function for cache key generation
+   * SECURITY FIX P1-4: Replaced 32-bit DJB2 hash with SHA-256 to eliminate collision risk
    */
   private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash).toString(36);
+    return createHash('sha256').update(str).digest('hex').substring(0, 16);
   }
 
   /**
@@ -467,6 +463,13 @@ export class PostgresQueryAnalyzer implements QueryAnalyzer {
   constructor(private db: { query: (sql: string, params?: unknown[]) => Promise<unknown[]> }) {}
 
   async analyze(query: string, params?: unknown[]): Promise<QueryPlan> {
+    // SECURITY FIX P0-1/P2-14: Validate SELECT-only to prevent SQL injection via EXPLAIN ANALYZE
+    if (!/^\s*SELECT\b/i.test(query)) {
+      throw new Error('Only SELECT queries can be analyzed. EXPLAIN ANALYZE executes the query.');
+    }
+    if (query.includes(';')) {
+      throw new Error('Query must not contain semicolons. Multi-statement queries are not allowed.');
+    }
     const explainQuery = `EXPLAIN (FORMAT JSON, ANALYZE, BUFFERS) ${query}`;
     const result = await this.db.query(explainQuery, params) as Array<{ 'QUERY PLAN': unknown }>;
     

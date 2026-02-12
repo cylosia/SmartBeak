@@ -9,6 +9,9 @@
  */
 
 import type { Pool, QueryResult } from 'pg';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('query-plan');
 
 // ============================================================================
 // Types & Interfaces
@@ -80,6 +83,32 @@ export interface SlowQueryReport {
 // Query Plan Analyzer
 // ============================================================================
 
+/**
+ * Validate that a query is a safe read-only SELECT before passing to EXPLAIN.
+ * SECURITY FIX P0-1: Prevents SQL injection via EXPLAIN ANALYZE which actually executes queries.
+ */
+function validateSelectOnly(query: string): void {
+  if (!/^\s*SELECT\b/i.test(query)) {
+    throw new Error('Only SELECT queries can be analyzed. EXPLAIN ANALYZE executes the query.');
+  }
+  // Block semicolons to prevent multi-statement injection
+  if (query.includes(';')) {
+    throw new Error('Query must not contain semicolons. Multi-statement queries are not allowed.');
+  }
+}
+
+/**
+ * Validate a SQL identifier (table name, index name, column name).
+ * SECURITY FIX P0-2: Prevents SQL injection via unvalidated identifiers.
+ */
+const VALID_IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/;
+
+function validateIdentifier(name: string, label: string): void {
+  if (!VALID_IDENTIFIER_RE.test(name)) {
+    throw new Error(`Invalid ${label}: must match [a-zA-Z_][a-zA-Z0-9_]{0,63}`);
+  }
+}
+
 export class QueryPlanAnalyzer {
   constructor(private pool: Pool) {}
 
@@ -87,6 +116,7 @@ export class QueryPlanAnalyzer {
    * Analyze query execution plan
    */
   async analyze(query: string, params?: unknown[]): Promise<PlanAnalysis> {
+    validateSelectOnly(query);
     const explainQuery = `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`;
     
     try {
@@ -99,7 +129,7 @@ export class QueryPlanAnalyzer {
 
       return this.analyzePlan(planData[0]!, query);
     } catch (error) {
-      console.error('[QueryPlanAnalyzer] Failed to analyze query:', error);
+      logger.error('[QueryPlanAnalyzer] Failed to analyze query', error as Error);
       throw error;
     }
   }
@@ -108,6 +138,7 @@ export class QueryPlanAnalyzer {
    * Analyze without executing (safe for production)
    */
   async analyzeSafe(query: string): Promise<Partial<PlanAnalysis>> {
+    validateSelectOnly(query);
     const explainQuery = `EXPLAIN (FORMAT JSON) ${query}`;
     
     try {
@@ -120,7 +151,7 @@ export class QueryPlanAnalyzer {
 
       return this.analyzePlanSafe(planData[0]!.Plan!, query);
     } catch (error) {
-      console.error('[QueryPlanAnalyzer] Failed to analyze query:', error);
+      logger.error('[QueryPlanAnalyzer] Failed to analyze query', error as Error);
       throw error;
     }
   }
@@ -336,27 +367,32 @@ export class QueryPlanAnalyzer {
    * Get index recommendations for a table
    */
   async getIndexRecommendations(tableName: string): Promise<IndexRecommendation[]> {
+    validateIdentifier(tableName, 'table name');
     const recommendations: IndexRecommendation[] = [];
 
     // Query pg_stat_statements for slow queries on this table
+    // Escape LIKE special characters in table name
+    const escapedTableName = tableName.replace(/[\\%_]/g, '\\$&');
     try {
       const result = await this.pool.query(`
         SELECT query, calls, mean_time, total_time
-        FROM pg_stat_statements 
-        WHERE query LIKE $1
+        FROM pg_stat_statements
+        WHERE query LIKE $1 ESCAPE '\\'
         ORDER BY mean_time DESC
         LIMIT 10
-      `, [`%${tableName}%`]);
+      `, [`%${escapedTableName}%`]);
 
       for (const row of result.rows) {
         const columns = this.suggestIndexColumns(row.query as string);
         if (columns.length > 0) {
+          // SECURITY FIX P0-2: Validate all identifiers used in generated DDL
+          columns.forEach(col => validateIdentifier(col, 'column name'));
           recommendations.push({
             table: tableName,
             columns,
             reason: `Slow query detected: ${(row.mean_time as number).toFixed(2)}ms average`,
             estimatedBenefit: (row.mean_time as number) > 100 ? 'high' : 'medium',
-            sql: `CREATE INDEX idx_${tableName}_${columns.join('_')} ON ${tableName}(${columns.join(', ')});`,
+            sql: `CREATE INDEX idx_${tableName}_${columns.join('_')} ON "${tableName}"(${columns.map(c => `"${c}"`).join(', ')});`,
           });
         }
       }
@@ -450,33 +486,50 @@ export class QueryPlanAnalyzer {
 export const queryHints = {
   /**
    * Force index usage
+   * SECURITY FIX P1-3: Validate table/index identifiers
    */
-  forceIndex: (table: string, index: string): string => 
-    `/*+ IndexScan(${table} ${index}) */`,
+  forceIndex: (table: string, index: string): string => {
+    validateIdentifier(table, 'table name');
+    validateIdentifier(index, 'index name');
+    return `/*+ IndexScan(${table} ${index}) */`;
+  },
 
   /**
    * Force sequential scan
+   * SECURITY FIX P1-3: Validate table identifier
    */
-  forceSeqScan: (table: string): string => 
-    `/*+ SeqScan(${table}) */`,
+  forceSeqScan: (table: string): string => {
+    validateIdentifier(table, 'table name');
+    return `/*+ SeqScan(${table}) */`;
+  },
 
   /**
    * Set work memory for query
+   * SECURITY FIX P1-1: Validate numeric parameter
    */
-  setWorkMem: (mb: number): string => 
-    `SET LOCAL work_mem = '${mb}MB';`,
+  setWorkMem: (mb: number): string => {
+    if (!Number.isFinite(mb) || mb < 1 || mb > 4096) {
+      throw new Error('work_mem must be a finite number between 1 and 4096 MB');
+    }
+    return `SET LOCAL work_mem = '${Math.floor(mb)}MB';`;
+  },
 
   /**
    * Disable nested loops
    */
-  disableNestedLoops: (): string => 
+  disableNestedLoops: (): string =>
     `SET LOCAL enable_nestloop = off;`,
 
   /**
    * Enable parallel query
+   * SECURITY FIX P1-2: Validate numeric parameter
    */
-  enableParallel: (workers: number): string => 
-    `SET LOCAL max_parallel_workers_per_gather = ${workers};`,
+  enableParallel: (workers: number): string => {
+    if (!Number.isFinite(workers) || workers < 0 || workers > 1024) {
+      throw new Error('max_parallel_workers must be a finite number between 0 and 1024');
+    }
+    return `SET LOCAL max_parallel_workers_per_gather = ${Math.floor(workers)};`;
+  },
 };
 
 // ============================================================================
@@ -511,7 +564,7 @@ export class SlowQueryLogger {
       this.slowQueries.shift();
     }
 
-    console.warn(`[SlowQuery] ${executionTimeMs.toFixed(2)}ms: ${query.substring(0, 100)}...`);
+    logger.warn(`[SlowQuery] ${executionTimeMs.toFixed(2)}ms`, { queryPreview: query.substring(0, 100) });
   }
 
   getSlowQueries(): SlowQueryReport[] {

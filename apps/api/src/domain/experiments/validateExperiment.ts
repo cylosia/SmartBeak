@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 const VariantSchema = z.object({
@@ -15,25 +14,28 @@ export type ExperimentVariant = z.infer<typeof VariantSchema>;
 
 /**
 * Validate experiment variants
+* P2-6 FIX: Removed redundant length check (Zod already enforces min(2))
+* P2-7 FIX: Added comment clarifying business requirement for same-dimension experiments
 * @param variants - Array of experiment variants
 * @throws Error if validation fails
 */
 export function validateExperiment(variants: unknown[]): void {
-  // Validate variants array structure
+  // Validate variants array structure (enforces 2-10 elements via Zod schema)
   const validatedVariants = VariantsSchema.parse(variants);
-
-  if (validatedVariants.length < 2) {
-  throw new Error('At least two variants required');
-  }
 
   const intents = new Set(validatedVariants.map(v => v.intent));
   const types = new Set(validatedVariants.map(v => v.contentType));
 
+  // Business rule: Variants in an experiment must target the same intent.
+  // Different intents should be modeled as separate experiments.
   if (intents.size > 1) {
-  throw new Error('All variants must share the same intent');
+    throw new Error('All variants must share the same intent');
   }
 
+  // Business rule: Variants must share the same content type.
+  // The experiment varies other dimensions (tone, structure, targeting) while
+  // holding intent and content type constant for fair comparison.
   if (types.size > 1) {
-  throw new Error('All variants must share the same content type');
+    throw new Error('All variants must share the same content type');
   }
 }

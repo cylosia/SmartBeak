@@ -229,8 +229,11 @@ export function initTelemetry(config: TelemetryConfig): void {
       collectorEndpoint: config.collectorEndpoint,
     });
   } catch (error) {
+    // P2-11 FIX: Don't re-throw — telemetry is non-critical infrastructure.
+    // A failure should not crash the application.
     logger.error('Failed to initialize telemetry', error as Error);
-    throw error;
+    isInitialized = false;
+    tracerProvider = null;
   }
 }
 

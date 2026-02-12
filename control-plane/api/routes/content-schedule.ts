@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getAuthContext } from '../types';
 import { getContentRepository } from '../../services/repository-factory';
+import { DomainOwnershipService } from '../../services/domain-ownership';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { ScheduleContent } from '../../../domains/content/application/handlers/ScheduleContent';
@@ -49,8 +50,24 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     const publishDate = new Date(publishAt);
 
     const repo = getContentRepository('content');
-    const handler = new ScheduleContent(repo);
 
+    // P0-5 FIX: Verify the authenticated user's org owns this content item
+    // before allowing schedule. Previously any editor could schedule any org's content.
+    const contentItem = await repo.getById(id);
+    if (!contentItem) {
+    return res.status(404).send({
+    error: 'Content not found',
+    code: 'CONTENT_NOT_FOUND',
+    });
+    }
+    // Verify org owns the domain that owns this content
+    if (contentItem.domainId) {
+    const { getContainer } = await import('../../services/container');
+    const ownership = new DomainOwnershipService(getContainer().db);
+    await ownership.assertOrgOwnsDomain(ctx.orgId, contentItem.domainId);
+    }
+
+    const handler = new ScheduleContent(repo);
     const event = await handler.execute(id, publishDate);
 
     return {

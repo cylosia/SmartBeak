@@ -1,6 +1,7 @@
 
 import Redis from 'ioredis';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import Stripe from 'stripe';
 
 import { getLogger } from '@kernel/logger';
 import { pool } from '../../../lib/db';
@@ -171,8 +172,6 @@ async function verifyStripeSignatureWithRetry(
   return null;
 }
 
-import Stripe from 'stripe';
-
 /**
 * Main webhook handler
 */
@@ -198,17 +197,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const buf = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
       let totalSize = 0;
+      let destroyed = false;
       req.on('data', (chunk) => {
+        if (destroyed) return;
         const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         totalSize += bufferChunk.length;
         if (totalSize > MAX_PAYLOAD_SIZE) {
-          res.status(413).json({ error: 'Payload too large' });
+          destroyed = true;
           req.destroy();
+          reject(new Error('Payload too large'));
           return;
         }
         chunks.push(bufferChunk);
       });
-      req.on('end', () => resolve(Buffer.concat(chunks)));
+      req.on('end', () => { if (!destroyed) resolve(Buffer.concat(chunks)); });
       req.on('error', reject);
     });
 
@@ -227,6 +229,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     event = verifiedEvent;
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));
+    if (error.message === 'Payload too large') {
+      return res.status(413).json({ error: 'Payload too large' });
+    }
     logger.error('Signature verification failed', error);
     return res.status(400).json({
       error: 'Webhook signature verification failed',
@@ -253,7 +258,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // P1-FIX: Timestamp validation to prevent replay attacks
   // Stripe includes 'created' timestamp in event (Unix timestamp)
-  const eventCreated = event["created"] as number;
+  const eventCreated = event.created as number;
   const now = Math.floor(Date.now() / 1000);
   const maxAge = 5 * 60; // 5 minutes
   
@@ -268,12 +273,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Distributed idempotency check
-  if (await isDuplicateEvent(event["id"])) {
-    logger.info('Event already processed, skipping', { eventId: event["id"] });
+  if (await isDuplicateEvent(event.id)) {
+    logger.info('Event already processed, skipping', { eventId: event.id });
     return res.json({ received: true, idempotent: true });
   }
 
-  logger.info('Received webhook event', { eventType: event.type, eventId: event["id"] });
+  logger.info('Received webhook event', { eventType: event.type, eventId: event.id });
 
   try {
     // SECURITY FIX: Issue 17 - Add timeout for event processing
@@ -289,7 +294,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.json({ received: true, type: event.type });
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error('Error processing event', err, { eventType: event.type, eventId: event["id"] });
+    logger.error('Error processing event', err, { eventType: event.type, eventId: event.id });
     
     // SECURITY FIX: Don't expose internal errors
     res.status(500).json({
@@ -348,7 +353,7 @@ async function processEvent(event: Stripe.Event): Promise<void> {
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
   logger.info('Checkout completed', { customerId: session.customer as string });
 
-  const orgId = session.metadata?.["orgId"];
+  const orgId = session.metadata?.orgId;
   if (!orgId) {
     throw new Error('Checkout session missing orgId metadata');
   }
@@ -366,7 +371,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
         [orgId, customerId]
       );
       if (orgRows.length === 0) {
-        logger.error('Security violation: orgId does not belong to Stripe customer', {
+        logger.error('Security violation: orgId does not belong to Stripe customer', undefined, {
           orgId: orgId.substring(0, 8) + '...',
           customerId: customerId.substring(0, 8) + '...',
         });
@@ -402,12 +407,12 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
         created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
       [
-        subscription["id"],
+        subscription.id,
         orgId,
         session.customer,
-        subscription["id"],
+        subscription.id,
         subscription.status,
-        subscription.items.data[0]?.price["id"],
+        subscription.items.data[0]?.price?.id,
         new Date(subscription.current_period_start * 1000),
         new Date(subscription.current_period_end * 1000),
       ]
@@ -422,7 +427,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
     );
 
     await client.query('COMMIT');
-    logger.info('Subscription activated', { orgId, subscriptionId: subscription["id"] });
+    logger.info('Subscription activated', { orgId, subscriptionId: subscription.id });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -434,7 +439,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
 // F24-FIX: Implement subscription.created handler. Previously was empty (just logged),
 // meaning subscriptions created outside checkout flow (Stripe dashboard, API) had no DB record.
 async function handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
-  logger.info('Subscription created', { subscriptionId: subscription["id"] });
+  logger.info('Subscription created', { subscriptionId: subscription.id });
 
   const customerId = subscription.customer as string;
   const client = await pool.connect();
@@ -497,7 +502,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription): Pro
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
   logger.info('Subscription updated', { 
-    subscriptionId: subscription["id"], 
+    subscriptionId: subscription.id, 
     status: subscription.status 
   });
 
@@ -513,7 +518,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
         updated_at = NOW()
       WHERE stripe_subscription_id = $1`,
       [
-        subscription["id"],
+        subscription.id,
         subscription.status,
         new Date(subscription.current_period_start * 1000),
         new Date(subscription.current_period_end * 1000),
@@ -529,7 +534,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
       SET subscription_status = $2,
         updated_at = NOW()
       WHERE id = (SELECT org_id FROM subscriptions WHERE stripe_subscription_id = $1)`,
-      [subscription["id"], orgStatus]
+      [subscription.id, orgStatus]
     );
 
     await client.query('COMMIT');
@@ -542,7 +547,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
-  logger.info('Subscription cancelled', { subscriptionId: subscription["id"] });
+  logger.info('Subscription cancelled', { subscriptionId: subscription.id });
 
   const client = await pool.connect();
   try {
@@ -568,7 +573,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
     );
 
     if (rows.length > 0) {
-      logger.info('Org set to read-only mode (7 day grace)', { orgId: rows[0]["id"] });
+      logger.info('Org set to read-only mode (7 day grace)', { orgId: rows[0].id });
     }
 
     await client.query('COMMIT');
@@ -581,7 +586,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-  logger.info('Payment failed', { invoiceId: invoice["id"] });
+  logger.info('Payment failed', { invoiceId: invoice.id });
 
   const client = await pool.connect();
   try {
@@ -590,7 +595,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     const { rows } = await client.query(
       `SELECT s.org_id, o.name
       FROM subscriptions s
-      JOIN organizations o ON o["id"] = s.org_id
+      JOIN organizations o ON o.id = s.org_id
       WHERE s.stripe_customer_id = $1`,
       [invoice.customer]
     );
@@ -617,10 +622,10 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
       `INSERT INTO alerts (id, severity, category, title, message, metadata, created_at)
       VALUES ($1, 'critical', 'billing', 'Payment Failed', 'Payment failed for organization', $2, NOW())`,
       [
-        `payment-failed-${invoice["id"]}`,
+        `payment-failed-${invoice.id}`,
         JSON.stringify({
           orgId,
-          invoiceId: invoice["id"],
+          invoiceId: invoice.id,
           amount: invoice.amount_due,
           attemptCount: invoice.attempt_count
         })
@@ -638,7 +643,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
 }
 
 async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
-  logger.info('Payment succeeded', { invoiceId: invoice["id"] });
+  logger.info('Payment succeeded', { invoiceId: invoice.id });
 
   const client = await pool.connect();
   try {
