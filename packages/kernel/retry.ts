@@ -465,9 +465,16 @@ export class CircuitBreaker {
 
   /**
   * Get current circuit state
+  * AUDIT-FIX P2-10: Made async and added lock acquisition for thread-safe
+  * state reads, consistent with all other state access in this class.
   * @returns Current circuit state
   */
-  getState(): CircuitState {
-  return this.state;
+  async getState(): Promise<CircuitState> {
+  const release = await this.stateLock.acquire();
+  try {
+    return this.state;
+  } finally {
+    release();
+  }
   }
 }
