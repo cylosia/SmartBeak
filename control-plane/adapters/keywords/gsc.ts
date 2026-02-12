@@ -4,7 +4,7 @@ import { validateNonEmptyString } from '@kernel/validation';
 
 import { KeywordIngestionAdapter, KeywordSuggestion } from './types';
 
-﻿import { google, searchconsole_v1, Auth } from 'googleapis';
+import { google, searchconsole_v1, Auth } from 'googleapis';
 
 
 /**
@@ -40,7 +40,9 @@ export class GscAdapter implements KeywordIngestionAdapter {
   }
 
   this.auth = new google.auth.OAuth2(
-    credentials?.redirectUri || process.env['GSC_REDIRECT_URI'] || 'http://localhost:3000/api/auth/gsc/callback'
+    clientId,
+    clientSecret,
+    credentials?.redirectUri || process.env['GSC_REDIRECT_URI'] || 'https://localhost:3000/api/auth/gsc/callback'
   );
 
   if (credentials?.refreshToken) {
@@ -60,6 +62,7 @@ export class GscAdapter implements KeywordIngestionAdapter {
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/webmasters.readonly'],
     prompt: 'consent',
+    ...(state ? { state } : {}),
   });
   }
 
@@ -74,10 +77,13 @@ export class GscAdapter implements KeywordIngestionAdapter {
   validateNonEmptyString(code, 'code');
 
   const { tokens } = await this.auth.getToken(code);
+  if (!tokens.access_token || tokens.expiry_date == null) {
+    throw new Error('Invalid token response from Google: missing access_token or expiry_date');
+  }
   return {
-    access_token: tokens.access_token!,
+    access_token: tokens.access_token,
     refresh_token: tokens.refresh_token ?? undefined,
-    expiry_date: tokens.expiry_date!,
+    expiry_date: tokens.expiry_date,
   };
   }
 
@@ -117,20 +123,28 @@ export class GscAdapter implements KeywordIngestionAdapter {
 
     const requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest = {
     startDate: startDate.toISOString().split('T')[0] as string,
-    endDate: endDate.toISOString().split('T')[0] ?? null,
+    endDate: endDate.toISOString().split('T')[0] as string,
     dimensions: ['query'],
     rowLimit: 1000,
     aggregationType: 'auto',
     };
 
     const fetchPromise = this.searchConsole.searchanalytics.query({
+    siteUrl,
+    requestBody,
     });
 
+    let timeoutId: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('GSC request timeout')), this.timeoutMs);
+    timeoutId = setTimeout(() => reject(new Error('GSC request timeout')), this.timeoutMs);
     });
 
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
+    let response: Awaited<typeof fetchPromise>;
+    try {
+    response = await Promise.race([fetchPromise, timeoutPromise]);
+    } finally {
+    clearTimeout(timeoutId!);
+    }
     const rows = response.data.rows || [];
 
     const suggestions = rows.map((row): KeywordSuggestion => {
@@ -145,8 +159,8 @@ export class GscAdapter implements KeywordIngestionAdapter {
     source: 'gsc',
     fetchedAt: new Date().toISOString(),
     dateRange: {
-        start: requestBody.startDate!,
-        end: requestBody.endDate!,
+        start: requestBody.startDate as string,
+        end: requestBody.endDate as string,
     },
     },
     };
@@ -162,19 +176,21 @@ export class GscAdapter implements KeywordIngestionAdapter {
     return suggestions;
   } catch (error: unknown) {
     const latency = Date.now() - startTime;
-    const err = error as { name?: string; code?: number; message?: string };
+    const errName = error instanceof Error ? error.name : 'Unknown';
+    const errCode = typeof error === 'object' && error !== null && 'code' in error ? (error as { code: unknown }).code : undefined;
+    const errMessage = error instanceof Error ? error.message : String(error);
     this.metrics.recordLatency('fetch', latency, false);
-    this.metrics.recordError('fetch', err.name || 'Unknown');
-    this.logger["error"]('Failed to fetch keywords from GSC', context, error instanceof Error ? error : new Error(String(error)));
+    this.metrics.recordError('fetch', errName);
+    this.logger.error('Failed to fetch keywords from GSC', context, error instanceof Error ? error : new Error(String(error)));
 
     // Provide more helpful error messages
-    if (err.code === 401) {
+    if (errCode === 401) {
     throw new Error('GSC authentication failed. Please re-authorize.');
     }
-    if (err.code === 403) {
+    if (errCode === 403) {
     throw new Error('Site not verified in Google Search Console or insufficient permissions.');
     }
-    if (err.message?.includes('insufficientPermissions')) {
+    if (errMessage.includes('insufficientPermissions')) {
     throw new Error('Insufficient permissions. Ensure site is verified in GSC.');
     }
 
@@ -195,9 +211,9 @@ export class GscAdapter implements KeywordIngestionAdapter {
     this.metrics.recordSuccess('listSites');
     return sites;
   } catch (error: unknown) {
-    const err = error as { name?: string };
-    this.metrics.recordError('listSites', err.name || 'Unknown');
-    this.logger["error"]('Failed to list GSC sites', context, error instanceof Error ? error : new Error(String(error)));
+    const errName = error instanceof Error ? error.name : 'Unknown';
+    this.metrics.recordError('listSites', errName);
+    this.logger.error('Failed to list GSC sites', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
   }
@@ -205,10 +221,11 @@ export class GscAdapter implements KeywordIngestionAdapter {
   async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string }> {
   const start = Date.now();
 
+  let timeoutId: ReturnType<typeof setTimeout>;
   try {
     // Try to list sites as health check
     const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Health check timeout')), timeoutConfig.short);
+    timeoutId = setTimeout(() => reject(new Error('Health check timeout')), timeoutConfig.short);
     });
 
     const checkPromise = this.listSites();
@@ -219,15 +236,23 @@ export class GscAdapter implements KeywordIngestionAdapter {
     latency: Date.now() - start,
     };
   } catch (error: unknown) {
-    const err = error as { message?: string };
+    const errMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
     healthy: false,
     latency: Date.now() - start,
-    error: err.message || 'Unknown error',
+    error: errMessage,
     };
+  } finally {
+    clearTimeout(timeoutId!);
   }
   }
 }
 
-// Backward-compatible default export
-export const gscAdapter = new GscAdapter();
+// Backward-compatible lazy-initialized singleton (avoids crash at import time if env vars are missing)
+let _gscAdapter: GscAdapter | undefined;
+export function getGscAdapter(): GscAdapter {
+  if (!_gscAdapter) {
+    _gscAdapter = new GscAdapter();
+  }
+  return _gscAdapter;
+}
