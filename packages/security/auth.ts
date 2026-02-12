@@ -202,8 +202,11 @@ export async function optionalAuthFastify(
       return;
     }
 
-    // Validate role and convert to array
-    const roles = claims.role ? [claims.role] : ['viewer'];
+    // P1-FIX: Require role claim — do not silently default to viewer
+    if (!claims.role) {
+      return; // Token missing role claim, treat as unauthenticated for optional auth
+    }
+    const roles = [claims.role];
 
     // Attach auth context to request
     req.authContext = {
@@ -258,8 +261,12 @@ export async function requireAuthFastify(
       return;
     }
 
-    // Validate role and convert to array
-    const roles = claims.role ? [claims.role] : ['viewer'];
+    // P1-FIX: Require role claim — reject tokens without role instead of defaulting to viewer
+    if (!claims.role) {
+      res.status(401).send({ error: 'Unauthorized. Token missing role claim.' });
+      return;
+    }
+    const roles = [claims.role];
 
     // Attach auth context to request
     req.authContext = {
@@ -344,11 +351,8 @@ export interface AuthContext {
   requestId?: string | undefined;
 }
 
-export interface UserRoleSchema {
-  viewer: 'viewer';
-  editor: 'editor';
-  admin: 'admin';
-}
+// P2-FIX: Removed unused UserRoleSchema interface that shadowed the Zod schema
+// via declaration merging. The interface was never used and caused confusion.
 
 // SECURITY FIX: Add 'owner' role which exists in DB but was missing from types
 const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
