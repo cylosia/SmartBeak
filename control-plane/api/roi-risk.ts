@@ -1,26 +1,21 @@
+/**
+ * AUDIT-FIX P0-04/P0-05: This file previously registered an UNAUTHENTICATED
+ * /roi-risk/:assetId route that used SELECT * without org-scoping.
+ *
+ * It has been removed because:
+ * 1. No authentication or authorization checks
+ * 2. No org_id scoping (IDOR vulnerability)
+ * 3. SELECT * exposing all columns including internal fields
+ * 4. Duplicate of the properly-secured route in ./routes/roi-risk.ts
+ *
+ * The authenticated version lives at: control-plane/api/routes/roi-risk.ts
+ * which implements:
+ * - Auth context verification
+ * - Role-based access control (requireRole)
+ * - Asset ownership verification (verifyAssetOwnership with org_id)
+ * - Explicit column selection
+ * - Rate limiting
+ * - IDOR logging
+ */
 
-import { FastifyInstance } from 'fastify';
-
-export interface AssetParams {
-  assetId: string;
-}
-
-// Extend FastifyInstance to include db
-interface FastifyInstanceWithDb extends FastifyInstance {
-  db: {
-    query: (sql: string, params: unknown[]) => Promise<{ rows: unknown[] }>;
-  };
-}
-
-export async function registerRoiRiskRoutes(app: FastifyInstance) {
-  const appWithDb = app as FastifyInstanceWithDb;
-  
-  app.get('/roi-risk/:assetId', async (req) => {
-  const { assetId } = req.params as AssetParams;
-  const res = await appWithDb.db.query(
-    'select * from roi_with_risk where asset_id = $1',
-    [assetId]
-  );
-  return res.rows[0];
-  });
-}
+// No routes exported - use routes/roi-risk.ts instead

@@ -84,9 +84,10 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
   } catch (error) {
     logger.error('[media/upload-intent] Error:', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
+    // P1-1 FIX: Do not leak internal error details to clients
     return res.status(500).send({
     error: 'Failed to create upload intent',
-    message: error instanceof Error ? error.message : 'Unknown error'
+    code: 'INTERNAL_ERROR'
     });
   }
   });
@@ -133,9 +134,10 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
   } catch (error) {
     logger.error('[media/complete] Error:', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
+    // P1-1 FIX: Do not leak internal error details to clients
     return res.status(500).send({
     error: 'Failed to complete upload',
-    message: error instanceof Error ? error.message : 'Unknown error'
+    code: 'INTERNAL_ERROR'
     });
   }
   });

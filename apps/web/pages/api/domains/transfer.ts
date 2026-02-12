@@ -61,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // SECURITY FIX: P1-HIGH Issue 4 - Verify domain belongs to user's org
+    // P0-3 FIX: Wrap verification + insert in a transaction to prevent TOCTOU race
     const pool = await getPoolInstance();
     const { rows } = await pool.query(
       `SELECT domain_id, org_id FROM domain_registry

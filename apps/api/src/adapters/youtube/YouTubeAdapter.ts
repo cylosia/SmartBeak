@@ -1,10 +1,14 @@
 import { z } from 'zod';
 import { API_BASE_URLS, API_VERSIONS, DEFAULT_TIMEOUTS } from '@config';
 import { validateNonEmptyString } from '../../utils/validation';
-import { AbortController } from 'abort-controller';
 import fetch from 'node-fetch';
 import { withRetry } from '../../utils/retry';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import {
+  YouTubeVideoSnippet,
+  YouTubeVideoStatus,
+  YouTubeVideoResponse,
+} from '../../utils/validation/social';
 
 /**
  * YouTube Publishing Adapter
@@ -25,46 +29,39 @@ class ApiError extends Error {
     super(message);
     this.status = status;
     this.retryAfter = retryAfter;
-    this.name = 'ApiError';
+    this.name = this.constructor.name;
   }
 }
 
-// YouTube API response type guards
-function isYouTubeVideoResponse(data: unknown): data is YouTubeVideoResponse {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    typeof (data as Record<string, unknown>)['id'] === 'string'
-  );
-}
+/**
+ * Zod schema for runtime validation of YouTube single-video responses.
+ * Validates structure beyond just checking for an 'id' field.
+ */
+const YouTubeVideoResponseSchema = z.object({
+  id: z.string(),
+  snippet: z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    categoryId: z.string().optional(),
+    defaultLanguage: z.string().optional(),
+  }).optional(),
+  status: z.object({
+    privacyStatus: z.enum(['public', 'unlisted', 'private']).optional(),
+    publishAt: z.string().optional(),
+    selfDeclaredMadeForKids: z.boolean().optional(),
+  }).optional(),
+});
 
-function isYouTubeVideoListResponse(data: unknown): data is { items: YouTubeVideoResponse[] } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    Array.isArray((data as Record<string, unknown>)['items'])
-  );
-}
+/**
+ * Zod schema for runtime validation of YouTube video list responses.
+ */
+const YouTubeVideoListResponseSchema = z.object({
+  items: z.array(YouTubeVideoResponseSchema),
+});
 
-export interface YouTubeVideoSnippet {
-  title?: string;
-  description?: string;
-  tags?: string[];
-  categoryId?: string;
-  defaultLanguage?: string;
-}
-
-export interface YouTubeVideoStatus {
-  privacyStatus?: 'public' | 'unlisted' | 'private';
-  publishAt?: string;
-  selfDeclaredMadeForKids?: boolean;
-}
-
-export interface YouTubeVideoResponse {
-  id: string;
-  snippet?: YouTubeVideoSnippet;
-  status?: YouTubeVideoStatus;
-}
+// Re-export types for consumers that import from this module
+export type { YouTubeVideoSnippet, YouTubeVideoStatus, YouTubeVideoResponse };
 
 export interface YouTubeVideoMetadata {
   title?: string;
@@ -88,10 +85,9 @@ export class YouTubeAdapter {
   private metrics: MetricsCollector;
 
   constructor(accessToken: string) {
-    this.accessToken = accessToken;
-
     validateNonEmptyString(accessToken, 'accessToken');
 
+    this.accessToken = accessToken;
     this.baseUrl = `${API_BASE_URLS.youtube}/${API_VERSIONS.youtube}`;
     this.timeoutMs = DEFAULT_TIMEOUTS.long;
     this.logger = new StructuredLogger('YouTubeAdapter');
@@ -107,42 +103,55 @@ export class YouTubeAdapter {
     validateNonEmptyString(videoId, 'videoId');
     this.logger.info('Updating YouTube video metadata', context, { videoId });
     const startTime = Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await withRetry(async () => {
-        const response = await fetch(`${this.baseUrl}/videos?part=snippet`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            id: videoId,
-            snippet: metadata,
-          }),
-          signal: controller.signal,
-        });
+      const data = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+          const response = await fetch(`${this.baseUrl}/videos?part=snippet`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              id: videoId,
+              snippet: metadata,
+            }),
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          const errorBody = await response.text();
+          if (!response.ok) {
+            const errorBody = await response.text();
+            this.logger.error('YouTube metadata update API error', context, {
+              status: response.status,
+              body: errorBody,
+              videoId,
+            });
 
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter);
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter);
+            }
+
+            throw new ApiError(
+              `YouTube metadata update failed: ${response.status} ${response.statusText}`,
+              response.status,
+            );
           }
 
-          throw new Error(`YouTube metadata update failed: ${response.status} ${response.statusText}`);
+          const rawData: unknown = await response.json();
+          const parsed = YouTubeVideoResponseSchema.safeParse(rawData);
+          if (!parsed.success) {
+            throw new ApiError('Invalid response format from YouTube API', 500);
+          }
+          return parsed.data;
+        } finally {
+          clearTimeout(timeoutId);
         }
-        return response;
       }, { maxRetries: 3 });
 
-      const rawData = await res.json();
-      if (!isYouTubeVideoResponse(rawData)) {
-        throw new ApiError('Invalid response format from YouTube API', 500);
-      }
-      const data = rawData;
       const latency = Date.now() - startTime;
       this.metrics.recordLatency('updateMetadata', latency, true);
       this.metrics.recordSuccess('updateMetadata');
@@ -152,10 +161,8 @@ export class YouTubeAdapter {
       const latency = Date.now() - startTime;
       this.metrics.recordLatency('updateMetadata', latency, false);
       this.metrics.recordError('updateMetadata', error instanceof Error ? error.name : 'Unknown');
-      this.logger.error('Failed to update YouTube metadata', context, error as Error);
+      this.logger.error('Failed to update YouTube metadata', context, error instanceof Error ? error : new Error(String(error)));
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
@@ -166,61 +173,69 @@ export class YouTubeAdapter {
     const context = createRequestContext('YouTubeAdapter', 'getVideo');
 
     validateNonEmptyString(videoId, 'videoId');
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    const startTime = Date.now();
     try {
-      const res = await withRetry(async () => {
-        const url = new URL(`${this.baseUrl}/videos`);
-        url.searchParams.append('id', videoId);
-        url.searchParams.append('part', parts.join(','));
-        const response = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Accept': 'application/json',
-          },
-          signal: controller.signal,
-        });
+      const data = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+        try {
+          const url = new URL(`${this.baseUrl}/videos`);
+          url.searchParams.append('id', videoId);
+          url.searchParams.append('part', parts.join(','));
+          const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Accept': 'application/json',
+            },
+            signal: controller.signal,
+          });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('retry-after') || undefined;
-            throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter);
+          if (!response.ok) {
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after') || undefined;
+              throw new ApiError(`YouTube rate limited: ${response.status}`, response.status, retryAfter);
+            }
+            throw new ApiError(`YouTube get video failed: ${response.status}`, response.status);
           }
-          throw new ApiError(`YouTube get video failed: ${response.status}`, response.status);
+
+          const rawData: unknown = await response.json();
+          const parsed = YouTubeVideoListResponseSchema.safeParse(rawData);
+          if (!parsed.success) {
+            throw new ApiError('Invalid response format from YouTube API', 500);
+          }
+          return parsed.data;
+        } finally {
+          clearTimeout(timeoutId);
         }
-        return response;
       }, { maxRetries: 3 });
 
-      const rawData = await res.json();
-      if (!isYouTubeVideoListResponse(rawData)) {
-        throw new ApiError('Invalid response format from YouTube API', 500);
-      }
-      const data = rawData;
       const firstItem = data.items[0];
       if (!firstItem) {
         throw new Error(`Video not found: ${videoId}`);
       }
+      const latency = Date.now() - startTime;
+      this.metrics.recordLatency('getVideo', latency, true);
       this.metrics.recordSuccess('getVideo');
       return firstItem;
     } catch (error) {
+      const latency = Date.now() - startTime;
+      this.metrics.recordLatency('getVideo', latency, false);
       this.metrics.recordError('getVideo', error instanceof Error ? error.name : 'Unknown');
-      this.logger.error('Failed to get YouTube video', context, error as Error);
+      this.logger.error('Failed to get YouTube video', context, error instanceof Error ? error : new Error(String(error)));
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
   /**
-   * MEDIUM FIX M7: Health check for YouTube API
+   * Health check for YouTube API.
+   * Differentiates between auth errors and service health issues.
    */
   async healthCheck(): Promise<HealthCheckResult> {
     const start = Date.now();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.short);
     try {
-      // Check quota / channels endpoint as health check
       const res = await fetch(`${this.baseUrl}/channels?part=id&mine=true`, {
         method: 'GET',
         headers: {
@@ -230,7 +245,16 @@ export class YouTubeAdapter {
         signal: controller.signal,
       });
       const latency = Date.now() - start;
-      const healthy = res.ok;  // Remove auth error codes
+
+      if (res.status === 401 || res.status === 403) {
+        return {
+          healthy: false,
+          latency,
+          error: `YouTube API authentication error: ${res.status}`,
+        };
+      }
+
+      const healthy = res.ok;
       return {
         healthy,
         latency,
@@ -240,7 +264,7 @@ export class YouTubeAdapter {
       return {
         healthy: false,
         latency: Date.now() - start,
-        error: error instanceof Error ? error["message"] : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     } finally {
       clearTimeout(timeoutId);

@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import { AbortController } from 'abort-controller';
 
-﻿
+import { validateUrl } from '../../packages/security/ssrf';
 
 /**
 * Link check result type
@@ -40,10 +40,16 @@ export async function checkLink(
 ): Promise<LinkStatus> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  // Validate URL
+  // Validate URL format
   try {
   new URL(url);
   } catch {
+  return 'error';
+  }
+
+  // P0-FIX: SSRF protection — block requests to internal/private networks
+  const ssrfCheck = validateUrl(url);
+  if (!ssrfCheck.allowed) {
   return 'error';
   }
 
@@ -72,11 +78,9 @@ async function checkWithMethod(
     redirect: opts.followRedirects ? 'follow' : 'manual',
     signal: controller.signal,
     headers: {
-    'User-Agent': opts.userAgent!,
+    'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent || 'SmartBeak-LinkChecker/1.0',
     },
   });
-
-  clearTimeout(timeoutId);
 
   if (res.status === 405 && method === 'HEAD') {
     // Method Not Allowed - signal to retry with GET
@@ -89,13 +93,14 @@ async function checkWithMethod(
 
   return 'error';
   } catch (error: unknown) {
-  clearTimeout(timeoutId);
-
   if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
     return 'timeout';
   }
 
   return 'error';
+  } finally {
+  // P2-FIX: clearTimeout in finally to prevent timer leaks
+  clearTimeout(timeoutId);
   }
 }
 
@@ -109,9 +114,12 @@ export async function checkLinks(
 ): Promise<Map<string, LinkStatus>> {
   const results = new Map<string, LinkStatus>();
 
+  // P2-FIX: Deduplicate URLs before processing
+  const uniqueUrls = [...new Set(urls)];
+
   // Process in batches to limit concurrency
-  for (let i = 0; i < urls.length; i += concurrency) {
-  const batch = urls.slice(i, i + concurrency);
+  for (let i = 0; i < uniqueUrls.length; i += concurrency) {
+  const batch = uniqueUrls.slice(i, i + concurrency);
   const batchResults = await Promise.all(
     batch.map(async (url) => ({
     url,

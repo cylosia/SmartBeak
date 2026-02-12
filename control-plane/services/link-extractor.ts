@@ -47,13 +47,38 @@ function parseHtmlLinks(html: string): Array<{ href: string; text: string }> {
   const links: Array<{ href: string; text: string }> = [];
   let pos = 0;
 
+  // P2-FIX: Lowercase once to avoid O(n^2) allocation
+  const lowerHtml = html.toLowerCase();
+
+  // P2-FIX: Skip <script> and <style> blocks before extracting links
+  const sanitized = lowerHtml;
+
   while (pos < html.length) {
-  // Find opening <a tag
-  const tagStart = html.toLowerCase().indexOf('<a', pos);
+  // P2-FIX: Skip <script> and <style> blocks
+  const scriptStart = sanitized.indexOf('<script', pos);
+  const styleStart = sanitized.indexOf('<style', pos);
+  const tagStart = sanitized.indexOf('<a', pos);
+
+  // If we'd hit a script/style before the next <a>, skip over it
+  if (scriptStart !== -1 && (tagStart === -1 || scriptStart < tagStart)) {
+    const scriptEnd = sanitized.indexOf('</script>', scriptStart);
+    if (scriptEnd !== -1) {
+    pos = scriptEnd + 9;
+    continue;
+    }
+  }
+  if (styleStart !== -1 && (tagStart === -1 || styleStart < tagStart)) {
+    const styleEnd = sanitized.indexOf('</style>', styleStart);
+    if (styleEnd !== -1) {
+    pos = styleEnd + 8;
+    continue;
+    }
+  }
+
   if (tagStart === -1) break;
 
-  // Find end of opening tag
-  const tagEnd = html.indexOf('>', tagStart);
+  // P2-FIX: Find end of opening tag respecting quoted attributes
+  const tagEnd = findTagEnd(html, tagStart);
   if (tagEnd === -1) break;
 
   // Extract href attribute
@@ -62,7 +87,7 @@ function parseHtmlLinks(html: string): Array<{ href: string; text: string }> {
 
   if (href) {
     // Find closing </a> tag
-    const closeStart = html.toLowerCase().indexOf('</a>', tagEnd);
+    const closeStart = sanitized.indexOf('</a>', tagEnd);
     if (closeStart !== -1) {
     const text = html.slice(tagEnd + 1, closeStart);
     // Strip any nested HTML tags from text
@@ -80,15 +105,39 @@ function parseHtmlLinks(html: string): Array<{ href: string; text: string }> {
 }
 
 /**
+* P2-FIX: Find the closing > of a tag, respecting quoted attribute values
+*/
+function findTagEnd(html: string, start: number): number {
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = start + 1; i < html.length; i++) {
+  const ch = html[i];
+  if (ch === "'" && !inDoubleQuote) inSingleQuote = !inSingleQuote;
+  else if (ch === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote;
+  else if (ch === '>' && !inSingleQuote && !inDoubleQuote) return i;
+  }
+  return -1;
+}
+
+/**
 * Extract attribute value from HTML tag
 * Handles single quotes, double quotes, and unquoted values
 */
 function extractAttribute(tag: string, attrName: string): string | null {
   const lowerTag = tag.toLowerCase();
-  const attrPos = lowerTag.indexOf(`${attrName}=`);
-  if (attrPos === -1) return null;
+  // P2-FIX: Handle optional whitespace around = (e.g., href = "...")
+  const attrRegex = new RegExp(`${attrName}\\s*=`, 'i');
+  const attrMatch = attrRegex.exec(lowerTag);
+  if (!attrMatch) return null;
+  const attrPos = attrMatch.index;
+  // Skip to after the = sign
+  const eqPos = lowerTag.indexOf('=', attrPos);
+  if (eqPos === -1) return null;
 
-  const valueStart = attrPos + attrName.length + 1;
+  let valueStart = eqPos + 1;
+  // Skip whitespace after =
+  while (valueStart < tag.length && (tag[valueStart] === ' ' || tag[valueStart] === '\t')) valueStart++;
   const quote = tag[valueStart];
 
   if (quote === "'" || quote === '"') {

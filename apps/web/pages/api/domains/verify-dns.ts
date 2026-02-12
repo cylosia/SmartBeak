@@ -1,18 +1,21 @@
-
-
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 import type { Pool } from 'pg';
 import { getPoolInstance } from '../../../lib/db';
 
-// import { verifyDns } from '@kernel/dns';
-const verifyDns = async (_domain: string, _token?: string): Promise<boolean> => {
-  // Placeholder implementation - DNS verification logic should be implemented here
-  return true;
-};
+// P0-1 FIX: Use real DNS verification instead of stub that always returns true
+import { verifyDns } from '@kernel/dns';
 
 import { rateLimit } from '../../../lib/rate-limit';
-import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
+import { requireAuth, validateMethod, sendError, AuthError } from '../../../lib/auth';
+import { isValidUUID } from '@security/input-validator';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('domains/verify-dns');
+
+// P2-10 FIX: RFC-compliant domain regex that accepts short domains (x.com),
+// subdomains (blog.example.com), and multi-level TLDs (example.co.uk)
+const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+const MAX_DOMAIN_LENGTH = 253;
 
 async function verifyDomainOwnership(
   userId: string,
@@ -48,19 +51,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return sendError(res, 400, 'Domain is required');
   }
 
-  // Validate domain format
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/;
-  if (!domainRegex.test(domain)) {
+  // P2-10 FIX: Use RFC-compliant domain validation
+  if (domain.length > MAX_DOMAIN_LENGTH || !DOMAIN_REGEX.test(domain)) {
     return sendError(res, 400, 'Invalid domain format');
   }
 
-  if (domainId) {
+  // P1-1 FIX: Validate token parameter before passing to DNS verifier
+  if (token !== undefined && (typeof token !== 'string' || token.length > 256)) {
+    return sendError(res, 400, 'Invalid verification token');
+  }
 
+  // P1-2 FIX: Validate domainId as UUID before SQL query
+  if (domainId !== undefined && !isValidUUID(domainId)) {
+    return sendError(res, 400, 'Invalid domain ID format');
+  }
+
+  if (domainId) {
     const pool = await getPoolInstance();
 
     const isAuthorized = await verifyDomainOwnership(auth.userId, domainId, pool);
     if (!isAuthorized) {
-
     return sendError(res, 404, 'Domain not found');
     }
   }
@@ -70,10 +80,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ verified: false, error: 'DNS verification failed' });
   }
 
+  logger.info('DNS verification succeeded', { domain, userId: auth.userId });
   res.json({ verified: true, domain });
   } catch (error: unknown) {
-  if (error instanceof Error && error.name === 'AuthError') return;
-  console.error('[domains/verify-dns] Error:', error);
+  // P1-3 FIX: Use instanceof for AuthError check instead of brittle name comparison
+  if (error instanceof AuthError) return;
+  logger.error('DNS verification failed', { error: error instanceof Error ? error.message : String(error) });
   sendError(res, 500, 'Failed to verify DNS');
   }
 }

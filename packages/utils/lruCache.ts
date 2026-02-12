@@ -19,6 +19,10 @@ export class LRUCache<K, V> {
   private readonly ttlMs: number | undefined;
 
   constructor(options: LRUCacheOptions) {
+  // P2-FIX: Validate maxSize > 0 to prevent unbounded growth
+  if (options.maxSize <= 0) {
+    throw new Error(`LRUCache maxSize must be > 0, got ${options.maxSize}`);
+  }
   this.cache = new Map();
   this.maxSize = options.maxSize;
   this.ttlMs = options.ttlMs;
@@ -53,7 +57,8 @@ export class LRUCache<K, V> {
   this.cache.delete(key);
   this.cache.set(key, updatedEntry);
 
-  return entry.value;
+  // P2-FIX: Return updatedEntry.value to avoid stale reference
+  return updatedEntry.value;
   }
 
   /**
@@ -86,8 +91,15 @@ export class LRUCache<K, V> {
   * @param key - Cache key
   * @returns True if exists and not expired
   */
+  // P2-FIX: Implement has() without side effects (don't call get() which mutates LRU order)
   has(key: K): boolean {
-  return this.get(key) !== undefined;
+  const entry = this.cache.get(key);
+  if (!entry) return false;
+  if (this.ttlMs && Date.now() - entry.timestamp > this.ttlMs) {
+    this.cache.delete(key);
+    return false;
+  }
+  return true;
   }
 
   /**
@@ -190,28 +202,46 @@ export class BoundedMap<K, V> extends Map<K, V> {
 * Create a bounded Array with size limit
 * Automatically evicts oldest items when limit is exceeded
 */
-export class BoundedArray<T> extends Array<T> {
+// P2-FIX: Use composition instead of inheritance to prevent bounds bypass via splice/index
+export class BoundedArray<T> {
+  private readonly items: T[];
   private readonly maxSize: number;
 
-  constructor(maxSize: number, ...items: T[]) {
-  super(...items.slice(0, maxSize));
+  constructor(maxSize: number, ...initialItems: T[]) {
   this.maxSize = maxSize;
+  this.items = initialItems.slice(0, maxSize);
   }
 
-  override push(...items: T[]): number {
-  for (const item of items) {
-    if (this.length >= this.maxSize) {
-    this.shift(); // Remove oldest
+  push(...newItems: T[]): number {
+  for (const item of newItems) {
+    if (this.items.length >= this.maxSize) {
+    this.items.shift();
     }
-    super.push(item);
+    this.items.push(item);
   }
-  return this.length;
+  return this.items.length;
   }
 
-  override unshift(...items: T[]): number {
-  // Only add items that fit within the limit
-  const available = this.maxSize - this.length;
-  const toAdd = items.slice(0, available);
-  return super.unshift(...toAdd);
+  unshift(...newItems: T[]): number {
+  const available = this.maxSize - this.items.length;
+  const toAdd = newItems.slice(0, available);
+  this.items.unshift(...toAdd);
+  return this.items.length;
+  }
+
+  get length(): number {
+  return this.items.length;
+  }
+
+  get(index: number): T | undefined {
+  return this.items[index];
+  }
+
+  toArray(): T[] {
+  return [...this.items];
+  }
+
+  [Symbol.iterator](): Iterator<T> {
+  return this.items[Symbol.iterator]();
   }
 }

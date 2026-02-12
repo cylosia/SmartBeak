@@ -1,16 +1,19 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { adminRateLimit } from '../middleware/rateLimiter';
+import { getLogger } from '@kernel/logger';
 import crypto from 'crypto';
+
+const logger = getLogger('adminAudit');
 
 /**
  * P0-FIX: Verify admin has membership in the specified organization.
  * Implements the previously TODO org membership verification to prevent IDOR.
  */
-async function verifyAdminOrgAccess(orgId: string): Promise<boolean> {
+async function verifyAdminOrgAccess(userId: string, orgId: string): Promise<boolean> {
   const db = await getDb();
   const membership = await db('org_memberships')
-    .where({ org_id: orgId })
+    .where({ user_id: userId, org_id: orgId })
     .whereIn('role', ['admin', 'owner'])
     .first();
   return !!membership;
@@ -196,18 +199,25 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
 
       // P0-FIX: IDOR Vulnerability - Require explicit org_id and verify admin has access
       // Previously: any admin could query any org's data by changing orgId parameter
-      // Now: org_id is required and we should verify admin membership (simplified check here)
+      // Now: org_id is required and we verify admin membership with user identity
       if (!orgId) {
         return reply.status(400).send({ error: 'orgId is required' });
       }
-      
+
       // Validate UUID format
       if (!/^[0-9a-f-]{36}$/i.test(orgId)) {
         return reply.status(400).send({ error: 'Invalid orgId format' });
       }
-      
-      // P0-FIX: Org membership verification to prevent IDOR
-      const hasAccess = await verifyAdminOrgAccess(orgId);
+
+      // P1-FIX: Require x-admin-id header to identify the admin user
+      // NOTE: x-admin-id should be replaced with JWT-derived identity in future
+      const adminId = req.headers['x-admin-id'] as string | undefined;
+      if (!adminId) {
+        return reply.status(400).send({ error: 'x-admin-id header is required' });
+      }
+
+      // P0-FIX: Org membership verification to prevent IDOR — now checks specific user
+      const hasAccess = await verifyAdminOrgAccess(adminId, orgId);
       if (!hasAccess) {
         return reply.status(403).send({ error: 'Access denied to this organization' });
       }
@@ -252,7 +262,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
         }
       };
     } catch (error) {
-      console.error('[admin/audit] Error:', error);
+      logger.error('Admin audit query failed', error instanceof Error ? error : new Error(String(error)));
       const errorResponse: { error: string; message?: string } = {
         error: 'Internal server error'
       };

@@ -31,10 +31,15 @@ export default function KeywordContentMap({ domainId }: KeywordContentMapProps) 
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
+export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   const id = params?.['id'];
   if (typeof id !== 'string') {
     return { notFound: true };
   }
+  // P1-13: TODO — Add domain authorization check here.
+  // The Clerk middleware authenticates the user, but does not verify
+  // that the user has access to this specific domain (IDOR risk).
+  // Use canAccessDomain(userId, id, db) from lib/auth.ts once
+  // a server-side DB pool is available in getServerSideProps.
   return { props: { domainId: id } };
 }

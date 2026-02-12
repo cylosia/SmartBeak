@@ -20,16 +20,26 @@ function validateState(state: string): boolean {
 function validateOAuthParams(clientId: string, redirectUri: string, state: string) {
   if (!/^[a-zA-Z0-9_-]+$/.test(clientId)) throw new Error('Invalid clientId');
   if (!redirectUri.startsWith('https://')) throw new Error('Invalid redirectUri');
+  // P1-FIX: Validate redirect URI is to an allowed domain
+  const allowedDomains = (process.env['OAUTH_ALLOWED_REDIRECT_DOMAINS'] || '').split(',').filter(Boolean);
+  if (allowedDomains.length > 0) {
+  const redirectHost = new URL(redirectUri).hostname;
+  if (!allowedDomains.some(d => redirectHost === d.trim() || redirectHost.endsWith('.' + d.trim()))) {
+    throw new Error('Redirect URI domain not in allowlist');
+  }
+  }
   // P1-FIX: Use strengthened state validation
   if (!validateState(state)) throw new Error('Invalid state');
 }
 
 export function getLinkedInAuthUrl(clientId: string, redirectUri: string, state: string) {
   validateOAuthParams(clientId, redirectUri, state);
+  // P0-FIX: Include state parameter for CSRF protection
   const params = new URLSearchParams({
   response_type: 'code',
   client_id: clientId,
   redirect_uri: redirectUri,
+  state: state,
   scope: LINKEDIN_OAUTH_SCOPES.join(' '),
   });
   return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;

@@ -44,11 +44,11 @@ export async function getMonetizationDecaySignals(
 
   if (contentVersionId) {
   const result = await db.query(
-    'select * from monetization_decay_signals where content_version_id = $1 order by period_start desc LIMIT $2',
+    'SELECT id, content_version_id, period_start, period_end, revenue_decline_pct, decay_flag, recommendations FROM monetization_decay_signals WHERE content_version_id = $1 ORDER BY period_start DESC LIMIT $2',
     [contentVersionId, safeLimit]
   );
   return result.rows;
   }
-  const result = await db.query('select * from monetization_decay_signals where decay_flag = true LIMIT $1', [safeLimit]);
+  const result = await db.query('SELECT id, content_version_id, period_start, period_end, revenue_decline_pct, decay_flag, recommendations FROM monetization_decay_signals WHERE decay_flag = TRUE LIMIT $1', [safeLimit]);
   return result.rows;
 }

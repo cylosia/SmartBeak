@@ -44,7 +44,8 @@ export function useRoiMetrics(domainId: string | undefined, period?: string) {
     queryKey: [ROI_QUERY_KEY, domainId, period],
     queryFn: async (): Promise<RoiMetrics> => {
       if (!domainId) throw new Error('Domain ID is required');
-      const params = period ? `?period=${period}` : '';
+      // P2-FIX: Encode period to prevent URL breakage from special characters
+      const params = period ? `?period=${encodeURIComponent(period)}` : '';
       const response = await api.get(`/domains/${domainId}/roi${params}`);
       return response.data as RoiMetrics;
     },

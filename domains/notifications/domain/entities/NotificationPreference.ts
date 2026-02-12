@@ -92,7 +92,7 @@ export class NotificationPreference {
     this["id"],
     this.userId,
     this.channel,
-    true,
+    false,
     this.frequency
   );
   }

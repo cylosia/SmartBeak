@@ -1,7 +1,7 @@
 export const MEDIA_LIMITS: Record<string, { mediaTargets: number }> = {
   free: { mediaTargets: 1 },
   pro: { mediaTargets: 5 },
-  agency: { mediaTargets: Infinity }
+  agency: { mediaTargets: Number.MAX_SAFE_INTEGER }
 };
 
 export function assertMediaLimit(plan: string, requested: number) {

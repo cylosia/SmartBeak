@@ -4,6 +4,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
 import { getPoolInstance } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
+import { getLogger } from '@kernel/logger';
 async function verifyDomainOwnership(userId: string, domainId: string, orgId: string): Promise<boolean> {
   const pool = await getPoolInstance();
   const { rows } = await pool.query(
@@ -37,7 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isAuthorized = await verifyDomainOwnership(auth.userId, domainId, auth["orgId"]);
   if (!isAuthorized) {
     // SECURITY: Return 404 (not 403) to prevent ID enumeration
-    console.warn(`[IDOR] User ${auth.userId} attempted to access diligence links for domain ${domainId} without ownership`);
+    // P1-FIX: Use structured logger instead of console.warn for PII safety
+    getLogger('diligence').warn('IDOR attempt on diligence links', { domainId });
     return res.status(404).json({ error: 'Domain not found' });
   }
 
@@ -45,6 +47,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const pool = await getPoolInstance();
   const client = await pool.connect();
   try {
+    // P1-FIX: Wrap both queries in a transaction for consistent statistics
+    await client.query('BEGIN');
+
     // Get internal link statistics
     const internalStats = await client.query(`
       SELECT COUNT(DISTINCT p["id"]) as total_pages,
@@ -74,20 +79,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     WHERE p.domain_id = $1 AND l.is_external = true
     `, [domainId]);
 
+    // P1-FIX: Get actual last crawl timestamp instead of fabricating it
+    const crawlTimestamp = await client.query(
+      `SELECT MAX(crawled_at) as last_crawled FROM pages WHERE domain_id = $1`,
+      [domainId]
+    );
+
+    await client.query('COMMIT');
+
     const linkSummary = {
     internal: {
-      orphan_pages: parseInt(internalStats.rows[0]?.orphan_pages || '0'),
-      broken_links: parseInt(internalStats.rows[0]?.broken_links || '0'),
-      total_pages: parseInt(internalStats.rows[0]?.total_pages || '0'),
+      orphan_pages: parseInt(internalStats.rows[0]?.orphan_pages || '0', 10),
+      broken_links: parseInt(internalStats.rows[0]?.broken_links || '0', 10),
+      total_pages: parseInt(internalStats.rows[0]?.total_pages || '0', 10),
       avg_links_per_page: Math.round(parseFloat(internalStats.rows[0]?.avg_links_per_page || '0'))
     },
     external: {
-      affiliate_links: parseInt(externalStats.rows[0]?.affiliate_links || '0'),
-      broken_links: parseInt(externalStats.rows[0]?.broken_links || '0'),
-      total_external: parseInt(externalStats.rows[0]?.total_external || '0'),
-      domains_linked: parseInt(externalStats.rows[0]?.domains_linked || '0')
+      affiliate_links: parseInt(externalStats.rows[0]?.affiliate_links || '0', 10),
+      broken_links: parseInt(externalStats.rows[0]?.broken_links || '0', 10),
+      total_external: parseInt(externalStats.rows[0]?.total_external || '0', 10),
+      domains_linked: parseInt(externalStats.rows[0]?.domains_linked || '0', 10)
     },
-    lastCrawled: new Date().toISOString()
+    lastCrawled: crawlTimestamp.rows[0]?.last_crawled || null
     };
 
     res.json(linkSummary);

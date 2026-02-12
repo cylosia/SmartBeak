@@ -1,7 +1,6 @@
 import { Fernet } from 'fernet';
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
-import { readFileSync } from 'fs';
 
 import { getLogger } from '../../packages/kernel/logger';
 
@@ -13,18 +12,28 @@ let fernet: Fernet | null = null;
 let initError: Error | null = null;
 
 /**
-* Initialize the encryption key lazily
+* Initialize the encryption key lazily.
+* P1-FIX: Read from environment variable instead of filesystem to prevent
+* CWD-dependent resolution, accidental git commits, and permission issues.
 */
 function initializeKey(): void {
   if (key !== null) return;
 
   try {
-  key = readFileSync('.master_key').toString().trim();
-  fernet = new Fernet(key);
+  const envKey = process.env['MASTER_ENCRYPTION_KEY'];
+  if (!envKey || envKey.trim().length === 0) {
+    throw new Error('MASTER_ENCRYPTION_KEY environment variable is not set');
+  }
+  const trimmedKey = envKey.trim();
+  if (trimmedKey.length < 32) {
+    throw new Error('MASTER_ENCRYPTION_KEY must be at least 32 characters');
+  }
+  key = trimmedKey;
+  fernet = new Fernet(trimmedKey);
   } catch (error) {
   initError = error instanceof Error ? error : new Error(String(error));
-  logger.error('Failed to read master key file', initError);
-  throw new Error('Failed to initialize API key vault: master key file not found');
+  logger.error('Failed to initialize encryption key', initError);
+  throw new Error('Failed to initialize API key vault: encryption key not configured');
   }
 }
 

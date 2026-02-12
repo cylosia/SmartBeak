@@ -1,8 +1,15 @@
 /**
+* P2-07: Use const array as single source of truth for role validation
+*/
+const VALID_ROLES = ['primary', 'secondary', 'supporting'] as const;
+type KeywordContentRole = typeof VALID_ROLES[number];
+
+/**
 * Database interface for keyword content mapper
+* P0-03: Fixed table name to content_keywords (matches migration)
 */
 export interface Database {
-  keyword_content_map: {
+  content_keywords: {
   insert: (data: {
     keyword_id: string;
     content_id: string;
@@ -17,16 +24,18 @@ export interface Database {
 export interface MapKeywordToContentInput {
   keyword_id: string;
   content_id: string;
-  role: 'primary' | 'secondary' | 'supporting';
+  // P2-06: Role type derived from const array
+  role: KeywordContentRole;
 }
 
 /**
 * Result of keyword to content mapping
+* P2-06: Role type narrowed to match input constraint
 */
 export interface MapKeywordToContentResult {
   keyword_id: string;
   content_id: string;
-  role: string;
+  role: KeywordContentRole;
 }
 
 /**
@@ -46,13 +55,13 @@ export async function mapKeywordToContent(
   if (!input.content_id || typeof input.content_id !== 'string') {
   throw new Error('content_id is required and must be a string');
   }
-  const validRoles = ['primary', 'secondary', 'supporting'];
-  if (!validRoles.includes(input.role)) {
-  throw new Error(`role must be one of: ${validRoles.join(', ')}`);
+  // P2-07: Runtime validation uses the same const array as the type
+  if (!(VALID_ROLES as readonly string[]).includes(input.role)) {
+  throw new Error(`role must be one of: ${VALID_ROLES.join(', ')}`);
   }
 
-  // Requires human action in UI; no automation here.
-  return db.keyword_content_map.insert({
+  // P0-03: Fixed table name to content_keywords (matches migration)
+  return db.content_keywords.insert({
   keyword_id: input.keyword_id,
   content_id: input.content_id,
   role: input.role

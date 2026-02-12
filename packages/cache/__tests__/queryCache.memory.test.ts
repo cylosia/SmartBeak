@@ -139,6 +139,15 @@ describe('QueryCache Memory Leak Prevention', () => {
   });
 
   describe('Periodic Cleanup', () => {
+    // TESTABILITY FIX P2-15: Enable fake timers so advanceTimersByTime actually works
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('should track versions cleaned during periodic cleanup', async () => {
       // Add some versions
       for (let i = 0; i < 100; i++) {

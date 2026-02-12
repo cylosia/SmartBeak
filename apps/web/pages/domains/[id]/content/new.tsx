@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { AppShell } from '../../../../components/AppShell';
 import { DomainTabs } from '../../../../components/DomainTabs';
 import { apiUrl } from '../../../../lib/api-client';
+import { fetchWithCsrf } from '../../../../lib/csrf';
 
 interface NewContentProps {
   domainId: string;
@@ -23,7 +24,8 @@ export default function NewContent({ domainId }: NewContentProps) {
     setSubmitting(true);
 
     try {
-      const res = await fetch(apiUrl('content'), {
+      // P1-FIX: Use fetchWithCsrf to include X-CSRF-Token header
+      const res = await fetchWithCsrf(apiUrl('content'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

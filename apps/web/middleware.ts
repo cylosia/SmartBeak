@@ -7,11 +7,12 @@ import type { NextRequest } from 'next/server';
 // security events (session invalidation, redirects, auth failures).
 // Edge Runtime cannot use Node.js-only loggers, so we use console with
 // structured JSON output that Vercel's log ingestion can parse.
+// P3-4 FIX: Include ...args in structured JSON output (were silently dropped)
 const logger = {
-  debug: (msg: string, ...args: unknown[]) => console.debug(JSON.stringify({ level: 'debug', service: 'middleware', msg, ts: Date.now() })),
-  info: (msg: string, ...args: unknown[]) => console.info(JSON.stringify({ level: 'info', service: 'middleware', msg, ts: Date.now() })),
-  warn: (msg: string, ...args: unknown[]) => console.warn(JSON.stringify({ level: 'warn', service: 'middleware', msg, ts: Date.now() })),
-  error: (msg: string, ...args: unknown[]) => console.error(JSON.stringify({ level: 'error', service: 'middleware', msg, ts: Date.now() })),
+  debug: (msg: string, ...args: unknown[]) => console.debug(JSON.stringify({ level: 'debug', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
+  info: (msg: string, ...args: unknown[]) => console.info(JSON.stringify({ level: 'info', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
+  warn: (msg: string, ...args: unknown[]) => console.warn(JSON.stringify({ level: 'warn', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
+  error: (msg: string, ...args: unknown[]) => console.error(JSON.stringify({ level: 'error', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
 };
 
 /**
@@ -127,11 +128,12 @@ function addSecurityHeaders(response: NextResponse): void {
   // Generate a fresh nonce for each request
   const nonce = generateCspNonce();
   response.headers.set('Content-Security-Policy', buildCspHeader(nonce));
-  // F2-FIX: Pass nonce via request header (server-side only), NOT response header.
-  // Exposing the nonce in the response (X-CSP-Nonce) leaks it to any intermediary
-  // (CDN, proxy, browser extension), defeating CSP. Request headers are only visible
-  // server-side in Next.js Server Components via headers().
-  response.headers.set('x-nonce', nonce);
+  // P1-7 FIX: Do NOT expose nonce in response headers. The CSP nonce must only be
+  // available server-side. In Next.js middleware, response headers are visible to
+  // CDNs, proxies, and browser extensions. The nonce is already embedded in the
+  // CSP header's script-src/style-src directives above, which is sufficient for
+  // the browser to validate inline scripts. Server Components that need the nonce
+  // should read it from the CSP header itself or use next/headers.
 }
 
 /**

@@ -72,17 +72,19 @@ export class LinkedInAdapter {
   lastName?: string | undefined;
   vanityName?: string | undefined;
   }> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+  // P1-FIX: Move AbortController + res.json() INSIDE withRetry callback
+  const data = await withRetry(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-  try {
-    const res = await withRetry(async () => {
+    try {
     const response = await fetch(
     `${this.baseUrl}/me?projection=(id,firstName,lastName,vanityName)`,
     {
     headers: {
         'Authorization': `Bearer ${this.accessToken}`,
         'X-Restli-Protocol-Version': '2.0.0',
+        'Accept': 'application/json',
     },
     signal: controller.signal,
     }
@@ -97,29 +99,27 @@ export class LinkedInAdapter {
     throw new Error(`LinkedIn API error: ${response.status} ${response.statusText}`);
     }
 
-    return response;
-    }, { maxRetries: 3 });
-
-    const rawData = await res.json();
+    const rawData = await response.json();
     if (!rawData || typeof rawData !== 'object' || !(rawData as { id?: unknown })["id"]) {
     throw new ApiError('Invalid response format from LinkedIn API', 500);
     }
-    const data = rawData as {
+    return rawData as {
     id: string;
     firstName?: { localized?: { en_US?: string } };
     lastName?: { localized?: { en_US?: string } };
     vanityName?: string;
     };
+    } finally {
+    clearTimeout(timeoutId);
+    }
+  }, { maxRetries: 3 });
 
-    return {
+  return {
     id: data["id"],
     firstName: data.firstName?.localized?.en_US,
     lastName: data.lastName?.localized?.en_US,
     vanityName: data.vanityName,
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  };
   }
 
   /**
@@ -170,11 +170,13 @@ export class LinkedInAdapter {
     },
   };
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
+  // P1-FIX: Move AbortController INSIDE withRetry + only retry on transport errors (not HTTP errors)
   try {
-    const res = await withRetry(async () => {
+    const { postId } = await withRetry(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
     const response = await fetch(`${this.baseUrl}/ugcPosts`, {
     method: 'POST',
     headers: {
@@ -192,14 +194,18 @@ export class LinkedInAdapter {
     throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
     }
 
-    throw new Error(`LinkedIn UGC post failed: ${response.status} ${response.statusText}`);
+    // P1-FIX: Don't retry non-idempotent POST on HTTP errors — only throw, don't retry
+    const err = new Error(`LinkedIn UGC post failed: ${response.status} ${response.statusText}`);
+    (err as Error & { noRetry: boolean }).noRetry = true;
+    throw err;
     }
 
-    return response;
-    }, { maxRetries: 3 });
-
-    const postId = res.headers.get('x-restli-id') || '';
-    const activityUrn = res.headers.get('x-linkedin-id') || '';
+    const postIdHeader = response.headers.get('x-restli-id') || '';
+    return { postId: postIdHeader };
+    } finally {
+    clearTimeout(timeoutId);
+    }
+    }, { maxRetries: 3, shouldRetry: (err) => !(err as Error & { noRetry?: boolean }).noRetry });
 
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('createUgcPost', latency, true);
@@ -216,8 +222,6 @@ export class LinkedInAdapter {
     this.metrics.recordError('createUgcPost', error instanceof Error ? error.name : 'Unknown');
     this.logger["error"]('Failed to create LinkedIn post', context, error as Error);
     throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
   }
 

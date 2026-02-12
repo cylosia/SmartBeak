@@ -50,28 +50,34 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return res.status(404).send({ error: 'Asset not found' });
     }
 
+    // AUDIT-FIX P1-07: Add org_id to secondary queries to prevent
+    // cross-tenant data leakage through asset_risk_factors and
+    // asset_recommendations tables.
     const [riskFactorsResult, recommendationsResult] = await Promise.all([
     pool.query(
-    `SELECT name, level, score
-    FROM asset_risk_factors
-    WHERE asset_id = $1`,
-    [assetId]
+    `SELECT arf.name, arf.level, arf.score
+    FROM asset_risk_factors arf
+    JOIN assets a ON a.id = arf.asset_id
+    WHERE arf.asset_id = $1 AND a.org_id = $2`,
+    [assetId, ctx["orgId"]]
     ),
     pool.query(
-    `SELECT recommendation as text
-    FROM asset_recommendations
-    WHERE asset_id = $1
-    ORDER BY priority DESC`,
-    [assetId]
+    `SELECT ar.recommendation as text
+    FROM asset_recommendations ar
+    JOIN assets a ON a.id = ar.asset_id
+    WHERE ar.asset_id = $1 AND a.org_id = $2
+    ORDER BY ar.priority DESC`,
+    [assetId, ctx["orgId"]]
     )
     ]);
 
     const riskFactors = riskFactorsResult.rows;
     const recommendations = recommendationsResult.rows;
 
-    // Calculate overall risk score
+    // AUDIT-FIX P1-09: Use Number() instead of parseFloat() to avoid
+    // passing non-string values and to properly handle null/undefined.
     const avgRiskScore = riskFactors.length > 0
-    ? riskFactors.reduce((sum, f) => sum + parseFloat(f.score || 0), 0) / riskFactors.length
+    ? riskFactors.reduce((sum, f) => sum + (Number(f.score) || 0), 0) / riskFactors.length
     : 50;
 
     const analysis = {
@@ -81,9 +87,10 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     name: assetData.name,
     },
     roi: {
-    monthly: parseFloat(assetData.monthly_revenue) || 0,
-    yearly: parseFloat(assetData.yearly_revenue) || 0,
-    percentage: parseFloat(assetData.roi_percentage) || 0,
+    // AUDIT-FIX P1-09: Use Number() for consistent numeric coercion
+    monthly: Number(assetData.monthly_revenue) || 0,
+    yearly: Number(assetData.yearly_revenue) || 0,
+    percentage: Number(assetData.roi_percentage) || 0,
     trend: assetData.trend,
     },
     risk: {
