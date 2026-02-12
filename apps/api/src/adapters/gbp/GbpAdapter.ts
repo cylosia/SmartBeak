@@ -5,10 +5,16 @@ import { getLogger } from '../../../packages/kernel/logger';
 // P1-HIGH FIX: Import database for refresh token storage
 import { db } from '../../db';
 
-// P0-CRITICAL FIX: AES-256-GCM encryption for refresh tokens
-const ENCRYPTION_KEY = process.env['GBP_TOKEN_ENCRYPTION_KEY'];
-if (!ENCRYPTION_KEY) {
-  throw new Error('GBP_TOKEN_ENCRYPTION_KEY environment variable is required');
+// Lazy-loaded encryption key (deferred from module-level to avoid crashing on import)
+let _ENCRYPTION_KEY: string | undefined;
+function getEncryptionKey(): string {
+  if (!_ENCRYPTION_KEY) {
+    _ENCRYPTION_KEY = process.env['GBP_TOKEN_ENCRYPTION_KEY'];
+    if (!_ENCRYPTION_KEY) {
+      throw new Error('GBP_TOKEN_ENCRYPTION_KEY environment variable is required');
+    }
+  }
+  return _ENCRYPTION_KEY;
 }
 
 /**
@@ -20,7 +26,7 @@ if (!ENCRYPTION_KEY) {
 function encryptToken(token: string): string {
   try {
     const iv = randomBytes(16);
-    const cipher = createCipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY!, 'hex'), iv);
+    const cipher = createCipheriv('aes-256-gcm', Buffer.from(getEncryptionKey(), 'hex'), iv);
     let encrypted = cipher.update(token, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     const authTag = cipher.getAuthTag();
@@ -48,7 +54,7 @@ function decryptToken(encryptedData: string): string {
     }
     const decipher = createDecipheriv(
       'aes-256-gcm',
-      Buffer.from(ENCRYPTION_KEY!, 'hex'),
+      Buffer.from(getEncryptionKey(), 'hex'),
       Buffer.from(ivHex, 'hex')
     );
     decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
@@ -59,7 +65,6 @@ function decryptToken(encryptedData: string): string {
     throw new Error(`Failed to decrypt token: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
-﻿
 
 const logger = getLogger('GbpAdapter');
 
@@ -465,7 +470,9 @@ export class GbpAdapter {
   const clientSecret = credentials?.clientSecret || process.env['GBP_CLIENT_SECRET'] || '';
 
   this.auth = new google.auth.OAuth2(
-    credentials?.redirectUri || process.env['GBP_REDIRECT_URI'] || 'http://localhost:3000/api/auth/gbp/callback'
+    clientId,
+    clientSecret,
+    credentials?.redirectUri || process.env['GBP_REDIRECT_URI'] || 'https://localhost:3000/api/auth/gbp/callback'
   );
 
   if (credentials?.refreshToken) {
@@ -493,6 +500,7 @@ export class GbpAdapter {
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/business.manage'],
     prompt: 'consent',
+    ...(state ? { state } : {}),
   });
   }
 
@@ -666,9 +674,14 @@ export class GbpAdapter {
 
     const result = response.data;
 
+    const validStates = ['LIVE', 'REJECTED', 'PENDING_REVIEW'] as const;
+    const state = validStates.includes(result.state as typeof validStates[number])
+    ? (result.state as typeof validStates[number])
+    : 'PENDING_REVIEW';
+
     return {
     name: result.name || '',
-    state: (result.state as 'LIVE' | 'REJECTED' | 'PENDING_REVIEW') || 'PENDING_REVIEW',
+    state,
     searchUrl: result.searchUrl,
     };
   } catch (error) {
@@ -791,14 +804,21 @@ export class GbpAdapter {
 
     const mybusiness = getMyBusinessV4Client(this.auth);
 
-    // P1-FIX: Validate updates before casting
     if (typeof updates !== 'object' || updates === null) {
       throw new Error('Updates must be a valid object');
     }
+    // Filter out undefined values to avoid clearing fields unintentionally
+    const definedKeys = Object.keys(updates).filter(
+      (k) => updates[k as keyof typeof updates] !== undefined
+    );
+    const requestBody: Record<string, unknown> = {};
+    for (const key of definedKeys) {
+      requestBody[key] = updates[key as keyof typeof updates];
+    }
     const response = await mybusiness.accounts.locations.localPosts.patch({
     name: postName,
-    updateMask: Object.keys(updates).join(','),
-    requestBody: (updates as unknown) as Record<string, unknown>,
+    updateMask: definedKeys.join(','),
+    requestBody,
     });
 
     return {
@@ -918,7 +938,14 @@ export class GbpAdapter {
     const startTime = new Date();
     startTime.setDate(startTime.getDate() - days);
 
-    const accountName = (locationName || '').split('/locations/')[0] || '';
+    // Extract account name from full location path (e.g., "accounts/123/locations/456")
+    // If locationName is just "locations/456", we need to retrieve the account first
+    const parts = (locationName || '').split('/locations/');
+    let accountName = parts[0] || '';
+    if (!accountName || accountName === locationName) {
+      const accounts = await this.listAccounts();
+      accountName = accounts[0]?.name || '';
+    }
 
     const response = await mybusiness.accounts.locations.reportInsights({
     name: accountName,
