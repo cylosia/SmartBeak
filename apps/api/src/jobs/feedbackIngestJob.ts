@@ -53,8 +53,24 @@ export interface IngestResult {
 /**
 * Feedback Ingestion Job
 * Processes feedback data across multiple time windows
+*
+* P0-3 FIX: Guard against scheduling this job while fetchFeedbackMetrics
+* is not implemented. Previously, the stub threw inside the processing loop,
+* causing every entity to fail, burning 3 retries, and flooding error logs.
 */
 export async function feedbackIngestJob(payload: unknown): Promise<IngestResult> {
+  // P0-3 FIX: Fail fast if the metrics API is not yet implemented.
+  // This prevents the job from burning through retries on dead code.
+  try {
+    await fetchFeedbackMetrics('__probe__', 7, 'api', '00000000-0000-0000-0000-000000000000');
+  } catch (error) {
+    if (error instanceof NotImplementedError) {
+      logger.error('feedbackIngestJob called but fetchFeedbackMetrics is not implemented. Remove this job from the scheduler.');
+      throw error; // Non-retryable -- do not retry NotImplementedError
+    }
+    // Probe failed for other reasons (network etc.) -- continue with actual processing
+  }
+
   // Validate input
   let validatedInput: FeedbackIngestInput;
   try {
@@ -203,23 +219,35 @@ async function processEntityWindow(
   }
 }
 
+/**
+ * P0-3 FIX: fetchFeedbackMetrics previously threw unconditionally
+ * ("Feedback metrics API integration not implemented"), making the entire
+ * feedbackIngestJob dead code that burned through retries and flooded logs.
+ *
+ * This function now fails fast with a clear NotImplementedError so callers
+ * can detect and avoid scheduling the job until integration is complete.
+ */
 async function fetchFeedbackMetrics(
-  entityId: string,
-  window: WindowSize,
-  source: string,
-  orgId: string
+  _entityId: string,
+  _window: WindowSize,
+  _source: string,
+  _orgId: string
 ): Promise<FeedbackWindow['metrics']> {
-  // Calculate date range for window
-  const endDate = new Date();
-  const startDate = new Date(endDate.getTime() - window * TIME.DAY);
+  // TODO: Implement feedback metrics API integration.
+  // Until this is implemented, feedbackIngestJob must NOT be scheduled.
+  // The job entry point guards against this with a pre-check.
+  throw new NotImplementedError('Feedback metrics API integration not implemented');
+}
 
-  logger.debug('Fetching feedback metrics', {
-  dateRange: { start: startDate, end: endDate },
-  });
-
-  // Feedback metrics API integration not yet implemented
-  // This is a placeholder that will be replaced with actual API call
-  throw new Error('Feedback metrics API integration not implemented');
+/**
+ * P0-3 FIX: Dedicated error class so callers can distinguish "not implemented"
+ * from transient failures and avoid retrying.
+ */
+class NotImplementedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotImplementedError';
+  }
 }
 
 /**
