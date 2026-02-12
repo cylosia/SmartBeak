@@ -76,9 +76,8 @@ function getClientIp(req: {
   headers: Record<string, string | string[]>;
   socket?: { remoteAddress?: string };
   ip?: string;
-  connection?: { remoteAddress?: string };
 }): string {
-  const requestIp = req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress;
+  const requestIp = req.ip || req.socket?.remoteAddress;
   
   // Parse X-Forwarded-For header only if request comes from a trusted proxy
   const forwardedFor = req.headers['x-forwarded-for'];

@@ -69,7 +69,7 @@ export async function requestLoggerMiddleware(
   const requestContext = createRequestContext({
   userId: auth?.userId,
   orgId: auth?.["orgId"],
-  path: req.routerPath || req.url,
+  path: req.routeOptions.url || req.url,
   method: req.method,
   });
 
@@ -106,7 +106,7 @@ export async function requestLoggerMiddleware(
     timestamp: new Date().toISOString(),
     method: req.method,
     url: req.url,
-    path: req.routerPath || req.url,
+    path: req.routeOptions.url || req.url,
     query: sanitizedQuery,
     headers: {
     'user-agent': safeHeaders['user-agent'],
@@ -125,14 +125,14 @@ export async function requestLoggerMiddleware(
     logger["error"]('API request error', undefined, {
     statusCode: res.statusCode,
     method: req.method,
-    path: req.routerPath || req.url,
+    path: req.routeOptions.url || req.url,
     query: sanitizedQuery,
     });
     } else {
     logger.info('API request', {
     statusCode: res.statusCode,
     method: req.method,
-    path: req.routerPath || req.url,
+    path: req.routeOptions.url || req.url,
     });
     }
 
@@ -142,7 +142,7 @@ export async function requestLoggerMiddleware(
   const onClose = () => {
     logger.warn('Request connection closed prematurely', {
       method: req.method,
-      path: req.routerPath || req.url,
+      path: req.routeOptions.url || req.url,
       requestId,
     });
     cleanup();
@@ -219,7 +219,7 @@ export function logRequest(
 
   logger.info(action, {
   method: req.method,
-  path: req.routerPath,
+  path: req.routeOptions.url,
   ...safeMetadata,
   });
 }
