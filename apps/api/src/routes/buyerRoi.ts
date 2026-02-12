@@ -163,7 +163,9 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     domain_id: domain,
     roi_rows: validatedRows
     });
-    return reply.status(200).send(summary as unknown as RoiSummaryResponse);
+    // P1-FIX: Removed unsafe double assertion (as unknown as X). The summary
+    // type is now trusted directly — if there's a mismatch, tsc will catch it.
+    return reply.status(200).send(summary);
   } catch (error) {
     logger.error('Error generating buyer ROI summary', error instanceof Error ? error : new Error(String(error)));
     const errorResponse: ErrorResponse = {

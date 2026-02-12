@@ -126,9 +126,9 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
     return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
   }
 
-  // P1-FIX: Cache Poisoning - Use private cache control for sensitive SEO reports
-  reply.header('Cache-Control', `private, max-age=${CACHE_MAX_AGE}`);
-  reply.header('Expires', new Date(Date.now() + CACHE_MAX_AGE * 1000).toUTCString());
+  // P1-FIX (AUDIT): Moved Cache-Control headers inside the success path.
+  // Previously set before try/catch, meaning error responses (400, 403, 404, 500)
+  // were cached by the browser for 1 hour.
 
   try {
     // Validate query parameters
@@ -182,13 +182,18 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
     ip: req.ip || 'unknown',
     });
 
+    // P1-FIX (AUDIT): Set cache headers only on successful responses
+    reply.header('Cache-Control', `private, max-age=${CACHE_MAX_AGE}`);
+    reply.header('Expires', new Date(Date.now() + CACHE_MAX_AGE * 1000).toUTCString());
+
     return report;
   } catch (error) {
     logger.error('Error generating buyer SEO report', error instanceof Error ? error : new Error(String(error)));
     const errorResponse: ErrorResponse = {
     error: 'Internal server error'
     };
-    if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+    // P1-FIX: Standardize dev error exposure with double-guard pattern
+    if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
     errorResponse["message"] = error["message"];
     }
     return reply.status(500).send(errorResponse);
