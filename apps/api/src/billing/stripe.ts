@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import crypto from 'crypto';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * MEDIUM FIX M1, M2, M3: Enhanced Stripe integration

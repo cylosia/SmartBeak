@@ -88,6 +88,7 @@ export const DEFAULT_TIMEOUTS = {
   medium: 15000,    // 15 seconds - normal operations
   long: 30000,      // 30 seconds - complex operations
   extended: 60000,  // 60 seconds - uploads/downloads
+  max: 300000,      // 5 minutes - maximum allowed timeout
 } as const;
 
 // ============================================================================

@@ -1,4 +1,4 @@
-import { getLogger } from '../../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Email block types

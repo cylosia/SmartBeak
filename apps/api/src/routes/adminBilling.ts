@@ -5,8 +5,8 @@ import { z } from 'zod';
 
 import { getDb } from '../db';
 import { adminRateLimit } from '../middleware/rateLimiter';
-import { sanitizeErrorMessage } from '../../../../packages/security/logger';
-import { isValidUUID } from '../../../../packages/security/input-validator';
+import { sanitizeErrorMessage } from '@security/logger';
+import { isValidUUID } from '@security/input-validator';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('AdminBilling');

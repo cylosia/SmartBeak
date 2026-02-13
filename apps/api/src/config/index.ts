@@ -6,6 +6,11 @@
  */
 
 import { getLogger } from '@kernel/logger';
+import {
+  DEFAULT_RETRY_CONFIG,
+  DEFAULT_CIRCUIT_BREAKER_CONFIG,
+  DEFAULT_TIMEOUTS,
+} from '../utils/config';
 
 const logger = getLogger('BillingConfig');
 
@@ -21,7 +26,12 @@ export {
   DEFAULT_RETRY_CONFIG,
   DEFAULT_CIRCUIT_BREAKER_CONFIG,
   RATE_LIMIT_CONFIG,
-  
+
+  // Aliased re-exports (single source of truth from utils/config)
+  DEFAULT_RETRY_CONFIG as retryConfig,
+  DEFAULT_CIRCUIT_BREAKER_CONFIG as circuitBreakerConfig,
+  DEFAULT_TIMEOUTS as timeoutConfig,
+
   // Type exports
   type ServiceName,
   type ApiBaseUrls,
@@ -30,34 +40,12 @@ export {
   type CircuitBreakerConfig,
   type RateLimitConfig,
   type QueryParams,
-  
+
   // Utility functions
   buildApiUrl,
   getMailchimpBaseUrl,
   getFacebookGraphUrl,
 } from '../utils/config';
-
-// ============================================================================
-// Retry Configuration
-// ============================================================================
-
-/**
- * Retry configuration for HTTP requests and operations
- */
-export const retryConfig = {
-  /** Maximum number of retry attempts */
-  maxRetries: 3,
-  /** Base delay between retries in milliseconds */
-  baseDelayMs: 1000,
-  /** Maximum delay between retries in milliseconds */
-  maxDelayMs: 30000,
-  /** Minimum delay between retries in milliseconds */
-  minDelayMs: 100,
-  /** HTTP status codes that should trigger a retry */
-  retryableStatuses: [408, 429, 500, 502, 503, 504] as const,
-  /** Exponential backoff multiplier */
-  backoffMultiplier: 2,
-} as const;
 
 // ============================================================================
 // Pagination Configuration
@@ -75,42 +63,6 @@ export const paginationConfig = {
   adminDefaultLimit: 50,
   /** Maximum safe offset for offset-based pagination */
   maxSafeOffset: 10000,
-} as const;
-
-// ============================================================================
-// Circuit Breaker Configuration
-// ============================================================================
-
-/**
- * Circuit breaker configuration for fault tolerance
- */
-export const circuitBreakerConfig = {
-  /** Number of failures before opening the circuit */
-  failureThreshold: 5,
-  /** Time in milliseconds before attempting to reset the circuit */
-  resetTimeoutMs: 30000,
-  /** Maximum attempts in half-open state */
-  halfOpenMaxAttempts: 3,
-} as const;
-
-// ============================================================================
-// Timeout Configuration
-// ============================================================================
-
-/**
- * Timeout configuration for various operation types (in milliseconds)
- */
-export const timeoutConfig = {
-  /** Short timeout for health checks (5 seconds) */
-  short: 5000,
-  /** Medium timeout for normal operations (15 seconds) */
-  medium: 15000,
-  /** Long timeout for complex operations (30 seconds) */
-  long: 30000,
-  /** Extended timeout for uploads/downloads (60 seconds) */
-  extended: 60000,
-  /** Maximum allowed timeout (5 minutes) */
-  max: 300000,
 } as const;
 
 // ============================================================================
@@ -351,10 +303,10 @@ export const abuseGuardConfig = {
 // ============================================================================
 
 export default {
-  retryConfig,
+  retryConfig: DEFAULT_RETRY_CONFIG,
   paginationConfig,
-  circuitBreakerConfig,
-  timeoutConfig,
+  circuitBreakerConfig: DEFAULT_CIRCUIT_BREAKER_CONFIG,
+  timeoutConfig: DEFAULT_TIMEOUTS,
   cacheConfig,
   contentIdeaConfig,
   jobConfig,

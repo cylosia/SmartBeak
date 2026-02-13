@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AuthContext } from '../types/fastify';
 import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('PublishRetryService');
 

@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { FastifyInstance } from 'fastify';
-import { requireAuthFastify } from '../../../../packages/security/auth';
+import { requireAuthFastify } from '@security/auth';
 import crypto from 'crypto';
 import { Pool } from 'pg';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 
 const logger = getLogger('PublishService');

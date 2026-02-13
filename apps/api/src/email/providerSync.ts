@@ -1,5 +1,5 @@
 import { EmailSubscriber } from './subscriberTypes';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * MEDIUM FIX M1, M2, M3, M4: Enhanced provider sync

@@ -7,7 +7,7 @@ import { AuthContext } from '../types/fastify';
 import { buildHeatmap } from '../portfolio/heatmap';
 import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('PortfolioHeatmapService');
 

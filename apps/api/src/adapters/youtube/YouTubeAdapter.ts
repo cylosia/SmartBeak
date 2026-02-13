@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { API_BASE_URLS, API_VERSIONS, DEFAULT_TIMEOUTS } from '@config';
 
 import { withRetry } from '../../utils/retry';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
 import type { CanaryAdapter } from '../../canaries/types';
 
