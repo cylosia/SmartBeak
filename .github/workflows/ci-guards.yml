@@ -86,12 +86,16 @@ jobs:
       - run: npm run test:integration
 
   test-extended:
+  migration-check:
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smartbeak_migration_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -124,3 +128,64 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build:web
       - run: npm run test:visual
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Run migrations up
+        env:
+          CONTROL_PLANE_DB: postgresql://postgres:postgres@localhost:5432/smartbeak_migration_test
+        run: npm run migrate
+
+      - name: Verify migrations applied
+        env:
+          CONTROL_PLANE_DB: postgresql://postgres:postgres@localhost:5432/smartbeak_migration_test
+        run: npm run migrate:status
+
+      - name: Run migrations rollback
+        env:
+          CONTROL_PLANE_DB: postgresql://postgres:postgres@localhost:5432/smartbeak_migration_test
+        run: npm run migrate:rollback -- --all
+
+      - name: Run migrations up again (idempotency check)
+        env:
+          CONTROL_PLANE_DB: postgresql://postgres:postgres@localhost:5432/smartbeak_migration_test
+        run: npm run migrate
+
+  openapi-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Export OpenAPI spec
+        run: |
+          node --import tsx/esm -e "
+            import { openapi } from './control-plane/api/openapi.ts';
+            import { writeFileSync } from 'node:fs';
+            writeFileSync('openapi-current.json', JSON.stringify(openapi, null, 2));
+          "
+
+      - name: Validate OpenAPI spec
+        run: npx --yes @redocly/cli lint openapi-current.json --skip-rule no-empty-servers
+
+      - name: Check for breaking changes
+        if: github.event_name == 'pull_request'
+        run: |
+          # Extract base branch spec
+          git show origin/${{ github.base_ref }}:control-plane/api/openapi.ts > /tmp/base-openapi.ts 2>/dev/null || exit 0
+
+          node --import tsx/esm -e "
+            const mod = await import('/tmp/base-openapi.ts');
+            import { writeFileSync } from 'node:fs';
+            writeFileSync('openapi-base.json', JSON.stringify(mod.openapi, null, 2));
+          " 2>/dev/null || exit 0
+
+          if [ -f openapi-base.json ]; then
+            npx --yes oasdiff breaking openapi-base.json openapi-current.json
+          fi

@@ -9,6 +9,9 @@ const nextConfig = {
   // Enable standalone output for Docker containerization
   output: 'standalone',
 
+  // Enable source maps in production browser builds for debugging
+  productionBrowserSourceMaps: true,
+
   // Security: Disable X-Powered-By header
   poweredByHeader: false,
 
@@ -40,6 +43,7 @@ const nextConfig = {
     return [
       {
         source: '/:path*',
+        // Values must match packages/config/headers.ts (canonical source of truth)
         headers: [
           {
             key: 'X-Frame-Options',
@@ -55,19 +59,28 @@ const nextConfig = {
           },
           {
             key: 'X-XSS-Protection',
-            value: '1; mode=block',
+            value: '0',
           },
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
           },
-          // F1-FIX: CSP header REMOVED from next.config.js
           // CSP is exclusively set in middleware.ts with per-request nonce generation.
-          // Having CSP in both locations caused the static CSP here to override
-          // the nonce-based CSP from middleware, breaking inline scripts or defeating CSP.
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(), payment=(self)',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(self), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
+          },
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'off',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'same-origin',
           },
         ],
       },

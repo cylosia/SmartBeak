@@ -35,6 +35,11 @@ export interface RateLimitResult {
 const DEFAULT_KEY_PREFIX = 'ratelimit';
 const logger = getLogger('rateLimiterRedis');
 
+// ============================================================================
+// In-Memory Fallback for Redis Unavailability
+// ============================================================================
+
+interface FallbackEntry {
 // ---------------------------------------------------------------------------
 // In-memory fallback for Redis outages (CRIT-7)
 // ---------------------------------------------------------------------------
@@ -44,6 +49,14 @@ interface InMemoryRateLimitEntry {
   windowStart: number;
 }
 
+const fallbackCounters = new LRUCache<string, FallbackEntry>({
+  max: 10000,
+  ttl: 300000, // 5 min safety TTL
+});
+
+/**
+ * In-memory rate limit check used when Redis is unavailable.
+ * Maintains rate enforcement (fail-closed) while surviving Redis outages.
 const FALLBACK_CACHE_MAX = 10_000;
 const FALLBACK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -82,6 +95,13 @@ function checkRateLimitInMemory(
   key: string,
   config: RateLimitConfig
 ): RateLimitResult {
+  const now = Date.now();
+  const prefix = config.keyPrefix || DEFAULT_KEY_PREFIX;
+  const fullKey = `${prefix}:${key}`;
+  const entry = fallbackCounters.get(fullKey);
+
+  if (!entry || (now - entry.windowStart) > config.windowMs) {
+    fallbackCounters.set(fullKey, { count: 1, windowStart: now });
   const prefix = config.keyPrefix || DEFAULT_KEY_PREFIX;
   const cacheKey = `${prefix}:${key}`;
   const now = Date.now();
@@ -100,6 +120,10 @@ function checkRateLimitInMemory(
 
   entry.count++;
   const allowed = entry.count <= config.maxRequests;
+  return {
+    allowed,
+    remaining: Math.max(0, config.maxRequests - entry.count),
+    resetTime: entry.windowStart + config.windowMs,
   const remaining = Math.max(0, config.maxRequests - entry.count);
   const resetTime = entry.windowStart + config.windowMs;
 
@@ -147,6 +171,19 @@ export async function checkRateLimit(
   key: string,
   config: RateLimitConfig
 ): Promise<RateLimitResult> {
+  let redis;
+  try {
+    redis = await getRedis();
+  } catch (redisError) {
+    // Redis unavailable - fall back to in-memory rate limiting
+    logger.warn(`[rateLimiter] Redis unavailable, using in-memory fallback: ${redisError instanceof Error ? redisError.message : String(redisError)}`);
+    return checkRateLimitInMemory(key, config);
+  }
+
+  const prefix = config.keyPrefix || DEFAULT_KEY_PREFIX;
+  const redisKey = `${prefix}:${key}`;
+  const now = Date.now();
+  const windowStart = now - config.windowMs;
   // CRIT-7: If circuit breaker is open, go directly to in-memory fallback
   // without wasting time on a Redis connection that will likely fail.
   if (cbIsOpen()) {
@@ -170,6 +207,25 @@ export async function checkRateLimit(
     const pipeline = redis.pipeline();
     pipeline.zremrangebyscore(redisKey, 0, windowStart);
     pipeline.zcard(redisKey);
+
+  try {
+    // Step 1: Clean old entries and get current count BEFORE adding
+    const pipeline = redis.pipeline();
+    pipeline.zremrangebyscore(redisKey, 0, windowStart);
+    pipeline.zcard(redisKey);
+
+    const results = await pipeline.exec();
+
+    if (!results) {
+      // AUDIT-FIX P0-01: Fail CLOSED on Redis error - deny request
+      logger.error('[rateLimiter] Redis pipeline failed - failing closed');
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime: now + config.windowMs,
+        limit: config.maxRequests,
+      };
+    }
 
     const results = await pipeline.exec();
 
@@ -199,6 +255,9 @@ export async function checkRateLimit(
       resetTime,
       limit: config.maxRequests,
     };
+  } catch (redisError) {
+    // Redis command error - fall back to in-memory rate limiting
+    logger.warn(`[rateLimiter] Redis command error, using in-memory fallback: ${redisError instanceof Error ? redisError.message : String(redisError)}`);
   } catch (error) {
     // CRIT-7: Redis unavailable -- record failure for circuit breaker and
     // fall back to per-instance in-memory rate limiting. This is degraded
@@ -358,13 +417,14 @@ export function rateLimitMiddleware<T>(
 
       next();
     } catch (error) {
-      // Last resort: if even the in-memory fallback fails (should not happen),
-      // allow the request rather than returning a 500.
-      logger.error('[rateLimiter] Unexpected error in rate limit middleware - allowing request', {
+      // SECURITY FIX: Fail closed — deny request when rate limiter errors unexpectedly.
+      // Previously called next() (fail-open), which allowed unlimited traffic on failure.
+      logger.error('[rateLimiter] Unexpected error in rate limit middleware - failing closed (denying request)', {
         error: error instanceof Error ? error.message : String(error),
       });
       emitCounter('rate_limiter_middleware_error', 1);
-      next();
+      res.status(503);
+      res.json({ error: 'Service temporarily unavailable' });
     }
   };
 }

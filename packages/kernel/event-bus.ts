@@ -1,4 +1,4 @@
-import { DomainEventEnvelope } from '../types/domain-event';
+import { DomainEventEnvelope } from '@types/domain-event';
 import { trace, context as otelContext, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 
 import { CircuitBreaker } from './retry';

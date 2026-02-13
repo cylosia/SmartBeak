@@ -7,8 +7,10 @@ import { z } from 'zod';
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
 import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 
 const logger = getLogger('domain-details');
+const handleError = createRouteErrorHandler({ logger });
 
 const DomainIdParamSchema = z.object({
   id: z.string().uuid()
@@ -69,8 +71,7 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     },
     };
   } catch (error) {
-    logger.error('Failed to fetch domain details', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Failed to fetch domain details' });
+    return handleError(res, error, 'fetch domain details');
   }
   });
 }
