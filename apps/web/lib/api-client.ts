@@ -194,28 +194,33 @@ export function createApiClient(config: ApiClientConfig) {
   };
 }
 
+// API version prefix — change this when migrating to a new API version
+const API_VERSION = 'v1';
+
+const apiBaseUrl = (typeof process !== 'undefined' && process.env['NEXT_PUBLIC_API_URL']
+  ? process.env['NEXT_PUBLIC_API_URL']
+  : '/api'
+).replace(/\/$/, '');
+
 // Default API client instance
 export const apiClient = createApiClient({
-  baseUrl: typeof process !== 'undefined' && process.env['NEXT_PUBLIC_API_URL'] ? process.env['NEXT_PUBLIC_API_URL'] : '/api',
+  baseUrl: `${apiBaseUrl}/${API_VERSION}`,
   timeoutMs: DEFAULT_TIMEOUT_MS,
   retries: 3,
 });
 
 // Auth API client with longer timeout for auth operations
 export const authApiClient = createApiClient({
-  baseUrl: typeof process !== 'undefined' && process.env['NEXT_PUBLIC_API_URL'] ? process.env['NEXT_PUBLIC_API_URL'] : '/api',
+  baseUrl: `${apiBaseUrl}/${API_VERSION}`,
   timeoutMs: 15000, // 15 seconds for auth
   retries: 2,
 });
 
 // Exported helpers for backward compatibility
 export const apiUrl = (path: string): string => {
-  const base = typeof process !== 'undefined' && process.env['NEXT_PUBLIC_API_URL']
-    ? process.env['NEXT_PUBLIC_API_URL']
-    : '/api';
   // C5-FIX: Ensure path separator between base URL and path
   const normalizedPath = path.replace(/^\//, '');
-  return `${base.replace(/\/$/, '')}/${normalizedPath}`;
+  return `${apiBaseUrl}/${API_VERSION}/${normalizedPath}`;
 };
 
 export const authFetch = async (

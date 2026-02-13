@@ -115,6 +115,36 @@ await app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
 });
 
+// API Versioning: Backward compatibility for unversioned paths.
+// Redirects (or rewrites) requests like GET /domains to /v1/domains.
+// Health check routes are excluded — they are infrastructure, not API contract.
+// Control via API_LEGACY_PATH_MODE env var: 'redirect' (default) | 'rewrite' | 'off'
+const LEGACY_PATH_MODE = process.env['API_LEGACY_PATH_MODE'] || 'redirect';
+
+if (LEGACY_PATH_MODE !== 'off') {
+  app.addHook('onRequest', async (req, reply) => {
+    const pathname = req.url?.split('?')[0] ?? '';
+
+    // Already versioned — pass through
+    if (pathname.startsWith('/v1/') || pathname === '/v1') return;
+
+    // Health check routes stay at root — pass through
+    if (pathname === '/health' || pathname.startsWith('/health/')) return;
+
+    // Root path — pass through
+    if (pathname === '/' || pathname === '') return;
+
+    if (LEGACY_PATH_MODE === 'rewrite') {
+      // Silent rewrite: route to /v1 without client roundtrip
+      req.url = `/v1${req.url}`;
+    } else {
+      // 308 Permanent Redirect: preserves HTTP method (unlike 301 which changes POST to GET)
+      const query = req.url?.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+      return reply.redirect(308, `/v1${pathname}${query}`);
+    }
+  });
+}
+
 // SECURITY FIX: Add security headers (HSTS, CSP, etc.)
 app.addHook('onSend', async (request, reply, payload) => {
   // HSTS - HTTP Strict Transport Security
@@ -184,6 +214,10 @@ const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 // Previous startsWith('/auth') matched /authors, /authorization etc.
 // Previous regex /(login|signin|signup|password-reset)$/ didn't match URLs with query strings.
 const AUTH_ENDPOINT_PATHS = new Set([
+  // Versioned paths (canonical)
+  '/v1/login', '/v1/signin', '/v1/signup', '/v1/password-reset',
+  '/v1/auth/login', '/v1/auth/signin', '/v1/auth/signup', '/v1/auth/password-reset',
+  // Legacy unversioned paths (for backward compat during transition)
   '/login', '/signin', '/signup', '/password-reset',
   '/auth/login', '/auth/signin', '/auth/signup', '/auth/password-reset',
 ]);
@@ -359,54 +393,60 @@ app.setNotFoundHandler((request, reply) => {
   void reply.status(404).send({ error: 'Route not found', code: 'NOT_FOUND' });
 });
 
-// Register all routes
+// Register all routes under /v1 prefix using Fastify's encapsulated plugin pattern.
+// Parent-level hooks (CORS, auth, security headers, BigInt serialization, error handler)
+// automatically propagate to routes registered inside the /v1 plugin.
+// Health check routes (registered directly on app below) stay at root.
 async function registerRoutes(): Promise<void> {
-  // Make container available to routes via app decorator
+  // Make container available to routes via app decorator.
+  // Parent decorators are visible inside encapsulated child contexts.
   app.decorate('container', container);
 
-  // Core routes
-  await planningRoutes(app, pool);
-  await contentRoutes(app, pool);
-  await domainRoutes(app, pool);
-  await billingRoutes(app, pool);
-  await orgRoutes(app, pool);
-  await onboardingRoutes(app, pool);
-  await notificationRoutes(app, pool);
-  await searchRoutes(app, pool);
-  await usageRoutes(app, pool);
-  await seoRoutes(app, pool);
-  await analyticsRoutes(app, pool);
-  await publishingRoutes(app, pool);
-  await mediaRoutes(app, pool);
-  await queueRoutes(app, pool);
+  await app.register(async function v1Routes(v1) {
+    // Core routes
+    await planningRoutes(v1, pool);
+    await contentRoutes(v1, pool);
+    await domainRoutes(v1, pool);
+    await billingRoutes(v1, pool);
+    await orgRoutes(v1, pool);
+    await onboardingRoutes(v1, pool);
+    await notificationRoutes(v1, pool);
+    await searchRoutes(v1, pool);
+    await usageRoutes(v1, pool);
+    await seoRoutes(v1, pool);
+    await analyticsRoutes(v1, pool);
+    await publishingRoutes(v1, pool);
+    await mediaRoutes(v1, pool);
+    await queueRoutes(v1, pool);
 
-  // Additional routes
-  // C3-FIX: Removed contentListRoutes — it registered a duplicate GET /content that conflicted
-  // with contentRoutes above. The content.ts handler is the canonical one.
-  await contentRevisionRoutes(app, pool);
-  await contentScheduleRoutes(app);
-  await domainOwnershipRoutes(app, pool);
-  await guardrailRoutes(app, pool);
-  await mediaLifecycleRoutes(app, pool);
-  await notificationAdminRoutes(app, pool);
-  await publishingCreateJobRoutes(app, pool);
-  await publishingPreviewRoutes(app, pool);
-  await queueMetricsRoutes(app, pool);
+    // Additional routes
+    // C3-FIX: Removed contentListRoutes — it registered a duplicate GET /content that conflicted
+    // with contentRoutes above. The content.ts handler is the canonical one.
+    await contentRevisionRoutes(v1, pool);
+    await contentScheduleRoutes(v1);
+    await domainOwnershipRoutes(v1, pool);
+    await guardrailRoutes(v1, pool);
+    await mediaLifecycleRoutes(v1, pool);
+    await notificationAdminRoutes(v1, pool);
+    await publishingCreateJobRoutes(v1, pool);
+    await publishingPreviewRoutes(v1, pool);
+    await queueMetricsRoutes(v1, pool);
 
-  // New routes to fix missing API endpoints
-  await affiliateRoutes(app, pool);
-  await diligenceRoutes(app, pool);
-  await attributionRoutes(app, pool);
-  await timelineRoutes(app, pool);
-  await domainDetailsRoutes(app, pool);
-  await themeRoutes(app, pool);
-  await roiRiskRoutes(app, pool);
-  await portfolioRoutes(app, pool);
-  await llmRoutes(app, pool);
-  await billingInvoiceRoutes(app, pool);
+    // New routes to fix missing API endpoints
+    await affiliateRoutes(v1, pool);
+    await diligenceRoutes(v1, pool);
+    await attributionRoutes(v1, pool);
+    await timelineRoutes(v1, pool);
+    await domainDetailsRoutes(v1, pool);
+    await themeRoutes(v1, pool);
+    await roiRiskRoutes(v1, pool);
+    await portfolioRoutes(v1, pool);
+    await llmRoutes(v1, pool);
+    await billingInvoiceRoutes(v1, pool);
 
-  // Migrated routes from apps/api/src/routes/
-  await registerAppsApiRoutes(app, pool);
+    // Migrated routes from apps/api/src/routes/
+    await registerAppsApiRoutes(v1, pool);
+  }, { prefix: '/v1' });
 }
 
 // P1-CRITICAL FIX: Deep health check with comprehensive dependency verification
