@@ -17,7 +17,8 @@ import { DomainOwnershipService } from '../../services/domain-ownership';
 import { getContentRepository } from '../../services/repository-factory';
 import { PublishContent } from '../../../domains/content/application/handlers/PublishContent';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, AuthContext } from '../../services/auth';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { UpdateDraft } from '../../../domains/content/application/handlers/UpdateDraft';
 
 const CreateContentSchema = z.object({
@@ -58,8 +59,36 @@ const ContentQuerySchema = z.object({
   search: z.string().max(200).optional(),
 });
 
+export interface ErrorWithCode extends Error {
+  code?: string;
+}
 
-export async function contentRoutes(app: FastifyInstance, pool: Pool) {
+export interface ZodError extends Error {
+  issues?: Array<{ path: (string | number)[]; message: string; code: string }>;
+}
+
+function sanitizeErrorForClient(error: unknown): { error: string; code?: string } {
+  // Log full error server-side
+  const errorToLog = error instanceof Error ? error : new Error(String(error));
+  logger.error('[content] Internal error:', errorToLog);
+
+  // Return safe message to client
+  const errWithCode = error as { code?: string; name?: string };
+  if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+  return { error: 'Domain not owned by organization', code: 'DOMAIN_NOT_OWNED' };
+  }
+  if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+  return { error: 'Content not found', code: 'CONTENT_NOT_FOUND' };
+  }
+  if (errWithCode.name === 'ZodError') {
+  return { error: 'Invalid input data', code: 'VALIDATION_ERROR' };
+  }
+
+  // Generic message for all other errors (prevents info leakage)
+  return { error: 'An error occurred processing your request', code: 'INTERNAL_ERROR' };
+}
+
+export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const ownership = new DomainOwnershipService(pool);
 
   // Note: Body limit should be set when creating the Fastify instance in http.ts
@@ -79,9 +108,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Validate orgId
     if (!ctx?.["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required');
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin', 'editor', 'viewer']);
+
+    // Validate orgId
+    if (!ctx.orgId) {
+    return res.status(400).send({ error: 'Organization ID is required' });
     }
 
-    const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
+    const orgIdResult = z.string().uuid().safeParse(ctx.orgId);
     if (!orgIdResult.success) {
     return errors.badRequest(res, 'Invalid organization ID');
     }
@@ -90,6 +125,11 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     const queryResult = ContentQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
     return errors.validationFailed(res, queryResult["error"].issues);
+    return res.status(400).send({
+    error: 'Invalid query parameters',
+    code: 'VALIDATION_ERROR',
+    details: queryResult.error.issues,
+    });
     }
 
     const { domainId, status, contentType, page, limit, search } = queryResult.data;
@@ -105,7 +145,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     if (domainId) {
     const domainResult = await pool.query(
     'SELECT 1 FROM domains WHERE id = $1 AND org_id = $2',
-    [domainId, ctx["orgId"]]
+    [domainId, ctx.orgId]
     );
     if (domainResult.rows.length === 0) {
     return errors.forbidden(res, 'Access denied to domain');
@@ -115,14 +155,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Build query
     // C4-FIX: Changed table name from 'content' to 'content_items' to match migration schema
     let query = `
-    SELECT c["id"], c.title, c.status, c.content_type, c.domain_id,
+    SELECT c.id, c.title, c.status, c.content_type, c.domain_id,
         c.created_at, c.updated_at, c.published_at,
         d.name as domain_name
     FROM content_items c
-    LEFT JOIN domains d ON c.domain_id = d["id"]
+    LEFT JOIN domains d ON c.domain_id = d.id
     WHERE d.org_id = $1
     `;
-    const params: unknown[] = [ctx["orgId"]];
+    const params: unknown[] = [ctx.orgId];
     let paramIndex = 2;
 
     if (domainId) {
@@ -145,7 +185,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Escape special characters: \ (backslash), % (percent), _ (underscore)
     const escapedSearch = search
       .replace(/\\/g, '\\\\')   // Escape backslashes first
-      .replace(/%/g, '\\%')     // Escape percent wildcards  
+      .replace(/%/g, '\\%')     // Escape percent wildcards
       .replace(/_/g, '\\_');    // Escape underscore wildcards
     query += ` AND (c.title ILIKE $${paramIndex} ESCAPE '\\' OR c.body ILIKE $${paramIndex} ESCAPE '\\')`;
     params.push(`%${escapedSearch}%`);
@@ -167,7 +207,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     return {
     data: rows.map(row => ({
-    id: row["id"],
+    id: row.id,
     title: row.title,
     status: row.status,
     contentType: row.content_type,
@@ -200,9 +240,16 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Validate orgId
     if (!ctx?.["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required');
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin', 'editor']);
+    await rateLimit('content', 50, req, res);
+
+    // Validate orgId
+    if (!ctx.orgId) {
+    return res.status(400).send({ error: 'Organization ID is required' });
     }
 
-    const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
+    const orgIdResult = z.string().uuid().safeParse(ctx.orgId);
     if (!orgIdResult.success) {
     return errors.badRequest(res, 'Invalid organization ID');
     }
@@ -220,14 +267,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     // Verify org owns the domain
-    await ownership.assertOrgOwnsDomain(ctx["orgId"], validated["domainId"]);
+    await ownership.assertOrgOwnsDomain(ctx.orgId, validated.domainId);
 
     const repo = getContentRepository('content');
     const handler = new CreateDraft(repo);
 
     const item = await handler.execute(
-    validated["id"],
-    validated["domainId"],
+    validated.id,
+    validated.domainId,
     validated.title,
     validated.body,
     validated.contentType
@@ -254,6 +301,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin', 'editor', 'viewer']);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin', 'editor', 'viewer']);
     await rateLimit('content', 50, req, res);
 
     // Validate params
@@ -272,12 +321,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     const repo = getContentRepository('content');
 
     // Get the item to verify domain ownership
-    const item = await repo.getById(params["id"]);
+    const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
-    await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
+    await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
     return { success: true, item };
   } catch (error: unknown) {
@@ -301,6 +350,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin','editor']);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 50, req, res);
 
     // Validate params
@@ -332,17 +383,17 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     const repo = getContentRepository('content');
 
     // Get the item to verify domain ownership
-    const item = await repo.getById(params["id"]);
+    const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
-    await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
+    await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
     // H12-FIX: Pass title and body from validated input, preserving existing values if not provided
     const handler = new UpdateDraft(repo);
     const updated = await handler.execute(
-    params["id"],
+    params.id,
     validated.title ?? item.title ?? '',
     validated.body ?? item.body ?? ''
     );
@@ -369,6 +420,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin','editor']);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 20, req, res);
 
     // Validate params
@@ -387,15 +440,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     const repo = getContentRepository('content');
 
     // Get the item to verify domain ownership
-    const item = await repo.getById(params["id"]);
+    const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
-    await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
+    await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
     const handler = new PublishContent(repo);
-    const event = await handler.execute(params["id"]);
+    const event = await handler.execute(params.id);
 
     return { success: true, event };
   } catch (error: unknown) {
@@ -419,6 +472,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin']);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin']);
     await rateLimit('content', 20, req, res);
 
     // Validate params
@@ -437,21 +492,21 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     const repo = getContentRepository('content');
 
     // Get the item to verify domain ownership
-    const item = await repo.getById(params["id"]);
+    const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
-    await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
+    await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
     // Soft delete
     // C4-FIX: Changed table 'content' to 'content_items' and 'deleted_at' to 'archived_at' to match migration schema
     await pool.query(
     'UPDATE content_items SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2',
-    ['archived', params["id"]]
+    ['archived', params.id]
     );
 
-    return { success: true, id: params["id"], deleted: true };
+    return { success: true, id: params.id, deleted: true };
   } catch (error: unknown) {
     logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };

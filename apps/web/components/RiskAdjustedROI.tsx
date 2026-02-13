@@ -1,5 +1,7 @@
 
 import React from 'react';
+import { useTranslation } from '../lib/i18n';
+
 export interface RiskFlag {
   [key: string]: unknown;
 }
@@ -15,14 +17,16 @@ export interface RiskAdjustedROIProps {
 }
 
 export function RiskAdjustedROI({ roi }: RiskAdjustedROIProps) {
+  const { t, formatCurrency } = useTranslation();
+
   if (!roi) return null;
 
   return (
   <div>
-    <h3>ROI</h3>
-    <p>Monthly Revenue: {roi.monthly_revenue ?? 0}</p>
-    <p>ROI: {roi.roi ?? 0}</p>
-    <h4>Risk Flags</h4>
+    <h3>{t('roi.roiTitle')}</h3>
+    <p>{t('roi.monthlyRevenue')}: {formatCurrency(roi.monthly_revenue ?? 0)}</p>
+    <p>{t('roi.roi')}: {roi.roi ?? 0}</p>
+    <h4>{t('roi.riskFlags')}</h4>
     <pre>{JSON.stringify(roi.risk_flags ?? [], null, 2)}</pre>
   </div>
   );

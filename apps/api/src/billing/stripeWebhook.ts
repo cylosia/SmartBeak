@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { getDb } from '../db';
 import { getRedis } from '@kernel/redis';
 import { getLogger } from '@kernel/logger';
+import { getBusinessKpis, getSloTracker } from '@packages/monitoring';
 
 const logger = getLogger('StripeWebhook');
 
@@ -178,12 +179,24 @@ export async function handleStripeWebhookRaw(
 
   // SECURITY FIX: Issue 17 - Add timeout for event processing
   const processingTimeout = 25000;
-  await Promise.race([
-    processEvent(event),
-    new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Event processing timeout')), processingTimeout)
-    ),
-  ]);
+  try {
+    await Promise.race([
+      processEvent(event),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Event processing timeout')), processingTimeout)
+      ),
+    ]);
+    try {
+      getBusinessKpis().recordWebhookProcessed('stripe');
+      getSloTracker().recordSuccess('slo.webhook.processing_rate');
+    } catch { /* not initialized */ }
+  } catch (error) {
+    try {
+      getBusinessKpis().recordWebhookFailed('stripe');
+      getSloTracker().recordFailure('slo.webhook.processing_rate');
+    } catch { /* not initialized */ }
+    throw error;
+  }
 }
 
 /**
@@ -193,6 +206,7 @@ async function processEvent(event: Stripe.Event): Promise<void> {
   // P0-FIX: Check for duplicate events
   if (await isDuplicateEvent(event.id)) {
     logger.info('Duplicate event ignored', { eventId: event.id, eventType: event.type });
+    try { getBusinessKpis().recordWebhookDuplicate('stripe'); } catch { /* not initialized */ }
     return;
   }
 

@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
+import { createRouteErrorHandler } from '@errors';
 
 import { BillingService } from '../../services/billing';
 import { getAuthContext } from '../types';
@@ -14,6 +15,7 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 
 const logger = getLogger('billing-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 export async function billingRoutes(app: FastifyInstance, pool: Pool) {
   const billing = new BillingService(pool);
@@ -41,6 +43,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
     logger["error"]('[billing/subscribe] Error:', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX (Finding 7): Don't leak any error details to clients
     return errors.internal(res);
+    return handleError(res, error, 'subscribe to plan');
   }
   });
 
@@ -55,6 +58,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
     logger["error"]('[billing/plan] Error:', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX (Finding 7): Don't leak raw error messages to clients
     return errors.internal(res);
+    return handleError(res, error, 'fetch billing plan');
   }
   });
 }

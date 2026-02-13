@@ -4,10 +4,15 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { PublishingCreateJobService } from '../../services/publishing-create-job';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type Role } from '../../services/auth';
 import { errors } from '@errors/responses';
+
+const logger = getLogger('publishing-create-job');
+const handleError = createRouteErrorHandler({ logger });
 
 export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool) {
   const svc = new PublishingCreateJobService(pool);
@@ -59,6 +64,7 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
     }
     console["error"]('Route error:', error);
     return errors.internal(res);
+    return handleError(res, error, 'create publishing job');
   }
   });
 }

@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '../../../packages/kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { checkRateLimitAsync } from '../../services/rate-limit';
 import { NotificationPreferenceService } from '../../../domains/notifications/application/NotificationPreferenceService';
 import { PostgresNotificationPreferenceRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationPreferenceRepository';
@@ -13,6 +14,7 @@ import { requireRole, AuthContext } from '../../services/auth';
 import { errors } from '@errors/responses';
 
 const logger = getLogger('Notifications');
+const handleError = createRouteErrorHandler({ logger });
 
 export interface Notification {
   id: string;
@@ -118,6 +120,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     logger.error('[notifications] Unexpected error', error instanceof Error ? error : new Error(String(error)));
     // P1-FIX: Removed error.message leak to client
     return errors.internal(res);
+    return handleError(res, error, 'fetch notifications');
   }
   });
 
@@ -141,6 +144,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     logger.error('[notifications/preferences] Error', error instanceof Error ? error : new Error(String(error)));
     // P1-FIX: Removed error.message leak to client
     return errors.internal(res, 'Failed to fetch preferences');
+    return handleError(res, error, 'fetch notification preferences');
   }
   });
 
@@ -173,6 +177,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     logger.error('[notifications/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
     // P1-FIX: Removed error.message leak to client
     return errors.internal(res, 'Failed to update preferences');
+    return handleError(res, error, 'update notification preferences');
   }
   });
 }

@@ -1,10 +1,15 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { generateETag, setCacheHeaders } from '../middleware/cache';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type Role } from '../../services/auth';
 import { errors } from '@errors/responses';
+
+const logger = getLogger('portfolio-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 
 
@@ -64,6 +69,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     console["error"]('[portfolio/revenue-confidence] Error:', error);
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch revenue confidence');
+    return handleError(res, error, 'fetch revenue confidence');
   }
   });
 
@@ -102,6 +108,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     console["error"]('[portfolio/dependency-risk] Error:', error);
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch dependency risk');
+    return handleError(res, error, 'fetch dependency risk');
   }
   });
 }

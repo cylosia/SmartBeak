@@ -3,6 +3,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { ContentStatus } from '../../../domains/content/domain/entities/ContentItem';
 import { getAuthContext } from '../types';
 import { getContentRepository } from '../../services/repository-factory';
@@ -10,6 +12,9 @@ import { ListContent } from '../../../domains/content/application/handlers/ListC
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { errors } from '@errors/responses';
+
+const logger = getLogger('content-list');
+const handleError = createRouteErrorHandler({ logger });
 
 const QuerySchema = z.object({
   status: z.enum(['draft', 'scheduled', 'published', 'archived']).default('draft'),
@@ -59,6 +64,7 @@ export async function contentListRoutes(app: FastifyInstance) {
   } catch (error: unknown) {
     console["error"]('[content/list] Error:', error);
     return errors.internal(res, 'Failed to list content');
+    return handleError(res, error, 'list content');
   }
   });
 }

@@ -5,11 +5,14 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '../../../packages/kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 import { errors } from '@errors/responses';
+import { getContainer } from '../../services/container';
 
 const logger = getLogger('LLM');
+const handleError = createRouteErrorHandler({ logger });
 
 export interface LlmModel {
   id: string;
@@ -105,6 +108,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch LLM models');
+    return handleError(res, error, 'fetch LLM models');
   }
   });
 
@@ -126,7 +130,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       return;
     }
 
-    const preferences: LlmPreferences = {
+    const defaults: LlmPreferences = {
     defaultModel: 'gpt-4',
     fallbackModel: 'gpt-3.5-turbo',
     contentGeneration: {
@@ -145,11 +149,35 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     },
     };
 
+    let preferences = defaults;
+    try {
+    const { rows } = await pool.query(
+      `SELECT preferences FROM org_llm_prefs WHERE org_id = $1`,
+      [ctx.orgId]
+    );
+    if (rows.length > 0 && rows[0].preferences) {
+      const stored = rows[0].preferences;
+      preferences = { ...defaults, ...stored };
+      if (stored.contentGeneration) {
+      preferences.contentGeneration = { ...defaults.contentGeneration, ...stored.contentGeneration };
+      }
+      if (stored.imageGeneration) {
+      preferences.imageGeneration = { ...defaults.imageGeneration, ...stored.imageGeneration };
+      }
+      if (stored.costLimits) {
+      preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits };
+      }
+    }
+    } catch (dbError) {
+    logger.error('[llm/preferences] Database error, using defaults', dbError instanceof Error ? dbError : new Error(String(dbError)));
+    }
+
     return res.send(preferences);
   } catch (error) {
     logger.error('[llm/preferences] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch LLM preferences');
+    return handleError(res, error, 'fetch LLM preferences');
   }
   });
 
@@ -188,11 +216,26 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     [ctx.orgId, JSON.stringify(updates)]
     );
 
+    // Sync budget to CostTracker for immediate enforcement
+    if (updates.costLimits) {
+    try {
+      const container = getContainer();
+      const monthly = updates.costLimits.monthly ?? 0;
+      const daily = monthly > 0 ? monthly / 30 : 0;
+      container.costTracker.setBudget(ctx.orgId, daily, monthly);
+    } catch (syncErr) {
+      logger.warn('[llm/preferences] Failed to sync budget to CostTracker', {
+      error: syncErr instanceof Error ? syncErr.message : String(syncErr),
+      });
+    }
+    }
+
     return res.send({ updated: true, preferences: updates });
   } catch (error) {
     logger.error('[llm/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to update LLM preferences');
+    return handleError(res, error, 'update LLM preferences');
   }
   });
 }

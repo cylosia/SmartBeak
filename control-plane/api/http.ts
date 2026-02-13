@@ -12,8 +12,15 @@ import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
 import { AppError, ErrorCodes, RateLimitError } from '@errors';
 import { errors as errHelpers } from '@errors/responses';
+import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
+import type { Pool } from 'pg';
+import { getPoolInstance } from '@database/pool';
+import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
+import { validateEnv } from '@config';
+import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
+import { BASE_SECURITY_HEADERS, CSP_API, PERMISSIONS_POLICY_API } from '@config/headers';
 
 // P2-PERF-FIX: Moved dynamic imports to top-level. Previously these were
 // await import() inside route handlers, making the first request to each endpoint slow.
@@ -25,6 +32,7 @@ import { attributionRoutes } from './routes/attribution';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
 import { billingInvoiceRoutes } from './routes/billing-invoices';
 import { billingRoutes } from './routes/billing';
+import { cacheRoutes } from './routes/cache';
 // C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
 import { contentRevisionRoutes } from './routes/content-revisions';
 import { contentRoutes } from './routes/content';
@@ -117,7 +125,8 @@ await app.register(cors, {
   // P2-SECURITY-FIX: Removed X-CSRF-Token from allowedHeaders. It was listed but
   // no CSRF validation middleware exists, creating a false sense of security.
   // For a Bearer-token-only API, CSRF protection is not required.
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'traceparent', 'tracestate'],
+  exposedHeaders: ['X-Request-ID', 'X-Trace-ID'],
 });
 
 // OpenAPI documentation via @fastify/swagger.
@@ -182,28 +191,19 @@ if (LEGACY_PATH_MODE !== 'off') {
   });
 }
 
-// SECURITY FIX: Add security headers (HSTS, CSP, etc.)
+// SECURITY FIX: Add security headers (HSTS, CSP, Cross-Origin, etc.)
+// Values sourced from packages/config/headers.ts (canonical source of truth)
 app.addHook('onSend', async (request, reply, payload) => {
-  // HSTS - HTTP Strict Transport Security
-  void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // Apply baseline security headers (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+  for (const [key, value] of Object.entries(BASE_SECURITY_HEADERS)) {
+    void reply.header(key, value);
+  }
 
-  // Content Security Policy
-  void reply.header('Content-Security-Policy', 'default-src \'self\'; frame-ancestors \'none\';');
+  // Content Security Policy — maximally restrictive for JSON-only API
+  void reply.header('Content-Security-Policy', CSP_API);
 
-  // Prevent clickjacking
-  void reply.header('X-Frame-Options', 'DENY');
-
-  // Prevent MIME type sniffing
-  void reply.header('X-Content-Type-Options', 'nosniff');
-
-  // XSS Protection
-  void reply.header('X-XSS-Protection', '1; mode=block');
-
-  // Referrer Policy
-  void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-  // Permissions Policy
-  void reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Permissions Policy — fully restrictive (no payment needed for API)
+  void reply.header('Permissions-Policy', PERMISSIONS_POLICY_API);
 
   // Prevent caching of sensitive authenticated responses
   const authHeader = request.headers.authorization;
@@ -216,17 +216,57 @@ app.addHook('onSend', async (request, reply, payload) => {
   return payload;
 });
 
-// P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a
-// duplicate Pool here. The managed pool has exhaustion monitoring, statement_timeout,
-// idle_in_transaction_session_timeout, and proper metrics - this standalone pool had none.
-// Previously this created a second pool with max:20, doubling total connections to 30/process.
-// SECURITY FIX (Finding 5): Use shared pool from @database/pool instead of creating a duplicate
-// Previously: new Pool({ max: 20 }) - created a second pool alongside the shared pool (max: 10)
-// Combined: up to 30 connections per function * 100+ Vercel functions = connection storm
-const pool = await getPoolInstance();
+// Backpressure hook: reject requests early when DB pool is critically loaded
+app.addHook('onRequest', async (request, reply) => {
+  // Skip health check endpoints
+  if (request.url?.startsWith('/health') || request.url === '/readyz' || request.url === '/livez') return;
 
-// Initialize DI container
-const container = initializeContainer({ dbPool: pool });
+  const metrics = getConnectionMetrics();
+  const backpressure = getBackpressureMetrics();
+
+  // Reject if pool utilization is critical or too many waiters
+  const totalConns = metrics.totalConnections;
+  const activeConns = totalConns - metrics.idleConnections;
+  const utilization = totalConns > 0 ? activeConns / totalConns : 0;
+
+  if (utilization > 0.9 || metrics.waitingClients > 8 || backpressure.waiting > 8) {
+    logger.warn('Backpressure: rejecting request due to pool pressure', {
+      waiting: metrics.waitingClients,
+      active: activeConns,
+      total: totalConns,
+      semaphoreWaiting: backpressure.waiting,
+      semaphoreAvailable: backpressure.available,
+    });
+    return reply.status(503).send({
+      error: 'Service temporarily unavailable',
+      message: 'Server under heavy load. Please retry shortly.',
+      retryAfter: 5,
+    });
+  }
+});
+
+// P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a
+// Pool and container are initialized lazily in start() to avoid connecting to the
+// database at module import time. Previously, a top-level await here meant that
+// any import of this module would block until the database was reachable.
+let pool: Pool;
+let container: ReturnType<typeof initializeContainer>;
+
+// Load cost tracking budgets from database
+try {
+  await container.costTracker.loadBudgetsFromDb();
+  logger.info('Cost tracking budgets loaded');
+} catch (error) {
+  logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+// Flush cost tracking buffer on shutdown
+registerShutdownHandler(async () => {
+  container.costTracker.stop();
+  logger.info('Cost tracker stopped and buffer flushed');
+});
 
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
@@ -400,6 +440,9 @@ app.setErrorHandler((error: unknown, request, reply) => {
     errorCode = ErrorCodes.NOT_FOUND;
   } else if (statusCode === 400) {
     errorCode = ErrorCodes.VALIDATION_ERROR;
+    errorCode = 'VALIDATION_ERROR';
+  } else if (statusCode === 402) {
+    errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
     errorCode = ErrorCodes.CONFLICT;
   } else if (statusCode === 429) {
@@ -464,6 +507,7 @@ async function registerRoutes(): Promise<void> {
     await publishingCreateJobRoutes(v1, pool);
     await publishingPreviewRoutes(v1, pool);
     await queueMetricsRoutes(v1, pool);
+    await cacheRoutes(v1, pool);
 
     // New routes to fix missing API endpoints
     await affiliateRoutes(v1, pool);
@@ -603,6 +647,7 @@ interface HealthStatus {
  * SECURITY FIX (Finding 5): Uses the shared pool instance
  */
 async function checkDatabase(): Promise<{ latency: number }> {
+  if (!pool) throw new Error('Database pool not initialized');
   const start = Date.now();
   const TIMEOUT_MS = 5000;
   // P0-FIX: Rewritten to fix two bugs in the original Promise.race pattern:
@@ -672,6 +717,7 @@ async function checkRedisHealth(): Promise<{ latency: number; mode: string }> {
  * Check queue health - look for stalled and failed jobs
  */
 async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number; pendingJobs: number }> {
+  if (!pool) throw new Error('Database pool not initialized');
   // P1-FIX: Combined 3 sequential queries into 1 to reduce pool connection usage.
   // Previously consumed 3 pool connections per health check request.
   const result = await pool.query(
@@ -706,6 +752,8 @@ app.get('/health/detailed', async (request, reply) => {
   }
   // P0-AUDIT-FIX: Require admin/owner role — previously any authenticated user could access
   try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
+  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  if (!container) throw new Error('Container not initialized');
   const containerHealth = await container.getHealth();
   return {
   status: containerHealth.services["database"] ? 'healthy' : 'degraded',
@@ -745,6 +793,11 @@ app.get('/health/sequences', async (request, reply) => {
 // Start server
 async function start(): Promise<void> {
   try {
+  // Initialize database pool (moved from module scope so the module can be
+  // imported without requiring a live database connection)
+  pool = await getPoolInstance();
+  container = initializeContainer({ dbPool: pool });
+
   await registerRoutes();
   const port = Number(process.env['PORT']) || 3000; // P3-FIX: Use Number() || fallback instead of parseInt to avoid NaN
   await app.listen({ port, host: '0.0.0.0' });
@@ -759,6 +812,13 @@ async function start(): Promise<void> {
     logger.info('Closing Fastify server (draining connections)...');
     await app.close();
     logger.info('Fastify server closed');
+  });
+
+  // Flush pending OTel spans before process exit
+  registerShutdownHandler(async () => {
+    logger.info('Flushing telemetry spans...');
+    await shutdownTelemetry();
+    logger.info('Telemetry shutdown complete');
   });
   } catch (error) {
   logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));

@@ -1,10 +1,15 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { PublishingPreviewService } from '../../services/publishing-preview';
 import { requireRole, AuthContext, RoleAccessError } from '../../services/auth';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+
+const logger = getLogger('publishing-preview');
+const handleError = createRouteErrorHandler({ logger });
 
 
 
@@ -72,6 +77,7 @@ export async function publishingPreviewRoutes(app: FastifyInstance, pool: Pool) 
     }
     console["error"]('Route error:', error);
     return errors.internal(res);
+    return handleError(res, error, 'generate Facebook preview');
   }
   });
 }

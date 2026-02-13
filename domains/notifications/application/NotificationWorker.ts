@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
 
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '@kernel/logger';
+import { withSpan, addSpanAttributes, recordSpanException, getBusinessKpis, getSloTracker } from '@packages/monitoring';
+import { writeToOutbox } from '@packages/database/outbox';
 
 import { DeliveryAdapter } from './ports/DeliveryAdapter';
 import { NotificationFailed } from '../domain/events/NotificationFailed';
@@ -63,15 +65,19 @@ export class NotificationWorker {
   * MEDIUM FIX M14: Explicit return type
   */
   async process(notificationId: string): Promise<ProcessResult> {
+  return withSpan({
+    spanName: 'NotificationWorker.process',
+    attributes: { 'notification.id': notificationId },
+  }, async () => {
     if (!notificationId || typeof notificationId !== 'string') {
     return { success: false, error: 'Invalid notification ID: must be a non-empty string' };
-  }
+    }
 
-  if (notificationId.length > 255) {
+    if (notificationId.length > 255) {
     return { success: false, error: 'Invalid notification ID: exceeds maximum length' };
-  }
+    }
 
-  const client = await this.pool.connect();
+    const client = await this.pool.connect();
 
   try {
     // P1-FIX: Begin transaction BEFORE any reads to ensure consistent snapshot
@@ -102,6 +108,9 @@ export class NotificationWorker {
     await this.auditLog('notification_skipped', notification["orgId"], {
     reason: 'user_preference_disabled'
     });
+
+    addSpanAttributes({ 'notification.channel': notification.channel, 'notification.result': 'skipped' });
+    try { getBusinessKpis().recordNotificationSkipped(notification.channel, 'user_preference_disabled'); } catch { /* not initialized */ }
 
     return { success: true, skipped: true };
     }
@@ -163,21 +172,21 @@ export class NotificationWorker {
     [notification["id"]]
     );
 
+    // Write event to outbox within the transaction for at-least-once delivery.
+    await writeToOutbox(client, new NotificationSent().toEnvelope(notification["id"]));
+
     await client.query('COMMIT');
-    // TODO: Migrate to a transactional outbox pattern in a future iteration.
-    // Currently eventBus.publish is called after COMMIT, so a crash here would
-    // lose the event. An outbox table written within the transaction would guarantee
-    // at-least-once delivery.
-    try {
-      await this.eventBus.publish(new NotificationSent().toEnvelope(notification["id"]));
-    } catch (publishError) {
-      logger.error('Failed to publish NotificationSent event (delivery was successful)', publishError instanceof Error ? publishError : new Error(String(publishError)));
-    }
 
     await this.auditLog('notification_sent', notification["orgId"], {
     channel: notification.channel,
     template: notification.template
     });
+
+    addSpanAttributes({ 'notification.channel': notification.channel, 'notification.result': 'delivered' });
+    try {
+      getBusinessKpis().recordNotificationDelivered(notification.channel);
+      getSloTracker().recordSuccess('slo.notification.delivery_rate');
+    } catch { /* not initialized */ }
 
     return { success: true, delivered: true };
 
@@ -200,21 +209,23 @@ export class NotificationWorker {
     await this.notifications.save(failedNotification, client);
 
     await this.dlq.record(notification["id"], notification.channel, errorMessage);
+
+    // Write event to outbox within the transaction for at-least-once delivery.
+    await writeToOutbox(client, new NotificationFailed().toEnvelope(notification["id"], errorMessage));
+
     await client.query('COMMIT');
-    // TODO: Migrate to a transactional outbox pattern in a future iteration.
-    // Currently eventBus.publish is called after COMMIT, so a crash here would
-    // lose the event. An outbox table written within the transaction would guarantee
-    // at-least-once delivery.
-    try {
-      await this.eventBus.publish(new NotificationFailed().toEnvelope(notification["id"], errorMessage));
-    } catch (publishError) {
-      logger.error('Failed to publish NotificationFailed event (failure was already recorded)', publishError instanceof Error ? publishError : new Error(String(publishError)));
-    }
 
     await this.auditLog('notification_failed', notification["orgId"], {
     channel: notification.channel,
     error: errorMessage
     });
+
+    addSpanAttributes({ 'notification.channel': notification.channel, 'notification.result': 'failed' });
+    recordSpanException(err instanceof Error ? err : new Error(String(err)));
+    try {
+      getBusinessKpis().recordNotificationFailed(notification.channel);
+      getSloTracker().recordFailure('slo.notification.delivery_rate');
+    } catch { /* not initialized */ }
 
     return { success: false, error: errorMessage };
     }
@@ -229,6 +240,7 @@ export class NotificationWorker {
   } finally {
     client.release();
   }
+  });
   }
 
   /**

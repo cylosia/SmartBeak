@@ -6,6 +6,8 @@ import { Pool } from 'pg';
 import { DLQService, RegionWorker } from '@kernel/queue';
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '@kernel/logger';
+import { withSpan, addSpanAttributes, recordSpanException, getBusinessKpis, getSloTracker } from '@packages/monitoring';
+import { writeToOutbox } from '@packages/database/outbox';
 
 import { PostgresPublishAttemptRepository } from '../infra/persistence/PostgresPublishAttemptRepository';
 import { PublishAdapter } from './ports/PublishAdapter';
@@ -64,21 +66,28 @@ export class PublishingWorker {
   * MEDIUM FIX M14: Explicit return type
   */
   async process(jobId: string, targetConfig: TargetConfig): Promise<ProcessResult> {
-  // Validate inputs with enhanced error handling
-  const validationError = this.validateInputs(jobId, targetConfig);
-  if (validationError) {
+  return withSpan({
+    spanName: 'PublishingWorker.process',
+    attributes: { 'publishing.job_id': jobId },
+  }, async () => {
+    // Validate inputs with enhanced error handling
+    const validationError = this.validateInputs(jobId, targetConfig);
+    if (validationError) {
     return { success: false, error: validationError };
-  }
+    }
 
     if (targetConfig.url) {
     try {
-    new URL(targetConfig.url);
+      new URL(targetConfig.url);
     } catch {
-    return { success: false, error: 'Invalid target URL format' };
+      return { success: false, error: 'Invalid target URL format' };
     }
-  }
+    }
 
-  try {
+    const platform = targetConfig.url ? new URL(targetConfig.url).hostname : 'unknown';
+    try { getBusinessKpis().recordPublishAttempt(platform); } catch { /* not initialized */ }
+
+    try {
     return await this.regionWorker.execute(jobId, async () => {
     const client = await this.pool.connect();
 
@@ -101,11 +110,11 @@ export class PublishingWorker {
     const updatedJob = job.start();
     await this.jobs.save(updatedJob);
 
-    // Commit state transition before publishing event
-    await client.query('COMMIT');
+    // Write event to outbox within the transaction for at-least-once delivery.
+    // The outbox relay will publish the event after this transaction commits.
+    await writeToOutbox(client, new PublishingStarted().toEnvelope(job["id"]));
 
-    // Publish event after successful commit
-    await this.eventBus.publish(new PublishingStarted().toEnvelope(job["id"]));
+    await client.query('COMMIT');
 
     try {
     // Security: Validate target URL
@@ -123,12 +132,18 @@ export class PublishingWorker {
     await this.attempts.record(job["id"], attempt, 'success');
     const succeededJob = updatedJob.succeed();
     await this.jobs.save(succeededJob);
+    await writeToOutbox(client, new PublishingSucceeded().toEnvelope(job["id"]));
     await client.query('COMMIT');
-    await this.eventBus.publish(new PublishingSucceeded().toEnvelope(job["id"]));
 
     await this.auditLog('publish_succeeded', job.domainId, {
         jobId: job["id"],
     });
+
+    addSpanAttributes({ 'publishing.result': 'success' });
+    try {
+      getBusinessKpis().recordPublishSuccess(platform);
+      getSloTracker().recordSuccess('slo.publishing.success_rate');
+    } catch { /* not initialized */ }
 
     return { success: true };
 
@@ -146,14 +161,21 @@ export class PublishingWorker {
 
     const failedJob = updatedJob.fail(errorMessage);
     await this.jobs.save(failedJob);
+    await writeToOutbox(client, new PublishingFailed().toEnvelope(job["id"], errorMessage));
 
     await client.query('COMMIT');
-    await this.eventBus.publish(new PublishingFailed().toEnvelope(job["id"], errorMessage));
 
     await this.auditLog('publish_failed', job.domainId, {
         jobId: job["id"],
         error: errorMessage
     });
+
+    addSpanAttributes({ 'publishing.result': 'failure' });
+    recordSpanException(err instanceof Error ? err : new Error(String(err)));
+    try {
+      getBusinessKpis().recordPublishFailure(platform, errorMessage);
+      getSloTracker().recordFailure('slo.publishing.success_rate');
+    } catch { /* not initialized */ }
 
     throw err;
     }
@@ -176,6 +198,7 @@ export class PublishingWorker {
 
     return { success: false, error: errorMessage };
   }
+  });
   }
 
   /**

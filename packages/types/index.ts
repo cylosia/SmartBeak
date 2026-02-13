@@ -6,17 +6,17 @@
 // Domain events
 export type { DomainEventEnvelope } from './domain-event';
 
-// Branded types - P2-MEDIUM FIX: Export branded types for type safety
-export type { 
-  OrgId, 
-  UserId, 
+// Branded types - pure type definitions (no kernel dependency)
+export type {
+  OrgId,
+  UserId,
   ContentId,
   DomainId,
   SessionId,
   CustomerId,
   InvoiceId,
   PaymentId
-} from '@kernel/validation/branded';
+} from './branded';
 
 // Plugin capabilities
 export type { PluginCapability, PluginManifest } from './plugin-capabilities';

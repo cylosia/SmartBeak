@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import { AsyncLocalStorage } from 'async_hooks';
+import { context as otelContext, trace } from '@opentelemetry/api';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('RequestContext');
@@ -56,19 +57,38 @@ export function runWithContext<T>(context: RequestContext, fn: () => Promise<T>)
 
 /**
 * Generate new request context
+* Bridges OTel trace context when available, falling back to random UUIDs.
 * @param options - Optional context properties to override defaults
 * @returns New request context
 */
 export function createRequestContext(options?: Partial<RequestContext>): RequestContext {
+  // Bridge trace/span IDs from the OTel active span when available.
+  // This ensures loggers and error reporters see the same IDs as OTel spans.
+  let otelTraceId: string | undefined;
+  let otelSpanId: string | undefined;
+
+  try {
+    const activeSpan = trace.getSpan(otelContext.active());
+    if (activeSpan) {
+      const spanCtx = activeSpan.spanContext();
+      if (spanCtx.traceId && spanCtx.traceId !== '00000000000000000000000000000000') {
+        otelTraceId = spanCtx.traceId;
+        otelSpanId = spanCtx.spanId;
+      }
+    }
+  } catch {
+    // OTel not available or not initialized — fall through to random IDs
+  }
+
   return {
-  requestId: options?.requestId || randomUUID(),
-  traceId: options?.["traceId"] || randomUUID(),
-  spanId: randomUUID().slice(0, 16),
-  userId: options?.["userId"],
-  orgId: options?.["orgId"],
-  startTime: Date.now(),
-  path: options?.path,
-  method: options?.method,
+    requestId: options?.requestId || randomUUID(),
+    traceId: options?.traceId || otelTraceId || randomUUID(),
+    spanId: otelSpanId || randomUUID().slice(0, 16),
+    userId: options?.userId,
+    orgId: options?.orgId,
+    startTime: Date.now(),
+    path: options?.path,
+    method: options?.method,
   };
 }
 
@@ -97,14 +117,25 @@ export function getElapsedMs(): number {
 */
 export function createChildContext(operation: string): RequestContext {
   const parent = getRequestContext();
+
+  let otelSpanId: string | undefined;
+  try {
+    const activeSpan = trace.getSpan(otelContext.active());
+    if (activeSpan) {
+      otelSpanId = activeSpan.spanContext().spanId;
+    }
+  } catch {
+    // OTel not available
+  }
+
   return {
-  requestId: parent?.requestId || randomUUID(),
-  traceId: parent?.["traceId"] || randomUUID(),
-  spanId: randomUUID().slice(0, 16),
-  userId: parent?.["userId"],
-  orgId: parent?.["orgId"],
-  startTime: Date.now(),
-  path: operation,
-  method: 'child',
+    requestId: parent?.requestId || randomUUID(),
+    traceId: parent?.traceId || randomUUID(),
+    spanId: otelSpanId || randomUUID().slice(0, 16),
+    userId: parent?.userId,
+    orgId: parent?.orgId,
+    startTime: Date.now(),
+    path: operation,
+    method: 'child',
   };
 }

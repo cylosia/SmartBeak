@@ -5,7 +5,7 @@ import { API_VERSIONS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
-import { withCircuitBreaker, withTimeout } from '../../utils/resilience';
+import { executeWithCircuitBreaker, withTimeout } from '../../utils/resilience';
 
 import { AbortController } from 'abort-controller';
 
@@ -50,17 +50,19 @@ export class MailchimpAdapter implements EmailProviderAdapter {
     this.logger = new StructuredLogger('MailchimpAdapter');
     this.metrics = new MetricsCollector('MailchimpAdapter');
 
-    this.createListWithResilience = withCircuitBreaker(
-      ((name: string) => this._createListInternal(name)) as (...args: unknown[]) => Promise<unknown>,
-      DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold,
-      'mailchimp-createList'
-    ) as (name: string) => Promise<string>;
+    this.createListWithResilience = (name: string) =>
+      executeWithCircuitBreaker(
+        'mailchimp-createList',
+        () => this._createListInternal(name),
+        DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold
+      );
 
-    this.addSubscriberWithResilience = withCircuitBreaker(
-      ((email: string, listId: string) => this._addSubscriberInternal(email, listId)) as (...args: unknown[]) => Promise<unknown>,
-      DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold,
-      'mailchimp-addSubscriber'
-    ) as (email: string, listId: string) => Promise<void>;
+    this.addSubscriberWithResilience = (email: string, listId: string) =>
+      executeWithCircuitBreaker(
+        'mailchimp-addSubscriber',
+        () => this._addSubscriberInternal(email, listId),
+        DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold
+      );
   }
 
   /**
