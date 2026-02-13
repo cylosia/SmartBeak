@@ -14,45 +14,11 @@ import { getLogger } from '@kernel/logger';
 // await import() inside route handlers, making the first request to each endpoint slow.
 import { getRepositoryHealth } from '../services/repository-factory';
 import { checkSequenceHealth } from '@database/health';
-import { affiliateRoutes } from './routes/affiliates';
-import { analyticsRoutes } from './routes/analytics';
-import { attributionRoutes } from './routes/attribution';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
-import { billingInvoiceRoutes } from './routes/billing-invoices';
-import { billingRoutes } from './routes/billing';
-// C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
-import { contentRevisionRoutes } from './routes/content-revisions';
-import { contentRoutes } from './routes/content';
-import { contentScheduleRoutes } from './routes/content-schedule';
-import { diligenceRoutes } from './routes/diligence';
-import { domainDetailsRoutes } from './routes/domain-details';
-import { domainOwnershipRoutes } from './routes/domain-ownership';
-import { domainRoutes } from './routes/domains';
-import { guardrailRoutes } from './routes/guardrails';
 import { initializeContainer } from '../services/container';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
-import { llmRoutes } from './routes/llm';
-import { mediaLifecycleRoutes } from './routes/media-lifecycle';
-import { mediaRoutes } from './routes/media';
-import { notificationAdminRoutes } from './routes/notifications-admin';
-import { notificationRoutes } from './routes/notifications';
-import { onboardingRoutes } from './routes/onboarding';
-import { orgRoutes } from './routes/orgs';
-import { planningRoutes } from './routes/planning';
-import { portfolioRoutes } from './routes/portfolio';
-import { publishingCreateJobRoutes } from './routes/publishing-create-job';
-import { publishingPreviewRoutes } from './routes/publishing-preview';
-import { publishingRoutes } from './routes/publishing';
-import { queueMetricsRoutes } from './routes/queue-metrics';
-import { queueRoutes } from './routes/queues';
-import { registerAppsApiRoutes } from './routes/apps-api-routes';
-import { roiRiskRoutes } from './routes/roi-risk';
-import { searchRoutes } from './routes/search';
-import { seoRoutes } from './routes/seo';
-import { themeRoutes } from './routes/themes';
-import { timelineRoutes } from './routes/timeline';
-import { usageRoutes } from './routes/usage';
+import { v1Routes } from './plugins/v1-routes';
 
 try {
   validateEnv();
@@ -184,8 +150,8 @@ const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 // Previous startsWith('/auth') matched /authors, /authorization etc.
 // Previous regex /(login|signin|signup|password-reset)$/ didn't match URLs with query strings.
 const AUTH_ENDPOINT_PATHS = new Set([
-  '/login', '/signin', '/signup', '/password-reset',
-  '/auth/login', '/auth/signin', '/auth/signup', '/auth/password-reset',
+  '/v1/login', '/v1/signin', '/v1/signup', '/v1/password-reset',
+  '/v1/auth/login', '/v1/auth/signin', '/v1/auth/signup', '/v1/auth/password-reset',
 ]);
 
 app.addHook('onRequest', async (req, reply) => {
@@ -359,54 +325,14 @@ app.setNotFoundHandler((request, reply) => {
   void reply.status(404).send({ error: 'Route not found', code: 'NOT_FOUND' });
 });
 
-// Register all routes
+// Register all routes — business routes under /v1 prefix, infra routes at root
 async function registerRoutes(): Promise<void> {
   // Make container available to routes via app decorator
   app.decorate('container', container);
 
-  // Core routes
-  await planningRoutes(app, pool);
-  await contentRoutes(app, pool);
-  await domainRoutes(app, pool);
-  await billingRoutes(app, pool);
-  await orgRoutes(app, pool);
-  await onboardingRoutes(app, pool);
-  await notificationRoutes(app, pool);
-  await searchRoutes(app, pool);
-  await usageRoutes(app, pool);
-  await seoRoutes(app, pool);
-  await analyticsRoutes(app, pool);
-  await publishingRoutes(app, pool);
-  await mediaRoutes(app, pool);
-  await queueRoutes(app, pool);
-
-  // Additional routes
-  // C3-FIX: Removed contentListRoutes — it registered a duplicate GET /content that conflicted
-  // with contentRoutes above. The content.ts handler is the canonical one.
-  await contentRevisionRoutes(app, pool);
-  await contentScheduleRoutes(app);
-  await domainOwnershipRoutes(app, pool);
-  await guardrailRoutes(app, pool);
-  await mediaLifecycleRoutes(app, pool);
-  await notificationAdminRoutes(app, pool);
-  await publishingCreateJobRoutes(app, pool);
-  await publishingPreviewRoutes(app, pool);
-  await queueMetricsRoutes(app, pool);
-
-  // New routes to fix missing API endpoints
-  await affiliateRoutes(app, pool);
-  await diligenceRoutes(app, pool);
-  await attributionRoutes(app, pool);
-  await timelineRoutes(app, pool);
-  await domainDetailsRoutes(app, pool);
-  await themeRoutes(app, pool);
-  await roiRiskRoutes(app, pool);
-  await portfolioRoutes(app, pool);
-  await llmRoutes(app, pool);
-  await billingInvoiceRoutes(app, pool);
-
-  // Migrated routes from apps/api/src/routes/
-  await registerAppsApiRoutes(app, pool);
+  // All business routes registered under /v1 prefix via Fastify plugin encapsulation.
+  // Individual route modules are unchanged — the prefix is applied automatically.
+  await app.register(v1Routes, { prefix: '/v1', pool });
 }
 
 // P1-CRITICAL FIX: Deep health check with comprehensive dependency verification
