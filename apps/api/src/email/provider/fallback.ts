@@ -265,21 +265,23 @@ export class FallbackEmailSender {
 
     for (let i = 0; i < this.providers.length; i++) {
       const provider = this.providers[i];
+      if (!provider) continue;
       try {
         const result = await provider.send(message);
 
         const usedFallback = i > 0;
+        const primaryProvider = this.providers[0];
 
-        if (usedFallback) {
+        if (usedFallback && primaryProvider) {
           // AUDIT FIX (Finding 3.2): Emit metric and WARN on fallback usage
           emitCounter('email.fallback_triggered', 1, {
-            failed_provider: this.providers[0].name,
+            failed_provider: primaryProvider.name,
             fallback_provider: provider.name,
           });
-          logger.warn(`Email sent via fallback provider ${provider.name} (primary ${this.providers[0].name} was unavailable)`, {
+          logger.warn(`Email sent via fallback provider ${provider.name} (primary ${primaryProvider.name} was unavailable)`, {
             to: maskEmail(message.to),
             subject: message.subject,
-            failedProviders: errors.map((_, idx) => this.providers[idx].name),
+            failedProviders: errors.map((_, idx) => this.providers[idx]?.name ?? 'unknown'),
           });
         } else {
           // SECURITY FIX (Finding 14): Mask PII in logs
@@ -305,7 +307,6 @@ export class FallbackEmailSender {
 
         if (errorCategory === 'validation') {
           logger.warn(`Provider ${provider.name} rejected email due to validation error, not falling back`, {
-            error: err.message,
             to: maskEmail(message.to),
           });
           emitCounter('email.validation_rejection', 1, { provider: provider.name });
@@ -313,8 +314,7 @@ export class FallbackEmailSender {
         }
 
         if (errorCategory === 'reputation') {
-          logger.error(`Provider ${provider.name} rejected email due to reputation/spam issue, not falling back`, {
-            error: err.message,
+          logger.error(`Provider ${provider.name} rejected email due to reputation/spam issue, not falling back`, err, {
             to: maskEmail(message.to),
           });
           emitCounter('email.reputation_rejection', 1, { provider: provider.name });

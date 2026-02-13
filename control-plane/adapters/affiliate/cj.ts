@@ -417,6 +417,6 @@ export function getCjAdapter(): CJAdapter {
 // Backward-compatible getter (deprecated — use getCjAdapter() instead)
 export const cjAdapter = new Proxy({} as CJAdapter, {
   get(_target, prop) {
-  return (getCjAdapter() as Record<string | symbol, unknown>)[prop];
+  return (getCjAdapter() as unknown as Record<string | symbol, unknown>)[prop];
   },
 });

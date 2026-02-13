@@ -30,7 +30,7 @@ const CreateOrgSchema = z.object({
 const InviteSchema = z.object({
   email: z.string().email('Invalid email address').max(254).toLowerCase().trim(),
   role: z.enum(['admin', 'editor', 'viewer'], {
-    errorMap: () => ({ message: 'Role must be one of: admin, editor, viewer' }),
+    message: 'Role must be one of: admin, editor, viewer',
   }),
 });
 
@@ -38,7 +38,7 @@ const InviteSchema = z.object({
 const AddMemberSchema = z.object({
   userId: z.string().uuid('Invalid user ID format'),
   role: z.enum(['admin', 'editor', 'viewer'], {
-    errorMap: () => ({ message: 'Role must be one of: admin, editor, viewer' }),
+    message: 'Role must be one of: admin, editor, viewer',
   }),
 });
 

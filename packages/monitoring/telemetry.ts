@@ -17,7 +17,7 @@ import {
   SimpleSpanProcessor,
   SpanExporter,
 } from '@opentelemetry/sdk-trace-base';
-// @ts-expect-error - Optional dependency may not be installed
+// @ts-ignore - Optional dependency may not be installed
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
 import {
@@ -37,13 +37,13 @@ import {
 } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
-// @ts-expect-error - Optional dependency may not be installed
+// @ts-ignore - Optional dependency may not be installed
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
-// @ts-expect-error - Optional dependency may not be installed
+// @ts-ignore - Optional dependency may not be installed
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
-// @ts-expect-error - Optional dependency may not be installed
+// @ts-ignore - Optional dependency may not be installed
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
-// @ts-expect-error - Optional dependency may not be installed
+// @ts-ignore - Optional dependency may not be installed
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 
 import { getLogger } from '@kernel/logger';

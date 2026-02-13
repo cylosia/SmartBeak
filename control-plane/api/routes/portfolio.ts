@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 
 import { generateETag, setCacheHeaders } from '../middleware/cache';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, RoleAccessError } from '../../services/auth';
+import { requireRole, RoleAccessError, type Role } from '../../services/auth';
 
 
 
@@ -15,7 +15,7 @@ export type AuthenticatedRequest = FastifyRequest & {
   auth?: {
   userId: string;
   orgId: string;
-  roles: string[];
+  roles: Role[];
   } | null | undefined;
 };
 

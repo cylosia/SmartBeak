@@ -125,7 +125,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (stripeError: unknown) {
       console.error('[billing/checkout] Stripe error:', stripeError);
 
-      if (stripeError instanceof Error && 'type' in stripeError && (stripeError as Record<string, unknown>).type === 'StripeInvalidRequestError') {
+      if (stripeError instanceof Error && 'type' in stripeError && (stripeError as Record<string, unknown>)['type'] === 'StripeInvalidRequestError') {
       // P1-13 FIX: Do not leak Stripe error details (may contain API key prefixes, config info)
       return sendError(res, 400, 'Invalid payment request. Please check your plan selection.');
       }

@@ -116,7 +116,11 @@ export class BillingService {
 
   private async setIdempotencyStatus(key: string, status: string, result?: unknown, error?: string): Promise<void> {
     const redis = await getRedis();
-    const entry: IdempotencyEntry = { status, result, error };
+    const entry: IdempotencyEntry = {
+      status,
+      ...(result !== undefined ? { result } : {}),
+      ...(error !== undefined ? { error } : {}),
+    };
     if (status === 'processing') {
       entry.startedAt = Date.now();
     }

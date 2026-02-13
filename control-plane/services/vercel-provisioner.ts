@@ -104,7 +104,7 @@ export async function provisionVercelProject(
   if (!res.ok) {
     // P1-5 FIX: Log full error internally but throw sanitized error message
     const text = await res.text();
-    logger.error('Vercel provisioning failed', { status: res.status, response: text });
+    logger.error('Vercel provisioning failed', undefined, { status: res.status, response: text });
     throw new Error(`Vercel provisioning failed with status ${res.status}`);
   }
 
@@ -134,7 +134,7 @@ export async function attachDomain(
   if (!res.ok) {
     // P1-5 FIX: Log full error internally but throw sanitized error message
     const text = await res.text();
-    logger.error('Domain attach failed', { status: res.status, projectId, response: text });
+    logger.error('Domain attach failed', undefined, { status: res.status, projectId, response: text });
     throw new Error(`Domain attach failed with status ${res.status}`);
   }
 

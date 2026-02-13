@@ -353,7 +353,7 @@ async function processEvent(event: Stripe.Event): Promise<void> {
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session): Promise<void> {
   logger.info('Checkout completed', { customerId: session.customer as string });
 
-  const orgId = session.metadata?.orgId;
+  const orgId = session.metadata?.['orgId'];
   if (!orgId) {
     throw new Error('Checkout session missing orgId metadata');
   }

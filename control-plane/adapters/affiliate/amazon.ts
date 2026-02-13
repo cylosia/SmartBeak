@@ -138,9 +138,9 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
     const products: Array<{
     asin: string;
     title: string;
-    imageUrl?: string;
-    price?: number;
-    currency?: string;
+    imageUrl?: string | undefined;
+    price?: number | undefined;
+    currency?: string | undefined;
     url: string;
     }> = [];
 
@@ -155,7 +155,7 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
         if (typeof item !== 'object' || item === null) continue;
         const i = item as Record<string, unknown>;
         if (typeof i['ASIN'] !== 'string' || typeof i['DetailPageURL'] !== 'string') {
-        this.logger.warn('Skipping malformed item in Amazon PAAPI response');
+        this.logger.warn('Skipping malformed item in Amazon PAAPI response', context);
         continue;
         }
         const itemInfo = i['ItemInfo'] as Record<string, unknown> | undefined;

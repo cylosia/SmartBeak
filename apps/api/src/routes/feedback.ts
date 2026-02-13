@@ -22,7 +22,7 @@ const FeedbackQuerySchema = z.object({
  * P1-2 FIX: Log auth failures for intrusion detection.
  */
 function verifyAuth(req: FastifyRequest) {
-  const result = getAuthContext({ authorization: req.headers.authorization });
+  const result = getAuthContext(req.headers.authorization != null ? { authorization: req.headers.authorization } : {});
 
   if (!result) {
     // P1-2 FIX: Log failed auth attempts for intrusion detection

@@ -85,7 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error: unknown) {
   // P1-3 FIX: Use instanceof for AuthError check instead of brittle name comparison
   if (error instanceof AuthError) return;
-  logger.error('DNS verification failed', { error: error instanceof Error ? error.message : String(error) });
+  logger.error('DNS verification failed', error instanceof Error ? error : new Error(String(error)));
   sendError(res, 500, 'Failed to verify DNS');
   }
 }

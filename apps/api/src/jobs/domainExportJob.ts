@@ -85,7 +85,7 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
   };
   
   // P1-6 FIX: Add runtime check instead of unsafe double cast through unknown
-  if (job && typeof (job as Record<string, unknown>)['on'] === 'function') {
+  if (job && typeof (job as unknown as Record<string, unknown>)['on'] === 'function') {
     (job as unknown as { on: (event: string, listener: () => void) => void }).on('cancel', abortListener);
   }
 
@@ -144,7 +144,7 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
   } finally {
     // P2-FIX: Clean up abort listener
     // P1-6 FIX: Add runtime check instead of unsafe double cast
-    if (job && typeof (job as Record<string, unknown>)['off'] === 'function') {
+    if (job && typeof (job as unknown as Record<string, unknown>)['off'] === 'function') {
       (job as unknown as { off: (event: string, listener: () => void) => void }).off('cancel', abortListener);
     }
   }

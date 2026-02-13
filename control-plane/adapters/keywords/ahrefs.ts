@@ -115,7 +115,7 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     if (typeof kw !== 'object' || kw === null) continue;
     const item = kw as Record<string, unknown>;
     if (typeof item['keyword'] !== 'string' || typeof item['volume'] !== 'number') {
-    this.logger.warn('Skipping malformed keyword item in Ahrefs response');
+    this.logger.warn('Skipping malformed keyword item in Ahrefs response', context);
     continue;
     }
     suggestions.push({
@@ -124,8 +124,8 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     volume: item['volume'],
     difficulty: typeof item['difficulty'] === 'number' ? item['difficulty'] : 0,
     cpc: typeof item['cpc'] === 'number' ? item['cpc'] : 0,
-    currentPosition: typeof item['position'] === 'number' ? item['position'] : undefined,
-    rankingUrl: typeof item['url'] === 'string' ? item['url'] : undefined,
+    ...(typeof item['position'] === 'number' ? { currentPosition: item['position'] } : {}),
+    ...(typeof item['url'] === 'string' ? { rankingUrl: item['url'] } : {}),
     source: 'ahrefs',
     fetchedAt: new Date().toISOString(),
     },
@@ -214,7 +214,7 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     if (typeof kw !== 'object' || kw === null) continue;
     const item = kw as Record<string, unknown>;
     if (typeof item['keyword'] !== 'string' || typeof item['volume'] !== 'number') {
-    this.logger.warn('Skipping malformed keyword idea in Ahrefs response');
+    this.logger.warn('Skipping malformed keyword idea in Ahrefs response', context);
     continue;
     }
     suggestions.push({
@@ -223,7 +223,7 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     volume: item['volume'],
     difficulty: typeof item['difficulty'] === 'number' ? item['difficulty'] : 0,
     cpc: typeof item['cpc'] === 'number' ? item['cpc'] : 0,
-    parentTopic: typeof item['parent_topic'] === 'string' ? item['parent_topic'] : undefined,
+    ...(typeof item['parent_topic'] === 'string' ? { parentTopic: item['parent_topic'] } : {}),
     source: 'ahrefs',
     fetchedAt: new Date().toISOString(),
     },

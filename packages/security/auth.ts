@@ -335,7 +335,7 @@ export const roleHierarchy: Record<UserRole, number> = {
 * Check if user has required role level
 */
 export function hasRequiredRole(userRole: UserRole, requiredRole: UserRole): boolean {
-  return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
+  return (roleHierarchy[userRole] ?? 0) >= (roleHierarchy[requiredRole] ?? 0);
 }
 
 // ============================================================================
@@ -392,7 +392,7 @@ class TokenBindingError extends Error {
 // with JWT_KEY_2 would be verified by jwt.ts but REJECTED here. Now both code paths
 // use the same verification logic with consistent key rotation, Zod validation, and
 // clock tolerance.
-function verifyToken(token: string): { sub?: string; orgId?: string; role?: string; jti?: string; exp?: number } {
+function verifyToken(token: string): JwtClaims {
   try {
     const claims: JwtClaims = jwtVerifyToken(token);
     return claims;
