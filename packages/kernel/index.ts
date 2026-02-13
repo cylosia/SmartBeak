@@ -91,3 +91,10 @@ export { getClientIp, isValidIp } from './ip-utils';
 
 // Bot detection — consolidated from apps/api/src/middleware/rateLimiter.ts
 export { detectBot, type BotDetectionResult } from './bot-detection';
+
+// Redaction engine — consolidated from packages/security/logger.ts and packages/kernel/logger.ts
+export {
+  sanitizeForLogging, sanitizeHeaders, sanitizeUrl, sanitizeErrorMessage,
+  isSensitiveField, isSensitiveValue, maskValue,
+  type SanitizedData,
+} from './redaction';
