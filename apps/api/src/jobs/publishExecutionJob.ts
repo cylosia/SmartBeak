@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { withRetry, CircuitBreaker } from '@kernel/retry';
 import { acquireLock, releaseLock } from '@kernel/redlock';  // P0-FIX: Distributed locking
+import { withSpan, addSpanAttributes, recordSpanException } from '@packages/monitoring';
 
 import { publishingConfig, cacheConfig } from '@config';
 import { getDb } from '../db';
@@ -52,6 +53,7 @@ function getCircuitBreaker(adapterName: string): CircuitBreaker {
 }
 
 export async function publishExecutionJob(payload: unknown): Promise<void> {
+  return withSpan({ spanName: 'publishExecutionJob' }, async () => {
 
   let validatedPayload: PublishExecutionPayload;
   try {
@@ -67,6 +69,7 @@ export async function publishExecutionJob(payload: unknown): Promise<void> {
   const { intentId, adapter, orgId, retryOptions: _retryOptions } = validatedPayload;
   const key = deterministicKey(['publish', intentId]);
 
+  addSpanAttributes({ 'publish.intent_id': intentId, 'publish.adapter_name': adapter.name });
   logger.info('Starting publish execution', { intentId, adapter: adapter.name, orgId });
 
   // P0-FIX: Distributed lock to prevent concurrent execution across workers
@@ -83,11 +86,17 @@ export async function publishExecutionJob(payload: unknown): Promise<void> {
 
   try {
     await executePublishJob(validatedPayload, key);
+    addSpanAttributes({ 'publish.result': 'success' });
+  } catch (error) {
+    addSpanAttributes({ 'publish.result': 'failure' });
+    recordSpanException(error instanceof Error ? error : new Error(String(error)));
+    throw error;
   } finally {
     // Always release lock
     const released = await releaseLock(lock);
     logger.info('Released distributed lock', { intentId, released });
   }
+  });
 }
 
 async function executePublishJob(
@@ -97,6 +106,7 @@ async function executePublishJob(
   const { intentId, adapter, orgId, retryOptions } = validatedPayload;
 
   // Phase 1: record attempt + lock intent
+  addSpanAttributes({ 'publish.phase': 'lock_and_record' });
   const db = await getDb();
   const attempt = await db.transaction(async trx => {
   // Set transaction timeout to prevent long-running queries
@@ -171,6 +181,7 @@ async function executePublishJob(
   }
 
   // Phase 2: External API call with circuit breaker and retry
+  addSpanAttributes({ 'publish.phase': 'external_api_call' });
   // NOTE: This phase operates outside the database transaction intentionally.
   // The transaction in Phase 1 only handles the initial attempt recording.
   // External API calls should not be within DB transactions to avoid holding
@@ -246,6 +257,7 @@ async function executePublishJob(
   }
 
   // Phase 3: Finalize - separate transaction for recording success
+  addSpanAttributes({ 'publish.phase': 'finalize' });
   // NOTE: This uses a separate transaction from Phase 1 because:
   // 1. Phase 1's transaction committed before external call (Phase 2)
   // 2. Holding a transaction open during external API calls would be an anti-pattern

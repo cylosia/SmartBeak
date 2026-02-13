@@ -33,6 +33,21 @@ export interface RateLimitResult {
 const DEFAULT_KEY_PREFIX = 'ratelimit';
 const logger = getLogger('rateLimiterRedis');
 
+// ============================================================================
+// Metrics Hook (set by monitoring package during initialization)
+// ============================================================================
+
+type RateLimitMetricsHook = (key: string, allowed: boolean, remaining: number, limit: number) => void;
+let _rateLimitMetricsHook: RateLimitMetricsHook | null = null;
+
+/**
+ * Register a metrics hook for rate limit checks.
+ * Called by the monitoring package during initialization.
+ */
+export function setRateLimitMetricsHook(hook: RateLimitMetricsHook): void {
+  _rateLimitMetricsHook = hook;
+}
+
 /**
  * Check rate limit using sliding window algorithm
  * 
@@ -101,6 +116,8 @@ export async function checkRateLimit(
     await redis.zadd(redisKey, now, memberId);
     await redis.pexpire(redisKey, config.windowMs);
   }
+
+  _rateLimitMetricsHook?.(key, allowed, remaining, config.maxRequests);
 
   return {
     allowed,

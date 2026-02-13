@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { withSpan, addSpanAttributes } from '@packages/monitoring';
 
 import { PublishingJob } from '../domain/entities/PublishingJob';
 import { PublishingJobRepository } from './ports/PublishingJobRepository';
@@ -72,51 +73,62 @@ export class PublishingService {
   contentId: string,
   targetId: string
   ): Promise<PublishingResult> {
-  // Validate inputs
-  const validationError = this.validateInputs(domainId, contentId, targetId);
-  if (validationError) {
+  return withSpan({
+    spanName: 'PublishingService.publish',
+    attributes: {
+    'publishing.domain_id': domainId,
+    'publishing.content_id': contentId,
+    'publishing.target_id': targetId,
+    },
+  }, async () => {
+    // Validate inputs
+    const validationError = this.validateInputs(domainId, contentId, targetId);
+    if (validationError) {
+    addSpanAttributes({ 'publishing.result': 'validation_failed' });
     return { success: false, error: validationError };
-  }
+    }
 
-  const client = await this.pool.connect();
+    const client = await this.pool.connect();
 
-  try {
+    try {
     await client.query('BEGIN');
 
     // Verify target exists with FOR UPDATE to prevent race conditions
     // P0-FIX: Move repository calls inside transaction for consistency
     const targetResult = await client.query(
-    'SELECT * FROM publish_targets WHERE id = $1 FOR UPDATE',
-    [targetId]
+      'SELECT * FROM publish_targets WHERE id = $1 FOR UPDATE',
+      [targetId]
     );
     const target = targetResult.rows[0] ? {
-    id: targetResult.rows[0]["id"],
-    domainId: targetResult.rows[0].domain_id,
-    // Map other fields as needed
+      id: targetResult.rows[0]["id"],
+      domainId: targetResult.rows[0].domain_id,
+      // Map other fields as needed
     } : null;
     if (!target) {
-    await client.query('ROLLBACK');
-    return {
-    success: false,
-    error: `Publish target '${targetId}' not found`
-    };
+      await client.query('ROLLBACK');
+      addSpanAttributes({ 'publishing.result': 'target_not_found' });
+      return {
+      success: false,
+      error: `Publish target '${targetId}' not found`
+      };
     }
 
     // Verify target belongs to domain
     if (target.domainId !== domainId) {
-    await client.query('ROLLBACK');
-    return {
-    success: false,
-    error: 'Target does not belong to the specified domain'
-    };
+      await client.query('ROLLBACK');
+      addSpanAttributes({ 'publishing.result': 'target_domain_mismatch' });
+      return {
+      success: false,
+      error: 'Target does not belong to the specified domain'
+      };
     }
 
     // Create publishing job
     const job = PublishingJob.create(
-    crypto.randomUUID(),
-    domainId,
-    contentId,
-    targetId,
+      crypto.randomUUID(),
+      domainId,
+      contentId,
+      targetId,
     );
 
     // P0-FIX: Pass client to save for transactional consistency
@@ -124,20 +136,23 @@ export class PublishingService {
 
     await client.query('COMMIT');
 
+    addSpanAttributes({ 'publishing.result': 'success' });
     return { success: true, job };
-  } catch (error) {
+    } catch (error) {
     try {
-    await client.query('ROLLBACK');
+      await client.query('ROLLBACK');
     } catch (rollbackError) {
-    logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
+      logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
     }
+    addSpanAttributes({ 'publishing.result': 'error' });
     return {
-    success: false,
-    error: error instanceof Error ? error.message : 'Failed to create publishing job'
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create publishing job'
     };
-  } finally {
+    } finally {
     client.release();
-  }
+    }
+  });
   }
 
   /**

@@ -11,6 +11,41 @@ import { getLogger } from '@kernel/logger';
 const logger = getLogger('retry');
 
 // ============================================================================
+// Metrics Hooks (set by monitoring package during initialization)
+// ============================================================================
+
+interface RetryMetricsHook {
+  onAttempt: (operation: string, attempt: number, delayMs: number) => void;
+  onExhaustion: (operation: string, totalAttempts: number) => void;
+}
+
+let _retryMetricsHook: RetryMetricsHook | null = null;
+
+/**
+ * Register a metrics hook for retry operations.
+ * Called by the monitoring package during initialization.
+ */
+export function setRetryMetricsHook(hook: RetryMetricsHook): void {
+  _retryMetricsHook = hook;
+}
+
+interface CircuitBreakerMetricsHook {
+  onStateChange: (name: string, fromState: string, toState: string) => void;
+  onExecution: (name: string, success: boolean, durationMs: number) => void;
+  onRejection: (name: string) => void;
+}
+
+let _circuitBreakerMetricsHook: CircuitBreakerMetricsHook | null = null;
+
+/**
+ * Register a metrics hook for circuit breaker operations.
+ * Called by the monitoring package during initialization.
+ */
+export function setCircuitBreakerMetricsHook(hook: CircuitBreakerMetricsHook): void {
+  _circuitBreakerMetricsHook = hook;
+}
+
+// ============================================================================
 // Types and Interfaces
 // ============================================================================
 
@@ -240,6 +275,9 @@ export async function withRetry<T>(
     const isLastAttempt = attempt > opts.maxRetries;
 
     if (isLastAttempt || !isRetryableError(err, opts)) {
+    if (isLastAttempt) {
+      _retryMetricsHook?.onExhaustion(retryKey, attempt);
+    }
     throw err;
     }
 
@@ -247,6 +285,7 @@ export async function withRetry<T>(
 
     // P1-FIX: Track retry attempt to prevent unbounded growth
     trackRetryAttempt(retryKey, Date.now());
+    _retryMetricsHook?.onAttempt(retryKey, attempt, delay);
 
     logger.warn(`Retry attempt ${attempt}/${opts.maxRetries} after ${delay}ms: ${err["message"]}`, {
     error: err["message"],
@@ -356,10 +395,12 @@ export class CircuitBreaker {
     const timeSinceLastFailure = Date.now() - (this.lastFailureTime || 0);
 
     if (timeSinceLastFailure < this.opts.resetTimeoutMs) {
+    _circuitBreakerMetricsHook?.onRejection(this.name);
     throw new Error(`Circuit breaker open for ${this.name}`);
     }
 
     // Transition to half-open
+    _circuitBreakerMetricsHook?.onStateChange(this.name, 'open', 'half-open');
     this.state = CircuitState.HALF_OPEN;
     this.halfOpenCalls = 0;
     logger.info(`Circuit breaker half-open for ${this.name}`);
@@ -367,6 +408,7 @@ export class CircuitBreaker {
 
     if (this.state === CircuitState.HALF_OPEN) {
     if (this.halfOpenCalls >= this.opts.halfOpenMaxCalls) {
+    _circuitBreakerMetricsHook?.onRejection(this.name);
     throw new Error(`Circuit breaker half-open limit reached for ${this.name}`);
     }
     this.halfOpenCalls++;
@@ -375,11 +417,14 @@ export class CircuitBreaker {
     release();
   }
 
+  const startTime = Date.now();
   try {
     const result = await fn();
+    _circuitBreakerMetricsHook?.onExecution(this.name, true, Date.now() - startTime);
     await this.onSuccess();
     return result;
   } catch (error) {
+    _circuitBreakerMetricsHook?.onExecution(this.name, false, Date.now() - startTime);
     // P1-FIX: Pass error to onFailure for classification
     await this.onFailure(error);
     throw error;
@@ -390,6 +435,7 @@ export class CircuitBreaker {
   const release = await this.stateLock.acquire();
   try {
     if (this.state === CircuitState.HALF_OPEN) {
+    _circuitBreakerMetricsHook?.onStateChange(this.name, 'half-open', 'closed');
     this.state = CircuitState.CLOSED;
     this.failures = 0;
     this.halfOpenCalls = 0;
@@ -457,7 +503,9 @@ export class CircuitBreaker {
     this.lastFailureTime = Date.now();
 
     if (this.failures >= this.opts.failureThreshold) {
+    const previousState = this.state;
     this.state = CircuitState.OPEN;
+    _circuitBreakerMetricsHook?.onStateChange(this.name, previousState, 'open');
     logger["error"](`Circuit breaker opened for ${this.name} (${this.failures} failures)`);
     }
   } finally {
