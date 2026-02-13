@@ -217,7 +217,7 @@ describe('ingestYouTubeAnalytics', () => {
       expect(result).toEqual({ views: 50, likes: 5, comments: 2 });
       expect(tokenFactory).toHaveBeenCalled();
 
-      const [url, options] = fetchMock.mock.calls[0] as [string, Record<string, unknown>];
+      const [_url, options] = fetchMock.mock.calls[0] as [string, Record<string, unknown>];
       expect((options['headers'] as Record<string, string>)['Authorization']).toBe('Bearer factory-token');
     });
   });
