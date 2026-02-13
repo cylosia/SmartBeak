@@ -603,6 +603,13 @@ export class MultiTierCache {
   }
 
   /**
+   * Get all L1 cache keys (for pattern-based invalidation)
+   */
+  getL1Keys(): string[] {
+    return [...this.l1Cache.keys()];
+  }
+
+  /**
    * Get cache size
    */
   getL1Size(): number {

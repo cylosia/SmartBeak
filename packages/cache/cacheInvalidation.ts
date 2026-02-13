@@ -167,12 +167,21 @@ export class CacheInvalidator {
    * Invalidate by key pattern (supports wildcards)
    */
   async invalidateByPattern(pattern: string): Promise<void> {
-    // Convert pattern to regex
-    const _regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
-    
-    // Note: In a real implementation, this would scan Redis keys
-    // For now, we just log the pattern
-    logger.info(`[CacheInvalidator] Invalidating pattern: ${pattern}`);
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+
+    const keys = this.cache.getL1Keys();
+    const toDelete: string[] = [];
+    for (const key of keys) {
+      if (regex.test(key)) {
+        toDelete.push(key);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await this.cache.deleteMany(toDelete);
+    }
+
+    logger.info(`[CacheInvalidator] Invalidated ${toDelete.length} entries matching pattern: ${pattern}`);
   }
 
   /**

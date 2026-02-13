@@ -22,9 +22,11 @@ export interface SearchResult {
   score: number;
 }
 
+const SEARCH_CACHE_TTL_MS = 5000;
+
 const CACHE = new LRUCache<string, CacheEntry<SearchResult[]>>({
   max: 5000,
-  ttl: 5000,
+  ttl: SEARCH_CACHE_TTL_MS,
 });
 
 /**
@@ -82,7 +84,7 @@ export class SearchQueryService {
     throw new Error('Search operation failed');
   }
 
-  CACHE.set(key, { value: results, expiresAt: Date.now() + 5000 });
+  CACHE.set(key, { value: results, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
   return results;
   }
 

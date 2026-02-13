@@ -112,14 +112,21 @@ export class CircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>> 
   /**
   * Handle successful execution
   * P1-FIX: Made async and protected with mutex for thread-safe state updates
+  * AUDIT-FIX: Only reset failures during half-open → closed transition,
+  * requiring consecutive successes (halfOpenMaxAttempts, default 1)
   */
   async onSuccess(): Promise<void> {
     await this.stateLock.runExclusive(() => {
-      // Reset failures counter on successful execution
-      if (this.failures > 0 || this.halfOpenAttempts > 0) {
-        this.failures = 0;
-        this.halfOpenAttempts = 0;
-        emitMetric({ name: 'circuit_closed', labels: { name: this.config.name } });
+      if (!this.open && this.failures > 0) {
+        // Half-open state: count consecutive successes before closing
+        this.successCount++;
+        const required = this.config.halfOpenMaxAttempts ?? 1;
+        if (this.successCount >= required) {
+          this.failures = 0;
+          this.halfOpenAttempts = 0;
+          this.successCount = 0;
+          emitMetric({ name: 'circuit_closed', labels: { name: this.config.name } });
+        }
       }
     });
   }
@@ -130,6 +137,7 @@ export class CircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>> 
   async onFailure(): Promise<void> {
     await this.stateLock.runExclusive(() => {
       this.failures++;
+      this.successCount = 0; // Reset consecutive success counter
       this.lastFailureTime = Date.now();
       emitMetric({
         name: 'circuit_failure',

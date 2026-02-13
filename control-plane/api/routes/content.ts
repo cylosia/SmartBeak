@@ -152,7 +152,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // C4-FIX: Changed table name from 'content' to 'content_items' to match migration schema
     let query = `
     SELECT c["id"], c.title, c.status, c.content_type, c.domain_id,
-        c.created_at, c.updated_at,
+        c.created_at, c.updated_at, c.published_at,
         d.name as domain_name
     FROM content_items c
     LEFT JOIN domains d ON c.domain_id = d["id"]

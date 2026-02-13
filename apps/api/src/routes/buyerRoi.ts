@@ -12,7 +12,12 @@ const RoleRowSchema = z.object({
   role: z.string(),
 });
 
-const RoiRowSchema = z.record(z.string(), z.unknown());
+const RoiRowSchema = z.object({
+  id: z.string(),
+  content_id: z.string().optional(),
+  roi_value: z.number().optional(),
+  created_at: z.coerce.date().optional(),
+}).passthrough();
 
 export type RoiRow = z.infer<typeof RoiRowSchema>;
 
