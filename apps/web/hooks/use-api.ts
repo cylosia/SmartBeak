@@ -81,6 +81,44 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * Enhanced API error that preserves HTTP status and server error response.
+ * Use `instanceof ApiError` to distinguish API failures from network errors.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly statusText: string,
+    public readonly body?: { error?: string; code?: string; requestId?: string; details?: unknown }
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Assert response is OK; throw ApiError with full context if not.
+ */
+async function assertOk(res: Response, operation: string): Promise<void> {
+  if (res.ok) return;
+
+  let body: { error?: string; code?: string; requestId?: string; details?: unknown } | undefined;
+  try {
+    body = await res.json();
+  } catch {
+    // Response body is not JSON - that's fine
+  }
+
+  const serverMessage = body?.error || res.statusText;
+  throw new ApiError(
+    `${operation} (HTTP ${res.status}): ${serverMessage}`,
+    res.status,
+    res.statusText,
+    body
+  );
+}
+
 // Query keys for cache management
 export const queryKeys = {
   domains: ['domains'] as const,
@@ -112,7 +150,7 @@ export function useDomains(): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch domains');
+      await assertOk(res, 'Failed to fetch domains');
       return res.json();
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -131,7 +169,7 @@ export function useDomain(id: string): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch domain');
+      await assertOk(res, 'Failed to fetch domain');
       return res.json();
     },
     enabled: !!id,
@@ -151,7 +189,7 @@ export function useThemes(): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch themes');
+      await assertOk(res, 'Failed to fetch themes');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -170,7 +208,7 @@ export function useTimeline(): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch timeline');
+      await assertOk(res, 'Failed to fetch timeline');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -189,7 +227,7 @@ export function useDomainTimeline(domainId: string): ReturnType<typeof useQuery>
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch timeline');
+      await assertOk(res, 'Failed to fetch timeline');
       return res.json();
     },
     enabled: !!domainId,
@@ -209,7 +247,7 @@ export function useInvoices(): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch invoices');
+      await assertOk(res, 'Failed to fetch invoices');
       const data = await res.json();
       return data.invoices || [];
     },
@@ -229,7 +267,7 @@ export function useLlmModels(): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch LLM models');
+      await assertOk(res, 'Failed to fetch LLM models');
       const data = await res.json();
       return data.models || [];
     },
@@ -249,7 +287,7 @@ export function useLlmPreferences(): ReturnType<typeof useQuery> {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch LLM preferences');
+      await assertOk(res, 'Failed to fetch LLM preferences');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -275,7 +313,7 @@ export function useUpdateLlmPreferences() {
         },
         DEFAULT_REQUEST_TIMEOUT_MS
       );
-      if (!res.ok) throw new Error('Failed to update preferences');
+      await assertOk(res, 'Failed to update preferences');
       return res.json();
     },
     onSuccess: () => {
@@ -303,9 +341,8 @@ export function usePortfolio() {
         }),
       ]);
 
-      if (!revenueRes.ok || !riskRes.ok) {
-        throw new Error('Failed to fetch portfolio data');
-      }
+      await assertOk(revenueRes, 'Failed to fetch portfolio revenue data');
+      await assertOk(riskRes, 'Failed to fetch portfolio risk data');
 
       const [revenue, risk] = await Promise.all([
         revenueRes.json(),
@@ -330,7 +367,7 @@ export function useAffiliateOffers() {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch affiliate offers');
+      await assertOk(res, 'Failed to fetch affiliate offers');
       const data = await res.json();
       return data.offers || [];
     },
@@ -350,7 +387,7 @@ export function useDiligence(token: string) {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch diligence data');
+      await assertOk(res, 'Failed to fetch diligence data');
       return res.json();
     },
     enabled: !!token,
@@ -370,7 +407,7 @@ export function useRoiRisk(assetId: string) {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch ROI risk data');
+      await assertOk(res, 'Failed to fetch ROI risk data');
       return res.json();
     },
     enabled: !!assetId,
@@ -390,7 +427,7 @@ export function useAttribution(type: 'llm' | 'buyer-safe') {
         credentials: 'include',
         signal,
       });
-      if (!res.ok) throw new Error('Failed to fetch attribution data');
+      await assertOk(res, 'Failed to fetch attribution data');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -413,6 +450,8 @@ export function useApi() {
       const response = await fetchWithTimeout(url, {
         credentials: 'include',
       }, DEFAULT_REQUEST_TIMEOUT_MS);
+      await assertOk(response, `Failed to GET ${path}`);
+      return { data: await response.json() };
       if (!response.ok) throw new Error(`Failed to GET ${path}`);
       return { data: await response.json() as T };
     },
@@ -424,6 +463,8 @@ export function useApi() {
         credentials: 'include',
         body: JSON.stringify(body),
       }, DEFAULT_REQUEST_TIMEOUT_MS);
+      await assertOk(response, `Failed to POST ${path}`);
+      return { data: await response.json() };
       if (!response.ok) throw new Error(`Failed to POST ${path}`);
       return { data: await response.json() as T };
     },
@@ -435,6 +476,8 @@ export function useApi() {
         credentials: 'include',
         body: JSON.stringify(body),
       }, DEFAULT_REQUEST_TIMEOUT_MS);
+      await assertOk(response, `Failed to PATCH ${path}`);
+      return { data: await response.json() };
       if (!response.ok) throw new Error(`Failed to PATCH ${path}`);
       return { data: await response.json() as T };
     },
@@ -444,6 +487,8 @@ export function useApi() {
         method: 'DELETE',
         credentials: 'include',
       }, DEFAULT_REQUEST_TIMEOUT_MS);
+      await assertOk(response, `Failed to DELETE ${path}`);
+      return { data: await response.json() };
       if (!response.ok) throw new Error(`Failed to DELETE ${path}`);
       return { data: await response.json() as T };
     },

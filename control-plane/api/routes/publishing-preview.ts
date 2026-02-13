@@ -1,8 +1,13 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { PublishingPreviewService } from '../../services/publishing-preview';
 import { requireRole, AuthContext, RoleAccessError } from '../../services/auth';
+
+const logger = getLogger('publishing-preview');
+const handleError = createRouteErrorHandler({ logger });
 
 
 
@@ -68,11 +73,7 @@ export async function publishingPreviewRoutes(app: FastifyInstance, pool: Pool) 
     const result = await svc.facebookPreview(content_id, ctx["orgId"]);
     return res.send(result);
   } catch (error) {
-    if (error instanceof RoleAccessError) {
-    return res.status(403).send({ error: 'Forbidden' });
-    }
-    console["error"]('Route error:', error);
-    return res.status(500).send({ error: 'Internal server error' });
+    return handleError(res, error, 'generate Facebook preview');
   }
   });
 }
