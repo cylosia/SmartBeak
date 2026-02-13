@@ -118,8 +118,6 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
   req: FastifyRequest<{ Querystring: SeoReportQueryType }>,
   reply: FastifyReply
   ): Promise<BuyerSeoReport | ErrorResponse> => {
-  const _ip = req["ip"] || 'unknown';
-
   await optionalAuthFastify(req, reply);
   const auth = req.authContext;
   if (!auth) {

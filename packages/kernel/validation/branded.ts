@@ -22,6 +22,9 @@ import { ValidationError, ErrorCodes } from './types-base';
 /** Branded type helper */
 export type Branded<T, B> = T & { readonly __brand: B };
 
+/** Alias for backward compatibility with kernel/branded.ts consumers */
+export type Brand<T, B> = Branded<T, B>;
+
 /** User ID branded type */
 export type UserId = Branded<string, 'UserId'>;
 
@@ -78,6 +81,42 @@ export type ApiKeyId = Branded<string, 'ApiKeyId'>;
 
 /** Audit Event ID branded type */
 export type AuditEventId = Branded<string, 'AuditEventId'>;
+
+// Additional branded types (consolidated from kernel/branded.ts)
+/** Membership ID branded type */
+export type MembershipId = Branded<string, 'MembershipId'>;
+/** Domain Registry ID branded type */
+export type DomainRegistryId = Branded<string, 'DomainRegistryId'>;
+/** Content Version ID branded type */
+export type ContentVersionId = Branded<string, 'ContentVersionId'>;
+/** Content Idea ID branded type */
+export type ContentIdeaId = Branded<string, 'ContentIdeaId'>;
+/** Media Collection ID branded type */
+export type MediaCollectionId = Branded<string, 'MediaCollectionId'>;
+/** Email Subscriber ID branded type */
+export type EmailSubscriberId = Branded<string, 'EmailSubscriberId'>;
+/** Email Campaign ID branded type */
+export type EmailCampaignId = Branded<string, 'EmailCampaignId'>;
+/** Email Template ID branded type */
+export type EmailTemplateId = Branded<string, 'EmailTemplateId'>;
+/** Job ID branded type */
+export type JobId = Branded<string, 'JobId'>;
+/** Task ID branded type */
+export type TaskId = Branded<string, 'TaskId'>;
+/** Export ID branded type */
+export type ExportId = Branded<string, 'ExportId'>;
+/** Analytics Event ID branded type */
+export type AnalyticsEventId = Branded<string, 'AnalyticsEventId'>;
+/** Metric ID branded type */
+export type MetricId = Branded<string, 'MetricId'>;
+/** Report ID branded type */
+export type ReportId = Branded<string, 'ReportId'>;
+/** Subscription ID branded type */
+export type SubscriptionId = Branded<string, 'SubscriptionId'>;
+/** Affiliate ID branded type */
+export type AffiliateId = Branded<string, 'AffiliateId'>;
+/** Commission ID branded type */
+export type CommissionId = Branded<string, 'CommissionId'>;
 
 // ============================================================================
 // Branded Type Factory Functions
@@ -445,4 +484,42 @@ export function unsafeAsContentId(id: string): ContentId {
  */
 export function unsafeAsDomainId(id: string): DomainId {
   return id as DomainId;
+}
+
+// ============================================================================
+// Additional Factory Functions (consolidated from kernel/branded.ts)
+// ============================================================================
+
+/** Factory function for EmailSubscriberId */
+export function createEmailSubscriberId(id: string): EmailSubscriberId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid EmailSubscriberId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as EmailSubscriberId;
+}
+
+/** Factory function for JobId */
+export function createJobId(id: string): JobId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid JobId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as JobId;
+}
+
+/** Factory function for SubscriptionId */
+export function createSubscriptionId(id: string): SubscriptionId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid SubscriptionId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as SubscriptionId;
+}
+
+/** Type guard for any valid UUID string */
+export function isValidId(value: unknown): value is string {
+  return typeof value === 'string' && isUUID(value);
+}
+
+/** Unsafe brand cast for cases where validation is already done */
+export function unsafeBrand<T, B>(value: T): Brand<T, B> {
+  return value as Brand<T, B>;
 }

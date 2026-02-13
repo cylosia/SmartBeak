@@ -11,6 +11,9 @@ function sanitizeFormId(formId: string): string {
   return formId.replace(/[^a-zA-Z0-9-]/g, '');
 }
 
+const CDN_BASE_URL = process.env['NEXT_PUBLIC_CDN_BASE_URL'] || 'https://cdn.acp.io';
+const FORMS_BASE_URL = process.env['NEXT_PUBLIC_FORMS_BASE_URL'] || 'https://acp.io';
+
 export function OptinEmbedSnippet({ formId }: { formId: string }) {
 
   if (!formId || !isValidFormId(formId)) {
@@ -23,8 +26,8 @@ export function OptinEmbedSnippet({ formId }: { formId: string }) {
   }
 
   const sanitizedFormId = sanitizeFormId(formId);
-  const script = `<script src='https://cdn.acp.io/forms/${sanitizedFormId}.js'></script>`;
-  const iframe = `<iframe src='https://acp.io/forms/${sanitizedFormId}' width='400' height='300' sandbox='allow-scripts allow-same-origin allow-forms' loading='lazy' referrerpolicy='no-referrer'></iframe>`;
+  const script = `<script src='${CDN_BASE_URL}/forms/${sanitizedFormId}.js'></script>`;
+  const iframe = `<iframe src='${FORMS_BASE_URL}/forms/${sanitizedFormId}' width='400' height='300' sandbox='allow-scripts allow-same-origin allow-forms' loading='lazy' referrerpolicy='no-referrer'></iframe>`;
 
   return (
   <div>

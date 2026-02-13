@@ -69,7 +69,7 @@ export class ImportAnalyzer {
   /**
    * Analyze imports in code
    */
-  analyzeImports(code: string, _filename: string): ImportAnalysis[] {
+  analyzeImports(code: string): ImportAnalysis[] {
     const imports: ImportAnalysis[] = [];
     const lines = code.split('\n');
 

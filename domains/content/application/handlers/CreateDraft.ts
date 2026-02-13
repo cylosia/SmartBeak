@@ -3,7 +3,7 @@ import { getLogger } from '@kernel/logger';
 import { ContentItem, ContentType } from '../../domain/entities/ContentItem';
 import { ContentRepository } from '../ports/ContentRepository';
 
-const _logger = getLogger('CreateDraft');
+const logger = getLogger('CreateDraft');
 
 
 
@@ -65,6 +65,7 @@ export class CreateDraft {
     await this.repo.save(item);
     return { success: true, item };
   } catch (error) {
+    logger.error('Failed to create draft', error instanceof Error ? error : new Error(String(error)));
     return {
     success: false,
     error: error instanceof Error ? error.message : 'Failed to create draft'
