@@ -87,10 +87,17 @@ export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
 // Error Response Interface
 // ============================================================================
 
+/**
+ * Standardized error response shape returned by all API endpoints.
+ */
 export interface ErrorResponse {
+  /** Human-readable error message */
   error: string;
+  /** Machine-readable error code from ErrorCodes */
   code: string;
+  /** Additional error details (validation issues, etc.) - hidden in production */
   details?: unknown;
+  /** Request ID for distributed tracing */
   requestId?: string;
 }
 
