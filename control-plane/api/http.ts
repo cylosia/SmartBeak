@@ -10,6 +10,7 @@ import { validateEnv } from '@config';
 import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
+import { BASE_SECURITY_HEADERS, CSP_API, PERMISSIONS_POLICY_API } from '@config/headers';
 
 // P2-PERF-FIX: Moved dynamic imports to top-level. Previously these were
 // await import() inside route handlers, making the first request to each endpoint slow.
@@ -147,28 +148,19 @@ if (LEGACY_PATH_MODE !== 'off') {
   });
 }
 
-// SECURITY FIX: Add security headers (HSTS, CSP, etc.)
+// SECURITY FIX: Add security headers (HSTS, CSP, Cross-Origin, etc.)
+// Values sourced from packages/config/headers.ts (canonical source of truth)
 app.addHook('onSend', async (request, reply, payload) => {
-  // HSTS - HTTP Strict Transport Security
-  void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // Apply baseline security headers (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+  for (const [key, value] of Object.entries(BASE_SECURITY_HEADERS)) {
+    void reply.header(key, value);
+  }
 
-  // Content Security Policy
-  void reply.header('Content-Security-Policy', 'default-src \'self\'; frame-ancestors \'none\';');
+  // Content Security Policy — maximally restrictive for JSON-only API
+  void reply.header('Content-Security-Policy', CSP_API);
 
-  // Prevent clickjacking
-  void reply.header('X-Frame-Options', 'DENY');
-
-  // Prevent MIME type sniffing
-  void reply.header('X-Content-Type-Options', 'nosniff');
-
-  // XSS Protection
-  void reply.header('X-XSS-Protection', '1; mode=block');
-
-  // Referrer Policy
-  void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-  // Permissions Policy
-  void reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Permissions Policy — fully restrictive (no payment needed for API)
+  void reply.header('Permissions-Policy', PERMISSIONS_POLICY_API);
 
   // Prevent caching of sensitive authenticated responses
   const authHeader = request.headers.authorization;
