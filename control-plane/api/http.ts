@@ -7,6 +7,7 @@ import Fastify from 'fastify';
 import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
+import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
 
@@ -112,7 +113,8 @@ await app.register(cors, {
   // P2-SECURITY-FIX: Removed X-CSRF-Token from allowedHeaders. It was listed but
   // no CSRF validation middleware exists, creating a false sense of security.
   // For a Bearer-token-only API, CSRF protection is not required.
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'traceparent', 'tracestate'],
+  exposedHeaders: ['X-Request-ID', 'X-Trace-ID'],
 });
 
 // API Versioning: Backward compatibility for unversioned paths.
@@ -726,6 +728,13 @@ async function start(): Promise<void> {
     logger.info('Closing Fastify server (draining connections)...');
     await app.close();
     logger.info('Fastify server closed');
+  });
+
+  // Flush pending OTel spans before process exit
+  registerShutdownHandler(async () => {
+    logger.info('Flushing telemetry spans...');
+    await shutdownTelemetry();
+    logger.info('Telemetry shutdown complete');
   });
   } catch (error) {
   logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));
