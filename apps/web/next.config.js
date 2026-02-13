@@ -6,6 +6,9 @@
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
+  // Enable standalone output for Docker containerization
+  output: 'standalone',
+
   // Security: Disable X-Powered-By header
   poweredByHeader: false,
 
