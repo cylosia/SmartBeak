@@ -1,6 +1,7 @@
 // P1-FIX: Removed BOM character
 import { Pool, PoolClient } from 'pg';
 import { getLogger } from '@kernel/logger';
+import { Semaphore, PoolExhaustionError } from '@kernel/semaphore';
 
 const logger = getLogger('database:pool');
 
@@ -336,6 +337,78 @@ export const pool = new Proxy({} as Pool, {
     return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(poolInstance) : value;
   }
 });
+
+// ============================================================================
+// Backpressure Gate
+// ============================================================================
+
+// Gate: allow max 8 concurrent connections (of 10 pool max) to leave headroom
+const POOL_GATE_MAX = 8;
+const POOL_GATE_MAX_WAITERS = 10;
+const poolGate = new Semaphore(POOL_GATE_MAX);
+
+/**
+ * Acquire a database connection with backpressure protection.
+ * Rejects early when the pool is near capacity, preventing
+ * requests from queuing indefinitely on pool.connect().
+ *
+ * @param timeoutMs - Max time to wait for a permit (default: 3000ms)
+ * @returns PoolClient with release() wrapped to also release the semaphore
+ * @throws PoolExhaustionError if backpressure is active
+ */
+export async function acquireConnection(timeoutMs = 3000): Promise<PoolClient> {
+  const pool = await getPool();
+
+  // Reject immediately if too many waiters are queued
+  if (poolGate.waiting > POOL_GATE_MAX_WAITERS) {
+    throw new PoolExhaustionError(
+      `Database pool backpressure: ${poolGate.waiting} requests waiting. Try again later.`
+    );
+  }
+
+  // Try to acquire a permit
+  const acquired = poolGate.tryAcquire();
+  if (!acquired) {
+    try {
+      await poolGate.acquire(timeoutMs);
+    } catch {
+      throw new PoolExhaustionError(
+        'Database pool backpressure: could not acquire connection permit within timeout'
+      );
+    }
+  }
+
+  try {
+    const client = await pool.connect();
+    // Wrap release to also release the semaphore permit
+    const originalRelease = client.release.bind(client);
+    client.release = (err?: boolean | Error) => {
+      poolGate.release();
+      return originalRelease(err);
+    };
+    return client;
+  } catch (error) {
+    poolGate.release();
+    throw error;
+  }
+}
+
+/**
+ * Get backpressure metrics for monitoring
+ */
+export function getBackpressureMetrics(): {
+  available: number;
+  waiting: number;
+  max: number;
+} {
+  return {
+    available: poolGate.available,
+    waiting: poolGate.waiting,
+    max: poolGate.max,
+  };
+}
+
+export { PoolExhaustionError };
 
 // Export internal getPool for other modules
 export { getPool };

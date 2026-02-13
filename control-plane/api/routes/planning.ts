@@ -3,9 +3,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { PlanningOverviewService } from '../../../domains/planning/application/PlanningOverviewService';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+
+const logger = getLogger('planning-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -48,11 +53,7 @@ export async function planningRoutes(app: FastifyInstance, pool: Pool): Promise<
     const result = await svc.overview(ctx["domainId"]);
     return res.send(result);
   } catch (error: unknown) {
-    console["error"]('[planning/overview] Error:', error);
-    return res.status(500).send({
-    error: 'Failed to retrieve planning overview',
-    message: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return handleError(res, error, 'fetch planning overview');
   }
   });
 }

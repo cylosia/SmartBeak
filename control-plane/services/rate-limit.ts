@@ -1,6 +1,7 @@
 import { LRUCache } from 'lru-cache';
 
 import { getLogger } from '@kernel/logger';
+import { getClientIp as kernelGetClientIp, isValidIp as _kernelIsValidIp } from '@kernel/ip-utils';
 
 import { RedisRateLimiter, getRateLimitConfig } from './rate-limiter-redis';
 
@@ -24,8 +25,6 @@ const LRU_CACHE_TTL_MS = 60 * 1000; // 1 minute
 const DEFAULT_RATE_LIMIT = 100;
 const DEFAULT_WINDOW_MS = 60 * 1000; // 1 minute
 const ERROR_RETRY_AFTER_SECONDS = 5;
-const IP_VALIDATION_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
-const IPV6_VALIDATION_REGEX = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
 
 const memoryCounters = new LRUCache<string, RateLimitRecord>({
   max: LRU_CACHE_MAX_SIZE,
@@ -35,81 +34,8 @@ const memoryCounters = new LRUCache<string, RateLimitRecord>({
 // Redis rate limiter instance
 let redisLimiter: RedisRateLimiter | null = null;
 
-const TRUSTED_PROXIES = process.env['TRUSTED_PROXIES']?.split(',').map(p => p.trim()) || [];
-
-/**
- * P1-FIX: Extract client IP with trusted proxy validation
- * 
- * Only trusts X-Forwarded-For from trusted proxies to prevent IP spoofing.
- * Falls back to the request's IP if the header is untrusted or invalid.
- * 
- * @param request - Fastify request object
- * @returns Client IP address
- */
-function _getClientIP(request: { ip: string; headers: Record<string, string | string[]> }): string {
-  const trustedProxies = process.env['TRUSTED_PROXIES']?.split(',') || [];
-  const forwarded = request.headers['x-forwarded-for'];
-  
-  // P1-FIX: Only trust X-Forwarded-For from trusted proxies
-  if (typeof forwarded === 'string' && trustedProxies.includes(request.ip)) {
-    return forwarded.split(',')[0]?.trim() || request.ip;
-  }
-  
-  return request.ip;
-}
-
-/**
-* Extract client IP with spoofing protection
-*
-* Uses trusted proxy configuration to safely extract the client IP
-* from X-Forwarded-For headers. Only trusts X-Forwarded-For headers
-* when the request comes from a trusted proxy. Falls back to direct
-* connection IP otherwise.
-*
-* SECURITY FIX: P1-HIGH - Added trusted proxy validation to prevent IP spoofing
-* Only trusts X-Forwarded-For when request.ip is in TRUSTED_PROXIES list.
-*
-* @param req - HTTP request object
-* @returns Client IP address or 'unknown' if cannot be determined
-*/
-function getClientIp(req: {
-  headers: Record<string, string | string[]>;
-  socket?: { remoteAddress?: string };
-  ip?: string;
-}): string {
-  const requestIp = req.ip || req.socket?.remoteAddress;
-  
-  // Parse X-Forwarded-For header only if request comes from a trusted proxy
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (typeof forwardedFor === 'string' && forwardedFor && requestIp) {
-    // SECURITY FIX: Only trust X-Forwarded-For from trusted proxies
-    if (TRUSTED_PROXIES.length > 0 && TRUSTED_PROXIES.includes(requestIp)) {
-      // Take the leftmost (original client) IP from the chain
-      const ips = forwardedFor.split(',').map(ip => ip.trim());
-      const clientIp = ips[0];
-      // Validate IP format (basic validation)
-      if (clientIp && isValidIp(clientIp)) {
-        return clientIp;
-      }
-    }
-  }
-
-  // Fallback to direct connection IP
-  return requestIp || 'unknown';
-}
-
-/**
-* Validate IP address format
-*
-* Performs basic validation for IPv4 and IPv6 addresses.
-* Note: This is a simplified check and may not catch all invalid formats.
-*
-* @param ip - IP address string to validate
-* @returns True if the IP appears to be valid
-*/
-function isValidIp(ip: string): boolean {
-  return IP_VALIDATION_REGEX.test(ip) || IPV6_VALIDATION_REGEX.test(ip);
-}
+// IP extraction — canonical implementation in @kernel/ip-utils
+const getClientIp = kernelGetClientIp;
 
 /**
 * Initialize the Redis-backed rate limiter

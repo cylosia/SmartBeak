@@ -204,6 +204,14 @@ export type {
   GoldenSignalThresholds,
   ErrorBudgetAlertLevel,
 } from './types';
+// Cost Tracking
+// ============================================================================
+export {
+  CostTracker,
+  type CostEntry,
+  type BudgetAlert,
+  type CostBreakdown,
+} from './costTracker';
 
 // ============================================================================
 // Legacy Exports (for backward compatibility)

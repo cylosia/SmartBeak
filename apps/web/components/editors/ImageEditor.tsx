@@ -1,5 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
+import { t } from '../../lib/i18n';
+
 export function ImageEditor() {
   const [preview, setPreview] = useState<string | null>(null);
   const previousUrlRef = useRef<string | null>(null);
@@ -15,10 +17,11 @@ export function ImageEditor() {
 
   return (
   <div>
-    <h4>Image Asset</h4>
+    <h4>{t('images.editorTitle')}</h4>
     <input
     type='file'
     accept='image/*'
+    aria-label={t('images.editorTitle')}
     onChange={(e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
@@ -32,7 +35,7 @@ export function ImageEditor() {
       }
     }}
     />
-    {preview && <img src={preview} style={{ maxWidth: '100%', marginTop: 12 }} />}
+    {preview && <img src={preview} alt={t('images.uploadedPreview')} style={{ maxWidth: '100%', marginTop: 12 }} />}
   </div>
   );
 }

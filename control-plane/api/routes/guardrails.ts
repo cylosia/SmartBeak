@@ -6,6 +6,7 @@ import { AlertService } from '../../services/alerts';
 import { FlagService } from '../../services/flags';
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
+import { featureFlags } from '@config/features';
 
 const FeatureFlagKeySchema = z.string()
   .min(1, 'Key is required')
@@ -121,6 +122,43 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   const { key } = paramsResult.data;
   const value = await flags.isEnabled(key);
   return { key, value };
+  });
+
+  // GET /admin/flags - List all feature flags (env-based + database-backed)
+  app.get('/admin/flags', async (req) => {
+  const ctx = getAuthContext(req);
+  requireRole(ctx, ['owner', 'admin']);
+
+  // Collect env-based flags
+  const envEntries = Object.entries(featureFlags).map(([key, value]) => ({
+    key,
+    value,
+    source: 'env' as const,
+    updatedAt: null as string | null,
+  }));
+
+  // Collect database-backed flags
+  const dbFlags = await flags.getAll();
+  const dbKeys = new Set(dbFlags.map(f => f.key));
+
+  // Merge: env flags first, then DB flags override or add
+  const merged = new Map<string, { key: string; value: boolean; source: 'env' | 'database'; updatedAt: string | null }>();
+
+  for (const entry of envEntries) {
+    merged.set(entry.key, entry);
+  }
+
+  for (const dbFlag of dbFlags) {
+    merged.set(dbFlag.key, {
+    key: dbFlag.key,
+    value: dbFlag.value,
+    source: 'database',
+    updatedAt: dbFlag.updatedAt ? dbFlag.updatedAt.toISOString() : null,
+    });
+  }
+
+  const result = [...merged.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return { flags: result };
   });
 
   // GET /alerts - List alerts for organization

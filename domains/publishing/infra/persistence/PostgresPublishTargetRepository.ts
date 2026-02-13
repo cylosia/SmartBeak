@@ -42,10 +42,10 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
     // Validate config when reading from database
     try {
     validatePublishTargetConfig(r.config);
-    } catch (error) {
+    } catch (error: unknown) {
     logger.warn('Invalid publish target config in database', {
     id: r.id,
-    error: (error as Error).message
+    error: error instanceof Error ? error.message : String(error)
     });
     }
 
@@ -53,7 +53,7 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
     const configCopy = JSON.parse(JSON.stringify(r.config ?? {}));
     return PublishTarget.reconstitute(r.id, r.domain_id, r.type, configCopy, r.enabled);
     });
-  } catch (error) {
+  } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Failed to list enabled publish targets', err, { domainId });
     throw error;
@@ -115,17 +115,17 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
     // Validate config when reading from database
     try {
     validatePublishTargetConfig(r.config);
-    } catch (error) {
+    } catch (error: unknown) {
     logger.warn('Invalid publish target config in database', {
     id: r.id,
-    error: (error as Error).message
+    error: error instanceof Error ? error.message : String(error)
     });
     }
 
     // Create a deep copy of config to prevent external mutation
     const configCopy = JSON.parse(JSON.stringify(r.config ?? {}));
     return PublishTarget.reconstitute(r.id, r.domain_id, r.type, configCopy, r.enabled);
-  } catch (error) {
+  } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Failed to get publish target by ID', err, { id });
     throw error;

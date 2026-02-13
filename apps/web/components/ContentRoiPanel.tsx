@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from '../lib/i18n';
 
 interface ContentRoiPanelProps {
   roi: {
@@ -10,21 +11,22 @@ interface ContentRoiPanelProps {
 }
 
 export function ContentRoiPanel({ roi }: ContentRoiPanelProps) {
+  const { t, formatCurrency } = useTranslation();
   return (
   <div>
-    <h3>Content ROI & Payback</h3>
+    <h3>{t('roi.contentTitle')}</h3>
     <ul>
-    <li>Estimated Monthly Revenue: ${roi.monthly_revenue_estimate}</li>
+    <li>{t('roi.estimatedMonthlyRevenue')}: {formatCurrency(roi.monthly_revenue_estimate)}</li>
     <li>
-      Payback Period:{' '}
+      {t('roi.paybackPeriod')}:{' '}
       {roi.payback_months !== null
-      ? roi.payback_months + ' months'
-      : 'N/A'}
+      ? t('roi.paybackMonths', { count: roi.payback_months })
+      : t('roi.paybackNA')}
     </li>
-    <li>Estimated 12-Month ROI: {roi.roi_12mo}%</li>
+    <li>{t('roi.estimated12MonthROI')}: {roi.roi_12mo}%</li>
     </ul>
     <p style={{ fontSize: '0.85em', color: '#555' }}>
-    These estimates are advisory and based on assumptions you provide.
+    {t('roi.advisory')}
     </p>
   </div>
   );

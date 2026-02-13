@@ -3,12 +3,17 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { ContentStatus } from '../../../domains/content/domain/entities/ContentItem';
 import { getAuthContext } from '../types';
 import { getContentRepository } from '../../services/repository-factory';
 import { ListContent } from '../../../domains/content/application/handlers/ListContent';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+
+const logger = getLogger('content-list');
+const handleError = createRouteErrorHandler({ logger });
 
 const QuerySchema = z.object({
   status: z.enum(['draft', 'scheduled', 'published', 'archived']).default('draft'),
@@ -60,15 +65,7 @@ export async function contentListRoutes(app: FastifyInstance) {
     }
     };
   } catch (error: unknown) {
-    console["error"]('[content/list] Error:', error);
-    const errorMessage = process.env['NODE_ENV'] === 'development' && error instanceof Error
-    ? error.message
-    : 'Failed to list content';
-    return res.status(500).send({
-    error: 'Failed to list content',
-    code: 'INTERNAL_ERROR',
-    ...(process.env['NODE_ENV'] === 'development' && { details: errorMessage })
-    });
+    return handleError(res, error, 'list content');
   }
   });
 }

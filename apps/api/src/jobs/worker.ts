@@ -2,6 +2,7 @@
 import { initializeJobScheduler } from './index';
 // P1-9 FIX: Import from shared package instead of cross-app import from apps/web
 import { validateEnv } from '@config/validation';
+import { shutdownTelemetry } from '@smartbeak/monitoring';
 import { getLogger } from '@kernel/logger';
 /**
  * Background Worker Entry Point
@@ -48,6 +49,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
       )
     ]);
     logger.info('Worker stopped');
+
+    // Flush pending OTel spans
+    await shutdownTelemetry();
+    logger.info('Telemetry shutdown complete');
   } catch (shutdownError) {
     logger.error('Forced shutdown due to timeout or error',
       shutdownError instanceof Error ? shutdownError : new Error(String(shutdownError))

@@ -21,7 +21,7 @@ import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 // @ts-expect-error -- Should use getKnex() async; needs refactor to support lazy init
 import { knex } from '../../packages/database';
-import { VercelAdapter } from '../../apps/api/src/adapters/vercel/VercelAdapter';
+import { VercelAdapter } from '@adapters/vercel/VercelAdapter';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('shard-deployment');

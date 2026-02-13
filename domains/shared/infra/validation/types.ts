@@ -7,7 +7,7 @@
 export type {
   NotificationPayload,
   NotificationAttachment,
-} from '@packages/types/notifications';
+} from '@types/notifications';
 
 export type {
   PublishTargetConfig,
@@ -15,7 +15,7 @@ export type {
   PublishTargetAuth,
   PublishTargetRateLimit,
   PublishTargetContentTransform,
-} from '@packages/types/publishing';
+} from '@types/publishing';
 
 /**
  * Search document author information

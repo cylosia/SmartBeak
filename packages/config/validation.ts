@@ -34,6 +34,8 @@ export type RequiredEnvVar = typeof REQUIRED_ENV_VARS[number];
 
 // Optional environment variables
 export const OPTIONAL_ENV_VARS = [
+  'OTEL_EXPORTER_OTLP_ENDPOINT',
+  'OTEL_SAMPLING_RATE',
   'AHREFS_API_TOKEN',
   'GSC_CLIENT_ID',
   'GSC_CLIENT_SECRET',

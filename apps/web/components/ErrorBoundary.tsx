@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../lib/i18n';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -24,9 +25,9 @@ export class ErrorBoundary extends React.Component<
   override render(): React.ReactNode {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 48, textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>
-          <h1>Something went wrong</h1>
-          <p>An unexpected error occurred. Please try reloading the page.</p>
+        <div role="alert" style={{ padding: 48, textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>
+          <h1>{t('errors.title')}</h1>
+          <p>{t('errors.description')}</p>
           <button
             onClick={() => window.location.reload()}
             style={{
@@ -38,7 +39,7 @@ export class ErrorBoundary extends React.Component<
               background: '#fff',
             }}
           >
-            Reload page
+            {t('common.reloadPage')}
           </button>
         </div>
       );

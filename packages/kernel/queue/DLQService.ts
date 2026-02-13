@@ -67,6 +67,7 @@ export class DLQService {
   * @param error - Error that caused the failure
   * @param jobData - Original job data
   * @param retryCount - Number of retry attempts made
+  * @param orgId - Organization ID for tenant isolation (optional)
   * @throws {Error} If the database write fails
   */
   async record(
@@ -74,7 +75,8 @@ export class DLQService {
   region: string,
   error: Error,
   jobData: unknown,
-  retryCount: number
+  retryCount: number,
+  orgId?: string
   ): Promise<void> {
   const category = categorizeError(error);
 
@@ -86,8 +88,8 @@ export class DLQService {
     `INSERT INTO publishing_dlq (
     id, publishing_job_id, region,
     error_message, error_stack, error_category,
-    job_data, retry_count, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+    job_data, retry_count, org_id, created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
     [
     randomUUID(),
     jobId,
@@ -98,6 +100,7 @@ export class DLQService {
     category,
     JSON.stringify(jobData),
     retryCount,
+    orgId ?? null,
     ]
     );
 

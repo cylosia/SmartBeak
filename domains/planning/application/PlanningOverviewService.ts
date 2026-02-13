@@ -126,7 +126,7 @@ export class PlanningOverviewService {
     );
     return Number(rows[0]?.count || 0);
   } catch (error) {
-    logger.error('Failed to get active authors count', error as Error, { domainId });
+    logger.error('Failed to get active authors count', error instanceof Error ? error : new Error(String(error)), { domainId });
     return 0;
   }
   }
@@ -146,7 +146,7 @@ export class PlanningOverviewService {
     );
     return Number(rows[0]?.count || 0);
   } catch (error) {
-    logger.error('Failed to get active customers count', error as Error, { domainId });
+    logger.error('Failed to get active customers count', error instanceof Error ? error : new Error(String(error)), { domainId });
     return 0;
   }
   }
@@ -164,7 +164,7 @@ export class PlanningOverviewService {
     );
     return Number(rows[0]?.count || 0);
   } catch (error) {
-    logger.warn('Keywords table query failed, returning 0', { domainId, error: (error as Error).message });
+    logger.warn('Keywords table query failed, returning 0', { domainId, error: error instanceof Error ? error.message : String(error) });
     return 0;
   }
   }
@@ -182,7 +182,7 @@ export class PlanningOverviewService {
     );
     return Number(rows[0]?.count || 0);
   } catch (error) {
-    logger.warn('Content ideas table query failed, returning 0', { domainId, error: (error as Error).message });
+    logger.warn('Content ideas table query failed, returning 0', { domainId, error: error instanceof Error ? error.message : String(error) });
     return 0;
   }
   }
@@ -202,7 +202,7 @@ export class PlanningOverviewService {
     );
     return Number(rows[0]?.count || 0);
   } catch (error) {
-    logger.warn('Content items table query failed, returning 0', { domainId, error: (error as Error).message });
+    logger.warn('Content items table query failed, returning 0', { domainId, error: error instanceof Error ? error.message : String(error) });
     return 0;
   }
   }

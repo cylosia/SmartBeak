@@ -42,8 +42,17 @@ export { addLogHandler, clearLogHandlers, debug, info, warn, error, fatal, Logge
 export { TIME, TIME_SECONDS, DB, RATE_LIMIT, HTTP, CONTENT, JOBS, CACHE, SECURITY, VALIDATION, PAGINATION, } from './constants';
 // Health checks (M7, M11)
 export { registerHealthCheck, checkAllHealth, getLastHealthCheck, createDatabaseHealthCheck, createExternalApiHealthCheck, createRedisHealthCheck, healthCheckMiddleware, } from './health-check';
+// Retry utilities (M8) + consolidated from apps/api/src/utils/retry.ts and resilience.ts
+export {
+  withRetry, makeRetryable, Retryable, CircuitBreaker, CircuitState,
+  sleep, jitteredBackoff, isRetryableStatus, parseRetryAfter,
+  CircuitOpenError, withTimeout, withCircuitBreaker,
+  type RetryOptions, type CircuitBreakerOptions, type JitteredBackoffOptions,
+} from './retry';
 // Retry utilities (M8)
-export { withRetry, makeRetryable, Retryable, CircuitBreaker, } from './retry';
+export { withRetry, makeRetryable, Retryable, CircuitBreaker, AbortError, } from './retry';
+// Backpressure utilities
+export { Semaphore, PoolExhaustionError, QueueBackpressureError, } from './semaphore';
 // DLQ (M15)
 export { setDLQStorage, getDLQStorage, sendToDLQ, DLQ, withDLQ, } from './dlq';
 // Metrics (M5)
@@ -80,3 +89,18 @@ export {
   rateLimitMiddleware, createRateLimiter,
   type RateLimitConfig, type RateLimitResult,
 } from './rateLimiterRedis';
+
+// IP utilities — consolidated from control-plane/services/rate-limit.ts and apps/api/src/utils/rateLimit.ts
+export { getClientIp, isValidIp } from './ip-utils';
+
+// Bot detection — consolidated from apps/api/src/middleware/rateLimiter.ts
+export { detectBot, type BotDetectionResult } from './bot-detection';
+
+// Redaction engine — consolidated from packages/security/logger.ts and packages/kernel/logger.ts
+export {
+  sanitizeForLogging, sanitizeHeaders, sanitizeUrl, sanitizeErrorMessage,
+  isSensitiveField, isSensitiveValue, maskValue,
+  type SanitizedData,
+} from './redaction';
+// Transactional outbox relay for at-least-once event delivery
+export { OutboxRelay, type OutboxRelayOptions } from './outbox/OutboxRelay';

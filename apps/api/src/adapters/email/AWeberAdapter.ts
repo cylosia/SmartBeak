@@ -1,6 +1,6 @@
 import { API_VERSIONS, API_BASE_URLS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '../../utils/config';
 import { AbortController } from 'abort-controller';
-import { withCircuitBreaker, withTimeout } from '../../utils/resilience';
+import { executeWithCircuitBreaker, withTimeout } from '../../utils/resilience';
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
 import { validateNonEmptyString, isAWeberErrorResponse, isAWeberListResponse } from '../../utils/validation';
 import fetch from 'node-fetch';
@@ -60,8 +60,18 @@ export class AWeberAdapter implements EmailProviderAdapter {
     this.logger = new StructuredLogger('AWeberAdapter');
     this.metrics = new MetricsCollector('AWeberAdapter');
 
-    this.createListWithResilience = withCircuitBreaker(((name: string) => this._createListInternal(name)) as (...args: unknown[]) => Promise<unknown>, DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold, 'aweber-createList') as (name: string) => Promise<string>;
-    this.addSubscriberWithResilience = withCircuitBreaker(((email: string, listId: string) => this._addSubscriberInternal(email, listId)) as (...args: unknown[]) => Promise<unknown>, DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold, 'aweber-addSubscriber') as (email: string, listId: string) => Promise<void>;
+    this.createListWithResilience = (name: string) =>
+      executeWithCircuitBreaker(
+        'aweber-createList',
+        () => this._createListInternal(name),
+        DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold
+      );
+    this.addSubscriberWithResilience = (email: string, listId: string) =>
+      executeWithCircuitBreaker(
+        'aweber-addSubscriber',
+        () => this._addSubscriberInternal(email, listId),
+        DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold
+      );
   }
 
   /**
