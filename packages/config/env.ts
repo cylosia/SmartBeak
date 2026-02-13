@@ -1,8 +1,12 @@
 /**
  * Environment Variable Utilities
- * 
+ *
  * Provides safe parsing and validation of environment variables.
  */
+
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('config');
 
 // P1-SECURITY FIX: Use word boundaries to prevent matching legitimate values
 // containing substrings like "test" (e.g., "contest-api-key", "attestation-token")
@@ -78,7 +82,7 @@ export function parseBoolEnv(name: string, defaultValue: boolean): boolean {
   const normalized = value.toLowerCase();
   if (normalized === 'true' || value === '1') return true;
   if (normalized === 'false' || value === '0') return false;
-  console.warn(`[config] Unrecognized boolean value for ${name}: "${value}", using default: ${defaultValue}`);
+  logger.warn('Unrecognized boolean value, using default', { name, value, defaultValue });
   return defaultValue;
 }
 
@@ -120,7 +124,7 @@ export function parseJSONEnv<T>(name: string, defaultValue: T): T {
     // P2-SECURITY FIX: Log a warning when JSON parsing fails instead of silently returning default.
     // For security-critical configs, silent failures can mask misconfiguration.
     const errMsg = e instanceof Error ? e.message : String(e);
-    console.warn(`[config] Failed to parse JSON env var ${name}: ${errMsg}, using default`);
+    logger.warn('Failed to parse JSON env var, using default', { name, error: errMsg });
     return defaultValue;
   }
 }

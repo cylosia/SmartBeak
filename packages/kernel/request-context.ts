@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 
 import { AsyncLocalStorage } from 'async_hooks';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('RequestContext');
 
 /**
 * Request Context Module
@@ -36,7 +39,7 @@ export const requestContextStorage = asyncLocalStorage;
 export function getRequestContext(): RequestContext | undefined {
   const context = asyncLocalStorage.getStore();
   if (!context && process.env.NODE_ENV === 'development') {
-    console.warn('getRequestContext called outside of runWithContext');
+    logger.warn('getRequestContext called outside of runWithContext');
   }
   return context;
 }

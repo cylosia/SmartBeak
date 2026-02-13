@@ -4,6 +4,9 @@
  */
 
 import { FastifyReply } from 'fastify';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('ErrorHandler');
 
 /**
  * Standard error response structure
@@ -80,7 +83,7 @@ export function sanitizeError(
   const sanitizedForLog = error instanceof Error 
     ? { ...error, message: sanitizeErrorMessage(error["message"]) }
     : error;
-  console.error(`[Error:${requestId}]`, sanitizedForLog);
+  logger.error('Sanitized error', { requestId, error: sanitizedForLog });
 
   const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -238,7 +241,7 @@ export function sanitizeExternalAPIError(
   const sanitizedError = error instanceof Error 
     ? sanitizeErrorMessage(error["message"])
     : sanitizeErrorMessage(String(error));
-  console.error(`[${provider} Error:${reqId}]`, sanitizedError);
+  logger.error('External API error', { provider, requestId: reqId, error: sanitizedError });
 
   // Always return generic message for external API errors
   return {

@@ -4,6 +4,9 @@ import { z } from 'zod';
 
 import { adminRateLimit } from '../middleware/rateLimiter';
 import { getDb } from '../db';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('AdminAuditExport');
 
 const ExportQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(1000).default(1000),
@@ -97,7 +100,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
     return reply.status(403).send({ error: 'Forbidden. Admin access required.' });
     }
   } catch (error) {
-    console.error('[admin-audit-export-hook] Error:', error);
+    logger.error('Authentication hook error', { error });
     const exportError = new ExportError('Authentication check failed', 'AUTH_ERROR', 500);
     return reply.status(exportError.statusCode).send({
     error: exportError["message"],
@@ -201,7 +204,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
     .header('X-Content-Type-Options', 'nosniff')
     .send(header + body);
   } catch (error) {
-    console.error('[admin-audit-export] Error:', error);
+    logger.error('Audit export error', { error });
     if (error instanceof ExportError) {
     return reply.status(error.statusCode).send({
     error: error["message"],

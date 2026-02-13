@@ -1,5 +1,9 @@
 
 
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('providers');
+
 // import { getOptionalEnv } from '@config';
 const getOptionalEnv = (key: string): string | undefined => {
   return process.env[key];
@@ -19,9 +23,7 @@ function validateProvider(name: string, config: Record<string, string>): void {
   .map(([key]) => key);
 
   if (missing.length > 0) {
-  console.warn(
-    `[providers] ${name} provider is not fully configured. Missing: ${missing.join(', ')}`
-  );
+  logger.warn('Provider is not fully configured', { provider: name, missing });
   }
 }
 

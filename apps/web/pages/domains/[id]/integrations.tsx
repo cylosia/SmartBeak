@@ -1,6 +1,6 @@
 
 import { GetServerSideProps } from 'next';
-
+import { requireDomainAccess } from '../../../lib/auth';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 interface DomainIntegration {
@@ -64,17 +64,21 @@ export default function DomainIntegrations({ domainId, integrations }: DomainInt
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const getServerSideProps: GetServerSideProps = async ({ params, req }) => {
   const domainId = params?.['id'];
 
-  if (!domainId || typeof domainId !== 'string') {
+  if (!domainId || typeof domainId !== 'string' || !UUID_RE.test(domainId)) {
     return { notFound: true };
   }
 
-  // TODO: Wire to domain_integrations table with proper authorization:
-  // 1. Verify user session via getSession(req)
-  // 2. Check canAccessDomain(userId, domainId) before returning data
-  // 3. Return { notFound: true } if unauthorized
+  const authCheck = await requireDomainAccess(req, domainId);
+  if (!authCheck.authorized) {
+    return authCheck.result;
+  }
+
+  // TODO: Wire to domain_integrations table once migration is complete
   const integrations = [
   { provider: 'Google Search Console', status: 'connected', account_identifier: 'sc-domain:example.com' }
   ];

@@ -5,6 +5,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('content:unarchive');
 
 /**
 * POST /api/content/unarchive
@@ -75,7 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (rows.length === 0) {
         await client.query('ROLLBACK');
         // SECURITY FIX: Return 404 (not 403) to prevent ID enumeration
-        console.warn(`[IDOR] User ${auth.userId} tried to unarchive content ${contentId} not in their org`);
+        logger.warn('IDOR attempt: user tried to unarchive content not in their org', { userId: auth.userId, contentId });
         return sendError(res, 404, 'Content not found');
       }
 
@@ -112,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Audit table may not exist yet - log but don't fail
         const err = auditError as { code?: string; message?: string };
         if (err.code !== '42P01') {
-          console.warn('[content/unarchive] Audit log error:', err.message);
+          logger.warn('Audit log error', { error: err.message });
         }
       }
 
@@ -131,7 +134,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       client.release();
     }
   } catch (error: unknown) {
-    console.error('[content/unarchive] Error:', error);
+    logger.error('Error unarchiving content', { error });
 
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     const message = error instanceof Error ? error.message : '';

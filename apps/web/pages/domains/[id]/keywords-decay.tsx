@@ -1,4 +1,5 @@
 import type { GetServerSidePropsContext } from 'next';
+import { requireDomainAccess } from '../../../lib/auth';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 
@@ -21,15 +22,16 @@ export default function KeywordDecay({ domainId }: KeywordDecayProps) {
   );
 }
 
-export async function getServerSideProps({ params, req: _req }: GetServerSidePropsContext) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   const id = params?.['id'];
-  if (typeof id !== 'string') {
+  if (typeof id !== 'string' || !UUID_RE.test(id)) {
     return { notFound: true };
   }
-  // P1-13: TODO — Add domain authorization check here.
-  // The Clerk middleware authenticates the user, but does not verify
-  // that the user has access to this specific domain (IDOR risk).
-  // Use canAccessDomain(userId, id, db) from lib/auth.ts once
-  // a server-side DB pool is available in getServerSideProps.
+  const authCheck = await requireDomainAccess(req, id);
+  if (!authCheck.authorized) {
+    return authCheck.result;
+  }
   return { props: { domainId: id } };
 }

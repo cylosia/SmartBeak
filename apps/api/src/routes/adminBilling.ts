@@ -7,6 +7,9 @@ import { getDb } from '../db';
 import { adminRateLimit } from '../middleware/rateLimiter';
 import { sanitizeErrorMessage } from '../../../../packages/security/logger';
 import { isValidUUID } from '../../../../packages/security/input-validator';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('AdminBilling');
 
 /**
  * P0-FIX: Verify the specified organization exists and has active admin membership.
@@ -252,7 +255,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages before logging and returning
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error["message"] : 'Failed to fetch billing data');
-      console.error('[admin/billing] Error:', sanitizedError);
+      logger.error('Error fetching billing data', { error: sanitizedError });
       
       return reply.status(500).send({ 
         error: 'Internal Server Error',
@@ -309,7 +312,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error["message"] : 'Failed to fetch organization');
-      console.error('[admin/billing/:id] Error:', sanitizedError);
+      logger.error('Error fetching organization', { error: sanitizedError });
       
       return reply.status(500).send({ 
         error: 'Internal Server Error',

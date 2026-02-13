@@ -5,6 +5,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('content:create');
 
 /**
 * POST /api/content/create
@@ -72,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // P1-FIX: Single verification check - query already filtered by org_id
     if (domainRows.length === 0) {
-      console.warn(`[IDOR] Domain ${domainId} not found or does not belong to user's org ${auth["orgId"]}`);
+      logger.warn('IDOR attempt: domain not found or does not belong to user org', { domainId, orgId: auth["orgId"] });
       return sendError(res, 403, 'Access denied to domain');
     }
 
@@ -90,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Security audit log for content creation
-    console.log(`[audit:content:create] Content created: ${contentId} by user: ${auth.userId}, org: ${auth["orgId"]}, domain: ${domainId}, type: ${type}`);
+    logger.info('Content created', { contentId, userId: auth.userId, orgId: auth["orgId"], domainId, type });
 
     // Return created content info
     res.status(201).json({
@@ -100,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updatedAt: now.toISOString(),
     });
   } catch (error: unknown) {
-    console.error('[content/create] Error:', error);
+    logger.error('Error creating content', { error });
 
     // Handle specific database errors
     const pgError = error as { code?: string; message?: string };

@@ -12,6 +12,9 @@
 
 import { createHash } from 'crypto';
 import { MultiTierCache } from './multiTierCache';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('QueryCache');
 
 // ============================================================================
 // Constants for Memory Leak Prevention
@@ -322,7 +325,7 @@ export class QueryCache {
 
     if (evicted > 0) {
       this.versionsCleaned += evicted;
-      console.warn(`[QueryCache] Evicted ${evicted} old version keys due to size limit. Total evicted: ${this.versionsCleaned}`);
+      logger.warn('Evicted old version keys due to size limit', { evicted, totalEvicted: this.versionsCleaned });
     }
   }
 
@@ -344,7 +347,7 @@ export class QueryCache {
 
     if (cleaned > 0) {
       this.versionsCleaned += cleaned;
-      console.log(`[QueryCache] Periodic cleanup removed ${cleaned} stale version keys`);
+      logger.info('Periodic cleanup removed stale version keys', { cleaned });
     }
 
     // Check if we're approaching the limit
@@ -352,7 +355,7 @@ export class QueryCache {
     if (utilization >= VERSION_ALERT_THRESHOLD && 
         (now - this.lastAlertTime) > VERSION_ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      console.error(`[QueryCache] ALERT: Version keys approaching limit`, {
+      logger.error('Version keys approaching limit', {
         current: this.queryVersions.size,
         max: MAX_VERSION_KEYS,
         utilization: `${(utilization * 100).toFixed(1)}%`,
@@ -378,7 +381,7 @@ export class QueryCache {
       tableCount: 1,
     });
     
-    console.log(`[QueryCache] Invalidated table ${tableName}, new version: ${safeVersion}`);
+    logger.info('Invalidated table', { tableName, newVersion: safeVersion });
   }
 
   /**

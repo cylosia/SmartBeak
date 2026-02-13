@@ -112,13 +112,13 @@ export class VaultClient {
 
     if (!secret) {
         // P1-FIX: Secret Leakage - Don't log sensitive key details
-        console.warn(`[VaultClient] Secret not found for org [REDACTED]`);
+        logger.warn('Secret not found for org [REDACTED]');
     throw new Error(`Secret not found: ${key}`);
     }
 
     this.addToCache(cacheKey, secret);
 
-    console.debug(`[VaultClient] Secret retrieved for org [REDACTED]`);
+    logger.debug('Secret retrieved for org [REDACTED]');
     return secret;
   } catch (error) {
     // Log and re-throw with context - check for specific error using error code or message
@@ -130,8 +130,8 @@ export class VaultClient {
     }
 
     // P1-FIX: Secret Leakage - Redact sensitive info in error logs
-    console.error(`[VaultClient] Error retrieving secret for org [REDACTED]:`,
-    error instanceof Error ? '[REDACTED_ERROR]' : 'Unknown error');
+    logger.error('Error retrieving secret for org [REDACTED]', {
+    error: error instanceof Error ? '[REDACTED_ERROR]' : 'Unknown error' });
     throw new Error(`Failed to retrieve secret: ${error instanceof Error ? error["message"] : 'Unknown error'}`);
   }
   }

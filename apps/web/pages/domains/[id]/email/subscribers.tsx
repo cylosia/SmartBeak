@@ -1,4 +1,5 @@
 import type { GetServerSidePropsContext } from 'next';
+import { requireDomainAccess } from '../../../../lib/auth';
 import { AppShell } from '../../../../components/AppShell';
 import { DomainTabs } from '../../../../components/DomainTabs';
 import { EmailAudienceTabs } from '../../../../components/EmailAudienceTabs';
@@ -25,15 +26,16 @@ export default function Subscribers({ domainId }: SubscribersProps) {
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const id = context.params?.['id'];
-  if (typeof id !== 'string') {
+  if (typeof id !== 'string' || !UUID_RE.test(id)) {
     return { notFound: true };
   }
-
-  // SECURITY FIX P2 #19: Verify the user has access to this domain.
-  // Currently pages show static data, but this prevents future IDOR when data fetching is added.
-  // TODO: Replace with actual auth check once getSession/getAuth is available in this context
-
+  const authCheck = await requireDomainAccess(context.req, id);
+  if (!authCheck.authorized) {
+    return authCheck.result;
+  }
   return { props: { domainId: id } };
 }

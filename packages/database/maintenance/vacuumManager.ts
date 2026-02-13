@@ -14,6 +14,9 @@ import type {
   MaintenanceOptions,
   TableAutovacuumConfig,
 } from './types';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('vacuumManager');
 
 /** Default timeout for maintenance operations (5 minutes) */
 const DEFAULT_TIMEOUT_MS = 300000;
@@ -339,8 +342,7 @@ async function logMaintenanceOperation(
     });
   } catch (err) {
     // P1-9 FIX: Log failure instead of silently swallowing
-    // eslint-disable-next-line no-console
-    console.error('[vacuumManager] Failed to log maintenance operation:', err instanceof Error ? err.message : String(err));
+    logger.error('Failed to log maintenance operation', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -491,8 +493,7 @@ export async function runVacuumMaintenance(
       try {
         validateTableName(table);
       } catch {
-        // eslint-disable-next-line no-console
-        console.error(`[vacuumManager] Skipping table with invalid name from db_vacuum_statistics: ${table}`);
+        logger.error('Skipping table with invalid name from db_vacuum_statistics', { table });
         continue;
       }
       const result = await vacuumAnalyzeTable(knex, table);

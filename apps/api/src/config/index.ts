@@ -1,9 +1,13 @@
 /**
  * Configuration Barrel Export
- * 
+ *
  * Centralized configuration exports for the API.
  * Re-exports from utils/config where appropriate and defines app-specific configs.
  */
+
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('BillingConfig');
 
 // ============================================================================
 // Re-exports from utils/config (shared configurations)
@@ -287,11 +291,11 @@ export function getBillingConfig(): BillingConfig {
   const jwtKey = process.env['JWT_KEY_1'] || '';
 
   if (!stripeSecretKey && process.env['NODE_ENV'] === 'production') {
-    console.warn('[BillingConfig] STRIPE_SECRET_KEY not configured');
+    logger.warn('STRIPE_SECRET_KEY not configured');
   }
 
   if (!jwtKey && process.env['NODE_ENV'] === 'production') {
-    console.warn('[BillingConfig] JWT_KEY_1 not configured');
+    logger.warn('JWT_KEY_1 not configured');
   }
 
   return {

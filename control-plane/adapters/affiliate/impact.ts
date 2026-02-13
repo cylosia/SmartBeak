@@ -2,6 +2,9 @@ import fetch from 'node-fetch';
 import { AbortController } from 'abort-controller';
 
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('ImpactAdapter');
 
 
 
@@ -186,7 +189,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
 
     return reports;
   } catch (error: unknown) {
-    console.error('[ImpactAdapter] Error fetching reports:', error instanceof Error ? error.message : String(error));
+    logger.error('Error fetching reports', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   }
@@ -275,7 +278,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     trackingLink: (c.TrackingLink || undefined) as string | undefined,
     })) as { id: string; name: string; description?: string; status: string; category?: string; currency: string; commissionTerms?: string; trackingLink?: string; }[];
   } catch (error: unknown) {
-    console.error('[ImpactAdapter] Error listing campaigns:', error instanceof Error ? error.message : String(error));
+    logger.error('Error listing campaigns', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   }
@@ -329,7 +332,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     dimensions: (ad.Width && ad.Height ? { width: ad.Width, height: ad.Height } : undefined) as { width: number; height: number; } | undefined,
     })) as { id: string; name: string; type: string; trackingLink: string; landingPageUrl?: string; creativeUrl?: string; dimensions?: { width: number; height: number; }; }[];
   } catch (error: unknown) {
-    console.error('[ImpactAdapter] Error getting campaign ads:', error instanceof Error ? error.message : String(error));
+    logger.error('Error getting campaign ads', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   }
@@ -374,7 +377,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     currency: data.Revenue?.Currency || 'USD',
     };
   } catch (error: unknown) {
-    console.error('[ImpactAdapter] Error getting performance summary:', error instanceof Error ? error.message : String(error));
+    logger.error('Error getting performance summary', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   }
@@ -450,7 +453,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     landingPage: (d.LandingPageUrl || undefined) as string | undefined,
     })) as { id: string; name: string; description?: string; code?: string; discount?: string; startDate?: string; endDate?: string; landingPage?: string; }[];
   } catch (error: unknown) {
-    console.error('[ImpactAdapter] Error getting deals:', error instanceof Error ? error.message : String(error));
+    logger.error('Error getting deals', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   }
@@ -506,7 +509,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
     endDate: (p.EndDate || undefined) as string | undefined,
     })) as { id: string; code: string; campaignId: string; campaignName: string; status: string; startDate?: string; endDate?: string; }[];
   } catch (error: unknown) {
-    console.error('[ImpactAdapter] Error getting promo codes:', error instanceof Error ? error.message : String(error));
+    logger.error('Error getting promo codes', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
   }
