@@ -6,6 +6,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('content:archive');
 
 /**
 * POST /api/content/archive
@@ -79,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (rows.length === 0) {
       // SECURITY FIX: Return 404 (not 403) to prevent ID enumeration
-      console.warn(`[IDOR] User ${auth.userId} tried to archive content ${contentId} not in their org`);
+      logger.warn('IDOR attempt: archive content not in org', { userId: auth.userId, contentId });
       return sendError(res, 404, 'Content not found');
     }
 
@@ -87,7 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Verify org_id matches
     if (content.org_id !== auth["orgId"]) {
-      console.warn(`[IDOR] Content org_id ${content.org_id} does not match user org_id ${auth["orgId"]}`);
+      logger.warn('IDOR: content org_id mismatch', { contentOrgId: content.org_id, userOrgId: auth["orgId"] });
       return sendError(res, 404, 'Content not found');
     }
 
@@ -129,7 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Security audit log for archive action
-    console.log(`[audit:content:archive] Content archived: ${contentId} by user: ${auth.userId}, org: ${auth["orgId"]}, intent: ${intentId}`);
+    logger.info('Content archived', { contentId, userId: auth.userId, orgId: auth["orgId"] });
 
     res.json({
       archived: true,
@@ -137,7 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Content has been archived and can be restored later.',
     });
   } catch (error: unknown) {
-    console.error('[content/archive] Error:', error);
+    logger.error('Content archive error', error instanceof Error ? error : new Error(String(error)));
 
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     const message = error instanceof Error ? error.message : '';

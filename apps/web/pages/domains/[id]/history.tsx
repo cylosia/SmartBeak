@@ -1,4 +1,4 @@
-import type { GetServerSidePropsContext } from 'next';
+import { withDomainAuth } from '../../../lib/auth';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 
@@ -20,11 +20,4 @@ export default function DomainHistory({ domainId }: DomainHistoryProps) {
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
-  const id = params?.['id'];
-  // P2-AUDIT-FIX: Validate domainId format (UUID)
-  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return { notFound: true };
-  }
-  return { props: { domainId: id } };
-}
+export const getServerSideProps = withDomainAuth();

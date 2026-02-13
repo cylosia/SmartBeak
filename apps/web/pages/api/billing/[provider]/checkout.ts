@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, sendError } from '../../../../lib/auth';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('billing:checkout');
 
 /**
  * POST /api/billing/:provider/checkout
@@ -82,7 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     case 'stripe': {
     // Validate Stripe configuration
     if (!process.env['STRIPE_SECRET_KEY']) {
-      console.error('[billing/checkout] Stripe is not configured');
+      logger.error('Stripe is not configured');
       return sendError(res, 503, 'Stripe is not configured');
     }
 
@@ -115,7 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Security audit log for checkout creation
-      console.log(`[audit:billing:checkout] Stripe checkout created: session ${session.id} by user: ${auth.userId}, org: ${auth.orgId}, priceId: ${priceId || planId}`);
+      logger.info('Stripe checkout session created', { sessionId: session.id, userId: auth.userId, orgId: auth.orgId, priceId: priceId || planId });
 
       return res.status(200).json({
       url: session.url,
@@ -123,7 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       provider: 'stripe',
       });
     } catch (stripeError: unknown) {
-      console.error('[billing/checkout] Stripe error:', stripeError);
+      logger.error('Stripe checkout error', stripeError instanceof Error ? stripeError : new Error(String(stripeError)));
 
       if (stripeError instanceof Error && 'type' in stripeError && (stripeError as Record<string, unknown>)['type'] === 'StripeInvalidRequestError') {
       // P1-13 FIX: Do not leak Stripe error details (may contain API key prefixes, config info)
@@ -137,13 +140,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     case 'paddle': {
     // Validate Paddle configuration
     if (!process.env['PADDLE_API_KEY']) {
-      console.error('[billing/checkout] Paddle is not configured');
+      logger.error('Paddle is not configured');
       return sendError(res, 503, 'Paddle is not configured');
     }
 
     // Validate Paddle vendor ID
     if (!process.env['PADDLE_VENDOR_ID']) {
-      console.error('[billing/checkout] Paddle vendor ID is not configured');
+      logger.error('Paddle vendor ID is not configured');
       return sendError(res, 503, 'Paddle is not fully configured');
     }
 
@@ -164,7 +167,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paddleCheckoutUrl.searchParams.set('cancel_url', cancelUrl || defaultCancelUrl);
 
       // Security audit log for checkout creation
-      console.log(`[audit:billing:checkout] Paddle checkout created by user: ${auth.userId}, org: ${auth.orgId}, productId: ${paddleProductId}`);
+      logger.info('Paddle checkout session created', { userId: auth.userId, orgId: auth.orgId, productId: paddleProductId });
 
       return res.status(200).json({
       url: paddleCheckoutUrl.toString(),
@@ -172,7 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       provider: 'paddle',
       });
     } catch (paddleError: unknown) {
-      console.error('[billing/checkout] Paddle error:', paddleError);
+      logger.error('Paddle checkout error', paddleError instanceof Error ? paddleError : new Error(String(paddleError)));
       throw paddleError;
     }
     }
@@ -184,7 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
 
-  console.error(`[billing/checkout] Error:`, error);
+  logger.error('Checkout error', error instanceof Error ? error : new Error(String(error)));
 
   const errorMessage = process.env['NODE_ENV'] === 'development' && error instanceof Error
     ? error.message

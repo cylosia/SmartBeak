@@ -1,4 +1,4 @@
-import type { GetServerSidePropsContext } from 'next';
+import { withDomainAuth } from '../../../lib/auth';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 
@@ -20,10 +20,4 @@ export default function DomainPending({ domainId }: DomainPendingProps) {
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
-  const id = params?.['id'];
-  if (typeof id !== 'string') {
-    return { notFound: true };
-  }
-  return { props: { domainId: id } };
-}
+export const getServerSideProps = withDomainAuth();

@@ -36,6 +36,7 @@ module.exports = {
     'no-useless-catch': 'warn',
     'no-extra-semi': 'warn',
     'prefer-const': 'warn',
+    'no-console': ['warn', { allow: [] }],
 
     '@typescript-eslint/no-unused-vars': ['warn', {
       argsIgnorePattern: '^_',
@@ -85,6 +86,18 @@ module.exports = {
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-unused-vars': 'off',
+      },
+    },
+    {
+      files: ['apps/web/middleware.ts'],
+      rules: {
+        'no-console': 'off', // Edge Runtime cannot use Node.js structured logger
+      },
+    },
+    {
+      files: ['apps/web/hooks/**/*.ts', 'apps/web/hooks/**/*.tsx'],
+      rules: {
+        'no-console': 'off', // Browser code — kernel logger is Node.js only
       },
     },
   ],

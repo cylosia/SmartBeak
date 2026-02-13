@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { LRUCache } from 'lru-cache';
 
 import Redis from 'ioredis';
@@ -138,7 +139,7 @@ async function checkRedisRateLimit(
   const redisKey = `ratelimit:read:${key}`;
 
   // Use unique member to prevent collisions
-  const memberId = `${now}-${Math.random().toString(36).substring(2, 15)}`;
+  const memberId = `${now}-${randomBytes(8).toString('hex')}`;
 
   const multi = redis.multi();
 

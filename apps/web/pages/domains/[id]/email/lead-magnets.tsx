@@ -1,4 +1,4 @@
-import type { GetServerSidePropsContext } from 'next';
+import { withDomainAuth } from '../../../../lib/auth';
 import { AppShell } from '../../../../components/AppShell';
 import { DomainTabs } from '../../../../components/DomainTabs';
 import { EmailAudienceTabs } from '../../../../components/EmailAudienceTabs';
@@ -39,10 +39,4 @@ export default function LeadMagnets({ domainId }: LeadMagnetsProps) {
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
-  const id = params?.['id'];
-  if (typeof id !== 'string') {
-    return { notFound: true };
-  }
-  return { props: { domainId: id } };
-}
+export const getServerSideProps = withDomainAuth();

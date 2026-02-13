@@ -5,6 +5,7 @@ import { getLogger } from '@kernel/logger';
 
 import { ContentRepository } from '../../content/application/ports/ContentRepository';
 import { IndexingJobRepository } from './ports/IndexingJobRepository';
+import { IndexingJob } from '../domain/entities/IndexingJob';
 import { SearchDocument, SearchDocumentFields } from '../domain/entities/SearchDocument';
 import { SearchDocumentRepository } from './ports/SearchDocumentRepository';
 import { SearchIndexed } from '../domain/events/SearchIndexed';
@@ -236,8 +237,7 @@ export class SearchIndexingWorker {
     await client.query('BEGIN');
 
     // P1-FIX: Fetch all jobs in a single query if repository supports it
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const jobs: Array<{ id: string; job: any }> = [];
+    const jobs: Array<{ id: string; job: IndexingJob }> = [];
 
     if (this.jobs.getByIds) {
     // Use batch fetch if available
@@ -290,8 +290,7 @@ export class SearchIndexingWorker {
     await client.query('COMMIT');
 
     // Process indexing outside transaction (may call external services)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const completedJobs: Array<{ id: string; job: any; success: boolean; error?: string }> = [];
+    const completedJobs: Array<{ id: string; job: IndexingJob; success: boolean; error?: string }> = [];
 
     for (const { id, job: originalJob } of pendingJobs) {
     const processingJob = originalJob.start();

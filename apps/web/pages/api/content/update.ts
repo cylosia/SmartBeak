@@ -4,6 +4,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('content:update');
 
 /**
 * POST /api/content/update
@@ -86,7 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (rows.length === 0) {
         await client.query('ROLLBACK');
         // SECURITY FIX: Return 404 (not 403) to prevent ID enumeration
-        console.warn(`[IDOR] User ${auth.userId} tried to access content ${contentId} not in their org`);
+        logger.warn('IDOR attempt: user accessed content not in their org', { userId: auth.userId, contentId });
         return sendError(res, 404, 'Content not found');
       }
 
@@ -171,7 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       client.release();
     }
   } catch (error: unknown) {
-    console.error('[content/update] Error:', error);
+    logger.error('Content update error', error instanceof Error ? error : new Error(String(error)));
 
     if (error instanceof Error && error.message?.includes('DATABASE_NOT_CONFIGURED')) {
       return sendError(res, 503, 'Service unavailable. Database not configured.');

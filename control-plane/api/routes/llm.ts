@@ -74,7 +74,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
-    try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
+    try { await rateLimit('llm', 30, req, res); } catch (e) { logger.debug('Rate limit triggered', { error: e instanceof Error ? e.message : String(e) }); return; }
 
     // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
     let models: LlmModel[] = [];
@@ -113,7 +113,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
-    try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
+    try { await rateLimit('llm', 30, req, res); } catch (e) { logger.debug('Rate limit triggered', { error: e instanceof Error ? e.message : String(e) }); return; }
 
     const preferences: LlmPreferences = {
     defaultModel: 'gpt-4',
@@ -153,7 +153,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return res.status(401).send({ error: 'Unauthorized' });
     }
     requireRole(ctx, ['owner', 'admin']);
-    try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
+    try { await rateLimit('llm', 30, req, res); } catch (e) { logger.debug('Rate limit triggered', { error: e instanceof Error ? e.message : String(e) }); return; }
 
     // Validate input
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);

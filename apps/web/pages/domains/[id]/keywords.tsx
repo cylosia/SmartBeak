@@ -1,6 +1,6 @@
-import type { GetServerSidePropsContext } from 'next';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
+import { withDomainAuth } from '../../../lib/auth';
 
 interface KeywordsProps {
   domainId: string;
@@ -35,15 +35,4 @@ export default function Keywords({ domainId }: KeywordsProps) {
   );
 }
 
-export async function getServerSideProps({ params, req: _req }: GetServerSidePropsContext) {
-  const id = params?.['id'];
-  if (typeof id !== 'string') {
-    return { notFound: true };
-  }
-  // P1-13: TODO — Add domain authorization check here.
-  // The Clerk middleware authenticates the user, but does not verify
-  // that the user has access to this specific domain (IDOR risk).
-  // Use canAccessDomain(userId, id, db) from lib/auth.ts once
-  // a server-side DB pool is available in getServerSideProps.
-  return { props: { domainId: id } };
-}
+export const getServerSideProps = withDomainAuth();

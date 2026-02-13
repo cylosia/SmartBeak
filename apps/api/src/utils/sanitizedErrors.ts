@@ -3,6 +3,7 @@
  * Sanitizes all error messages to remove internal details and secrets
  */
 
+import { randomBytes } from 'crypto';
 import { FastifyReply } from 'fastify';
 
 /**
@@ -20,7 +21,7 @@ export interface SanitizedErrorResponse {
  * Generate a unique request ID for error tracking
  */
 export function generateRequestId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  return `${Date.now()}-${randomBytes(6).toString('hex')}`;
 }
 
 /**

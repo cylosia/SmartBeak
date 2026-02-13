@@ -1,12 +1,16 @@
 /**
  * Performance Monitoring Hooks
- * 
+ *
  * P2 OPTIMIZATION: Provides hooks for monitoring cache and query performance:
  * - Cache hit/miss tracking
  * - Query execution time tracking
  * - Memory usage monitoring
  * - Performance alerts
  */
+
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('PerformanceMonitor');
 
 import { MultiTierCache, CacheStats } from './multiTierCache';
 import { QueryCacheStats } from './queryCache';
@@ -158,7 +162,7 @@ export class PerformanceMonitor {
       this.collectMetrics();
     }, this.options.sampleIntervalMs).unref();
 
-    console.log('[PerformanceMonitor] Started monitoring');
+    logger.info('Started monitoring');
   }
 
   /**
@@ -170,7 +174,7 @@ export class PerformanceMonitor {
       clearInterval(this.sampleIntervalId);
       this.sampleIntervalId = null;
     }
-    console.log('[PerformanceMonitor] Stopped monitoring');
+    logger.info('Stopped monitoring');
   }
 
   /**

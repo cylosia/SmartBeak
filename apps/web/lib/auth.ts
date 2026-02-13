@@ -15,6 +15,9 @@ export interface AuthContext {
 }
 import { Pool } from 'pg';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
+import type { GetServerSidePropsContext, GetServerSidePropsResult } from 'next';
+import { getPoolInstance } from './db';
 
 const logger = getLogger('Auth');
 
@@ -508,6 +511,63 @@ export async function canAccessDomain(userId: string, domainId: string, db: Pool
     return false;
   }
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface DomainPageProps {
+  domainId: string;
+}
+
+/**
+ * SSR authorization wrapper for domain pages.
+ * Validates domain ID, authenticates user via Clerk, and checks domain access.
+ * Returns notFound for unauthorized access (prevents domain ID enumeration).
+ */
+export function withDomainAuth<P extends DomainPageProps = DomainPageProps>(
+  getProps?: (
+    context: GetServerSidePropsContext,
+    domainId: string
+  ) => Promise<GetServerSidePropsResult<P>>,
+  requiredRole: string = 'viewer'
+) {
+  return async (
+    context: GetServerSidePropsContext
+  ): Promise<GetServerSidePropsResult<P>> => {
+    const id = context.params?.['id'];
+
+    if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
+      return { notFound: true };
+    }
+
+    const { userId } = getAuth(context.req);
+    if (!userId) {
+      return {
+        redirect: {
+          destination: '/login',
+          permanent: false,
+        },
+      };
+    }
+
+    try {
+      const pool = await getPoolInstance();
+      const hasAccess = await canAccessDomain(userId, id, pool, requiredRole);
+      if (!hasAccess) {
+        return { notFound: true };
+      }
+    } catch (err) {
+      logger.error('Domain auth check failed', err instanceof Error ? err : new Error(String(err)));
+      return { notFound: true };
+    }
+
+    if (getProps) {
+      return getProps(context, id);
+    }
+
+    return { props: { domainId: id } as P };
+  };
+}
+
 /**
  * Check if user is org admin
  */

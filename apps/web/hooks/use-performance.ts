@@ -238,7 +238,7 @@ export function useInteractionTracking(
       interactionStartTime.current.delete(key);
 
       // Log slow interactions
-      if (duration > 100) {
+      if (process.env.NODE_ENV === 'development' && duration > 100) {
         console.warn(`[Performance] Slow ${type} interaction: ${duration.toFixed(2)}ms`);
       }
     },

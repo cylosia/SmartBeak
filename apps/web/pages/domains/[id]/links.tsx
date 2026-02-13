@@ -1,8 +1,6 @@
-
-import { GetServerSideProps } from 'next';
-
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
+import { withDomainAuth } from '../../../lib/auth';
 // P1-FIX: Replace `any` with proper types
 interface LinkStats {
   orphans: number;
@@ -57,14 +55,15 @@ export default function Links({ domainId, internal, external }: LinksProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
-  const domainId = params?.['id'];
-  // Placeholder aggregates; wire to read models
-  return {
-  props: {
-    domainId,
-    internal: { orphans: 3, hubs: 5, broken: 2 },
-    external: { editorial: 42, affiliate: 18, broken: 4 }
+export const getServerSideProps = withDomainAuth<LinksProps>(
+  async (_context, domainId) => {
+    // Placeholder aggregates; wire to read models
+    return {
+      props: {
+        domainId,
+        internal: { orphans: 3, hubs: 5, broken: 2 },
+        external: { editorial: 42, affiliate: 18, broken: 4 }
+      }
+    };
   }
-  };
-};
+);

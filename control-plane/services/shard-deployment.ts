@@ -244,7 +244,13 @@ export async function deployShardToVercel(
       .update({ status: 'building' });
 
     // 3. Fetch files from storage to temp directory
-    const files = JSON.parse(shard.file_manifest) as Record<string, { sha: string; size: number }>;
+    let files: Record<string, { sha: string; size: number }>;
+    try {
+      files = JSON.parse(shard.file_manifest) as Record<string, { sha: string; size: number }>;
+    } catch (parseError) {
+      logger.error('Invalid file_manifest JSON in shard', parseError instanceof Error ? parseError : new Error(String(parseError)), { shardId });
+      throw new Error(`Shard ${shardId} has invalid file_manifest`);
+    }
     const fileList: ShardFile[] = [];
 
     await mkdir(tempDir, { recursive: true });
