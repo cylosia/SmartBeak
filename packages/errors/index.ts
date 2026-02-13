@@ -560,6 +560,15 @@ export function safeStringifyError(error: unknown): string {
   }
 }
 
+/**
+ * Extract error message from unknown catch parameter.
+ * Standardized pattern for catch blocks across the codebase.
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 // ============================================================================
 // Export all error codes as individual constants for convenience
 // ============================================================================

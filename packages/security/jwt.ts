@@ -277,9 +277,9 @@ function getCurrentKeys(): string[] {
 function verifyJwtClaims(payload: unknown): JwtClaims {
   const result = JwtClaimsSchema.safeParse(payload);
   if (!result.success) {
-    throw new TokenInvalidError(`Invalid claims: ${result["error"]["message"]}`);
+    throw new TokenInvalidError(`Invalid claims: ${result.error.message}`);
   }
-  return result["data"];
+  return result.data;
 }
 
 /**
@@ -348,7 +348,7 @@ export function verifyToken(
       } else if (error instanceof AuthError) {
         lastError = error;
       } else {
-        lastError = error as Error;
+        lastError = error instanceof Error ? error : new Error(String(error));
       }
     }
   }
@@ -416,7 +416,7 @@ export function extractAndVerifyToken(authHeader: string | undefined): {
       return { valid: false, error: 'Token expired' };
     }
     if (error instanceof TokenInvalidError) {
-      return { valid: false, error: error["message"] };
+      return { valid: false, error: error.message };
     }
     return { valid: false, error: 'Token verification failed' };
   }
@@ -441,13 +441,13 @@ export function getAuthContext(
 
   const claims = result.claims;
 
-  if (!claims.sub || !claims["orgId"]) {
+  if (!claims.sub || !claims.orgId) {
     return null;
   }
 
   return {
     userId: claims.sub,
-    orgId: claims["orgId"],
+    orgId: claims.orgId,
     roles: claims.role ? [claims.role] : [],
     sessionId: claims.jti,
   };

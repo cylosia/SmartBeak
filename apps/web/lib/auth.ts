@@ -326,6 +326,17 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
     try {
       claims = jwt.verify(token, jwtKey1, jwtVerifyOptions) as jwt.JwtPayload;
     }
+    catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      emitAuthAudit({
+        timestamp: new Date(),
+        type: 'auth.failure',
+        ip: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        reason: `Token verification failed: ${errorMsg}`,
+      });
+      res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
+      throw new AuthError('Token verification failed');
     catch (primaryErr) {
       // Try second key for rotation support
       if (jwtKey2 && jwtKey2.length >= 32) {
