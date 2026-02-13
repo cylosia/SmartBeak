@@ -49,7 +49,7 @@ export type DraftInfo = z.infer<typeof DraftInfoSchema>;
 function _validateJwtClaims(payload: unknown): JwtClaims {
   const result = LocalJwtClaimsSchema.safeParse(payload);
   if (!result.success) {
-    throw new Error(`Invalid JWT claims: ${result.error["message"]}`);
+    throw new Error(`Invalid JWT claims: ${result.error.message}`);
   }
   const data = result.data;
   return {
@@ -62,7 +62,7 @@ function _validateJwtClaims(payload: unknown): JwtClaims {
 function validateDraftInfo(row: unknown): DraftInfo {
   const result = DraftInfoSchema.safeParse(row);
   if (!result.success) {
-    throw new Error(`Invalid draft info: ${result.error["message"]}`);
+    throw new Error(`Invalid draft info: ${result.error.message}`);
   }
   return result.data;
 }
@@ -70,7 +70,7 @@ function validateDraftInfo(row: unknown): DraftInfo {
 function validateDomainAccess(row: unknown): { domain_id: string } {
   const result = DomainAccessSchema.safeParse(row);
   if (!result.success) {
-    throw new Error(`Invalid domain access: ${result.error["message"]}`);
+    throw new Error(`Invalid domain access: ${result.error.message}`);
   }
   return result.data;
 }
@@ -78,7 +78,7 @@ function validateDomainAccess(row: unknown): { domain_id: string } {
 function validateTargetAccess(row: unknown): { id: string } {
   const result = TargetAccessSchema.safeParse(row);
   if (!result.success) {
-    throw new Error(`Invalid target access: ${result.error["message"]}`);
+    throw new Error(`Invalid target access: ${result.error.message}`);
   }
   return result.data;
 }
@@ -86,7 +86,7 @@ function validateTargetAccess(row: unknown): { id: string } {
 function validateRoleRow(row: unknown): { role: string } {
   const result = RoleRowSchema.safeParse(row);
   if (!result.success) {
-    throw new Error(`Invalid role row: ${result.error["message"]}`);
+    throw new Error(`Invalid role row: ${result.error.message}`);
   }
   return result.data;
 }

@@ -16,7 +16,7 @@ export type Experiment = z.infer<typeof ExperimentSchema>;
 function validateExperiment(row: unknown): Experiment {
   const result = ExperimentSchema.safeParse(row);
   if (!result.success) {
-  throw new Error(`Invalid experiment data: ${result.error["message"]}`);
+  throw new Error(`Invalid experiment data: ${result.error.message}`);
   }
   return result.data;
 }
@@ -44,8 +44,8 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
   validatedInput = ExperimentStartInputSchema.parse(payload);
   } catch (error) {
   if (error instanceof Error) {
-    logger.error('Invalid experiment start payload: ' + (error instanceof Error ? error.message : String(error)));
-    throw new Error(`Validation failed: ${error["message"]}`);
+    logger.error('Invalid experiment start payload: ' + error.message);
+    throw new Error(`Validation failed: ${error.message}`);
   }
   throw error;
   }

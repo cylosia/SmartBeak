@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 
 import { getDb } from '../db';
 import { getRedis } from '@kernel/redis';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('StripeWebhook');
 

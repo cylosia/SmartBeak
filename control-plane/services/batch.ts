@@ -206,7 +206,10 @@ export async function mapInBatches<T, R>(
     const error = batchResult.reason instanceof Error
     ? batchResult.reason
     : new Error(String(batchResult.reason));
-    errors.push({ item: batch[index] as T, error });
+    const item = batch[index];
+    if (item !== undefined) {
+      errors.push({ item, error });
+    }
 
     logger.error(`[map-batch] Error mapping item at index ${i + index}`, error);
     }

@@ -6,7 +6,7 @@ import { extractAndVerifyToken } from '@security/jwt';
 import { FastifyInstance, FastifyReply, FastifyRequest as FRequest, HookHandlerDoneFunction } from 'fastify';
 import { validateExperiment } from '../domain/experiments/validateExperiment';
 import type { FastifyRequest } from 'fastify';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('ExperimentService');
 

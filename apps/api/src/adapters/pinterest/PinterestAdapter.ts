@@ -3,7 +3,7 @@ import { AbortController } from 'abort-controller';
 import { validateNonEmptyString, validateUrl } from '../../utils/validation';
 import fetch from 'node-fetch';
 import { withRetry } from '../../utils/retry';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 
 /**
  * Pinterest Publishing Adapter

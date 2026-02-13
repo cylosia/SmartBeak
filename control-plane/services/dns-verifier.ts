@@ -37,7 +37,7 @@ function isPotentialRebindingAttack(domain: string): boolean {
 }
 
 // Re-export from kernel
-export { generateDnsToken, verifyDns } from '../../packages/kernel/dns';
+export { generateDnsToken, verifyDns } from '@kernel/dns';
 
 // Import for wrapper functions
 import {
@@ -45,7 +45,7 @@ import {
   verifyDns as kernelVerifyDns,
   verifyDnsMulti as kernelVerifyDnsMulti,
   getDnsTxtRecords as kernelGetDnsTxtRecords,
-} from '../../packages/kernel/dns';
+} from '@kernel/dns';
 
 /**
 * Generate a DNS verification token with error handling
@@ -58,7 +58,7 @@ export function generateDnsTokenSafe(): string {
   logger.debug('DNS token generated successfully');
   return token;
   } catch (error) {
-  logger["error"](
+  logger.error(
     'Failed to generate DNS token',
     error instanceof Error ? error : new Error(String(error))
   );
@@ -77,13 +77,13 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
   try {
   // Validate inputs
   if (typeof domain !== 'string' || domain.length === 0 || domain.length > 253) {
-    logger["error"]('Invalid domain for DNS verification', new Error('Validation failed'), {
+    logger.error('Invalid domain for DNS verification', new Error('Validation failed'), {
     });
     throw new Error('Invalid domain: must be a valid domain string');
   }
 
   if (typeof token !== 'string' || token.length === 0) {
-    logger["error"]('Invalid token for DNS verification', new Error('Validation failed'), {
+    logger.error('Invalid token for DNS verification', new Error('Validation failed'), {
     });
     throw new Error('Invalid token: must be a non-empty string');
   }
@@ -91,14 +91,14 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
   // Sanitize domain (basic validation)
   const sanitizedDomain = domain.trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(sanitizedDomain)) {
-    logger["error"]('Domain format validation failed', new Error('Validation failed'), {
+    logger.error('Domain format validation failed', new Error('Validation failed'), {
     domain: sanitizedDomain,
     });
     throw new Error('Invalid domain format');
   }
 
   if (isPotentialRebindingAttack(sanitizedDomain)) {
-    logger["error"]('Potential DNS rebinding attack detected', new Error('Security validation failed'), {
+    logger.error('Potential DNS rebinding attack detected', new Error('Security validation failed'), {
     domain: sanitizedDomain,
     });
     throw new Error('Invalid domain: potential security risk');
@@ -180,14 +180,14 @@ export async function verifyDnsMultiSafe(
   try {
   // Validate domain
   if (typeof domain !== 'string' || domain.length === 0) {
-    logger["error"]('Invalid domain for multi DNS verification', new Error('Validation failed'), {
+    logger.error('Invalid domain for multi DNS verification', new Error('Validation failed'), {
     });
     throw new Error('Invalid domain');
   }
 
   // Validate methods array
   if (!Array.isArray(methods) || methods.length === 0) {
-    logger["error"]('Invalid methods for DNS verification', new Error('Validation failed'), {
+    logger.error('Invalid methods for DNS verification', new Error('Validation failed'), {
     });
     throw new Error('Methods must be a non-empty array');
   }
@@ -201,7 +201,7 @@ export async function verifyDnsMultiSafe(
     typeof method.record !== 'string' ||
     typeof method.token !== 'string'
     ) {
-    logger["error"]('Invalid verification method', new Error('Validation failed'), { method });
+    logger.error('Invalid verification method', new Error('Validation failed'), { method });
     throw new Error('Each method must have type: \'txt\', record: string, token: string');
     }
   }
@@ -223,7 +223,7 @@ export async function verifyDnsMultiSafe(
 
   return results;
   } catch (error) {
-  logger["error"](
+  logger.error(
     'Multi DNS verification failed',
     error instanceof Error ? error : new Error(String(error)),
     { domain, methodCount: methods?.length }
@@ -242,7 +242,7 @@ export async function getDnsTxtRecordsSafe(domain: string): Promise<string[]> {
   try {
   // Validate domain
   if (typeof domain !== 'string' || domain.length === 0 || domain.length > 253) {
-    logger["error"]('Invalid domain for TXT records query', new Error('Validation failed'), {
+    logger.error('Invalid domain for TXT records query', new Error('Validation failed'), {
     });
     throw new Error('Invalid domain');
   }
@@ -258,7 +258,7 @@ export async function getDnsTxtRecordsSafe(domain: string): Promise<string[]> {
 
   return records;
   } catch (error) {
-  logger["error"](
+  logger.error(
     'Failed to get DNS TXT records',
     error instanceof Error ? error : new Error(String(error)),
     { domain }

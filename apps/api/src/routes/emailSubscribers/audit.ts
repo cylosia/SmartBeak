@@ -1,6 +1,6 @@
 import type { AuditEventParams } from './types';
 import { getDb } from '../../db';
-import { getLogger } from '../../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Audit Logging Module for Email Subscribers

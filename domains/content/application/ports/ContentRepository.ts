@@ -41,6 +41,7 @@ export interface ContentRepository {
   * @param limit - Maximum number of items to return
   * @param offset - Number of items to skip (for pagination)
   * @param domainId - Optional domain filter for multi-tenant scenarios
+  * @param orgId - Optional org filter for multi-tenant isolation
   * @param client - Optional database client for transaction context
   * @returns Promise resolving to array of content items (may contain nulls if validation fails)
   * @throws {Error} If query execution fails
@@ -50,6 +51,7 @@ export interface ContentRepository {
   limit: number,
   offset: number,
   domainId?: string,
+  orgId?: string,
   client?: PoolClient
   ): Promise<(ContentItem | null)[]>;
 

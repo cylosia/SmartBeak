@@ -56,24 +56,32 @@ export function generateSignedUploadUrl(storageKey: string, expiresInSeconds = 3
   : `${config.bucket}.s3.${config.region}.amazonaws.com`;
 
   // Create canonical request
-  const _method = 'PUT';
-  const _canonicalUri = `/${storageKey}`;
-  const _canonicalQuerystring = `X-Amz-Algorithm=AWS4-HMAC-SHA256&` +
+  const method = 'PUT';
+  const canonicalUri = `/${storageKey}`;
+  const canonicalQuerystring = `X-Amz-Algorithm=AWS4-HMAC-SHA256&` +
   `X-Amz-Credential=${encodeURIComponent(`${config.accessKeyId}/${credentialScope}`)}&` +
   `X-Amz-Date=${amzDate}&` +
   `X-Amz-Expires=${expiresInSeconds}&` +
   `X-Amz-SignedHeaders=host`;
 
-  const _canonicalHeaders = `host:${host}\n`;
-  const _signedHeaders = 'host';
-  const _payloadHash = 'UNSIGNED-PAYLOAD';
+  const canonicalHeaders = `host:${host}\n`;
+  const signedHeaders = 'host';
+  const payloadHash = 'UNSIGNED-PAYLOAD';
 
   const canonicalRequest = [
+  method,
+  canonicalUri,
+  canonicalQuerystring,
+  canonicalHeaders,
+  signedHeaders,
+  payloadHash,
   ].join('\n');
 
   // Create string to sign
   const stringToSign = [
   'AWS4-HMAC-SHA256',
+  amzDate,
+  credentialScope,
   createHash('sha256').update(canonicalRequest).digest('hex')
   ].join('\n');
 

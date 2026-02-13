@@ -42,7 +42,7 @@ export class PublishingCreateJobService {
     // Validate content exists
     const content = await client.query(
     'SELECT id FROM content_items WHERE id=$1',
-    [input["contentId"]]
+    [input.contentId]
     );
     if (!content.rows[0]) {
     await client.query('ROLLBACK');
@@ -52,7 +52,7 @@ export class PublishingCreateJobService {
     // Validate target exists
     const target = await client.query(
     'SELECT id, type, config, region FROM publish_targets WHERE id=$1 AND domain_id=$2',
-    [input.targetId, input["domainId"]]
+    [input.targetId, input.domainId]
     );
     if (!target.rows[0]) {
     await client.query('ROLLBACK');
@@ -66,8 +66,9 @@ export class PublishingCreateJobService {
     (id, domain_id, content_id, target_id, status, region, created_at)
     VALUES ($1,$2,$3,$4,'pending',$5,now())`,
     [
-    input["domainId"],
-    input["contentId"],
+    jobId,
+    input.domainId,
+    input.contentId,
     input.targetId,
     target.rows[0].region
     ]

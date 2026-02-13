@@ -30,7 +30,7 @@ export function DomainSaleReadinessPanel({ data }: DomainSaleReadinessPanelProps
     <h4>Rationale</h4>
     <ul>
     {data.rationale.map((r: string, i: number) => (
-      <li key={i}>{r}</li>
+      <li key={`rationale-${i}-${r.slice(0, 50)}`}>{r}</li>
     ))}
     </ul>
 

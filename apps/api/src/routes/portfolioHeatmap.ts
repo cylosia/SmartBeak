@@ -7,7 +7,7 @@ import { AuthContext } from '../types/fastify';
 import { buildHeatmap } from '../portfolio/heatmap';
 import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('PortfolioHeatmapService');
 
@@ -85,7 +85,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     'content_roi_models.roi_12mo as roi_12mo',
     db.raw('extract(day from now() - page_seo_profiles.last_reviewed_at) as freshness_days')
     )
-    .limit(limit)           .offset(offset);
+    .limit(limit + 1)           .offset(offset);
     } catch (dbError) {
         logger.error('Database error', dbError as Error);
     return res.status(503).send({
@@ -93,6 +93,12 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     code: 'DB_UNAVAILABLE',
     message: 'Unable to fetch heatmap data. Please try again later.'
     });
+    }
+
+    // P2-FIX: Fetch limit+1 rows and check for overflow to determine hasMore accurately
+    const hasMore = rows.length > limit;
+    if (hasMore) {
+    rows = rows.slice(0, limit);
     }
 
     const heatmapData = rows.map((r) => ({
@@ -106,7 +112,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     void res.send({
     data: heatmap,
     pagination: {
-    hasMore: rows.length === limit
+    hasMore
     }
     });
   } catch (error) {
@@ -127,7 +133,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     return res.status(500).send({
     error: 'Internal server error',
     code: 'INTERNAL_ERROR',
-    message: error instanceof Error ? error["message"] : 'Unknown error'
+    message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
   });

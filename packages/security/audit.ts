@@ -94,8 +94,6 @@ export class AuditLogger extends EventEmitter {
   private readonly MAX_RETRY_ATTEMPTS = 3;
   private failedFlushCount = 0;
 
-  private currentBufferSize = 0;
-
   // FIX: Track dropped events for monitoring
   private totalDroppedEvents = 0;
 

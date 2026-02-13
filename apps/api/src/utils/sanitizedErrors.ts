@@ -3,6 +3,7 @@
  * Sanitizes all error messages to remove internal details and secrets
  */
 
+import crypto from 'crypto';
 import { FastifyReply } from 'fastify';
 import { randomBytes } from 'crypto';
 import { getLogger } from '@kernel/logger';

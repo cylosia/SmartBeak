@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 import { API_VERSIONS, API_BASE_URLS, DEFAULT_TIMEOUTS } from '@config';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 import { AbortController } from 'abort-controller';

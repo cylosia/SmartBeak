@@ -5,8 +5,8 @@ import { z } from 'zod';
 
 import { getDb } from '../db';
 import { adminRateLimit } from '../middleware/rateLimiter';
-import { sanitizeErrorMessage } from '../../../../packages/security/logger';
-import { isValidUUID } from '../../../../packages/security/input-validator';
+import { sanitizeErrorMessage } from '@security/logger';
+import { isValidUUID } from '@security/input-validator';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('AdminBilling');
@@ -132,8 +132,6 @@ function validateColumnName(column: string): string {
 }
 
 export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
-  const db = await getDb();
-
   app.addHook('onRequest', adminRateLimit());
 
   app.addHook('onRequest', async (req, reply) => {
@@ -182,6 +180,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     reply: FastifyReply
   ): Promise<AdminBillingResponse | { error: string; code?: string; message?: string }> => {
     try {
+      const db = await getDb();
       // Validate query parameters
       const parseResult = AdminBillingQuerySchema.safeParse(req.query);
       if (!parseResult.success) {
@@ -274,8 +273,9 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     reply: FastifyReply
   ) => {
     try {
+      const db = await getDb();
       const { id } = req.params;
-      
+
       // SECURITY FIX: Issue 8 - Validate UUID format consistently
       if (!isValidUUID(id)) {
         return reply.status(400).send({

@@ -392,6 +392,7 @@ export class AnalyticsPipeline {
     `INSERT INTO daily_analytics (
     date, domain_id, metric_type, metric_name, value
     )
+    SELECT
     DATE(timestamp) as date,
     domain_id,
     'keyword' as metric_type,

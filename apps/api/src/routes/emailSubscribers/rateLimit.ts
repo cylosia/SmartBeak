@@ -1,5 +1,5 @@
 import { securityConfig } from '@config';
-import { getLogger } from '../../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Rate Limiting Module
