@@ -271,7 +271,12 @@ export class MultiTierCache {
               error: parseError instanceof Error ? parseError.message : String(parseError),
             });
             // Delete corrupted entry
-            await this.redis.del(fullKey).catch(() => {});
+            await this.redis.del(fullKey).catch((err) => {
+              logger.warn('Failed to delete corrupted L2 cache entry', {
+                key: fullKey,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
             this.stats.l2Misses++;
             if (factory) {
               return this.set(key, await factory(), options);
