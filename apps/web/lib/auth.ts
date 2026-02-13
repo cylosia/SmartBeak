@@ -324,7 +324,7 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
       }) as jwt.JwtPayload;
     }
     catch (err) {
-      const errorMsg = err instanceof Error ? err['message'] : 'Unknown error';
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       emitAuthAudit({
         timestamp: new Date(),
         type: 'auth.failure',

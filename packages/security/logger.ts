@@ -196,8 +196,8 @@ export function sanitizeForLogging<T>(
   if (data instanceof Error) {
     return {
       name: data.name,
-      message: data["message"],
-      stack: process.env['NODE_ENV'] === 'development' ? data["stack"] : undefined,
+      message: data.message,
+      stack: process.env['NODE_ENV'] === 'development' ? data.stack : undefined,
     };
   }
   
@@ -378,7 +378,7 @@ export function sanitizeErrorMessage(error: unknown): string {
   let message: string;
   
   if (error instanceof Error) {
-    message = error["message"];
+    message = error.message;
   } else if (typeof error === 'string') {
     message = error;
   } else {
