@@ -291,7 +291,6 @@ export async function abuseGuard(req: GuardRequest, _res: GuardResponse, next: N
         userId: validated.userId,
         ip: validated.ip,
       });
-      // P2-FIX: Use structured logger instead of console.warn
       logger.warn('High risk submission detected', logData as Record<string, unknown>);
     }
     next();

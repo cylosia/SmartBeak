@@ -4,6 +4,7 @@
  */
 
 import { FastifyReply } from 'fastify';
+import { randomBytes } from 'crypto';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('ErrorHandler');
@@ -23,7 +24,7 @@ export interface SanitizedErrorResponse {
  * Generate a unique request ID for error tracking
  */
 export function generateRequestId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+  return `${Date.now()}-${randomBytes(6).toString('hex')}`;
 }
 
 /**

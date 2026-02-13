@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import FormData from 'form-data';
+import { randomInt } from 'crypto';
 
 import { API_BASE_URLS, DEFAULT_TIMEOUTS } from '../../utils/config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
@@ -125,7 +126,7 @@ export class StabilityImageAdapter {
       width = 1024,
       height = 1024,
       // Use safe integer range for seed generation (0 to 2^31 - 1)
-      seed = Math.floor(Math.random() * 2147483647),
+      seed = randomInt(0, 2147483647),
       steps = 30,
       cfgScale = 7,
       samples = 1,
@@ -252,7 +253,7 @@ export class StabilityImageAdapter {
       model = this.defaultModel,
       width = 1024,
       height = 1024,
-      seed = Math.floor(Math.random() * 2147483647),
+      seed = randomInt(0, 2147483647),
       steps = 30,
       cfgScale = 7,
       samples = 1,

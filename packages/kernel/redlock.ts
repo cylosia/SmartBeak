@@ -38,11 +38,6 @@ const DEFAULT_OPTIONS: Required<LockOptions> = {
 /**
  * Generate a unique lock value using timestamp and random component
  */
-/**
- * AUDIT-FIX P1-06: Use crypto.randomBytes instead of Math.random() for lock
- * values. Math.random() is predictable with enough samples, enabling an
- * attacker to predict lock values and release other processes' locks.
- */
 function generateLockValue(): string {
   return `${Date.now()}-${randomBytes(16).toString('hex')}-${process.pid}`;
 }
