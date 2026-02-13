@@ -142,7 +142,7 @@ export class BillingService {
         logger.info(`Compensated: deleted Stripe customer ${customerId}`);
     }
     } catch (compError: unknown) {
-    logger["error"]('Compensation failed', compError instanceof Error ? compError : new Error(String(compError)));
+    logger.error('Compensation failed', compError instanceof Error ? compError : new Error(String(compError)));
     }
   }
 
@@ -220,7 +220,7 @@ export class BillingService {
     const errorMessage = error instanceof Error ? error.message : String(error);
     await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
 
-    logger["error"]('Error assigning plan', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Error assigning plan', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to assign plan: ${errorMessage}`);
     } finally {
     client.release();
@@ -246,7 +246,7 @@ export class BillingService {
 
     return rows[0] || null;
     } catch (error) {
-    logger["error"]('Error fetching active plan', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Error fetching active plan', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to fetch active plan: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -284,7 +284,7 @@ export class BillingService {
     logger.info(`Entered grace period for org ${orgId}: ${days} days`);
     } catch (error) {
     await client.query('ROLLBACK');
-    logger["error"]('Error entering grace period', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Error entering grace period', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to enter grace period: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
     client.release();
@@ -339,7 +339,7 @@ export class BillingService {
     logger.info(`Cancelled subscription for org ${orgId}`);
     } catch (error) {
     await client.query('ROLLBACK');
-    logger["error"]('Error cancelling subscription', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Error cancelling subscription', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to cancel subscription: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
     client.release();
@@ -383,7 +383,7 @@ export class BillingService {
     logger.info(`Updated subscription ${subscriptionId} status to ${status}`);
     } catch (error) {
     await client.query('ROLLBACK');
-    logger["error"]('Error updating subscription status', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Error updating subscription status', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to update subscription status: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
     client.release();
@@ -405,7 +405,7 @@ export class BillingService {
 
     return rows;
     } catch (error) {
-    logger["error"]('Error fetching subscriptions', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Error fetching subscriptions', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to fetch subscriptions: ${error instanceof Error ? error.message : String(error)}`);
     }
   }

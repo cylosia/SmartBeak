@@ -75,10 +75,7 @@ const config = {
     reapIntervalMillis: 1000,
     createRetryIntervalMillis: 200,
   },
-  // P0-FIX: Statement timeout for serverless (must be < 5s)
-  ...(isServerless && {
-    statement_timeout: 3000,  // 3s max query time in serverless
-  }),
+  // statement_timeout is already set in connection config (line 65)
   acquireConnectionTimeout: isServerless ? 5000 : 60000,
   migrations: {
     tableName: 'knex_migrations',
