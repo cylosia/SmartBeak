@@ -1,6 +1,5 @@
 import { getLogger } from '@kernel/logger';
 
-// P1-10 FIX: Use structured logger instead of console.log/warn/error
 const logger = getLogger('ops-metrics');
 
 /**

@@ -38,7 +38,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isAuthorized = await verifyDomainOwnership(auth.userId, domainId, auth["orgId"]);
   if (!isAuthorized) {
     // SECURITY: Return 404 (not 403) to prevent ID enumeration
-    // P1-FIX: Use structured logger instead of console.warn for PII safety
     getLogger('diligence').warn('IDOR attempt on diligence links', { domainId });
     return res.status(404).json({ error: 'Domain not found' });
   }

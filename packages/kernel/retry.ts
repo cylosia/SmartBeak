@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { getLogger } from '@kernel/logger';
 
 /**
@@ -229,8 +230,7 @@ export async function withRetry<T>(
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  // P1-FIX: Generate a unique key for this retry operation
-  const retryKey = `${fn.name || 'anonymous'}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const retryKey = `${fn.name || 'anonymous'}_${Date.now()}_${randomUUID()}`;
 
   for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
   try {
