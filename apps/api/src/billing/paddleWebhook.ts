@@ -2,6 +2,7 @@ import { getDb } from '../db';
 import crypto from 'crypto';
 import { getRedis } from '@kernel/redis';
 import { getLogger } from '@kernel/logger';
+import { getBusinessKpis, getSloTracker } from '@packages/monitoring';
 
 /**
  * P0-FIX: Verify Paddle webhook signature using raw body
@@ -117,6 +118,7 @@ export async function handlePaddleWebhook(
   // P0-FIX: Event deduplication - prevent replay attacks
   if (await isDuplicateEvent(eventId)) {
     logger.info('Duplicate event ignored', { eventId });
+    try { getBusinessKpis().recordWebhookDuplicate('paddle'); } catch { /* not initialized */ }
     return;
   }
 
@@ -147,6 +149,7 @@ export async function handlePaddleWebhook(
 
   logger.info('Processing event', { eventType: event_type, orgId: org_id });
 
+  try {
   if (event_type === 'subscription.created' || event_type === 'subscription.updated') {
     if (payload['customer'] && typeof payload['customer'] !== 'object') {
       throw new Error('Invalid customer data in payload');
@@ -230,6 +233,18 @@ export async function handlePaddleWebhook(
         })
       });
     });
+  }
+
+  try {
+    getBusinessKpis().recordWebhookProcessed('paddle');
+    getSloTracker().recordSuccess('slo.webhook.processing_rate');
+  } catch { /* not initialized */ }
+  } catch (error) {
+    try {
+      getBusinessKpis().recordWebhookFailed('paddle');
+      getSloTracker().recordFailure('slo.webhook.processing_rate');
+    } catch { /* not initialized */ }
+    throw error;
   }
 }
 

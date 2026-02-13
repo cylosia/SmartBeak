@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { TIME as _TIME } from '@kernel/constants';
 import { getLogger } from '@kernel/logger';
 import { withRetry } from '@kernel/retry';
+import { withSpan, addSpanAttributes, getBusinessKpis } from '@packages/monitoring';
 
 import { getDb } from '../db';
 import { JobScheduler } from './JobScheduler';
@@ -58,6 +59,7 @@ export interface IngestResult {
 * causing every entity to fail, burning 3 retries, and flooding error logs.
 */
 export async function feedbackIngestJob(payload: unknown): Promise<IngestResult> {
+  return withSpan({ spanName: 'feedbackIngestJob' }, async () => {
   // P0-3 FIX: Fail fast if the metrics API is not yet implemented.
   // This prevents the job from burning through retries on dead code.
   try {
@@ -88,6 +90,9 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   if (!orgId) {
   throw new Error('orgId is required');
   }
+
+  addSpanAttributes({ 'ingest.source': source, 'ingest.entity_count': entities.length });
+  try { getBusinessKpis().recordIngestionAttempt(source); } catch { /* not initialized */ }
 
   logger.info('Starting feedback ingestion', {
   entityCount: entities.length,
@@ -177,6 +182,12 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   );
   }
 
+  addSpanAttributes({ 'ingest.processed': result.processed, 'ingest.failed': result.failed });
+  try {
+    if (result.processed > 0) getBusinessKpis().recordIngestionSuccess(source, result.processed);
+    if (result.failed > 0) getBusinessKpis().recordIngestionFailure(source, result.failed);
+  } catch { /* not initialized */ }
+
   logger.info('Feedback ingestion completed', {
   processed: result.processed,
   failed: result.failed,
@@ -184,6 +195,7 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   });
 
   return result;
+  });
 }
 
 async function processEntityWindow(

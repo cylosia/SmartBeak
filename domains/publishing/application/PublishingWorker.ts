@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { DLQService, RegionWorker } from '@kernel/queue';
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '@kernel/logger';
+import { withSpan, addSpanAttributes, recordSpanException, getBusinessKpis, getSloTracker } from '@packages/monitoring';
 import { writeToOutbox } from '@packages/database/outbox';
 
 import { PostgresPublishAttemptRepository } from '../infra/persistence/PostgresPublishAttemptRepository';
@@ -65,21 +66,28 @@ export class PublishingWorker {
   * MEDIUM FIX M14: Explicit return type
   */
   async process(jobId: string, targetConfig: TargetConfig): Promise<ProcessResult> {
-  // Validate inputs with enhanced error handling
-  const validationError = this.validateInputs(jobId, targetConfig);
-  if (validationError) {
+  return withSpan({
+    spanName: 'PublishingWorker.process',
+    attributes: { 'publishing.job_id': jobId },
+  }, async () => {
+    // Validate inputs with enhanced error handling
+    const validationError = this.validateInputs(jobId, targetConfig);
+    if (validationError) {
     return { success: false, error: validationError };
-  }
+    }
 
     if (targetConfig.url) {
     try {
-    new URL(targetConfig.url);
+      new URL(targetConfig.url);
     } catch {
-    return { success: false, error: 'Invalid target URL format' };
+      return { success: false, error: 'Invalid target URL format' };
     }
-  }
+    }
 
-  try {
+    const platform = targetConfig.url ? new URL(targetConfig.url).hostname : 'unknown';
+    try { getBusinessKpis().recordPublishAttempt(platform); } catch { /* not initialized */ }
+
+    try {
     return await this.regionWorker.execute(jobId, async () => {
     const client = await this.pool.connect();
 
@@ -131,6 +139,12 @@ export class PublishingWorker {
         jobId: job["id"],
     });
 
+    addSpanAttributes({ 'publishing.result': 'success' });
+    try {
+      getBusinessKpis().recordPublishSuccess(platform);
+      getSloTracker().recordSuccess('slo.publishing.success_rate');
+    } catch { /* not initialized */ }
+
     return { success: true };
 
     } catch (err: unknown) {
@@ -156,6 +170,13 @@ export class PublishingWorker {
         error: errorMessage
     });
 
+    addSpanAttributes({ 'publishing.result': 'failure' });
+    recordSpanException(err instanceof Error ? err : new Error(String(err)));
+    try {
+      getBusinessKpis().recordPublishFailure(platform, errorMessage);
+      getSloTracker().recordFailure('slo.publishing.success_rate');
+    } catch { /* not initialized */ }
+
     throw err;
     }
 
@@ -177,6 +198,7 @@ export class PublishingWorker {
 
     return { success: false, error: errorMessage };
   }
+  });
   }
 
   /**

@@ -44,6 +44,23 @@ import {
   createEmailHandler,
 } from './alerting-rules';
 
+import {
+  ResourceMetricsCollector,
+  initResourceMetrics,
+  ResourceMetricsConfig,
+} from './resource-metrics';
+
+import {
+  SloTracker,
+  initSloTracker,
+  defaultSloDefinitions,
+} from './slo-tracker';
+
+import {
+  BusinessKpiTracker,
+  initBusinessKpis,
+} from './business-kpis';
+
 const logger = getLogger('monitoring-init');
 
 // ============================================================================
@@ -88,7 +105,22 @@ export interface MonitoringInitConfig {
     webhookUrl?: string;
     emailAddresses?: string[];
   };
-  
+
+  /** Resource metrics configuration */
+  resourceMetrics?: ResourceMetricsConfig & {
+    enabled?: boolean;
+  };
+
+  /** SLO tracker configuration */
+  sloTracker?: {
+    enabled?: boolean;
+  };
+
+  /** Business KPIs configuration */
+  businessKpis?: {
+    enabled?: boolean;
+  };
+
   /** Database connection for persistence */
   db?: Pool;
 }
@@ -113,6 +145,21 @@ export interface MonitoringComponents {
   alerting: {
     engine: AlertRulesEngine;
     start: (intervalMs?: number) => void;
+    stop: () => void;
+  };
+  resourceMetrics: {
+    collector: ResourceMetricsCollector;
+    start: () => void;
+    stop: () => void;
+  };
+  sloTracker: {
+    tracker: SloTracker;
+    start: () => void;
+    stop: () => void;
+  };
+  businessKpis: {
+    tracker: BusinessKpiTracker;
+    start: () => void;
     stop: () => void;
   };
 }
@@ -276,6 +323,56 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
     throw error;
   }
 
+  // Initialize Resource Metrics
+  let resourceMetricsCollector: ResourceMetricsCollector;
+  try {
+    resourceMetricsCollector = initResourceMetrics({
+      pollingIntervalMs: config.resourceMetrics?.pollingIntervalMs,
+    });
+
+    if (config.resourceMetrics?.enabled !== false) {
+      resourceMetricsCollector.start();
+      logger.info('✓ Resource metrics collector started');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize resource metrics', error as Error);
+    throw error;
+  }
+
+  // Initialize SLO Tracker
+  let sloTracker: SloTracker;
+  try {
+    sloTracker = initSloTracker({
+      metricsCollector: metricsCollector,
+    });
+
+    if (config.sloTracker?.enabled !== false) {
+      // Register default SLO definitions
+      for (const slo of defaultSloDefinitions) {
+        sloTracker.registerSlo(slo);
+      }
+      sloTracker.start();
+      logger.info('✓ SLO tracker started', { sloCount: defaultSloDefinitions.length });
+    }
+  } catch (error) {
+    logger.error('Failed to initialize SLO tracker', error as Error);
+    throw error;
+  }
+
+  // Initialize Business KPIs
+  let businessKpiTracker: BusinessKpiTracker;
+  try {
+    businessKpiTracker = initBusinessKpis(metricsCollector);
+
+    if (config.businessKpis?.enabled !== false) {
+      businessKpiTracker.start();
+      logger.info('✓ Business KPI tracker started');
+    }
+  } catch (error) {
+    logger.error('Failed to initialize business KPIs', error as Error);
+    throw error;
+  }
+
   logger.info('✓ All monitoring components initialized');
 
   return {
@@ -296,6 +393,21 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       engine: alertingEngine,
       start: (intervalMs?: number) => alertingEngine.start(intervalMs),
       stop: () => alertingEngine.stop(),
+    },
+    resourceMetrics: {
+      collector: resourceMetricsCollector,
+      start: () => resourceMetricsCollector.start(),
+      stop: () => resourceMetricsCollector.stop(),
+    },
+    sloTracker: {
+      tracker: sloTracker,
+      start: () => sloTracker.start(),
+      stop: () => sloTracker.stop(),
+    },
+    businessKpis: {
+      tracker: businessKpiTracker,
+      start: () => businessKpiTracker.start(),
+      stop: () => businessKpiTracker.stop(),
     },
   };
 }
@@ -413,6 +525,36 @@ export function createMetricsMiddleware(
  */
 export async function shutdownMonitoring(): Promise<void> {
   logger.info('Shutting down monitoring components...');
+
+  // Stop business KPIs
+  try {
+    const { getBusinessKpis } = await import('./business-kpis');
+    const kpis = getBusinessKpis();
+    kpis.stop();
+    logger.info('✓ Business KPIs stopped');
+  } catch (error) {
+    logger.warn('Business KPIs shutdown skipped or failed', { error: error instanceof Error ? error.message : String(error) });
+  }
+
+  // Stop SLO tracker
+  try {
+    const { getSloTracker } = await import('./slo-tracker');
+    const tracker = getSloTracker();
+    tracker.stop();
+    logger.info('✓ SLO tracker stopped');
+  } catch (error) {
+    logger.warn('SLO tracker shutdown skipped or failed', { error: error instanceof Error ? error.message : String(error) });
+  }
+
+  // Stop resource metrics
+  try {
+    const { getResourceMetrics } = await import('./resource-metrics');
+    const resourceMetrics = getResourceMetrics();
+    resourceMetrics.stop();
+    logger.info('✓ Resource metrics stopped');
+  } catch (error) {
+    logger.warn('Resource metrics shutdown skipped or failed', { error: error instanceof Error ? error.message : String(error) });
+  }
 
   // Stop alerting
   try {

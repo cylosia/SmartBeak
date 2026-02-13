@@ -36,6 +36,18 @@ const DEFAULT_KEY_PREFIX = 'ratelimit';
 const logger = getLogger('rateLimiterRedis');
 
 // ============================================================================
+// Metrics Hook (set by monitoring package during initialization)
+// ============================================================================
+
+type RateLimitMetricsHook = (key: string, allowed: boolean, remaining: number, limit: number) => void;
+let _rateLimitMetricsHook: RateLimitMetricsHook | null = null;
+
+/**
+ * Register a metrics hook for rate limit checks.
+ * Called by the monitoring package during initialization.
+ */
+export function setRateLimitMetricsHook(hook: RateLimitMetricsHook): void {
+  _rateLimitMetricsHook = hook;
 // In-Memory Fallback for Redis Unavailability
 // ============================================================================
 
@@ -269,6 +281,14 @@ export async function checkRateLimit(
       key,
     });
 
+  _rateLimitMetricsHook?.(key, allowed, remaining, config.maxRequests);
+
+  return {
+    allowed,
+    remaining,
+    resetTime,
+    limit: config.maxRequests,
+  };
     emitCounter('rate_limiter_fallback', 1, { reason: 'redis_error' });
 
     return checkRateLimitInMemory(key, config);
