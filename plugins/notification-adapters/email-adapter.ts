@@ -5,7 +5,7 @@ import {
   DeliveryResult,
   DeliveryAdapterError
 } from '../../packages/types/notifications';
-import { getOptionalEnv, getEnvWithDefault } from '../../packages/config';
+import { getOptionalEnv, getEnvWithDefault, API_BASE_URLS, API_VERSIONS } from '../../packages/config';
 
 import { ErrorCodes, ExternalAPIError } from '../../packages/kernel/validation';
 import { getLogger } from '../../packages/kernel/logger';
@@ -546,7 +546,7 @@ export class EmailAdapter implements DeliveryAdapter {
     }
 
     // P1-RESILIENCE FIX: Add timeout to prevent hanging on unresponsive external API
-    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    const response = await fetch(`${API_BASE_URLS.sendgrid}/${API_VERSIONS.sendgrid}/mail/send`, {
       method: 'POST',
       signal: AbortSignal.timeout(30000),
       headers: {
@@ -604,7 +604,7 @@ export class EmailAdapter implements DeliveryAdapter {
     }
 
     // P1-RESILIENCE FIX: Add timeout to prevent hanging on unresponsive external API
-    const response = await fetch('https://api.postmarkapp.com/email', {
+    const response = await fetch(`${API_BASE_URLS.postmark}/email`, {
       method: 'POST',
       signal: AbortSignal.timeout(30000),
       headers: {

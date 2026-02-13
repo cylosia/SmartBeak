@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { API_BASE_URLS } from '@config';
 
 /**
 * Paddle Billing Integration
@@ -184,7 +185,7 @@ export async function createPaddleCheckout(orgId: string, planId: string): Promi
     throw new Error('PADDLE_API_KEY not configured');
   }
   
-  const response = await fetch('https://api.paddle.com/transactions', {
+  const response = await fetch(`${API_BASE_URLS.paddle}/transactions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${paddleApiKey}`,

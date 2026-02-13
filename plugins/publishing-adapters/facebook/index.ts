@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 
 import { PublishAdapter, PublishInput, PublishTargetConfig } from '../../../packages/types/publishing';
+import { getFacebookGraphUrl } from '@config';
 import { renderFacebookPost } from './render';
 import { validateFacebookConfig, FacebookTargetConfig } from './config';
 
@@ -28,7 +29,7 @@ export class FacebookPublishAdapter implements PublishAdapter {
       ...(targetConfig.imageUrl !== undefined && { imageUrl: targetConfig.imageUrl }),
     });
 
-    const endpoint = `https://graph.facebook.com/v18.0/${targetConfig.pageId}/feed`;
+    const endpoint = `${getFacebookGraphUrl()}/${targetConfig.pageId}/feed`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

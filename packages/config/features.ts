@@ -36,6 +36,12 @@ export const featureFlags = {
   /** Enable experimental features - defaults to false for security */
   enableExperimental: parseBoolEnv('ENABLE_EXPERIMENTAL', false),
 
+  /** Enable beta features (web) - defaults to false for security */
+  enableBeta: parseBoolEnv('NEXT_PUBLIC_ENABLE_BETA', false),
+
+  /** Enable chat support (web) - defaults to false for security */
+  enableChat: parseBoolEnv('NEXT_PUBLIC_ENABLE_CHAT', false),
+
   /** Enable circuit breaker pattern - defaults to true (protective control) */
   enableCircuitBreaker: parseBoolEnv('ENABLE_CIRCUIT_BREAKER', true),
 
