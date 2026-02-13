@@ -1,5 +1,7 @@
 
 import React from 'react';
+import { useTranslation } from '../lib/i18n';
+
 export interface PortfolioRoi {
   total_production_cost?: number;
   total_monthly_revenue?: number;
@@ -17,6 +19,8 @@ export interface PortfolioRoiDashboardProps {
 }
 
 export function PortfolioRoiDashboard({ summary }: PortfolioRoiDashboardProps) {
+  const { t, formatCurrency } = useTranslation();
+
   if (!summary) {
   return null;
   }
@@ -25,18 +29,18 @@ export function PortfolioRoiDashboard({ summary }: PortfolioRoiDashboardProps) {
 
   return (
   <div>
-    <h2>Portfolio ROI</h2>
+    <h2>{t('roi.portfolioTitle')}</h2>
     <ul>
-    <li>Total Content Items: {summary.total_content_items ?? 0}</li>
-    <li>Total Production Cost: ${portfolioRoi?.total_production_cost ?? 0}</li>
-    <li>Estimated Monthly Revenue: ${portfolioRoi?.total_monthly_revenue ?? 0}</li>
+    <li>{t('roi.totalContentItems')}: {summary.total_content_items ?? 0}</li>
+    <li>{t('roi.totalProductionCost')}: {formatCurrency(portfolioRoi?.total_production_cost ?? 0)}</li>
+    <li>{t('roi.estimatedMonthlyRevenue')}: {formatCurrency(portfolioRoi?.total_monthly_revenue ?? 0)}</li>
     <li>
-      Avg Payback:{' '}
+      {t('roi.avgPayback')}:{' '}
       {portfolioRoi?.avg_payback_months !== null && portfolioRoi?.avg_payback_months !== undefined
-      ? portfolioRoi.avg_payback_months + ' months'
-      : 'N/A'}
+      ? t('roi.paybackMonths', { count: portfolioRoi.avg_payback_months })
+      : t('roi.paybackNA')}
     </li>
-    <li>Estimated 12-Month ROI: {portfolioRoi?.roi_12mo ?? 0}%</li>
+    <li>{t('roi.estimated12MonthROI')}: {portfolioRoi?.roi_12mo ?? 0}%</li>
     </ul>
   </div>
   );

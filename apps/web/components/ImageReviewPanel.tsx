@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../lib/i18n';
 
 interface ReviewImage {
   url: string;
@@ -14,9 +15,9 @@ export function ImageReviewPanel({ image, onApprove, onReject }: ImageReviewPane
   const isValidImageUrl = image.url.startsWith('https://') || image.url.startsWith('http://');
   return (
   <div>
-    {isValidImageUrl && <img src={image.url} />}
-    <button onClick={onApprove}>Approve</button>
-    <button onClick={onReject}>Reject</button>
+    {isValidImageUrl && <img src={image.url} alt={t('images.reviewImage')} />}
+    <button onClick={onApprove}>{t('images.approve')}</button>
+    <button onClick={onReject}>{t('images.reject')}</button>
   </div>
   );
 }

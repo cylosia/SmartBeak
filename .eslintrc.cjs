@@ -18,11 +18,12 @@ module.exports = {
     node: true,
   },
 
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint', 'jsx-a11y'],
 
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
+    'plugin:jsx-a11y/recommended',
   ],
 
   rules: {
@@ -54,6 +55,10 @@ module.exports = {
     // proving these bugs occur. These rules prevent new ones from being introduced.
     '@typescript-eslint/no-floating-promises': 'error',
     '@typescript-eslint/no-misused-promises': 'error',
+
+    // Accessibility: downgrade noisy rules to warn for incremental adoption
+    'jsx-a11y/click-events-have-key-events': 'warn',
+    'jsx-a11y/no-static-element-interactions': 'warn',
   },
 
   overrides: [
@@ -67,9 +72,11 @@ module.exports = {
     {
       files: [
         '**/*.test.ts',
+        '**/*.test.tsx',
         '**/*.spec.ts',
         '**/__tests__/**/*.ts',
         'test/**/*.ts',
+        'test/**/*.tsx',
       ],
       env: {
         jest: true,

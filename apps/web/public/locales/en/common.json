@@ -35,7 +35,10 @@
   "publish": {
     "createIntents": "Create Publish Intents",
     "selectTargets": "Select publish targets",
-    "createCount": "Create {{count}} Publish Intent(s)"
+    "createCount": "Create {{count}} Publish Intent(s)",
+    "targetVercel": "Web (Vercel)",
+    "targetWordpress": "WordPress",
+    "targetFacebook": "Facebook"
   },
   "common": {
     "loading": "Loading...",
@@ -44,6 +47,68 @@
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "reloadPage": "Reload page",
+    "skipToMain": "Skip to main content",
+    "selected": "{{count}} selected",
+    "requestReview": "Request Review",
+    "addTag": "Add Tag",
+    "addNote": "Add Note",
+    "createContent": "+ Create Content"
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try reloading the page."
+  },
+  "pricing": {
+    "title": "Pricing",
+    "soloTitle": "Solo Operator",
+    "soloDescription": "{{price}} / month \u2014 single domain, full governance",
+    "portfolioTitle": "Portfolio / Agency",
+    "portfolioDescription": "{{price}} / month \u2014 multiple domains, buyer diligence",
+    "enterpriseTitle": "Enterprise / Buyer",
+    "enterpriseDescription": "Custom pricing \u2014 acquisition & governance",
+    "subscribe": "Subscribe",
+    "contactSales": "Contact sales"
+  },
+  "roi": {
+    "contentTitle": "Content ROI & Payback",
+    "estimatedMonthlyRevenue": "Estimated Monthly Revenue",
+    "paybackPeriod": "Payback Period",
+    "paybackMonths": "{{count}} months",
+    "paybackNA": "N/A",
+    "estimated12MonthROI": "Estimated 12-Month ROI",
+    "advisory": "These estimates are advisory and based on assumptions you provide.",
+    "portfolioTitle": "Portfolio ROI",
+    "totalContentItems": "Total Content Items",
+    "totalProductionCost": "Total Production Cost",
+    "avgPayback": "Avg Payback",
+    "roiTitle": "ROI",
+    "monthlyRevenue": "Monthly Revenue",
+    "roi": "ROI",
+    "riskFlags": "Risk Flags"
+  },
+  "contentIndex": {
+    "title": "Content",
+    "noContent": "No content yet. Create your first piece of content.",
+    "colTitle": "Title",
+    "colType": "Type",
+    "colStatus": "Status",
+    "colUpdated": "Updated"
+  },
+  "images": {
+    "editorTitle": "Image Asset",
+    "uploadedPreview": "Uploaded image preview",
+    "reviewImage": "Image under review",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "a11y": {
+    "mainNav": "Main navigation",
+    "pageContent": "Page content",
+    "contentFilters": "Content filters",
+    "filterByType": "Filter by content type",
+    "filterByStatus": "Filter by content status",
+    "filterResultsCount": "{{count}} results shown"
   }
 }
