@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getLogger } from '../../packages/kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
+import { rejectDisallowedAlgorithm } from '../../packages/security/jwt';
 
 
 /**
@@ -21,7 +22,8 @@ import { AuthError } from '@kernel/auth';
 const logger = getLogger('JwtService');
 
 // Type exports at top level
-export type UserRole = 'admin' | 'editor' | 'viewer';
+// P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
+export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner';
 export interface JwtClaims {
   sub: string;
   role: UserRole;
@@ -44,7 +46,9 @@ export {
 // Zod Schemas
 // ============================================================================
 
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer']);
+// P0-FIX: Added 'owner' to match packages/security/jwt.ts and prevent Zod validation
+// failures when creating tokens for org owners.
+export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner']);
 
 export const JwtClaimsInputSchema = z.object({
   sub: z.string().min(1).max(256),
@@ -203,6 +207,17 @@ function parseMs(timeStr: string): number {
 * @returns Array of signing keys
 * @throws {InvalidKeyError} When keys are invalid
 */
+/**
+ * SECURITY: Detect PEM-formatted keys to prevent algorithm confusion.
+ * If an RSA/EC public key is used as an HS256 secret, an attacker who
+ * knows the public key can forge tokens.
+ */
+const PEM_PATTERN = /-----BEGIN\s+(RSA\s+)?(PUBLIC|PRIVATE|CERTIFICATE|EC)\s+KEY-----/i;
+
+function isPemKey(key: string): boolean {
+  return PEM_PATTERN.test(key.trim());
+}
+
 function getKeys(): string[] {
   const key1 = process.env['JWT_KEY_1'];
   const key2 = process.env['JWT_KEY_2'];
@@ -228,6 +243,21 @@ function getKeys(): string[] {
   }
   if (placeholderPatterns.test(key2) || key2.includes('your_')) {
   throw new InvalidKeyError('JWT_KEY_2 appears to be a placeholder value. Please set a secure random key.');
+  }
+
+  // SECURITY FIX: Reject PEM-formatted keys to prevent algorithm confusion.
+  // Using an RSA/EC public key as HS256 secret enables token forgery.
+  if (isPemKey(key1)) {
+  throw new InvalidKeyError(
+    'JWT_KEY_1 appears to be a PEM-formatted key. ' +
+    'HS256 requires a symmetric secret, not an asymmetric key.'
+  );
+  }
+  if (isPemKey(key2)) {
+  throw new InvalidKeyError(
+    'JWT_KEY_2 appears to be a PEM-formatted key. ' +
+    'HS256 requires a symmetric secret, not an asymmetric key.'
+  );
   }
 
   return [key1, key2];
@@ -534,6 +564,9 @@ export function getTokenInfo(token: string): TokenInfo | null {
  * Now uses jwt.verify() to ensure the old token was legitimately signed.
  */
 export function refreshToken(token: string, _expiresIn?: string): string {
+  // SECURITY FIX: Pre-verification algorithm check (defense-in-depth)
+  rejectDisallowedAlgorithm(token);
+
   // P0-1 FIX: VERIFY the token cryptographically instead of just decoding it.
   // jwt.decode() performs NO signature verification - an attacker could craft
   // any payload and get it signed with a valid production key.

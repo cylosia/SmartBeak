@@ -82,3 +82,6 @@ export {
   rateLimitMiddleware, createRateLimiter,
   type RateLimitConfig, type RateLimitResult,
 } from './rateLimiterRedis';
+
+// Transactional outbox relay for at-least-once event delivery
+export { OutboxRelay, type OutboxRelayOptions } from './outbox/OutboxRelay';

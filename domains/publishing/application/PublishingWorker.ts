@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { DLQService, RegionWorker } from '@kernel/queue';
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '@kernel/logger';
+import { writeToOutbox } from '@packages/database/outbox';
 
 import { PostgresPublishAttemptRepository } from '../infra/persistence/PostgresPublishAttemptRepository';
 import { PublishAdapter } from './ports/PublishAdapter';
@@ -101,11 +102,11 @@ export class PublishingWorker {
     const updatedJob = job.start();
     await this.jobs.save(updatedJob);
 
-    // Commit state transition before publishing event
-    await client.query('COMMIT');
+    // Write event to outbox within the transaction for at-least-once delivery.
+    // The outbox relay will publish the event after this transaction commits.
+    await writeToOutbox(client, new PublishingStarted().toEnvelope(job["id"]));
 
-    // Publish event after successful commit
-    await this.eventBus.publish(new PublishingStarted().toEnvelope(job["id"]));
+    await client.query('COMMIT');
 
     try {
     // Security: Validate target URL
@@ -123,8 +124,8 @@ export class PublishingWorker {
     await this.attempts.record(job["id"], attempt, 'success');
     const succeededJob = updatedJob.succeed();
     await this.jobs.save(succeededJob);
+    await writeToOutbox(client, new PublishingSucceeded().toEnvelope(job["id"]));
     await client.query('COMMIT');
-    await this.eventBus.publish(new PublishingSucceeded().toEnvelope(job["id"]));
 
     await this.auditLog('publish_succeeded', job.domainId, {
         jobId: job["id"],
@@ -146,9 +147,9 @@ export class PublishingWorker {
 
     const failedJob = updatedJob.fail(errorMessage);
     await this.jobs.save(failedJob);
+    await writeToOutbox(client, new PublishingFailed().toEnvelope(job["id"], errorMessage));
 
     await client.query('COMMIT');
-    await this.eventBus.publish(new PublishingFailed().toEnvelope(job["id"], errorMessage));
 
     await this.auditLog('publish_failed', job.domainId, {
         jobId: job["id"],

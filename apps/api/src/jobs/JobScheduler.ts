@@ -3,6 +3,14 @@ import Redis from 'ioredis';
 
 import { EventEmitter } from 'events';
 import { z } from 'zod';
+import {
+  context as otelContext,
+  trace,
+  propagation,
+  SpanStatusCode,
+  SpanKind,
+  ROOT_CONTEXT,
+} from '@opentelemetry/api';
 
 import { getLogger } from '@kernel/logger';
 import { DLQService } from '@kernel/queue/DLQService';
@@ -420,6 +428,31 @@ export class JobScheduler extends EventEmitter {
 
           this.emit('jobStarted', job);
 
+          // Extract OTel trace context from job data for distributed tracing
+          let parentContext = ROOT_CONTEXT;
+          try {
+            const traceHeaders = (job.data as Record<string, unknown>)?._traceContext;
+            if (traceHeaders && typeof traceHeaders === 'object') {
+              parentContext = propagation.extract(
+                ROOT_CONTEXT,
+                traceHeaders as Record<string, string>
+              );
+            }
+          } catch {
+            // Proceed without parent context
+          }
+
+          // Strip internal trace context before passing data to handlers
+          let cleanData = job.data;
+          try {
+            if (typeof job.data === 'object' && job.data !== null && '_traceContext' in (job.data as Record<string, unknown>)) {
+              const { _traceContext: _, ...rest } = job.data as Record<string, unknown>;
+              cleanData = rest;
+            }
+          } catch {
+            // Use original data
+          }
+
           // P2-MEDIUM FIX: Ensure AsyncLocalStorage context is propagated for job processing
           const requestContext = createRequestContext({
             requestId: job.id || `job-${Date.now()}`,
@@ -427,33 +460,60 @@ export class JobScheduler extends EventEmitter {
             orgId: (job.data as Record<string, string> | undefined)?.['orgId'] || undefined,
           });
 
-          // P1-1 FIX: Extract jobId ONCE and reuse in finally block. Previously,
-          // line 428 used `job.id || \`job-${Date.now()}\`` and line 448 used
-          // `job.id || ''`, creating a key mismatch that leaked abort controllers.
+          // P1-1 FIX: Extract jobId ONCE and reuse in finally block.
           const effectiveJobId = job.id || `job-${Date.now()}`;
           const abortController = new AbortController();
           this.abortControllers.set(effectiveJobId, abortController);
           this.abortControllerTimestamps.set(effectiveJobId, Date.now());
 
-          return runWithContext(requestContext, async () => {
-            try {
-              const result = await this.executeWithTimeout(
-                handler(job.data, job),
-                config.timeout || jobConfig.defaultTimeoutMs,
-                abortController.signal
-              );
-              // P1-2 FIX: Removed duplicate this.emit('jobCompleted', job, result) here.
-              // The worker 'completed' event handler in attachWorkerHandlers() already
-              // emits 'jobCompleted'. Having both caused double emission for every job.
-              return result;
-            } catch (error) {
-              this.emit('jobFailed', job, error);
-              throw error;
-            } finally {
-              // P1-1 FIX: Use same effectiveJobId from outer scope
-              this.abortControllers.delete(effectiveJobId);
-              this.abortControllerTimestamps.delete(effectiveJobId);
-            }
+          // Create an OTel span for job processing, linked to the parent trace
+          let jobSpan: ReturnType<ReturnType<typeof trace.getTracer>['startSpan']> | undefined;
+          let spanContext = parentContext;
+          try {
+            const tracer = trace.getTracer('smartbeak-jobs', '1.0.0');
+            jobSpan = tracer.startSpan(
+              `job.process ${job.name}`,
+              {
+                kind: SpanKind.CONSUMER,
+                attributes: {
+                  'job.name': job.name,
+                  'job.id': effectiveJobId,
+                  'job.queue': queueName,
+                  'job.attempt': job.attemptsMade,
+                },
+              },
+              parentContext
+            );
+            spanContext = trace.setSpan(parentContext, jobSpan);
+          } catch {
+            // OTel not available — proceed without span
+          }
+
+          return otelContext.with(spanContext, () => {
+            return runWithContext(requestContext, async () => {
+              try {
+                const result = await this.executeWithTimeout(
+                  handler(cleanData, job),
+                  config.timeout || jobConfig.defaultTimeoutMs,
+                  abortController.signal
+                );
+                jobSpan?.setStatus({ code: SpanStatusCode.OK });
+                return result;
+              } catch (error) {
+                jobSpan?.setStatus({
+                  code: SpanStatusCode.ERROR,
+                  message: error instanceof Error ? error.message : String(error),
+                });
+                if (error instanceof Error) jobSpan?.recordException(error);
+                this.emit('jobFailed', job, error);
+                throw error;
+              } finally {
+                jobSpan?.end();
+                // P1-1 FIX: Use same effectiveJobId from outer scope
+                this.abortControllers.delete(effectiveJobId);
+                this.abortControllerTimestamps.delete(effectiveJobId);
+              }
+            });
           });
         },
         {
@@ -623,11 +683,26 @@ export class JobScheduler extends EventEmitter {
     payloadSize,
   });
 
+  // Inject OTel trace context into job data for cross-process propagation
+  let jobData = data;
+  try {
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(otelContext.active(), traceHeaders);
+    if (Object.keys(traceHeaders).length > 0) {
+      jobData = {
+        ...(typeof data === 'object' && data !== null ? data : { _payload: data }),
+        _traceContext: traceHeaders,
+      };
+    }
+  } catch {
+    // Telemetry not initialized — proceed without trace context
+  }
+
   // P0-3 FIX: Pass priority to queue.add(). Previously computed but never included
   // in options, causing all jobs to run at BullMQ default priority.
   // P0-4 FIX: Wrap backoff in { backoff: { type, delay } } object. BullMQ expects
   // nested backoff config, not top-level type/delay keys (which are silently ignored).
-  return queue.add(name, data, {
+  return queue.add(name, jobData, {
     priority,
     ...(options.delay !== undefined && { delay: options.delay }),
     ...(options.jobId !== undefined && { jobId: options.jobId }),

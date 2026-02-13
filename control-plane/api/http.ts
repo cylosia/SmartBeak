@@ -5,8 +5,11 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
+import type { Pool } from 'pg';
+import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
+import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
 
@@ -112,7 +115,8 @@ await app.register(cors, {
   // P2-SECURITY-FIX: Removed X-CSRF-Token from allowedHeaders. It was listed but
   // no CSRF validation middleware exists, creating a false sense of security.
   // For a Bearer-token-only API, CSRF protection is not required.
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'traceparent', 'tracestate'],
+  exposedHeaders: ['X-Request-ID', 'X-Trace-ID'],
 });
 
 // API Versioning: Backward compatibility for unversioned paths.
@@ -209,16 +213,27 @@ app.addHook('onRequest', async (request, reply) => {
 });
 
 // P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a
-// duplicate Pool here. The managed pool has exhaustion monitoring, statement_timeout,
-// idle_in_transaction_session_timeout, and proper metrics - this standalone pool had none.
-// Previously this created a second pool with max:20, doubling total connections to 30/process.
-// SECURITY FIX (Finding 5): Use shared pool from @database/pool instead of creating a duplicate
-// Previously: new Pool({ max: 20 }) - created a second pool alongside the shared pool (max: 10)
-// Combined: up to 30 connections per function * 100+ Vercel functions = connection storm
-const pool = await getPoolInstance();
+// Pool and container are initialized lazily in start() to avoid connecting to the
+// database at module import time. Previously, a top-level await here meant that
+// any import of this module would block until the database was reachable.
+let pool: Pool;
+let container: ReturnType<typeof initializeContainer>;
 
-// Initialize DI container
-const container = initializeContainer({ dbPool: pool });
+// Load cost tracking budgets from database
+try {
+  await container.costTracker.loadBudgetsFromDb();
+  logger.info('Cost tracking budgets loaded');
+} catch (error) {
+  logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+// Flush cost tracking buffer on shutdown
+registerShutdownHandler(async () => {
+  container.costTracker.stop();
+  logger.info('Cost tracker stopped and buffer flushed');
+});
 
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
@@ -388,6 +403,8 @@ app.setErrorHandler((error: unknown, request, reply) => {
     errorCode = 'NOT_FOUND';
   } else if (statusCode === 400) {
     errorCode = 'VALIDATION_ERROR';
+  } else if (statusCode === 402) {
+    errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
     errorCode = 'CONFLICT';
   }
@@ -599,6 +616,7 @@ interface HealthStatus {
  * SECURITY FIX (Finding 5): Uses the shared pool instance
  */
 async function checkDatabase(): Promise<{ latency: number }> {
+  if (!pool) throw new Error('Database pool not initialized');
   const start = Date.now();
   const TIMEOUT_MS = 5000;
   // P0-FIX: Rewritten to fix two bugs in the original Promise.race pattern:
@@ -668,6 +686,7 @@ async function checkRedisHealth(): Promise<{ latency: number; mode: string }> {
  * Check queue health - look for stalled and failed jobs
  */
 async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number; pendingJobs: number }> {
+  if (!pool) throw new Error('Database pool not initialized');
   // P1-FIX: Combined 3 sequential queries into 1 to reduce pool connection usage.
   // Previously consumed 3 pool connections per health check request.
   const result = await pool.query(
@@ -702,6 +721,7 @@ app.get('/health/detailed', async (request, reply) => {
   }
   // P0-AUDIT-FIX: Require admin/owner role — previously any authenticated user could access
   try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  if (!container) throw new Error('Container not initialized');
   const containerHealth = await container.getHealth();
   return {
   status: containerHealth.services["database"] ? 'healthy' : 'degraded',
@@ -741,6 +761,11 @@ app.get('/health/sequences', async (request, reply) => {
 // Start server
 async function start(): Promise<void> {
   try {
+  // Initialize database pool (moved from module scope so the module can be
+  // imported without requiring a live database connection)
+  pool = await getPoolInstance();
+  container = initializeContainer({ dbPool: pool });
+
   await registerRoutes();
   const port = Number(process.env['PORT']) || 3000; // P3-FIX: Use Number() || fallback instead of parseInt to avoid NaN
   await app.listen({ port, host: '0.0.0.0' });
@@ -755,6 +780,13 @@ async function start(): Promise<void> {
     logger.info('Closing Fastify server (draining connections)...');
     await app.close();
     logger.info('Fastify server closed');
+  });
+
+  // Flush pending OTel spans before process exit
+  registerShutdownHandler(async () => {
+    logger.info('Flushing telemetry spans...');
+    await shutdownTelemetry();
+    logger.info('Telemetry shutdown complete');
   });
   } catch (error) {
   logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));
