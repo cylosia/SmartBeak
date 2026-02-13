@@ -9,7 +9,7 @@
 import fetch from 'node-fetch';
 import { createHash } from 'crypto';
 import { API_VERSIONS } from '@config';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 

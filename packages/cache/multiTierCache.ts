@@ -498,7 +498,11 @@ export class MultiTierCache {
    * Delete multiple keys
    */
   async deleteMany(keys: string[]): Promise<void> {
-    await Promise.all(keys.map(key => this.delete(key)));
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+      const batch = keys.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(key => this.delete(key)));
+    }
   }
 
   /**

@@ -5,7 +5,6 @@
  * Used by the shard deployment system and other file storage needs.
  */
 
-// @ts-expect-error -- @aws-sdk/client-s3 not yet installed; tracked as tech debt
 import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
 
 // Storage provider types

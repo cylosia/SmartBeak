@@ -1,5 +1,5 @@
 import { getLogger } from '@kernel/logger';
-import { MetricsCollector } from '../../utils/request';
+import { MetricsCollector } from '@kernel/request';
 import { withRetry } from '../../utils/retry';
 import { validateUrl } from '@security/ssrf';
 

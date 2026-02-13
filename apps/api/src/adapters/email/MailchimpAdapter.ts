@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 
 import { API_VERSIONS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '../../utils/config';
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
 import { withCircuitBreaker, withTimeout } from '../../utils/resilience';
 

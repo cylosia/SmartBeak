@@ -1,7 +1,7 @@
 import type { AuthContext, FastifyRequestLike } from './types';
 import { extractAndVerifyToken } from '@security/jwt';
 import { getDb } from '../../db';
-import { getLogger } from '../../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Authentication Module for Email Routes

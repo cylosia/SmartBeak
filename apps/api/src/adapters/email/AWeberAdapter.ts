@@ -5,7 +5,7 @@ import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEma
 import { validateNonEmptyString, isAWeberErrorResponse, isAWeberListResponse } from '../../utils/validation';
 import fetch from 'node-fetch';
 import { withRetry } from '../../utils/retry';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 
 /**
  * AWeber Email Provider Adapter

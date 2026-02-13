@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import crypto from 'crypto';
 import { getRedis } from '@kernel/redis';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 /**
  * P0-FIX: Verify Paddle webhook signature using raw body

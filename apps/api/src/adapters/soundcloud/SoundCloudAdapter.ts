@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 
 import { API_BASE_URLS, DEFAULT_TIMEOUTS } from '@config';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 

@@ -8,7 +8,7 @@ import { dbConfig, paginationConfig } from '@config';
 import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
 import { recommendNextActions } from '../advisor/nextActions';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const QUERY_TIMEOUT_MS = dbConfig.queryTimeoutMs;
 

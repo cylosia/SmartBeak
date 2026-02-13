@@ -6,7 +6,7 @@ import { apiRateLimit } from '../middleware/rateLimiter';
 import { csrfProtection } from '../middleware/csrf';
 import { optionalAuthFastify } from '@security/auth';
 import { sanitizeError } from '../utils/sanitizedErrors';
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 // P1-SECURITY FIX: domain_id is required to prevent unscoped exports
 const ExportBodySchema = z.object({

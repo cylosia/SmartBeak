@@ -3,7 +3,7 @@ import { LRUCache } from 'lru-cache';
 
 import { API_VERSIONS, API_BASE_URLS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_CONFIG } from '../../utils/config';
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString, isConstantContactErrorsResponse, isConstantContactListResponse } from '../../utils/validation';
 import { withCircuitBreaker, withTimeout } from '../../utils/resilience';
 import { withRetry } from '../../utils/retry';

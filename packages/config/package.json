@@ -8,7 +8,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@smartbeak/kernel": "1.0.0"
+    "@smartbeak/kernel": "1.0.0",
+    "@aws-sdk/client-s3": "^3.500.0"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

@@ -25,7 +25,7 @@ export function ImageAnalyticsDashboard({ rows }: ImageAnalyticsDashboardProps) 
     </thead>
     <tbody>
       {rows.map((r: ImageAnalyticsRow, i: number) => (
-      <tr key={i}>
+      <tr key={r.platform}>
         <td>{r.platform}</td>
         <td>{r.ctr}</td>
         <td>{r.impressions}</td>
