@@ -357,8 +357,13 @@ export class MultiTierCache {
       l2TtlSeconds?: number;
       tags?: string[];
       timeoutMs?: number;
+      signal?: AbortSignal;
     }
   ): Promise<T> {
+    if (options?.signal?.aborted) {
+      throw new Error('Cache computation aborted');
+    }
+
     if (!this.options.stampedeProtection) {
       const cached = await this.get<T>(key);
       if (cached !== undefined) return cached;
@@ -459,19 +464,39 @@ export class MultiTierCache {
       l2TtlSeconds?: number;
       tags?: string[];
       timeoutMs?: number;
+      signal?: AbortSignal;
     }
   ): Promise<T> {
+    if (options?.signal?.aborted) {
+      throw new Error('Cache computation aborted');
+    }
+
     const timeoutMs = options?.timeoutMs ?? this.options.inFlightTtlMs;
 
     // P1-6 FIX: Track timeout timer so it can be cleared when factory resolves first
     let timeoutId: NodeJS.Timeout | undefined;
     try {
-      const value = await Promise.race([
+      const racers: Promise<T>[] = [
         factory(),
         new Promise<never>((_, reject) => {
           timeoutId = setTimeout(() => reject(new Error(`Cache computation timeout for key: ${key}`)), timeoutMs);
         }),
-      ]);
+      ];
+
+      // Add abort signal as a racer if provided
+      if (options?.signal) {
+        racers.push(new Promise<never>((_, reject) => {
+          if (options.signal!.aborted) {
+            reject(new Error('Cache computation aborted'));
+            return;
+          }
+          options.signal!.addEventListener('abort', () => {
+            reject(new Error('Cache computation aborted'));
+          }, { once: true });
+        }));
+      }
+
+      const value = await Promise.race(racers);
 
       await this.set(key, value, options);
       return value;

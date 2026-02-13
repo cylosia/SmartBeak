@@ -5,7 +5,7 @@ import { API_VERSIONS, API_BASE_URLS, DEFAULT_TIMEOUTS, DEFAULT_CIRCUIT_BREAKER_
 import { EmailProviderAdapter, EmailSequence, validateEmailSequence, validateEmail } from './EmailProviderAdapter';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString, isConstantContactErrorsResponse, isConstantContactListResponse } from '../../utils/validation';
-import { withCircuitBreaker, withTimeout } from '../../utils/resilience';
+import { executeWithCircuitBreaker, withTimeout } from '../../utils/resilience';
 import { withRetry } from '../../utils/retry';
 
 import { AbortController } from 'abort-controller';
@@ -59,17 +59,19 @@ export class ConstantContactAdapter implements EmailProviderAdapter {
     this.logger = new StructuredLogger('ConstantContactAdapter');
     this.metrics = new MetricsCollector('ConstantContactAdapter');
 
-    this.createListWithResilience = withCircuitBreaker(
-      ((name: string) => this._createListInternal(name)) as (...args: unknown[]) => Promise<unknown>,
-      DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold,
-      'constantcontact-createList'
-    ) as (name: string) => Promise<string>;
+    this.createListWithResilience = (name: string) =>
+      executeWithCircuitBreaker(
+        'constantcontact-createList',
+        () => this._createListInternal(name),
+        DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold
+      );
 
-    this.addSubscriberWithResilience = withCircuitBreaker(
-      ((email: string, listId: string) => this._addSubscriberInternal(email, listId)) as (...args: unknown[]) => Promise<unknown>,
-      DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold,
-      'constantcontact-addSubscriber'
-    ) as (email: string, listId: string) => Promise<void>;
+    this.addSubscriberWithResilience = (email: string, listId: string) =>
+      executeWithCircuitBreaker(
+        'constantcontact-addSubscriber',
+        () => this._addSubscriberInternal(email, listId),
+        DEFAULT_CIRCUIT_BREAKER_CONFIG.failureThreshold
+      );
   }
 
   /**
