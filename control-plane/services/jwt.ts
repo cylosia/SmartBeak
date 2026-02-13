@@ -329,7 +329,12 @@ export function signToken(claimsInput: SignTokenInput): string {
   boundOrgId: validated["orgId"],
   } as Omit<JwtClaims, 'iat' | 'exp'>;
 
-  return jwt.sign(payload as object, KEYS[0]!, { expiresIn: Math.floor(expiresInMs / 1000) } as jwt.SignOptions);
+  return jwt.sign(payload as object, KEYS[0]!, {
+    algorithm: 'HS256',
+    expiresIn: Math.floor(expiresInMs / 1000),
+    audience: _aud,
+    issuer: _iss,
+  } as jwt.SignOptions);
 }
 
 // ============================================================================
