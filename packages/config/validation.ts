@@ -1,11 +1,15 @@
 /**
  * Configuration Validation
- * 
+ *
  * Validates required and optional environment variables at startup.
+ * Uses Zod schema internally for type-safe validation while preserving
+ * the existing ValidationResult API for backward compatibility.
+ *
  * SECURITY FIX: Added NODE_ENV, LOG_LEVEL, and SERVICE_NAME as required.
  */
 
 import { getEnvVar, isPlaceholder } from './env';
+import { envSchema } from './schema';
 import { getLogger } from '../kernel/logger';
 import crypto from 'crypto';
 
@@ -39,6 +43,7 @@ export const OPTIONAL_ENV_VARS = [
   'AHREFS_API_TOKEN',
   'GSC_CLIENT_ID',
   'GSC_CLIENT_SECRET',
+  'GSC_REDIRECT_URI',
   'VERCEL_TOKEN',
   'OPENAI_API_KEY',
   'STABILITY_API_KEY',
@@ -79,6 +84,10 @@ export const OPTIONAL_ENV_VARS = [
   'NEXT_PUBLIC_APP_URL',
   'NEXT_PUBLIC_ACP_API',
   'APP_URL',
+  'CDN_BASE_URL',
+  'NEXT_PUBLIC_CDN_BASE_URL',
+  'FORMS_BASE_URL',
+  'NEXT_PUBLIC_FORMS_BASE_URL',
 ] as const;
 
 export type OptionalEnvVar = typeof OPTIONAL_ENV_VARS[number];
@@ -109,51 +118,12 @@ export interface ValidationResult {
 }
 
 /**
- * Validates NODE_ENV value
- */
-function validateNodeEnv(value: string | undefined): { valid: boolean; reason?: string } {
-  if (!value) {
-    return { valid: false, reason: 'NODE_ENV is required' };
-  }
-  const validValues = ['development', 'production', 'test'];
-  if (!validValues.includes(value)) {
-    return { valid: false, reason: `NODE_ENV must be one of: ${validValues.join(', ')}` };
-  }
-  return { valid: true };
-}
-
-/**
- * Validates LOG_LEVEL value
- */
-function validateLogLevel(value: string | undefined): { valid: boolean; reason?: string } {
-  if (!value) {
-    return { valid: false, reason: 'LOG_LEVEL is required' };
-  }
-  const validValues = ['debug', 'info', 'warn', 'error', 'silent'];
-  if (!validValues.includes(value.toLowerCase())) {
-    return { valid: false, reason: `LOG_LEVEL must be one of: ${validValues.join(', ')}` };
-  }
-  return { valid: true };
-}
-
-/**
- * Validates SERVICE_NAME value
- */
-function validateServiceName(value: string | undefined): { valid: boolean; reason?: string } {
-  if (!value) {
-    return { valid: false, reason: 'SERVICE_NAME is required' };
-  }
-  if (value.length < 2) {
-    return { valid: false, reason: 'SERVICE_NAME must be at least 2 characters' };
-  }
-  if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-    return { valid: false, reason: 'SERVICE_NAME must contain only alphanumeric characters, hyphens, and underscores' };
-  }
-  return { valid: true };
-}
-
-/**
- * Validate environment configuration
+ * Validate environment configuration using Zod schema.
+ *
+ * Parses process.env through the Zod envSchema first, then maps any
+ * schema errors into the legacy ValidationResult shape so existing
+ * consumers and tests continue to work unchanged.
+ *
  * SECURITY FIX: Added validation for NODE_ENV, LOG_LEVEL, SERVICE_NAME
  */
 export function validateConfig(): ValidationResult {
@@ -162,6 +132,7 @@ export function validateConfig(): ValidationResult {
   const invalid: Array<{ key: RequiredEnvVar; reason: string }> = [];
   const warnings: string[] = [];
 
+  // --- Phase 1: Legacy presence/placeholder checks (backward compat) ---
   for (const key of REQUIRED_ENV_VARS) {
     const value = getEnvVar(key);
     if (!value) {
@@ -171,23 +142,26 @@ export function validateConfig(): ValidationResult {
     }
   }
 
-  // Validate specific required variables
-  // P2-8 FIX: Replace non-null assertions (!) with safe defaults
-  const nodeEnvResult = validateNodeEnv(getEnvVar('NODE_ENV'));
-  if (!nodeEnvResult.valid) {
-    invalid.push({ key: 'NODE_ENV', reason: nodeEnvResult.reason ?? 'Unknown validation error' });
+  // --- Phase 2: Zod schema validation for type/format checks ---
+  // Only run schema validation if all required vars are present (not missing)
+  // to avoid duplicate "missing" errors from Zod.
+  if (missing.length === 0 && placeholders.length === 0) {
+    const result = envSchema.safeParse(process.env);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const key = issue.path[0] as string;
+        // Only report errors for required vars in the invalid array
+        if (REQUIRED_ENV_VARS.includes(key as RequiredEnvVar)) {
+          // Avoid duplicates
+          if (!invalid.some(i => i.key === key)) {
+            invalid.push({ key: key as RequiredEnvVar, reason: issue.message });
+          }
+        }
+      }
+    }
   }
 
-  const logLevelResult = validateLogLevel(getEnvVar('LOG_LEVEL'));
-  if (!logLevelResult.valid) {
-    invalid.push({ key: 'LOG_LEVEL', reason: logLevelResult.reason ?? 'Unknown validation error' });
-  }
-
-  const serviceNameResult = validateServiceName(getEnvVar('SERVICE_NAME'));
-  if (!serviceNameResult.valid) {
-    invalid.push({ key: 'SERVICE_NAME', reason: serviceNameResult.reason ?? 'Unknown validation error' });
-  }
-
+  // --- Phase 3: Security-critical cross-field checks ---
   // P2-9 FIX: Use timing-safe comparison for JWT key equality check
   const jwtKey1 = getEnvVar('JWT_KEY_1');
   const jwtKey2 = getEnvVar('JWT_KEY_2');
@@ -196,11 +170,14 @@ export function validateConfig(): ValidationResult {
     const buf2 = Buffer.from(jwtKey2);
     const areEqual = buf1.length === buf2.length && crypto.timingSafeEqual(buf1, buf2);
     if (areEqual) {
-      invalid.push({ key: 'JWT_KEY_2', reason: 'JWT_KEY_1 and JWT_KEY_2 must be different values' });
+      // Avoid duplicate if Zod already caught this
+      if (!invalid.some(i => i.key === 'JWT_KEY_2')) {
+        invalid.push({ key: 'JWT_KEY_2', reason: 'JWT_KEY_1 and JWT_KEY_2 must be different values' });
+      }
     }
   }
 
-  // Check optional variables in non-production
+  // --- Phase 4: Optional variable warnings ---
   if (process.env['NODE_ENV'] !== 'production') {
     const missingOptional: OptionalEnvVar[] = [];
     for (const key of OPTIONAL_ENV_VARS) {

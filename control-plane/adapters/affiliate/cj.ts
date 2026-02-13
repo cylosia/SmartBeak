@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 
+import { API_BASE_URLS } from '@config';
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
 
 
@@ -44,7 +45,7 @@ export interface CJCommissionItem {
 export class CJAdapter implements AffiliateRevenueAdapter {
   readonly provider = 'cj';
   private credentials: CJCredentials;
-  private baseUrl = 'https://commissions.api.cj.com/query';
+  private baseUrl = `${API_BASE_URLS.cj}/query`;
 
   constructor(credentials?: Partial<CJCredentials>) {
   this.credentials = {

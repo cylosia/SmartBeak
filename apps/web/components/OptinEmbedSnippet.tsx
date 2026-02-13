@@ -1,5 +1,7 @@
 
 import React from 'react';
+import { cdnConfig } from '@config';
+
 function isValidFormId(formId: string): boolean {
   // Allow only alphanumeric characters and hyphens
   const validFormIdRegex = /^[a-zA-Z0-9-]+$/;
@@ -11,8 +13,8 @@ function sanitizeFormId(formId: string): string {
   return formId.replace(/[^a-zA-Z0-9-]/g, '');
 }
 
-const CDN_BASE_URL = process.env['NEXT_PUBLIC_CDN_BASE_URL'] || 'https://cdn.acp.io';
-const FORMS_BASE_URL = process.env['NEXT_PUBLIC_FORMS_BASE_URL'] || 'https://acp.io';
+const CDN_BASE_URL = cdnConfig.cdnBaseUrl;
+const FORMS_BASE_URL = cdnConfig.formsBaseUrl;
 
 export function OptinEmbedSnippet({ formId }: { formId: string }) {
 

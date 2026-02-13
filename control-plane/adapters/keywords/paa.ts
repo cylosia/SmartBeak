@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-import { apiConfig, timeoutConfig } from '@config';
+import { apiConfig, timeoutConfig, API_BASE_URLS } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
@@ -235,7 +235,7 @@ export class PaaAdapter implements KeywordIngestionAdapter {
 
   try {
     const res = await withRetry(async () => {
-    const response = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/advanced', {
+    const response = await fetch(`${API_BASE_URLS.dataforseo}/v3/serp/google/organic/live/advanced`, {
     method: 'POST',
     headers: {
     'Authorization': `Basic ${auth}`,

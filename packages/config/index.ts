@@ -62,12 +62,32 @@ export {
 // ============================================================================
 export {
   apiConfig,
+  cdnConfig,
   buildApiUrl,
   getMailchimpBaseUrl,
   getFacebookGraphUrl,
   API_VERSIONS,
   API_BASE_URLS,
+  type ServiceName,
+  type QueryParams,
 } from './api';
+
+// ============================================================================
+// Environment Validation Schema
+// ============================================================================
+export { envSchema, type EnvConfig } from './schema';
+
+// ============================================================================
+// Secrets Management
+// ============================================================================
+export {
+  SECRET_MANIFEST,
+  getSecretsForFeature,
+  getRequiredSecretCategories,
+  validateSecretStrength,
+  type SecretCategory,
+  type SecretCategoryName,
+} from './secrets';
 
 // ============================================================================
 // Security Configuration
@@ -154,7 +174,7 @@ export { resourceLimits } from './limits';
 // ============================================================================
 // Composite Config (convenience export)
 // ============================================================================
-import { apiConfig } from './api';
+import { apiConfig, cdnConfig } from './api';
 import { securityConfig, abuseGuardConfig } from './security';
 import { cacheConfig, redisConfig } from './cache';
 import { timeoutConfig } from './timeouts';
@@ -174,6 +194,7 @@ import { resourceLimits } from './limits';
  */
 export const config = {
   api: apiConfig,
+  cdn: cdnConfig,
   security: securityConfig,
   cache: cacheConfig,
   timeout: timeoutConfig,

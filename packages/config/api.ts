@@ -1,10 +1,11 @@
 /**
  * API Configuration
- * 
+ *
  * Configuration for external APIs and service endpoints.
+ * Single source of truth for all API base URLs, versions, and CDN endpoints.
  */
 
-import { parseIntEnv } from './env';
+import { parseIntEnv, getEnvVar } from './env';
 
 /** Named constants for API configuration */
 const API_CONSTANTS = {
@@ -13,6 +14,40 @@ const API_CONSTANTS = {
   DEFAULT_MAX_REQUEST_SIZE_BYTES: 10 * 1024 * 1024, // 10MB
   DEFAULT_PORT: 3001,
 } as const;
+
+/** All known service names */
+export type ServiceName =
+  | 'facebook'
+  | 'instagram'
+  | 'linkedin'
+  | 'pinterest'
+  | 'youtube'
+  | 'tiktok'
+  | 'twitter'
+  | 'wordpress'
+  | 'mailchimp'
+  | 'aweber'
+  | 'constantContact'
+  | 'vercel'
+  | 'gsc'
+  | 'ga'
+  | 'gbp'
+  | 'openai'
+  | 'stability'
+  | 'vimeo'
+  | 'soundcloud'
+  | 'serpapi'
+  | 'ahrefs'
+  | 'youtubeAnalytics'
+  | 'sendgrid'
+  | 'postmark'
+  | 'paddle'
+  | 'cj'
+  | 'impact'
+  | 'dataforseo';
+
+/** Query parameters type for URL building */
+export type QueryParams = Record<string, string | number | boolean | undefined>;
 
 export const apiConfig = {
   /** Timeout for API requests in milliseconds */
@@ -35,10 +70,13 @@ export const apiConfig = {
     pinterest: 'v5',
     youtube: 'v3',
     tiktok: 'v2',
+    twitter: 'v2',
+    wordpress: 'v1',
     vercel: 'v13',
     aweber: '1.0',
     mailchimp: '3.0',
     constantContact: 'v3',
+    sendgrid: 'v3',
   } as const,
 
   /** Base URLs for external APIs */
@@ -49,10 +87,15 @@ export const apiConfig = {
     pinterest: 'https://api.pinterest.com',
     youtube: 'https://www.googleapis.com/youtube',
     tiktok: 'https://open.tiktokapis.com',
+    twitter: 'https://api.twitter.com',
+    wordpress: 'https://public-api.wordpress.com',
     vercel: 'https://api.vercel.com',
     aweber: 'https://api.aweber.com',
     mailchimp: (server: string) => `https://${server}.api.mailchimp.com`,
     constantContact: 'https://api.cc.email',
+    gsc: 'https://www.googleapis.com/webmasters/v3',
+    ga: 'https://analyticsdata.googleapis.com',
+    gbp: 'https://mybusiness.googleapis.com',
     openai: 'https://api.openai.com/v1',
     stability: 'https://api.stability.ai/v2beta',
     vimeo: 'https://api.vimeo.com',
@@ -61,7 +104,22 @@ export const apiConfig = {
     ahrefs: 'https://api.ahrefs.com/v3',
     /** P1-3 FIX (audit 2): YouTube Analytics is a separate API from YouTube Data */
     youtubeAnalytics: 'https://youtubeanalytics.googleapis.com',
+    sendgrid: 'https://api.sendgrid.com',
+    postmark: 'https://api.postmarkapp.com',
+    paddle: 'https://api.paddle.com',
+    cj: 'https://commissions.api.cj.com',
+    impact: 'https://api.impact.com',
+    dataforseo: 'https://api.dataforseo.com',
   } as const,
+} as const;
+
+/**
+ * CDN and embed form configuration.
+ * No hardcoded fallbacks — must be set via environment variables.
+ */
+export const cdnConfig = {
+  cdnBaseUrl: getEnvVar('CDN_BASE_URL') || getEnvVar('NEXT_PUBLIC_CDN_BASE_URL'),
+  formsBaseUrl: getEnvVar('FORMS_BASE_URL') || getEnvVar('NEXT_PUBLIC_FORMS_BASE_URL'),
 } as const;
 
 /**
@@ -71,7 +129,7 @@ export function buildApiUrl(
   baseUrl: string,
   version: string,
   path: string,
-  queryParams?: Record<string, string | number | boolean | undefined>
+  queryParams?: QueryParams
 ): string {
   const cleanPath = path.replace(/^\/+/, '');
   let url = `${baseUrl}/${version}/${cleanPath}`;
