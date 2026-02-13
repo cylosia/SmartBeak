@@ -1,4 +1,7 @@
 import type { GetServerSidePropsContext } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
+import { canAccessDomain } from '../../../lib/auth';
+import { getPoolInstance } from '../../../lib/db';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 
@@ -21,15 +24,20 @@ export default function KeywordDecay({ domainId }: KeywordDecayProps) {
   );
 }
 
-export async function getServerSideProps({ params, req: _req }: GetServerSidePropsContext) {
+export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   const id = params?.['id'];
   if (typeof id !== 'string') {
     return { notFound: true };
   }
-  // P1-13: TODO — Add domain authorization check here.
-  // The Clerk middleware authenticates the user, but does not verify
-  // that the user has access to this specific domain (IDOR risk).
-  // Use canAccessDomain(userId, id, db) from lib/auth.ts once
-  // a server-side DB pool is available in getServerSideProps.
+  // P1-13 FIX: Domain authorization check to prevent IDOR
+  const { userId } = getAuth(req);
+  if (!userId) {
+    return { redirect: { destination: '/login', permanent: false } };
+  }
+  const pool = await getPoolInstance();
+  const hasAccess = await canAccessDomain(userId, id, pool);
+  if (!hasAccess) {
+    return { notFound: true };
+  }
   return { props: { domainId: id } };
 }

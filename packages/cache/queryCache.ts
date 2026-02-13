@@ -12,6 +12,9 @@
 
 import { createHash } from 'crypto';
 import { MultiTierCache } from './multiTierCache';
+import { getLogger } from '@kernel/logger';
+
+const queryCacheLogger = getLogger('QueryCache');
 
 // ============================================================================
 // Constants for Memory Leak Prevention
@@ -344,7 +347,7 @@ export class QueryCache {
 
     if (cleaned > 0) {
       this.versionsCleaned += cleaned;
-      console.log(`[QueryCache] Periodic cleanup removed ${cleaned} stale version keys`);
+      queryCacheLogger.info(`Periodic cleanup removed ${cleaned} stale version keys`);
     }
 
     // Check if we're approaching the limit
@@ -352,11 +355,7 @@ export class QueryCache {
     if (utilization >= VERSION_ALERT_THRESHOLD && 
         (now - this.lastAlertTime) > VERSION_ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      console.error(`[QueryCache] ALERT: Version keys approaching limit`, {
-        current: this.queryVersions.size,
-        max: MAX_VERSION_KEYS,
-        utilization: `${(utilization * 100).toFixed(1)}%`,
-      });
+      queryCacheLogger.warn(`ALERT: Version keys approaching limit - current: ${this.queryVersions.size}, max: ${MAX_VERSION_KEYS}, utilization: ${(utilization * 100).toFixed(1)}%`);
     }
   }
 

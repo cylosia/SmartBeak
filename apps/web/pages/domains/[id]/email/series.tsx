@@ -1,4 +1,7 @@
 import type { GetServerSidePropsContext } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
+import { canAccessDomain } from '../../../../lib/auth';
+import { getPoolInstance } from '../../../../lib/db';
 import { AppShell } from '../../../../components/AppShell';
 import { DomainTabs } from '../../../../components/DomainTabs';
 import { EmailAudienceTabs } from '../../../../components/EmailAudienceTabs';
@@ -44,14 +47,15 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   if (typeof id !== 'string') {
     return { notFound: true };
   }
-
-  // SECURITY FIX P2 #19: Verify the user has access to this domain.
-  // Currently pages show static data, but this prevents future IDOR when data fetching is added.
-  // TODO: Replace with actual auth check once getSession/getAuth is available in this context
-  // e.g.: const session = await getAuth(context);
-  //       if (!session?.orgId) return { redirect: { destination: '/login', permanent: false } };
-  //       const domain = await db.query('SELECT id FROM domains WHERE id = $1 AND org_id = $2', [id, session.orgId]);
-  //       if (!domain) return { notFound: true };
-
+  // P1-13 FIX: Domain authorization check to prevent IDOR
+  const { userId } = getAuth(context.req);
+  if (!userId) {
+    return { redirect: { destination: '/login', permanent: false } };
+  }
+  const pool = await getPoolInstance();
+  const hasAccess = await canAccessDomain(userId, id, pool);
+  if (!hasAccess) {
+    return { notFound: true };
+  }
   return { props: { domainId: id } };
 }
