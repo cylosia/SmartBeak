@@ -54,6 +54,7 @@
       "@utils/*": ["packages/utils/*"],
       "@types/*": ["packages/types/*"],
       "@domain/*": ["domains/*"],
+      "@adapters/*": ["packages/adapters/*"],
       "@packages/*": ["packages/*"],
       "@shutdown": ["packages/shutdown/index.ts"]
     }
@@ -73,6 +74,7 @@
     { "path": "./packages/utils" },
     { "path": "./packages/shutdown" },
     { "path": "./packages/ml" },
-    { "path": "./packages/db" }
+    { "path": "./packages/db" },
+    { "path": "./packages/adapters" }
   ]
 }
