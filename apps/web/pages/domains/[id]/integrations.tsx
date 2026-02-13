@@ -1,5 +1,8 @@
 
 import { GetServerSideProps } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
+import { canAccessDomain } from '../../../lib/auth';
+import { getPoolInstance } from '../../../lib/db';
 
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
@@ -64,17 +67,25 @@ export default function DomainIntegrations({ domainId, integrations }: DomainInt
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+export const getServerSideProps: GetServerSideProps = async ({ params, req }) => {
   const domainId = params?.['id'];
 
   if (!domainId || typeof domainId !== 'string') {
     return { notFound: true };
   }
 
-  // TODO: Wire to domain_integrations table with proper authorization:
-  // 1. Verify user session via getSession(req)
-  // 2. Check canAccessDomain(userId, domainId) before returning data
-  // 3. Return { notFound: true } if unauthorized
+  // P1-13 FIX: Domain authorization check to prevent IDOR
+  const { userId } = getAuth(req);
+  if (!userId) {
+    return { redirect: { destination: '/login', permanent: false } };
+  }
+  const pool = await getPoolInstance();
+  const hasAccess = await canAccessDomain(userId, domainId, pool);
+  if (!hasAccess) {
+    return { notFound: true };
+  }
+
+  // TODO: Wire to domain_integrations table
   const integrations = [
   { provider: 'Google Search Console', status: 'connected', account_identifier: 'sc-domain:example.com' }
   ];

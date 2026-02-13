@@ -57,6 +57,12 @@ export class SearchQueryService {
     throw new Error('Offset must be non-negative');
   }
 
+  // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
+  const MAX_SAFE_OFFSET = 10000;
+  if (offset > MAX_SAFE_OFFSET) {
+    throw new Error(`Offset exceeds maximum safe value (${MAX_SAFE_OFFSET})`);
+  }
+
   // SECURITY FIX P0 #8: Require orgId for tenant isolation
   if (!ctx.orgId) {
     throw new Error('orgId is required for search');

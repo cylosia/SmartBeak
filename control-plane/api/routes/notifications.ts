@@ -62,6 +62,15 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     const limit = Math.min(100, Math.max(1, parseInt((req.query as Record<string, string>)?.["limit"] || '50', 10)));
     const offset = (page - 1) * limit;
 
+    // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
+    const MAX_SAFE_OFFSET = 10000;
+    if (offset > MAX_SAFE_OFFSET) {
+    return res.status(400).send({
+    error: `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`,
+    code: 'PAGINATION_LIMIT',
+    });
+    }
+
     let rows: Notification[];
     let total: number;
 

@@ -32,9 +32,19 @@ async function verifyMediaOwnership(userId: string, mediaId: string, pool: Pool)
   return result.rows[0]?.has_access === true;
 }
 
+// P1 FIX: Allowlist of accepted media MIME types to prevent arbitrary file uploads
+const ALLOWED_MEDIA_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm',
+  'application/pdf',
+] as const;
+
 const UploadIntentBodySchema = z.object({
   id: z.string().uuid(),
-  mimeType: z.string().min(1),
+  mimeType: z.enum(ALLOWED_MEDIA_TYPES, {
+    errorMap: () => ({ message: `MIME type must be one of: ${ALLOWED_MEDIA_TYPES.join(', ')}` }),
+  }),
 });
 
 const CompleteUploadParamsSchema = z.object({
