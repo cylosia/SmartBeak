@@ -128,6 +128,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     const { domainId, status, contentType, page, limit, search } = queryResult.data;
     const offset = (page - 1) * limit;
 
+    // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
+    const MAX_SAFE_OFFSET = 10000;
+    if (offset > MAX_SAFE_OFFSET) {
+    return res.status(400).send({
+    error: `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`,
+    code: 'PAGINATION_LIMIT',
+    });
+    }
+
     // If domainId provided, verify ownership
     if (domainId) {
     const domainResult = await pool.query(

@@ -540,7 +540,9 @@ export async function requireDomainAccess(
  * Check if user is org admin
  */
 export async function requireOrgAdmin(auth: AuthResult, res: NextApiResponse): Promise<void> {
-  if (!auth.roles.includes('admin')) {
+  // P1 FIX: Check role hierarchy — owner (4) >= admin (3), so owners should pass
+  const hasAdminAccess = auth.roles.some(role => (roleHierarchy[role] ?? 0) >= roleHierarchy['admin']!);
+  if (!hasAdminAccess) {
     res.status(403).json({
       error: 'Forbidden. Admin access required.',
       required: 'admin',

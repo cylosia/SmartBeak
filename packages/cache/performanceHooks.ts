@@ -13,6 +13,7 @@ import { QueryCacheStats } from './queryCache';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('PerformanceHooks');
+const perfLogger = getLogger('PerformanceMonitor');
 
 // ============================================================================
 // Types & Interfaces
@@ -162,6 +163,7 @@ export class PerformanceMonitor {
     }, this.options.sampleIntervalMs).unref();
 
     logger.info('Started monitoring');
+    perfLogger.info('Started monitoring');
   }
 
   /**
@@ -174,6 +176,7 @@ export class PerformanceMonitor {
       this.sampleIntervalId = null;
     }
     logger.info('Stopped monitoring');
+    perfLogger.info('Stopped monitoring');
   }
 
   /**

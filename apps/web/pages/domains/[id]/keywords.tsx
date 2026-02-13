@@ -1,5 +1,8 @@
 import type { GetServerSidePropsContext } from 'next';
 import { requireDomainAccess } from '../../../lib/auth';
+import { getAuth } from '@clerk/nextjs/server';
+import { canAccessDomain } from '../../../lib/auth';
+import { getPoolInstance } from '../../../lib/db';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 
@@ -46,6 +49,15 @@ export async function getServerSideProps({ params, req }: GetServerSidePropsCont
   const authCheck = await requireDomainAccess(req, id);
   if (!authCheck.authorized) {
     return authCheck.result;
+  // P1-13 FIX: Domain authorization check to prevent IDOR
+  const { userId } = getAuth(req);
+  if (!userId) {
+    return { redirect: { destination: '/login', permanent: false } };
+  }
+  const pool = await getPoolInstance();
+  const hasAccess = await canAccessDomain(userId, id, pool);
+  if (!hasAccess) {
+    return { notFound: true };
   }
   return { props: { domainId: id } };
 }

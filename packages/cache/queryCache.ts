@@ -15,6 +15,7 @@ import { MultiTierCache } from './multiTierCache';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('QueryCache');
+const queryCacheLogger = getLogger('QueryCache');
 
 // ============================================================================
 // Constants for Memory Leak Prevention
@@ -348,6 +349,7 @@ export class QueryCache {
     if (cleaned > 0) {
       this.versionsCleaned += cleaned;
       logger.info('Periodic cleanup removed stale version keys', { cleaned });
+      queryCacheLogger.info(`Periodic cleanup removed ${cleaned} stale version keys`);
     }
 
     // Check if we're approaching the limit
@@ -360,6 +362,7 @@ export class QueryCache {
         max: MAX_VERSION_KEYS,
         utilization: `${(utilization * 100).toFixed(1)}%`,
       });
+      queryCacheLogger.warn(`ALERT: Version keys approaching limit - current: ${this.queryVersions.size}, max: ${MAX_VERSION_KEYS}, utilization: ${(utilization * 100).toFixed(1)}%`);
     }
   }
 

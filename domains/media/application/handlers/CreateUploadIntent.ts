@@ -132,6 +132,23 @@ export class CreateUploadIntent {
   private isValidMimeType(mimeType: string): boolean {
   // Basic MIME type validation: type/subtype format
   const mimeTypePattern = /^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$/;
-  return mimeTypePattern.test(mimeType);
+  if (!mimeTypePattern.test(mimeType)) {
+    return false;
+  }
+
+  // P1 FIX: Block dangerous executable MIME types (matching UploadMedia handler)
+  const blockedTypes = [
+    'application/x-javascript',
+    'text/javascript',
+    'application/javascript',
+    'application/ecmascript',
+    'text/ecmascript',
+    'application/x-php',
+    'application/x-sh',
+    'application/x-csh',
+    'application/x-executable'
+  ];
+
+  return !blockedTypes.includes(mimeType.toLowerCase());
   }
 }

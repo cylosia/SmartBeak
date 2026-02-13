@@ -159,6 +159,7 @@ export class CacheInvalidator {
     }
 
     logger.info('Invalidated entries by tags', { invalidatedCount, tags });
+    logger.info(`Invalidated ${invalidatedCount} entries by tags: ${tags.join(', ')}`);
     return invalidatedCount;
   }
 
