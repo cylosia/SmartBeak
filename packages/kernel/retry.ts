@@ -209,7 +209,7 @@ function calculateDelay(attempt: number, options: RetryOptions): number {
 * @param ms - Milliseconds to sleep
 * @returns Promise that resolves after the delay
 */
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -479,4 +479,125 @@ export class CircuitBreaker {
     release();
   }
   }
+}
+
+// ============================================================================
+// HTTP Retry Utilities (consolidated from apps/api/src/utils/retry.ts)
+// ============================================================================
+
+/**
+* Options for jittered backoff
+*/
+export interface JitteredBackoffOptions {
+  /** Base milliseconds */
+  baseMs?: number;
+  /** Maximum milliseconds */
+  maxMs?: number;
+}
+
+/**
+* Calculate jittered backoff delay
+* @param attempt - Current attempt number
+* @param options - Backoff options
+* @returns Delay in milliseconds
+*/
+export function jitteredBackoff(attempt: number, options: JitteredBackoffOptions = {}): number {
+  const { baseMs = 1000, maxMs = 30000 } = options;
+  const exponentialDelay = baseMs * Math.pow(2, attempt);
+  const cappedDelay = Math.min(exponentialDelay, maxMs);
+  const jitter = Math.random() * cappedDelay;
+  return Math.floor(jitter);
+}
+
+/**
+* Check if an HTTP status code is retryable
+* @param status - HTTP status code
+* @param retryableStatuses - List of retryable statuses
+* @returns Whether status is retryable
+*/
+export function isRetryableStatus(
+  status: number,
+  retryableStatuses: number[] = [408, 429, 500, 502, 503, 504]
+): boolean {
+  return retryableStatuses.includes(status);
+}
+
+/**
+* Parse Retry-After header value
+* @param headerValue - Header value string (seconds or HTTP date)
+* @returns Delay in milliseconds
+*/
+export function parseRetryAfter(headerValue: string | null): number {
+  if (!headerValue) return 0;
+
+  // Try parsing as seconds first
+  const seconds = parseInt(headerValue, 10);
+  if (!isNaN(seconds)) {
+    return seconds * 1000;
+  }
+
+  // Try parsing as HTTP date
+  const date = new Date(headerValue);
+  if (!isNaN(date.getTime())) {
+    return Math.max(0, date.getTime() - Date.now());
+  }
+
+  return 0;
+}
+
+// ============================================================================
+// Timeout & Circuit Breaker Factory (consolidated from apps/api/src/utils/resilience.ts)
+// ============================================================================
+
+/**
+* Error thrown when circuit breaker is open
+*/
+export class CircuitOpenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CircuitOpenError';
+  }
+}
+
+/**
+* Execute a promise with a timeout
+* @param promise - Promise to execute
+* @param ms - Timeout in milliseconds (clamped to 1..300000)
+* @returns Promise result
+* @throws Error if timeout is exceeded
+*/
+export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  const boundedMs = Math.min(Math.max(1, ms), 300000);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`Timeout exceeded after ${boundedMs}ms`)), boundedMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+* Factory function for creating circuit breaker wrapped functions.
+* Uses the kernel CircuitBreaker internally.
+* @param fn - Function to wrap
+* @param failureThreshold - Number of failures before opening (default: 3)
+* @param name - Circuit breaker name (default: 'unknown')
+* @returns Wrapped function
+*/
+export function withCircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>>(
+  fn: T,
+  failureThreshold = 3,
+  name = 'unknown'
+): (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never> {
+  const breaker = new CircuitBreaker(name, {
+    failureThreshold,
+    resetTimeoutMs: 30000,
+    halfOpenMaxCalls: 3,
+  });
+  return (async (...args: Parameters<T>) => {
+    return breaker.execute(() => fn(...args));
+  }) as (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never>;
 }

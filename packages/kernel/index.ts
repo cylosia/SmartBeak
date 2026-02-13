@@ -42,8 +42,13 @@ export { addLogHandler, clearLogHandlers, debug, info, warn, error, fatal, Logge
 export { TIME, TIME_SECONDS, DB, RATE_LIMIT, HTTP, CONTENT, JOBS, CACHE, SECURITY, VALIDATION, PAGINATION, } from './constants';
 // Health checks (M7, M11)
 export { registerHealthCheck, checkAllHealth, getLastHealthCheck, createDatabaseHealthCheck, createExternalApiHealthCheck, createRedisHealthCheck, healthCheckMiddleware, } from './health-check';
-// Retry utilities (M8)
-export { withRetry, makeRetryable, Retryable, CircuitBreaker, } from './retry';
+// Retry utilities (M8) + consolidated from apps/api/src/utils/retry.ts and resilience.ts
+export {
+  withRetry, makeRetryable, Retryable, CircuitBreaker, CircuitState,
+  sleep, jitteredBackoff, isRetryableStatus, parseRetryAfter,
+  CircuitOpenError, withTimeout, withCircuitBreaker,
+  type RetryOptions, type CircuitBreakerOptions, type JitteredBackoffOptions,
+} from './retry';
 // DLQ (M15)
 export { setDLQStorage, getDLQStorage, sendToDLQ, DLQ, withDLQ, } from './dlq';
 // Metrics (M5)
