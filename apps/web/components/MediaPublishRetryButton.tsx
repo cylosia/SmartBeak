@@ -45,7 +45,7 @@ export function MediaPublishRetryButton({ intentId, onRetry }: MediaPublishRetry
 
   return (
   <div>
-    <button type='button' disabled={loading} onClick={retry}>
+    <button type='button' disabled={loading} onClick={() => void retry()}>
     {loading ? 'Retrying…' : 'Retry'}
     </button>
     {success && <span style={{ color: 'green' }}>Queued</span>}

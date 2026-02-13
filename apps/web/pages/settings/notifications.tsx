@@ -73,7 +73,7 @@ export default function NotificationSettings() {
         <input
           type='checkbox'
           checked={preferences[ch.id] ?? false}
-          onChange={e => handleToggle(ch.id, e)}
+          onChange={e => void handleToggle(ch.id, e)}
           disabled={saving}
         />
         {' '}{ch.label}

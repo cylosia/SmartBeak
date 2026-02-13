@@ -42,14 +42,14 @@ export function setCacheHeaders(
   }
 ) {
   if (options.noCache) {
-  res.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.header('Pragma', 'no-cache');
-  res.header('Expires', '0');
+  void res.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  void res.header('Pragma', 'no-cache');
+  void res.header('Expires', '0');
   return;
   }
 
   if (options.etag) {
-  res.header('ETag', options.etag);
+  void res.header('ETag', options.etag);
   }
 
   const directives: string[] = [];
@@ -67,7 +67,7 @@ export function setCacheHeaders(
   directives.push(`stale-while-revalidate=${options.staleWhileRevalidate}`);
   }
 
-  res.header('Cache-Control', directives.join(', '));
+  void res.header('Cache-Control', directives.join(', '));
 }
 
 /**

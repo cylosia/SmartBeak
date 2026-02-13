@@ -178,9 +178,9 @@ export async function getRedisClient(): Promise<RedisOrCluster> {
     });
     
     // P0-FIX: Wait for shutdown before process exits to prevent race conditions
-    process.on('beforeExit', async () => {
+    process.on('beforeExit', () => {
       if (shutdownPromise) {
-        await shutdownPromise;
+        void shutdownPromise;
       }
     });
   }

@@ -45,7 +45,7 @@ export default function Checkout() {
     }
   }
 
-  createSession();
+  void createSession();
   return () => { cancelled = true; };
   }, []);
 

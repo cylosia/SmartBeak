@@ -101,11 +101,10 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     }
     } catch (dbError) {
     logger.error('[notifications] Database error', dbError instanceof Error ? dbError : new Error(String(dbError)));
-    res.status(503).send({
+    return res.status(503).send({
     error: 'Database temporarily unavailable',
     message: 'Unable to fetch notifications. Please try again later.'
     });
-    return;
     }
 
     return res.send({
@@ -172,12 +171,11 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     // Validate body
     const bodyResult = PreferenceBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: bodyResult["error"].issues
     });
-    return;
     }
 
     const { channel, enabled, frequency } = bodyResult.data;

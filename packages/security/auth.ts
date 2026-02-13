@@ -241,39 +241,33 @@ export async function requireAuthFastify(
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !validateAuthHeaderConstantTime(authHeader)) {
-    res.status(401).send({ error: 'Unauthorized. Bearer token required.' });
-    return;
+    return res.status(401).send({ error: 'Unauthorized. Bearer token required.' });
   }
 
   // Validate token format
   if (!BEARER_REGEX.test(authHeader)) {
-    res.status(401).send({ error: 'Unauthorized. Invalid token format.' });
-    return;
+    return res.status(401).send({ error: 'Unauthorized. Invalid token format.' });
   }
 
   const token = authHeader.slice(7);
   if (!token || token.length < 10) {
-    res.status(401).send({ error: 'Unauthorized. Invalid token format.' });
-    return;
+    return res.status(401).send({ error: 'Unauthorized. Invalid token format.' });
   }
 
   try {
     const claims = verifyToken(token);
 
     if (!claims.sub) {
-      res.status(401).send({ error: 'Unauthorized. Token missing user ID.' });
-      return;
+      return res.status(401).send({ error: 'Unauthorized. Token missing user ID.' });
     }
 
     if (!claims["orgId"]) {
-      res.status(401).send({ error: 'Unauthorized. Organization context required.' });
-      return;
+      return res.status(401).send({ error: 'Unauthorized. Organization context required.' });
     }
 
     // P1-FIX: Reject missing role instead of silently defaulting to 'viewer'
     if (!claims.role) {
-      res.status(401).send({ error: 'Unauthorized. Token missing role claim.' });
-      return;
+      return res.status(401).send({ error: 'Unauthorized. Token missing role claim.' });
     }
     const roles = [claims.role];
 
@@ -287,10 +281,9 @@ export async function requireAuthFastify(
     };
   } catch (error) {
     if (error instanceof JwtTokenExpiredError) {
-      res.status(401).send({ error: 'Unauthorized. Token expired.' });
-      return;
+      return res.status(401).send({ error: 'Unauthorized. Token expired.' });
     }
-    res.status(401).send({ error: 'Unauthorized. Invalid token.' });
+    return res.status(401).send({ error: 'Unauthorized. Invalid token.' });
   }
 }
 

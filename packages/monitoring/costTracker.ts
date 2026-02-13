@@ -62,7 +62,7 @@ export class CostTracker extends EventEmitter {
   */
   private startFlushTimer(): void {
   this.flushTimer = setInterval(() => {
-    this.flush();
+    void this.flush();
   }, this.flushIntervalMs).unref();
   }
 
@@ -73,7 +73,7 @@ export class CostTracker extends EventEmitter {
   if (this.flushTimer) {
     clearInterval(this.flushTimer);
   }
-  this.flush();
+  void this.flush();
   }
 
   /**

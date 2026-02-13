@@ -63,7 +63,7 @@ export function useCreatePortfolioItem() {
       return response.data as PortfolioItem;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [PORTFOLIO_QUERY_KEY, variables["domainId"]] });
+      void queryClient.invalidateQueries({ queryKey: [PORTFOLIO_QUERY_KEY, variables["domainId"]] });
     },
   });
 }

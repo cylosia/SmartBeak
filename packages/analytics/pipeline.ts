@@ -81,7 +81,7 @@ export class AnalyticsPipeline {
   */
   private startFlushTimer(): void {
   this.flushTimer = setInterval(() => {
-    this.flush();
+    void this.flush();
   }, this.flushIntervalMs).unref();
   }
 
@@ -92,7 +92,7 @@ export class AnalyticsPipeline {
   if (this.flushTimer) {
     clearInterval(this.flushTimer);
   }
-  this.flush();
+  void this.flush();
   }
 
   /**

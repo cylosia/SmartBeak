@@ -115,8 +115,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
     // Check for admin authentication
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
-      return;
+      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
     }
 
     const token = authHeader.slice(7);
@@ -124,8 +123,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       // This should use the shared auth utility
       // For now, we check a simple admin token for protection
       if (!process.env['ADMIN_API_KEY']) {
-        reply.status(500).send({ error: 'Admin API not configured' });
-        return;
+        return reply.status(500).send({ error: 'Admin API not configured' });
       }
       // P0-FIX: Use constant-time comparison to prevent timing attacks
       // Pad both buffers to max length to avoid leaking key length via early return
@@ -134,8 +132,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       const expectedBuf = Buffer.from(expectedKey, 'utf8');
       const maxLen = Math.max(tokenBuf.length, expectedBuf.length);
       if (maxLen === 0) {
-        reply.status(403).send({ error: 'Forbidden. Admin access required.' });
-        return;
+        return reply.status(403).send({ error: 'Forbidden. Admin access required.' });
       }
       const tokenPadded = Buffer.alloc(maxLen, 0);
       const expectedPadded = Buffer.alloc(maxLen, 0);
@@ -144,12 +141,10 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       const isEqual = crypto.timingSafeEqual(tokenPadded, expectedPadded) && tokenBuf.length === expectedBuf.length;
 
       if (!isEqual) {
-        reply.status(403).send({ error: 'Forbidden. Admin access required.' });
-        return;
+        return reply.status(403).send({ error: 'Forbidden. Admin access required.' });
       }
     } catch (err) {
-      reply.status(401).send({ error: 'Invalid token' });
-      return;
+      return reply.status(401).send({ error: 'Invalid token' });
     }
   });
 

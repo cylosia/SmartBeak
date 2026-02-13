@@ -177,7 +177,7 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
     }
     catch (error) {
       logger.error('Error retrieving publish intent', error as Error);
-      res.status(500).send({ error: 'Failed to retrieve intent' });
+      return res.status(500).send({ error: 'Failed to retrieve intent' });
     }
   });
 }

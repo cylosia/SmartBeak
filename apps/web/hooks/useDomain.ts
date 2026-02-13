@@ -74,7 +74,7 @@ export function useCreateDomain() {
       return response.data as unknown as Domain;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
     },
   });
 }
@@ -85,15 +85,15 @@ export function useCreateDomain() {
 export function useUpdateDomain() {
   const api = useApi();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ domainId, input }: { domainId: string; input: UpdateDomainInput }) => {
       const response = await api.patch(`/domains/${domainId}`, input);
       return response.data as unknown as Domain;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY, variables["domainId"]] });
-      queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY, variables["domainId"]] });
+      void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
     },
   });
 }
@@ -104,13 +104,13 @@ export function useUpdateDomain() {
 export function useDeleteDomain() {
   const api = useApi();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (domainId: string): Promise<void> => {
       await api.delete(`/domains/${domainId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
     },
   });
 }

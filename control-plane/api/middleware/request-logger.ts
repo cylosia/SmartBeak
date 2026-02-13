@@ -85,7 +85,7 @@ export async function requestLoggerMiddleware(
   });
 
   // Add request ID to response headers
-  res.header('X-Request-ID', requestId);
+  void res.header('X-Request-ID', requestId);
 
   // P2-MEDIUM FIX: Properly clean up event listeners to prevent memory leak
   const cleanup = () => {

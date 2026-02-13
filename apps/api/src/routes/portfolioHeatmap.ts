@@ -62,12 +62,11 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
 
     const parseResult = HeatmapQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: parseResult.error.issues
     });
-    return;
     }
 
     const { domain_id, limit, offset } = parseResult.data;
@@ -89,12 +88,11 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     .limit(limit)           .offset(offset);
     } catch (dbError) {
         logger.error('Database error', dbError as Error);
-    res.status(503).send({
+    return res.status(503).send({
     error: 'Database temporarily unavailable',
     code: 'DB_UNAVAILABLE',
     message: 'Unable to fetch heatmap data. Please try again later.'
     });
-    return;
     }
 
     const heatmapData = rows.map((r) => ({
@@ -105,7 +103,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     }));
 
     const heatmap = buildHeatmap(heatmapData);
-    res.send({
+    void res.send({
     data: heatmap,
     pagination: {
     hasMore: rows.length === limit

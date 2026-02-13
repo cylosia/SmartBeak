@@ -153,40 +153,36 @@ export function csrfProtection(config: CsrfConfig = {}) {
     const sessionId = authUser?.sessionId || authUser?.userId;
 
     if (!sessionId) {
-      res.status(403).send({
+      return res.status(403).send({
         error: 'CSRF protection: Session ID required',
         code: 'CSRF_SESSION_REQUIRED',
       });
-      return;
     }
 
     // Get CSRF token from header
     const providedToken = req.headers[mergedConfig.headerName.toLowerCase()];
     if (typeof providedToken !== 'string') {
-      res.status(403).send({
+      return res.status(403).send({
         error: 'CSRF protection: Token required',
         code: 'CSRF_TOKEN_REQUIRED',
       });
-      return;
     }
 
     if (!providedToken) {
-      res.status(403).send({
+      return res.status(403).send({
         error: 'CSRF protection: Token required',
         code: 'CSRF_TOKEN_REQUIRED',
       });
-      return;
     }
 
     // CRITICAL-FIX: Validate token with proper await
     try {
       const isValid = await validateCsrfToken(sessionId, providedToken);
       if (!isValid) {
-        res.status(403).send({
+        return res.status(403).send({
           error: 'CSRF protection: Invalid or expired token',
           code: 'CSRF_INVALID_TOKEN',
         });
-        return;
       }
 
       // P2-FIX: Removed redundant clearCsrfToken call. validateCsrfToken already
@@ -198,11 +194,10 @@ export function csrfProtection(config: CsrfConfig = {}) {
       const err = error instanceof Error ? error : new Error(String(error));
       // Import would create circular dependency - use minimal safe logging
       process.stderr.write(`[CSRF] Validation error: ${err.message}\n`);
-      res.status(500).send({
+      return res.status(500).send({
         error: 'CSRF protection: Validation error',
         code: 'CSRF_VALIDATION_ERROR',
       });
-      return;
     }
   };
 }
@@ -221,7 +216,7 @@ export async function setCsrfCookie(
   // SECURITY FIX: Remove HttpOnly so client JS can read the token to send in x-csrf-token header.
   // HttpOnly prevented JS from reading the cookie, breaking the double-submit CSRF pattern entirely.
   // SameSite=Strict + Secure still protect against cross-origin cookie submission.
-  res.header('Set-Cookie',
+  void res.header('Set-Cookie',
     `${mergedConfig.cookieName}=${token}; Secure; SameSite=Strict; Path=/; Max-Age=3600`
   );
 

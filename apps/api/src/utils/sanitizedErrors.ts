@@ -191,7 +191,7 @@ export function sendSanitizedError(
   code?: string
 ): void {
   const sanitized = sanitizeError(error, defaultMessage, code);
-  reply.status(statusCode).send(sanitized);
+  void reply.status(statusCode).send(sanitized);
 }
 
 /**

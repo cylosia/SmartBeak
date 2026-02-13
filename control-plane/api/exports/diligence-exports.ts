@@ -88,8 +88,8 @@ export async function registerDiligenceExportRoutes(app: FastifyInstance) {
   const values = Object.values(row).map(sanitizeCsvCell).join(',');
   const csv = headers + '\n' + values;
 
-  reply.header('Content-Type', 'text/csv');
-  reply.send(csv);
+  void reply.header('Content-Type', 'text/csv');
+  return reply.send(csv);
   });
 
   app.get('/diligence/:token/export/pdf', async (req, reply) => {

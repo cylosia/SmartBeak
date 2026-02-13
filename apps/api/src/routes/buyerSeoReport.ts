@@ -183,8 +183,8 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
     });
 
     // P1-FIX (AUDIT): Set cache headers only on successful responses
-    reply.header('Cache-Control', `private, max-age=${CACHE_MAX_AGE}`);
-    reply.header('Expires', new Date(Date.now() + CACHE_MAX_AGE * 1000).toUTCString());
+    void reply.header('Cache-Control', `private, max-age=${CACHE_MAX_AGE}`);
+    void reply.header('Expires', new Date(Date.now() + CACHE_MAX_AGE * 1000).toUTCString());
 
     return report;
   } catch (error) {

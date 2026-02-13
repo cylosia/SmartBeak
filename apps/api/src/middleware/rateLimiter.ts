@@ -790,8 +790,7 @@ export function adminRateLimit() {
     const allowed = await checkRateLimitDistributed(key, config);
 
     if (!allowed) {
-      reply.status(429).send({ error: 'Rate limit exceeded' });
-      return;
+      return reply.status(429).send({ error: 'Rate limit exceeded' });
     }
   };
 }
@@ -820,8 +819,7 @@ export function apiRateLimit() {
     const allowed = await checkRateLimitDistributed(key, config);
 
     if (!allowed) {
-      reply.status(429).send({ error: 'Rate limit exceeded' });
-      return;
+      return reply.status(429).send({ error: 'Rate limit exceeded' });
     }
   };
 }
@@ -847,8 +845,7 @@ export function rateLimitMiddleware(
       // P0-FIX #8: confidence is 0-100 (integer), not 0-1 (float).
       // Previously compared > 0.7, which matched ANY non-zero score, blocking legitimate users.
       if (botResult.isBot && botResult.confidence > 70) {
-        reply.status(403).send({ error: 'Bot detected' });
-        return;
+        return reply.status(403).send({ error: 'Bot detected' });
       }
     }
 
@@ -885,8 +882,7 @@ export function rateLimitMiddleware(
     const allowed = await checkRateLimitDistributed(key, config);
 
     if (!allowed) {
-      reply.status(429).send({ error: 'Rate limit exceeded' });
-      return;
+      return reply.status(429).send({ error: 'Rate limit exceeded' });
     }
   };
 }

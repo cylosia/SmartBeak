@@ -1,7 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
-import type StripeTypes from 'stripe';
 
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
@@ -148,8 +147,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     ].join(',');
     }).join('\n');
 
-    res.header('Content-Type', 'text/csv');
-    res.header('Content-Disposition', "attachment; filename='invoices.csv'");
+    void res.header('Content-Type', 'text/csv');
+    void res.header('Content-Disposition', "attachment; filename='invoices.csv'");
     return res.type('text/csv').send(csvHeader + csvRows);
     }
 

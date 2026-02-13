@@ -46,23 +46,21 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
       // through validation error messages.
       const auth = req.auth;
       if (!auth) {
-        reply.status(401).send({
+        return reply.status(401).send({
           error: 'Unauthorized',
           code: 'UNAUTHORIZED'
         });
-        return;
       }
 
       requireRole(auth, ['owner', 'admin', 'editor']);
 
       const parseResult = ExportRequestSchema.safeParse(req.body);
       if (!parseResult.success) {
-        reply.status(400).send({
+        return reply.status(400).send({
           error: 'Invalid request body',
           code: 'VALIDATION_ERROR',
           details: parseResult.error.issues
         });
-        return;
       }
 
       await rateLimit('media:analytics:export', 10, req, reply);
@@ -83,7 +81,7 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
         .filter(Boolean)
         .join('\n');
 
-      reply
+      void reply
         .header('Content-Type', 'text/csv')
         .header('Content-Disposition', "attachment; filename='media_analytics.csv'")
         .send(header + body);
@@ -96,11 +94,10 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
         (errWithCode.code === 'PERMISSION_DENIED' ||
          errWithCode.code === 'FORBIDDEN');
       if (hasPermissionError) {
-        reply.status(403).send({
+        return reply.status(403).send({
           error: 'Permission denied',
           code: 'FORBIDDEN'
         });
-        return;
       }
 
       // P1-1 FIX: Do not leak internal error details to clients

@@ -159,12 +159,11 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
     // P3-FIX: Sanitize validation error details
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: parseResult["error"].issues.map(i => ({ path: i.path, message: i.message }))
     });
-    return;
     }
 
     const updates = parseResult.data;

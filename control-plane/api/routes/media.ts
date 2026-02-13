@@ -64,12 +64,11 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     // Validate body
     const bodyResult = UploadIntentBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: bodyResult["error"].issues
     });
-    return;
     }
 
     const { id, mimeType } = bodyResult.data;
@@ -107,23 +106,21 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     // Validate params
     const paramsResult = CompleteUploadParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: paramsResult["error"].issues
     });
-    return;
     }
 
     const { id } = paramsResult.data;
 
     const isAuthorized = await verifyMediaOwnership(ctx.userId, id, pool);
     if (!isAuthorized) {
-    res.status(404).send({
+    return res.status(404).send({
     error: 'Media not found',
     code: 'NOT_FOUND'
     });
-    return;
     }
 
     const repo = new PostgresMediaRepository(getPool(resolveDomainDb('media')));

@@ -440,7 +440,7 @@ export class AlertRulesEngine extends EventEmitter {
 
     // Start evaluation
     this.evaluationInterval = setInterval(() => {
-      this.evaluateAll();
+      void this.evaluateAll();
     }, evaluationIntervalMs).unref();
 
     logger.info('Alert rules engine started', { 

@@ -39,7 +39,7 @@ export default function NewContent({ domainId }: NewContentProps) {
       }
 
       const { item } = await res.json();
-      router.push(`/domains/${domainId}/content/${item.id}`);
+      void router.push(`/domains/${domainId}/content/${item.id}`);
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -56,7 +56,7 @@ export default function NewContent({ domainId }: NewContentProps) {
 
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={(e) => void handleSubmit(e)}>
         <label>
           Title<br />
           <input

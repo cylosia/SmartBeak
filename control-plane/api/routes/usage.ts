@@ -57,18 +57,17 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     stats = await usage.getUsage(ctx["orgId"]) as unknown as UsageStats;
     } catch (serviceError) {
     console["error"]('[usage] Service error:', serviceError);
-    res.status(503).send({
+    return res.status(503).send({
     error: 'Service temporarily unavailable',
     message: 'Unable to fetch usage data. Please try again later.'
     });
-    return;
     }
 
     return res.send(stats);
   } catch (error) {
     // P1-FIX: Log full error server-side but never expose raw error messages to clients
     console["error"]('[usage] Unexpected error:', error);
-    res.status(500).send({
+    return res.status(500).send({
     error: 'Internal server error'
     });
   }

@@ -134,7 +134,7 @@ export class PoolHealthMonitor extends EventEmitter {
     if (this.healthCheckInterval) return;
 
     this.healthCheckInterval = setInterval(() => {
-      this.performHealthCheck();
+      void this.performHealthCheck();
     }, this.config.healthCheckIntervalMs).unref();
 
     this.emit('monitoring:started');

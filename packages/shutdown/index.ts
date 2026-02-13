@@ -146,22 +146,18 @@ export function setupShutdownHandlers(): void {
   if (isRegistered) return;
   isRegistered = true;
 
-  process.on('SIGTERM', async () => {
-  try {
-    await gracefulShutdown('SIGTERM');
-  } catch (error) {
+  process.on('SIGTERM', () => {
+  void gracefulShutdown('SIGTERM').catch((error) => {
     logger["error"]('SIGTERM shutdown error:', error as Error);
     process.exit(1);
-  }
+  });
   });
 
-  process.on('SIGINT', async () => {
-  try {
-    await gracefulShutdown('SIGINT');
-  } catch (error) {
+  process.on('SIGINT', () => {
+  void gracefulShutdown('SIGINT').catch((error) => {
     logger["error"]('SIGINT shutdown error:', error as Error);
     process.exit(1);
-  }
+  });
   });
 }
 

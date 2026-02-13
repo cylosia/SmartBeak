@@ -10,7 +10,7 @@ module.exports = {
       jsx: true,
     },
     // P1-9 FIX: Enable type-aware linting for no-floating-promises rule
-    project: './tsconfig.base.json',
+    project: './tsconfig.eslint.json',
   },
 
   env: {
