@@ -22,7 +22,8 @@ export class ListContent {
     status,
     Math.min(Math.max(1, limit), MAX_LIMIT),
     Math.min(Math.max(0, offset), MAX_OFFSET),
-    domainId
+    domainId,
+    orgId
   );
   }
 

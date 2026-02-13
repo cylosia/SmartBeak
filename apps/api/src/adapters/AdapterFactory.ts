@@ -14,6 +14,24 @@ import {
   validateVercelCreds,
 } from '../utils/validation';
 
+/**
+ * Type-safe wrapper for withCircuitBreaker that preserves function signatures.
+ * Avoids the unsafe double cast through `(...args: unknown[]) => Promise<unknown>`.
+ */
+function wrapWithCircuitBreakerAndTimeout<TArgs extends unknown[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>,
+  timeoutMs: number,
+  threshold: number,
+  name: string,
+): (...args: TArgs) => Promise<TResult> {
+  const wrapped = withCircuitBreaker(
+    ((...args: unknown[]) => withTimeout(fn(...(args as TArgs)), timeoutMs)) as (...args: unknown[]) => Promise<unknown>,
+    threshold,
+    name,
+  );
+  return (...args: TArgs) => wrapped(...args) as Promise<TResult>;
+}
+
 const GA_TIMEOUT = timeoutConfig.short;
 const GSC_TIMEOUT = timeoutConfig.short;
 const FACEBOOK_TIMEOUT = timeoutConfig.short;
@@ -66,11 +84,9 @@ export class AdapterFactory {
 
     const adapter = new GaAdapter(creds);
     const originalFetchMetrics = adapter.fetchMetrics.bind(adapter);
-    adapter.fetchMetrics = withCircuitBreaker(
-      ((propertyId: string, request: GARequest) => withTimeout(originalFetchMetrics(propertyId, request), GA_TIMEOUT)) as (...args: unknown[]) => Promise<unknown>,
-      3,
-      'ga'
-    ) as (propertyId: string, request: GARequest) => Promise<GAResponse>;
+    adapter.fetchMetrics = wrapWithCircuitBreakerAndTimeout(
+      originalFetchMetrics, GA_TIMEOUT, 3, 'ga'
+    );
     return adapter;
   }
 
@@ -82,11 +98,9 @@ export class AdapterFactory {
 
     const adapter = new GscAdapter(auth);
     const originalFetchSearchAnalytics = adapter.fetchSearchAnalytics.bind(adapter);
-    adapter.fetchSearchAnalytics = withCircuitBreaker(
-      ((siteUrl: string, body: SearchAnalyticsRequest) => withTimeout(originalFetchSearchAnalytics(siteUrl, body), GSC_TIMEOUT)) as (...args: unknown[]) => Promise<unknown>,
-      3,
-      'gsc'
-    ) as (siteUrl: string, body: SearchAnalyticsRequest) => Promise<SearchAnalyticsResponse>;
+    adapter.fetchSearchAnalytics = wrapWithCircuitBreakerAndTimeout(
+      originalFetchSearchAnalytics, GSC_TIMEOUT, 3, 'gsc'
+    );
     return adapter;
   }
 
@@ -96,11 +110,9 @@ export class AdapterFactory {
 
     const adapter = new FacebookAdapter(tokenData.accessToken);
     const originalPublishPagePost = adapter.publishPagePost.bind(adapter);
-    adapter.publishPagePost = withCircuitBreaker(
-      ((pageId: string, message: string) => withTimeout(originalPublishPagePost(pageId, message), FACEBOOK_TIMEOUT)) as (...args: unknown[]) => Promise<unknown>,
-      3,
-      'facebook'
-    ) as (pageId: string, message: string) => Promise<FacebookPostResponse>;
+    adapter.publishPagePost = wrapWithCircuitBreakerAndTimeout(
+      originalPublishPagePost, FACEBOOK_TIMEOUT, 3, 'facebook'
+    );
     return adapter;
   }
 
@@ -110,11 +122,9 @@ export class AdapterFactory {
 
     const adapter = new VercelAdapter(tokenData.token);
     const originalTriggerDeploy = adapter.triggerDeploy.bind(adapter);
-    adapter.triggerDeploy = withCircuitBreaker(
-      ((projectId: string, payload: VercelDeployPayload) => withTimeout(originalTriggerDeploy(projectId, payload), VERCEL_TIMEOUT)) as (...args: unknown[]) => Promise<unknown>,
-      3,
-      'vercel'
-    ) as (projectId: string, payload: VercelDeployPayload) => Promise<VercelDeployResponse>;
+    adapter.triggerDeploy = wrapWithCircuitBreakerAndTimeout(
+      originalTriggerDeploy, VERCEL_TIMEOUT, 3, 'vercel'
+    );
     return adapter;
   }
 }
