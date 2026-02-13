@@ -5,7 +5,7 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { getPoolInstance } from '@database/pool';
-import { registerShutdownHandler } from '@shutdown';
+import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
 
 import { getLogger } from '@kernel/logger';
@@ -247,7 +247,8 @@ app.addHook('onRequest', async (req, reply) => {
     // via config: { public: true } on the route definition and implement their own
     // signature verification (e.g., Stripe HMAC, Clerk webhook signature).
     const isPublicRoute = (req.routeOptions?.config as { public?: boolean })?.public === true ||
-                         pathname === '/health' || pathname.startsWith('/health/');
+                         pathname === '/health' || pathname.startsWith('/health/') ||
+                         pathname === '/readyz' || pathname === '/livez';
 
     if (!authHeader) {
       if (isPublicRoute) {
@@ -454,6 +455,55 @@ app.get('/health', async (request, reply) => {
   return reply.status(statusCode).send({
     status: health.status,
     timestamp: health.timestamp,
+  });
+});
+
+// Kubernetes readiness probe - checks if pod should receive traffic.
+// Returns 503 during graceful shutdown or if critical dependencies
+// (database, Redis) are unreachable.
+app.get('/readyz', async (_request, reply) => {
+  // During graceful shutdown, tell K8s to stop routing traffic to this pod.
+  // This allows in-flight requests to drain before the process exits.
+  if (getIsShuttingDown()) {
+    return reply.status(503).send({
+      ready: false,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // Check critical dependencies in parallel (reuse existing helpers)
+  const checks = await Promise.allSettled([
+    checkDatabase(),
+    checkRedisHealth(),
+  ]);
+
+  const ready = checks.every(c => c.status === 'fulfilled');
+
+  return reply.status(ready ? 200 : 503).send({
+    ready,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Kubernetes liveness probe - checks if pod is stuck/deadlocked.
+// Measures event loop responsiveness. A pod with a down database is NOT
+// dead and should not be restarted — only a blocked event loop indicates
+// the process is stuck and needs a restart.
+const EVENT_LOOP_LAG_THRESHOLD_MS = 5000;
+
+app.get('/livez', async (_request, reply) => {
+  // Measure event loop lag: schedule a timer for 0ms and measure actual delay.
+  // If the event loop is blocked (e.g., infinite loop, CPU-bound work),
+  // the callback fires late, and lagMs will exceed the threshold.
+  const lagStart = Date.now();
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  const lagMs = Date.now() - lagStart;
+
+  const alive = lagMs < EVENT_LOOP_LAG_THRESHOLD_MS;
+
+  return reply.status(alive ? 200 : 503).send({
+    alive,
+    timestamp: new Date().toISOString(),
   });
 });
 
