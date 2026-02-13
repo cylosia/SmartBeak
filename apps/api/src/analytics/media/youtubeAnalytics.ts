@@ -1,22 +1,15 @@
-
 import fetch from 'node-fetch';
 import { z } from 'zod';
 
 import { timeoutConfig, API_BASE_URLS } from '@config';
-import { withRetry } from '../../utils/retry';
 import { getLogger } from '@kernel/logger';
+
+import { withRetry } from '../../utils/retry';
 import { ApiError } from '../../adapters/youtube/YouTubeAdapter';
 
-const logger = getLogger('youtubeAnalytics');
+// ── Module-level constants & configuration ──────────────────────────────
 
-/**
-* YouTube analytics data structure
-*/
-export interface YouTubeAnalyticsData {
-  views: number;
-  likes: number;
-  comments: number;
-}
+const logger = getLogger('youtubeAnalytics');
 
 // Constants for array indices in YouTube Analytics API response
 // P0-2 FIX: Removed `dimensions: 'video'` from the request. The
@@ -38,29 +31,6 @@ const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /** P2-8 FIX (audit 2): Sanitize videoId in log messages for defense-in-depth */
 const MAX_VIDEO_ID_LOG_LENGTH = 20;
-function sanitizeVideoIdForLog(videoId: string): string {
-  return videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
-}
-
-/**
- * P1-5 FIX (audit 2): Semantic date validation beyond regex format check.
- * Rejects dates like 2024-13-45 or 2024-02-30 that pass the regex.
- */
-function validateAnalyticsDate(dateStr: string, name: string): void {
-  if (!dateStr || typeof dateStr !== 'string' || !DATE_FORMAT_REGEX.test(dateStr)) {
-    throw new Error(`Invalid ${name}: must be a string in YYYY-MM-DD format`);
-  }
-  const parsed = new Date(dateStr + 'T00:00:00Z');
-  if (isNaN(parsed.getTime())) {
-    throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
-  }
-  // Roundtrip check catches month/day overflow (e.g., 2024-02-30 -> 2024-03-01)
-  // P3-6 FIX (audit 3): Explicit assertion — regex guarantees exactly 3 numeric segments
-  const [y, m, d] = dateStr.split('-').map(Number) as [number, number, number];
-  if (parsed.getUTCFullYear() !== y || parsed.getUTCMonth() + 1 !== m || parsed.getUTCDate() !== d) {
-    throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
-  }
-}
 
 /**
  * Zod schema for validating the YouTube Analytics API response.
@@ -69,6 +39,19 @@ function validateAnalyticsDate(dateStr: string, name: string): void {
 const YouTubeAnalyticsResponseSchema = z.object({
   rows: z.array(z.array(z.number())).optional(),
 });
+
+// ── Types & interfaces ──────────────────────────────────────────────────
+
+/**
+* YouTube analytics data structure
+*/
+export interface YouTubeAnalyticsData {
+  views: number;
+  likes: number;
+  comments: number;
+}
+
+// ── Exported API ────────────────────────────────────────────────────────
 
 /**
 * Ingest YouTube analytics for a video
@@ -204,4 +187,30 @@ export async function ingestYouTubeAnalytics(
   const comments = row[COMMENTS_INDEX]!;
 
   return { views, likes, comments };
+}
+
+// ── Private helpers ─────────────────────────────────────────────────────
+
+function sanitizeVideoIdForLog(videoId: string): string {
+  return videoId.slice(0, MAX_VIDEO_ID_LOG_LENGTH).replace(/[^\w-]/g, '');
+}
+
+/**
+ * P1-5 FIX (audit 2): Semantic date validation beyond regex format check.
+ * Rejects dates like 2024-13-45 or 2024-02-30 that pass the regex.
+ */
+function validateAnalyticsDate(dateStr: string, name: string): void {
+  if (!dateStr || typeof dateStr !== 'string' || !DATE_FORMAT_REGEX.test(dateStr)) {
+    throw new Error(`Invalid ${name}: must be a string in YYYY-MM-DD format`);
+  }
+  const parsed = new Date(dateStr + 'T00:00:00Z');
+  if (isNaN(parsed.getTime())) {
+    throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
+  }
+  // Roundtrip check catches month/day overflow (e.g., 2024-02-30 -> 2024-03-01)
+  // P3-6 FIX (audit 3): Explicit assertion — regex guarantees exactly 3 numeric segments
+  const [y, m, d] = dateStr.split('-').map(Number) as [number, number, number];
+  if (parsed.getUTCFullYear() !== y || parsed.getUTCMonth() + 1 !== m || parsed.getUTCDate() !== d) {
+    throw new Error(`Invalid ${name}: '${dateStr}' is not a valid calendar date`);
+  }
 }

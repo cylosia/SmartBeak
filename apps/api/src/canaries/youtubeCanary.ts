@@ -1,6 +1,7 @@
-import type { YouTubeAdapter, CanaryResult } from './types';
-import { runMediaCanary } from './mediaCanaries';
 import { DEFAULT_TIMEOUTS } from '@config';
+
+import { runMediaCanary } from './mediaCanaries';
+import type { YouTubeAdapter, CanaryResult } from './types';
 
 /**
 * YouTube Canary
