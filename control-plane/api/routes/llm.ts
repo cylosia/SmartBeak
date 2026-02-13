@@ -76,8 +76,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
     try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
 
-    let models: LlmModel[];
-    try {
     // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
     let models: LlmModel[] = [];
     try {
