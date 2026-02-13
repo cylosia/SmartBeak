@@ -51,6 +51,7 @@ export class SafeDLQService extends KernelDLQService {
   * @param error - Error that caused the failure
   * @param jobData - Original job data
   * @param retryCount - Number of retry attempts made
+  * @param orgId - Organization ID for tenant isolation (optional)
   * @throws Error if recording fails
   */
   async recordSafe(
@@ -58,7 +59,8 @@ export class SafeDLQService extends KernelDLQService {
   region: string,
   error: Error,
   jobData: Record<string, unknown>,
-  retryCount: number
+  retryCount: number,
+  orgId?: string
   ): Promise<void> {
   try {
     // Validate inputs
@@ -87,7 +89,7 @@ export class SafeDLQService extends KernelDLQService {
     const sanitizedRegion = region.trim().toLowerCase();
     const sanitizedRetryCount = Math.floor(retryCount);
 
-    await this.record(sanitizedJobId, sanitizedRegion, error, jobData, sanitizedRetryCount);
+    await this.record(sanitizedJobId, sanitizedRegion, error, jobData, sanitizedRetryCount, orgId);
 
     logger.info('Job recorded to DLQ', {
     jobId: sanitizedJobId,
