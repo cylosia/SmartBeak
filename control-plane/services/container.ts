@@ -60,15 +60,6 @@ export interface SlackMessage {
   [key: string]: unknown;
 }
 
-// Extended adapter interfaces with publish method
-interface IFacebookAdapter {
-  publish: (input: { domainId: string; contentId: string; targetConfig: unknown }) => Promise<PublishResult>;
-}
-
-interface ILinkedInAdapter {
-  publish: (input: { domainId: string; contentId: string; targetConfig: unknown }) => Promise<PublishResult>;
-}
-
 export class Container {
   // P1-5 FIX: Use a plain Map for singletons — they should never expire.
   // Previously used LRUCache with 1hr TTL which evicted singletons (Redis, EventBus)
@@ -181,7 +172,7 @@ export class Container {
     return new PublishingWorker(
     jobRepo,
     attemptRepo,
-    adapter as unknown as import('../../domains/publishing/application/ports/PublishAdapter').PublishAdapter,
+    adapter,
     this.eventBus,
     this.dlqService,
     this.regionWorker,
@@ -268,11 +259,10 @@ export class Container {
   }
 
   const adapter = new FacebookAdapter(token);
-  // Validate adapter conforms to PublishAdapter interface
-  if (typeof (adapter as unknown as IFacebookAdapter).publish !== 'function') {
+  if (typeof adapter.publish !== 'function') {
     throw new Error('FacebookAdapter does not implement PublishAdapter interface');
   }
-  return adapter as unknown as PublishAdapter;
+  return adapter as PublishAdapter;
   }
 
   /**
@@ -320,10 +310,10 @@ export class Container {
     throw new Error('Facebook adapter requires pageAccessToken');
     }
     const fbAdapter = new FacebookAdapter(fbConfig.pageAccessToken);
-    if (typeof (fbAdapter as unknown as IFacebookAdapter).publish !== 'function') {
+    if (typeof fbAdapter.publish !== 'function') {
     throw new Error('FacebookAdapter does not implement PublishAdapter interface');
     }
-    return fbAdapter as unknown as PublishAdapter;
+    return fbAdapter as PublishAdapter;
     }
     case 'linkedin': {
     const liConfig = config as { accessToken?: string };
@@ -331,10 +321,10 @@ export class Container {
     throw new Error('LinkedIn adapter requires accessToken');
     }
     const liAdapter = new LinkedInAdapter(liConfig.accessToken);
-    if (typeof (liAdapter as unknown as ILinkedInAdapter).publish !== 'function') {
+    if (typeof liAdapter.publish !== 'function') {
     throw new Error('LinkedInAdapter does not implement PublishAdapter interface');
     }
-    return liAdapter as unknown as PublishAdapter;
+    return liAdapter as PublishAdapter;
     }
     default:
     throw new Error(`Unknown adapter type: ${targetType}`);
@@ -362,7 +352,7 @@ export class Container {
 
   // Check Redis
   try {
-    await this["redis"].ping();
+    await this.redis.ping();
     services["redis"] = true;
   } catch (error) {
     services["redis"] = false;
@@ -378,7 +368,7 @@ export class Container {
   async dispose(): Promise<void> {
   if (this.instances.has('redis')) {
     try {
-    await this["redis"].quit();
+    await this.redis.quit();
     } catch (err) {
     logger.error('Error closing Redis connection', err instanceof Error ? err : new Error(String(err)));
     }
@@ -388,7 +378,7 @@ export class Container {
   // The owner is responsible for closing it
 
   // Clear all instances
-  this.instances["clear"]();
+  this.instances.clear();
   }
 }
 

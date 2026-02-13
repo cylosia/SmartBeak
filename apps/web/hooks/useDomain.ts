@@ -39,8 +39,8 @@ export function useDomain(domainId: string | undefined) {
     queryKey: [DOMAIN_QUERY_KEY, domainId],
     queryFn: async (): Promise<Domain> => {
       if (!domainId) throw new Error('Domain ID is required');
-      const response = await api.get(`/domains/${domainId}`);
-      return response.data as Domain;
+      const response = await api.get<Domain>(`/domains/${domainId}`);
+      return response.data;
     },
     enabled: !!domainId,
   });
@@ -55,8 +55,8 @@ export function useDomainList() {
   return useQuery({
     queryKey: [DOMAIN_QUERY_KEY],
     queryFn: async (): Promise<Domain[]> => {
-      const response = await api.get('/domains');
-      return response as unknown as Domain[];
+      const response = await api.get<Domain[]>('/domains');
+      return response.data;
     },
   });
 }
@@ -70,8 +70,8 @@ export function useCreateDomain() {
   
   return useMutation({
     mutationFn: async (input: CreateDomainInput) => {
-      const response = await api.post('/domains', input);
-      return response.data as unknown as Domain;
+      const response = await api.post<Domain>('/domains', input);
+      return response.data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
@@ -88,11 +88,11 @@ export function useUpdateDomain() {
 
   return useMutation({
     mutationFn: async ({ domainId, input }: { domainId: string; input: UpdateDomainInput }) => {
-      const response = await api.patch(`/domains/${domainId}`, input);
-      return response.data as unknown as Domain;
+      const response = await api.patch<Domain>(`/domains/${domainId}`, input);
+      return response.data;
     },
     onSuccess: (_, variables) => {
-      void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY, variables["domainId"]] });
+      void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY, variables.domainId] });
       void queryClient.invalidateQueries({ queryKey: [DOMAIN_QUERY_KEY] });
     },
   });

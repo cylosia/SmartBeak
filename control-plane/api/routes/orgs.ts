@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '../../../packages/kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { InviteService } from '../../services/invite-service';
 import { MembershipService } from '../../services/membership-service';
 import { OrgService } from '../../services/org-service';
@@ -12,6 +13,7 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 
 const logger = getLogger('Orgs');
+const handleError = createRouteErrorHandler({ logger });
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -74,9 +76,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     const { name } = bodyResult.data;
     return await orgs.createOrg(name, ctx.userId);
   } catch (error) {
-    logger.error('[orgs] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to create organization' });
+    return handleError(res, error, 'create organization');
   }
   });
 
@@ -104,9 +104,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
 
     return await orgs.listMembers(id);
   } catch (error) {
-    logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to retrieve members' });
+    return handleError(res, error, 'list organization members');
   }
   });
 
@@ -144,9 +142,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     const { email, role } = bodyResult.data;
     return await invites.invite(id, email, role);
   } catch (error) {
-    logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to send invite' });
+    return handleError(res, error, 'send organization invite');
   }
   });
 
@@ -185,9 +181,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     await members.addMember(id, userId, role);
     return { ok: true };
   } catch (error) {
-    logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to add member' });
+    return handleError(res, error, 'add organization member');
   }
   });
 }

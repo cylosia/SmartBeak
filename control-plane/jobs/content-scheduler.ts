@@ -17,6 +17,12 @@ const DEFAULT_TIMEOUT_MS = 30000;
 // Import the domain ContentItem
 import { ContentItem } from '../../domains/content/domain/entities/ContentItem';
 
+function assertIsPool(value: unknown): asserts value is Pool {
+  if (!value || typeof value !== 'object' || typeof (value as { query?: unknown }).query !== 'function') {
+    throw new Error('Expected a pg.Pool instance from resolveDomainDb');
+  }
+}
+
 /**
 * Run content scheduler with graceful shutdown support
 */
@@ -33,7 +39,9 @@ export async function runContentScheduler(signal?: AbortSignal): Promise<{
   return { processed: 0, failed: 0, items: [] };
   }
 
-  const repo = new PostgresContentRepository(resolveDomainDb('content') as unknown as Pool);
+  const dbConnection = resolveDomainDb('content');
+  assertIsPool(dbConnection);
+  const repo = new PostgresContentRepository(dbConnection);
 
   // Fetch ready content with retry
   let ready: ContentItem[];
@@ -45,13 +53,13 @@ export async function runContentScheduler(signal?: AbortSignal): Promise<{
     initialDelayMs: 1000,
     retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'timeout'],
     onRetry: (error: Error, attempt: number) => {
-    logger.warn(`Retry ${attempt} fetching ready content`, { error: error['message'] });
+    logger.warn(`Retry ${attempt} fetching ready content`, { error: error.message });
     },
     }
   );
-  } catch (error) {
+  } catch (error: unknown) {
   const errorToLog = error instanceof Error ? error : new Error(String(error));
-  logger["error"]('Failed to fetch ready content after retries', errorToLog);
+  logger.error('Failed to fetch ready content after retries', errorToLog);
   throw error;
   }
 
@@ -77,7 +85,7 @@ export async function runContentScheduler(signal?: AbortSignal): Promise<{
   const CHUNK_SIZE = 100;
   for (let i = 0; i < ready.length; i += CHUNK_SIZE) {
     const chunk = ready.slice(i, i + CHUNK_SIZE);
-    
+
     const processPromises = chunk.map((item) =>
       limit(async () => {
         // Check abort signal before each item
@@ -91,13 +99,13 @@ export async function runContentScheduler(signal?: AbortSignal): Promise<{
         try {
           await publishWithTimeout(item, repo, signal);
           results.processed++;
-          results.items.push(item["id"]);
-          logger.info('Content published', { contentId: item["id"], title: item.title });
-        } catch (error) {
+          results.items.push(item.id);
+          logger.info('Content published', { contentId: item.id, title: item.title });
+        } catch (error: unknown) {
           results.failed++;
           const errorToLog = error instanceof Error ? error : new Error(String(error));
-          logger["error"]('Failed to publish content', errorToLog, {
-            contentId: item["id"],
+          logger.error('Failed to publish content', errorToLog, {
+            contentId: item.id,
             title: item.title,
           });
         }
@@ -124,12 +132,12 @@ async function publishWithTimeout(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
   const timeoutId = setTimeout(() => {
-    reject(new Error(`Publish timeout after ${DEFAULT_TIMEOUT_MS}ms for content ${item["id"]}`));
+    reject(new Error(`Publish timeout after ${DEFAULT_TIMEOUT_MS}ms for content ${item.id}`));
   }, DEFAULT_TIMEOUT_MS);
 
   const abortHandler = () => {
     clearTimeout(timeoutId);
-    reject(new Error(`Publish aborted for content ${item["id"]}`));
+    reject(new Error(`Publish aborted for content ${item.id}`));
   };
 
   if (signal) {
@@ -137,7 +145,7 @@ async function publishWithTimeout(
   }
 
   const handler = new PublishContent(repo);
-  handler.execute(item["id"])
+  handler.execute(item.id)
     .then(() => {
     clearTimeout(timeoutId);
     if (signal) {

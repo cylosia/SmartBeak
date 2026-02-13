@@ -18,6 +18,8 @@ export interface Lock {
   resource: string;
   value: string;
   expiration: number;
+  /** Monotonically increasing fencing token for stale-lock detection */
+  fencingToken: number;
 }
 
 export interface LockOptions {
@@ -70,16 +72,30 @@ export async function acquireLock(
   const redis = await getRedis();
   const lockValue = generateLockValue();
   const lockKey = `lock:${resource}`;
+  const fencingKey = `fence:${resource}`;
 
-  // P0-FIX: Use NX (only set if not exists) with PX (millisecond expiration)
-  // This is atomic and race-condition safe
-  const acquired = await redis.set(lockKey, lockValue, 'PX', opts.ttl, 'NX');
+  // Atomically: SET NX with PX expiration + INCR fencing token.
+  // The fencing token is a monotonically increasing counter that allows
+  // downstream systems to reject writes from stale lock holders.
+  const luaAcquire = `
+    local acquired = redis.call("set", KEYS[1], ARGV[1], "PX", ARGV[2], "NX")
+    if acquired then
+      local token = redis.call("incr", KEYS[2])
+      return token
+    else
+      return -1
+    end
+  `;
 
-  if (acquired === 'OK') {
+  const result = await redis.eval(luaAcquire, 2, lockKey, fencingKey, lockValue, String(opts.ttl));
+  const token = Number(result);
+
+  if (token >= 0) {
     return {
       resource,
       value: lockValue,
       expiration: Date.now() + opts.ttl,
+      fencingToken: token,
     };
   }
 
@@ -187,14 +203,15 @@ export async function extendLock(
  * 
  * @example
  * ```typescript
- * const result = await withLock('publish:intent:123', async () => {
+ * const result = await withLock('publish:intent:123', async (lock) => {
+ *   // lock.fencingToken can be used to validate writes
  *   return await processPublishIntent(intentId);
  * }, { ttl: 10000 });
  * ```
  */
 export async function withLock<T>(
   resource: string,
-  fn: () => Promise<T>,
+  fn: (lock: Lock) => Promise<T>,
   options: LockOptions = {}
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -205,7 +222,7 @@ export async function withLock<T>(
   }
 
   try {
-    return await fn();
+    return await fn(lock);
   } finally {
     // Always release lock, even if function throws
     await releaseLock(lock).catch(err => {

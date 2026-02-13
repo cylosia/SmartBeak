@@ -32,6 +32,22 @@ export interface RetryOptions {
   shouldRetry?: (error: Error) => boolean;
   /** Callback invoked on each retry attempt */
   onRetry?: (error: Error, attempt: number) => void;
+  /** Optional AbortSignal to cancel the retry loop */
+  signal?: AbortSignal;
+}
+
+// ============================================================================
+// AbortError
+// ============================================================================
+
+/**
+* Error thrown when an operation is aborted via AbortSignal
+*/
+export class AbortError extends Error {
+  constructor(message = 'Operation aborted') {
+    super(message);
+    this.name = 'AbortError';
+  }
 }
 
 /**
@@ -205,12 +221,30 @@ function calculateDelay(attempt: number, options: RetryOptions): number {
 }
 
 /**
-* Sleep for specified milliseconds
+* Sleep for specified milliseconds, abortable via signal
 * @param ms - Milliseconds to sleep
-* @returns Promise that resolves after the delay
+* @param signal - Optional AbortSignal to cancel the sleep
+* @returns Promise that resolves after the delay or rejects on abort
 */
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new AbortError());
+  if (!signal) return new Promise(resolve => setTimeout(resolve, ms));
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    function onAbort() {
+      clearTimeout(timeoutId);
+      reject(new AbortError());
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 // ============================================================================
@@ -233,9 +267,19 @@ export async function withRetry<T>(
   const retryKey = `${fn.name || 'anonymous'}_${Date.now()}_${randomUUID()}`;
 
   for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
+  // Check abort signal before each attempt
+  if (opts.signal?.aborted) {
+    throw new AbortError('Retry aborted');
+  }
+
   try {
     return await fn();
   } catch (error: unknown) {
+    // Propagate AbortError immediately without retry
+    if (error instanceof AbortError) {
+    throw error;
+    }
+
     const err = error instanceof Error ? error : new Error(String(error));
     const isLastAttempt = attempt > opts.maxRetries;
 
@@ -254,7 +298,7 @@ export async function withRetry<T>(
 
     opts.onRetry?.(error as Error, attempt);
 
-    await sleep(delay);
+    await sleep(delay, opts.signal);
   }
   }
 
@@ -344,10 +388,15 @@ export class CircuitBreaker {
   /**
   * Execute a function with circuit breaker protection
   * @param fn - Function to execute
+  * @param signal - Optional AbortSignal to cancel execution
   * @returns Promise resolving to function result
   * @throws Error if circuit is open
+  * @throws AbortError if signal is aborted
   */
-  async execute<T>(fn: () => Promise<T>): Promise<T> {
+  async execute<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) {
+    throw new AbortError('Circuit breaker execution aborted');
+  }
 
   const release = await this.stateLock.acquire();
 
@@ -380,6 +429,10 @@ export class CircuitBreaker {
     await this.onSuccess();
     return result;
   } catch (error) {
+    // Don't count abort errors as circuit breaker failures
+    if (error instanceof AbortError) {
+    throw error;
+    }
     // P1-FIX: Pass error to onFailure for classification
     await this.onFailure(error);
     throw error;

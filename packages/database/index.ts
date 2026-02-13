@@ -20,6 +20,12 @@ export * from './jsonb';
 export * from './errors';
 export * from './health';
 
+// Transactional outbox for at-least-once event delivery
+export * from './outbox';
+
+// Fencing token validation for distributed locks
+export * from './fencing';
+
 // P2-MEDIUM: Database maintenance utilities
 export * as maintenance from './maintenance';
 

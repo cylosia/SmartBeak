@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 
 import { BillingService } from '../../services/billing';
 import { getAuthContext } from '../types';
@@ -15,6 +16,7 @@ import { requireRole } from '../../services/auth';
 import { UsageService } from '../../services/usage';
 
 const logger = getLogger('domains-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 const DomainNameSchema = z.string()
   .min(1, 'Domain name is required')
@@ -132,9 +134,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
     return domains;
   } catch (error) {
-    logger["error"]('[domains] Error:', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch domains' });
+    return handleError(res, error, 'list domains');
   }
   });
 
@@ -252,8 +252,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     return { id: domainId, name, status: 'active' };
   } catch (error) {
     await client.query('ROLLBACK');
-    logger["error"]('[domains POST] Error:', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Failed to create domain' });
+    return handleError(res, error, 'create domain');
   } finally {
     client.release();
   }
@@ -318,9 +317,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     updatedAt: row.updated_at,
     };
   } catch (error) {
-    logger["error"]('[domains/:domainId] Error:', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch domain' });
+    return handleError(res, error, 'fetch domain');
   }
   });
 
@@ -411,8 +408,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('ROLLBACK').catch((rollbackError: Error) => {
     logger.error('Rollback failed during PATCH', rollbackError);
     });
-    logger.error('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Failed to update domain' });
+    return handleError(res, error, 'update domain');
   } finally {
     client.release();
   }
@@ -475,8 +471,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('ROLLBACK').catch((rollbackError: Error) => {
     logger.error('Rollback failed during DELETE', rollbackError);
     });
-    logger.error('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Failed to delete domain' });
+    return handleError(res, error, 'delete domain');
   } finally {
     client.release();
   }

@@ -49,6 +49,10 @@ export {
   CircuitOpenError, withTimeout, withCircuitBreaker,
   type RetryOptions, type CircuitBreakerOptions, type JitteredBackoffOptions,
 } from './retry';
+// Retry utilities (M8)
+export { withRetry, makeRetryable, Retryable, CircuitBreaker, AbortError, } from './retry';
+// Backpressure utilities
+export { Semaphore, PoolExhaustionError, QueueBackpressureError, } from './semaphore';
 // DLQ (M15)
 export { setDLQStorage, getDLQStorage, sendToDLQ, DLQ, withDLQ, } from './dlq';
 // Metrics (M5)
@@ -98,3 +102,5 @@ export {
   isSensitiveField, isSensitiveValue, maskValue,
   type SanitizedData,
 } from './redaction';
+// Transactional outbox relay for at-least-once event delivery
+export { OutboxRelay, type OutboxRelayOptions } from './outbox/OutboxRelay';

@@ -1,12 +1,16 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { LRUCache } from 'lru-cache';
+import { checkRateLimit as checkRateLimitRedis } from '@kernel/rateLimiterRedis';
+import { getLogger } from '@kernel/logger';
 
 /**
-* Rate Limiting Utility for Fastify Routes in apps/api
-* Simplified wrapper that matches the pattern: await rateLimit('endpoint-name', limit, req, res);
+* @deprecated Use `checkRateLimit` from `@kernel/rateLimiterRedis` directly.
+* This file is a backward-compatible shim that delegates to the kernel
+* distributed rate limiter (with automatic in-memory fallback).
 *
 * @module utils/rateLimit
 */
+
+const logger = getLogger('rateLimit');
 
 export interface RateLimitRecord {
   count: number;
@@ -27,20 +31,29 @@ const memoryCounters = new LRUCache<string, RateLimitRecord>({
 
 // IP extraction — canonical implementation in @kernel/ip-utils
 import { getClientIp as kernelGetClientIp } from '@kernel/ip-utils';
+/**
+* Extract client IP from request
+* P1-FIX: IP Spoofing - Only trust X-Forwarded-For from trusted proxies
+*/
+function getClientIp(req: FastifyRequest): string {
+  const trustedProxies = process.env['TRUSTED_PROXIES']?.split(',').map(p => p.trim()) || [];
 
 function getClientIp(req: FastifyRequest): string {
   return kernelGetClientIp(req as unknown as { headers: Record<string, string | string[] | undefined>; ip?: string });
 }
 
 /**
-* Rate limit function for Fastify routes
-* Pattern: await rateLimit('endpoint-name', limit, req, res);
+* @deprecated Use `checkRateLimit` from `@kernel/rateLimiterRedis` directly.
+*
+* Rate limit function for Fastify routes.
+* Now delegates to the kernel's distributed Redis rate limiter
+* (with automatic in-memory fallback when Redis is unavailable).
 *
 * @param endpoint - Unique identifier for the endpoint
 * @param limit - Maximum requests per minute
 * @param req - FastifyRequest object
 * @param res - FastifyReply object
-* @returns Promise<boolean> - true if allowed, throws if rate limited
+* @returns Promise<boolean> - true if allowed, false if rate limited
 */
 export async function rateLimit(
   endpoint: string,
@@ -50,33 +63,26 @@ export async function rateLimit(
 ): Promise<boolean> {
   const ip = getClientIp(req);
   const key = `${endpoint}:${ip}`;
-  const now = Date.now();
-  const windowMs = 60000; // 1 minute window
 
-  const entry = memoryCounters.get(key) ?? { count: 0, reset: now + windowMs };
-
-  // Reset if window has passed
-  if (now > entry.reset) {
-  entry["count"] = 0;
-  entry.reset = now + windowMs;
-  }
-
-  entry["count"]++;
-  memoryCounters.set(key, entry);
+  const result = await checkRateLimitRedis(key, {
+    maxRequests: limit,
+    windowMs: 60000, // 1 minute window
+    keyPrefix: 'ratelimit:api',
+  });
 
   // Set rate limit headers
-  void res.header('X-RateLimit-Limit', limit);
-  void res.header('X-RateLimit-Remaining', Math.max(0, limit - entry["count"]));
-  void res.header('X-RateLimit-Reset', Math.ceil(entry.reset / 1000));
+  void res.header('X-RateLimit-Limit', result.limit);
+  void res.header('X-RateLimit-Remaining', result.remaining);
+  void res.header('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
 
-  if (entry["count"] > limit) {
-  // P0-FIX: Just return after sending response - don't throw to prevent double response
-  void res.status(429).send({
-    error: 'Too many requests',
-    message: `Rate limit exceeded for ${endpoint}. Please try again later.`,
-    retryAfter: Math.ceil((entry.reset - now) / 1000),
-  });
-  return false;
+  if (!result.allowed) {
+    const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000);
+    void res.status(429).send({
+      error: 'Too many requests',
+      message: `Rate limit exceeded for ${endpoint}. Please try again later.`,
+      retryAfter,
+    });
+    return false;
   }
 
   return true;

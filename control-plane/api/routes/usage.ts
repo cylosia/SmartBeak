@@ -3,9 +3,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 import { UsageService } from '../../services/usage';
+
+const logger = getLogger('usage-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 export interface UsageStats {
   orgId: string;
@@ -56,20 +61,16 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     try {
     stats = await usage.getUsage(ctx["orgId"]) as unknown as UsageStats;
     } catch (serviceError) {
-    console["error"]('[usage] Service error:', serviceError);
+    logger.error('[usage] Service error', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
     return res.status(503).send({
-    error: 'Service temporarily unavailable',
-    message: 'Unable to fetch usage data. Please try again later.'
+    error: 'Usage service temporarily unavailable',
+    code: 'SERVICE_UNAVAILABLE',
     });
     }
 
     return res.send(stats);
   } catch (error) {
-    // P1-FIX: Log full error server-side but never expose raw error messages to clients
-    console["error"]('[usage] Unexpected error:', error);
-    return res.status(500).send({
-    error: 'Internal server error'
-    });
+    return handleError(res, error, 'fetch usage statistics');
   }
   });
 }

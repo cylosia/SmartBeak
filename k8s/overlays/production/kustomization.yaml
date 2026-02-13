@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: smartbeak-production
+namePrefix: prod-
+
+resources:
+  - ../../base
+
+patches:
+  - path: patches/api-resources.yaml
+  - path: patches/web-resources.yaml
+  - path: patches/worker-resources.yaml
+  - path: patches/replicas.yaml
+  - path: configmap-env.yaml
+
+images:
+  - name: smartbeak/api
+    newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/api
+    newTag: latest
+  - name: smartbeak/web
+    newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/web
+    newTag: latest
+  - name: smartbeak/worker
+    newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/worker
+    newTag: latest

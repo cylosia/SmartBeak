@@ -5,11 +5,13 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '../../../packages/kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 import { getContainer } from '../../services/container';
 
 const logger = getLogger('LLM');
+const handleError = createRouteErrorHandler({ logger });
 
 export interface LlmModel {
   id: string;
@@ -102,9 +104,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send({ models });
   } catch (error) {
-    logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch LLM models' });
+    return handleError(res, error, 'fetch LLM models');
   }
   });
 
@@ -170,9 +170,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send(preferences);
   } catch (error) {
-    logger.error('[llm/preferences] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch LLM preferences' });
+    return handleError(res, error, 'fetch LLM preferences');
   }
   });
 
@@ -231,9 +229,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send({ updated: true, preferences: updates });
   } catch (error) {
-    logger.error('[llm/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to update LLM preferences' });
+    return handleError(res, error, 'update LLM preferences');
   }
   });
 }

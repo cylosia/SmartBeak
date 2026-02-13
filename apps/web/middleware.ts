@@ -2,6 +2,7 @@
 import { getAuth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { BASE_SECURITY_HEADERS, buildWebAppCsp, PERMISSIONS_POLICY_WEB_APP } from '@config/headers';
 
 // F3-FIX: Restore real logging. The no-op logger silently dropped all auth
 // security events (session invalidation, redirects, auth failures).
@@ -21,13 +22,10 @@ const logger = {
 */
 
 // SECURITY FIX: P0-CRITICAL (Finding 2) - Static security headers (CSP generated per-request with real nonce)
+// Values sourced from packages/config/headers.ts (canonical source of truth)
 const STATIC_SECURITY_HEADERS: Record<string, string> = {
-  'X-Frame-Options': 'DENY',
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(self)',
+  ...BASE_SECURITY_HEADERS,
+  'Permissions-Policy': PERMISSIONS_POLICY_WEB_APP,
 };
 
 /**
@@ -38,13 +36,6 @@ function generateCspNonce(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
   return btoa(String.fromCharCode(...array));
-}
-
-/**
-* Build CSP header with a real per-request nonce
-*/
-function buildCspHeader(nonce: string): string {
-  return `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://*.clerk.accounts.dev https://api.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`;
 }
 
 export async function middleware(req: NextRequest) {
@@ -127,7 +118,7 @@ function addSecurityHeaders(response: NextResponse): void {
   }
   // Generate a fresh nonce for each request
   const nonce = generateCspNonce();
-  response.headers.set('Content-Security-Policy', buildCspHeader(nonce));
+  response.headers.set('Content-Security-Policy', buildWebAppCsp(nonce));
   // P1-7 FIX: Do NOT expose nonce in response headers. The CSP nonce must only be
   // available server-side. In Next.js middleware, response headers are visible to
   // CDNs, proxies, and browser extensions. The nonce is already embedded in the

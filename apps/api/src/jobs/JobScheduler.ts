@@ -14,6 +14,7 @@ import {
 
 import { getLogger } from '@kernel/logger';
 import { DLQService } from '@kernel/queue/DLQService';
+import { QueueBackpressureError } from '@kernel/semaphore';
 import { runWithContext, createRequestContext } from '@kernel/request-context';
 import { jobConfig, redisConfig } from '@config';
 
@@ -661,6 +662,15 @@ export class JobScheduler extends EventEmitter {
   const queue = this.queues.get(handlerConfig.config.queue);
   if (!queue) {
     throw new Error(`Queue ${handlerConfig.config.queue} not found`);
+  }
+
+  // Backpressure: reject if queue has too many pending jobs
+  const MAX_QUEUE_DEPTH = 1000;
+  const waitingCount = await queue.getWaitingCount();
+  if (waitingCount > MAX_QUEUE_DEPTH) {
+    throw new QueueBackpressureError(
+      `Queue ${handlerConfig.config.queue} has ${waitingCount} pending jobs (max: ${MAX_QUEUE_DEPTH}). Rejecting new job '${name}'.`
+    );
   }
 
     const jobPriority = options.priority || handlerConfig.config.priority || 'normal';
