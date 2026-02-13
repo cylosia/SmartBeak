@@ -78,8 +78,8 @@ const config = {
   // statement_timeout is already set in connection config (line 65)
   acquireConnectionTimeout: isServerless ? 5000 : 60000,
   migrations: {
-    tableName: 'knex_migrations',
-    directory: './migrations',
+    tableName: 'schema_migrations',
+    directory: '../../migrations/sql',
   },
   // Debug logging in development
   debug: process.env['NODE_ENV'] === 'development' && process.env['DEBUG_DB'] === 'true',

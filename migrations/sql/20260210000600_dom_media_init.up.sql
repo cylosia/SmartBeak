@@ -1,0 +1,6 @@
+
+CREATE TABLE IF NOT EXISTS media_assets (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  type TEXT NOT NULL
+);
