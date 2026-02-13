@@ -4,7 +4,7 @@
 
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
-import { getPoolInstance } from '@database/pool';
+import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
 
@@ -177,6 +177,35 @@ app.addHook('onSend', async (request, reply, payload) => {
   }
 
   return payload;
+});
+
+// Backpressure hook: reject requests early when DB pool is critically loaded
+app.addHook('onRequest', async (request, reply) => {
+  // Skip health check endpoints
+  if (request.url?.startsWith('/health') || request.url === '/readyz' || request.url === '/livez') return;
+
+  const metrics = getConnectionMetrics();
+  const backpressure = getBackpressureMetrics();
+
+  // Reject if pool utilization is critical or too many waiters
+  const totalConns = metrics.totalConnections;
+  const activeConns = totalConns - metrics.idleConnections;
+  const utilization = totalConns > 0 ? activeConns / totalConns : 0;
+
+  if (utilization > 0.9 || metrics.waitingClients > 8 || backpressure.waiting > 8) {
+    logger.warn('Backpressure: rejecting request due to pool pressure', {
+      waiting: metrics.waitingClients,
+      active: activeConns,
+      total: totalConns,
+      semaphoreWaiting: backpressure.waiting,
+      semaphoreAvailable: backpressure.available,
+    });
+    return reply.status(503).send({
+      error: 'Service temporarily unavailable',
+      message: 'Server under heavy load. Please retry shortly.',
+      retryAfter: 5,
+    });
+  }
 });
 
 // P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a

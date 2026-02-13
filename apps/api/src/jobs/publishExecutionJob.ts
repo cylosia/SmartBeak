@@ -37,7 +37,8 @@ export interface PublishResult {
 
 const circuitBreakers = new LRUCache<string, CircuitBreaker>({
   max: cacheConfig.circuitBreakerCacheMax,
-  ttl: cacheConfig.circuitBreakerCacheTtlMs,
+  // No TTL: circuit breaker state must persist for the process lifetime
+  // to accurately track failures across requests
 });
 
 function getCircuitBreaker(adapterName: string): CircuitBreaker {

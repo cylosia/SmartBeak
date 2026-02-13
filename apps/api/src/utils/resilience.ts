@@ -33,6 +33,8 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
 /**
  * Circuit breaker implementation for fault tolerance
  * MEDIUM FIX M15: Bounded failures counter
+ * Singleton per name: circuit breaker state is shared across all callers
+ * using the same name, ensuring failures are tracked globally per service.
  */
 
 
@@ -50,6 +52,33 @@ export interface CircuitBreakerConfig {
 const VALID_ADAPTER_NAMES = ['google-analytics', 'facebook', 'gsc', 'vercel', 'instagram', 'youtube', 'pinterest', 'linkedin', 'mailchimp', 'constant-contact', 'aweber'] as const;
 export type ValidAdapterName = typeof VALID_ADAPTER_NAMES[number];
 
+// ============================================================================
+// Singleton Circuit Breaker Registry
+// ============================================================================
+
+/**
+ * Module-level registry to share circuit breaker state across all callers
+ * using the same name. This ensures failure tracking is per-service, not
+ * per-adapter-instance.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const circuitBreakerRegistry = new Map<string, CircuitBreaker<any>>();
+
+/**
+ * Get the circuit breaker registry (for testing/monitoring)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getCircuitBreakerRegistry(): ReadonlyMap<string, CircuitBreaker<any>> {
+  return circuitBreakerRegistry;
+}
+
+/**
+ * Reset the circuit breaker registry (for testing/shutdown)
+ */
+export function resetCircuitBreakerRegistry(): void {
+  circuitBreakerRegistry.clear();
+}
+
 export class CircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>> {
   fn: T;
   config: CircuitBreakerConfig;
@@ -62,20 +91,29 @@ export class CircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>> 
   private stateLock = new Mutex();
   /**
   * Create a new CircuitBreaker
-  * @param fn - Function to wrap
+  * @param fn - Function to wrap (used by legacy withCircuitBreaker; ignored by executeWithCircuitBreaker)
   * @param config - Circuit breaker configuration
   */
   constructor(fn: T, config: CircuitBreakerConfig) {
     this.fn = fn;
     this.config = config;
   }
+
   /**
-  * Execute the wrapped function with circuit breaker protection
-  * @param args - Arguments to pass to the function
+  * Execute a function with circuit breaker protection.
+  * Accepts the function to execute as a parameter so the CB state (failures,
+  * open/closed) can be shared across callers while each caller provides its
+  * own function closure (important for correct `this` binding in adapters).
+  * @param fn - Function to execute (overrides constructor fn)
+  * @param signal - Optional AbortSignal
   * @returns Function result
   * @throws CircuitOpenError if circuit is open
   */
-  async execute(...args: Parameters<T>): Promise<ReturnType<T> extends Promise<infer R> ? R : never> {
+  async executeFn<R>(fn: () => Promise<R>, signal?: AbortSignal): Promise<R> {
+    if (signal?.aborted) {
+      throw new Error('Circuit breaker execution aborted');
+    }
+
     // Check if we should try closing the circuit - acquire lock for state check
     const shouldAttemptReset = await this.stateLock.runExclusive(() => {
       if (this.open) {
@@ -100,14 +138,29 @@ export class CircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>> 
     }
 
     try {
-      const result = await this.fn(...args);
+      const result = await fn();
       await this.onSuccess();
-      return result as ReturnType<T> extends Promise<infer R> ? R : never;
+      return result;
     }
     catch (error) {
+      // Don't count abort-related errors as circuit breaker failures
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error;
+      }
       await this.onFailure();
       throw error;
     }
+  }
+
+  /**
+  * Execute the wrapped function with circuit breaker protection (legacy API).
+  * Uses the function provided in the constructor.
+  * @param args - Arguments to pass to the function
+  * @returns Function result
+  * @throws CircuitOpenError if circuit is open
+  */
+  async execute(...args: Parameters<T>): Promise<ReturnType<T> extends Promise<infer R> ? R : never> {
+    return this.executeFn(() => this.fn(...args) as Promise<ReturnType<T> extends Promise<infer R> ? R : never>);
   }
   /**
   * Handle successful execution
@@ -182,24 +235,68 @@ export class CircuitOpenError extends Error {
   }
 }
 // ============================================================================
-// Factory Function
+// Factory Functions
 // ============================================================================
+
 /**
- * Factory function for creating circuit breaker wrapped functions
+ * Execute a function with a singleton circuit breaker, keyed by name.
+ * The circuit breaker state (failures, open/closed) is shared across all
+ * callers using the same name. The function itself is provided per-call,
+ * so each caller can bind its own `this` context.
+ *
+ * @param name - Circuit breaker name (should identify the dependency/service)
+ * @param fn - Function to execute
+ * @param failureThreshold - Number of failures before opening (default: 3)
+ * @param signal - Optional AbortSignal
+ * @returns Function result
+ */
+export async function executeWithCircuitBreaker<R>(
+  name: string,
+  fn: () => Promise<R>,
+  failureThreshold = 3,
+  signal?: AbortSignal
+): Promise<R> {
+  let breaker = circuitBreakerRegistry.get(name);
+  if (!breaker) {
+    // Create a placeholder fn for the constructor (not used by executeFn)
+    const placeholder = (() => Promise.resolve()) as unknown as (...args: unknown[]) => Promise<unknown>;
+    breaker = new CircuitBreaker(placeholder, {
+      failureThreshold,
+      resetTimeoutMs: 30000,
+      name,
+    });
+    circuitBreakerRegistry.set(name, breaker);
+  }
+  return breaker.executeFn(fn, signal);
+}
+
+/**
+ * Factory function for creating circuit breaker wrapped functions.
+ * Uses the singleton registry so circuit breaker state is shared
+ * across all callers with the same name.
+ *
+ * @deprecated Use executeWithCircuitBreaker() for new code to avoid
+ * capturing stale `this` references in adapter constructors.
+ *
  * @param fn - Function to wrap
  * @param failureThreshold - Number of failures before opening (default: 3)
  * @param name - Circuit breaker name (default: 'unknown')
  * @returns Wrapped function
  */
 export function withCircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>>(
-  fn: T, 
-  failureThreshold = 3, 
+  fn: T,
+  failureThreshold = 3,
   name = 'unknown'
 ): (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never> {
-  const breaker = new CircuitBreaker(fn, {
-    failureThreshold,
-    resetTimeoutMs: 30000, // 30 seconds
-    name,
-  });
-  return ((...args: Parameters<T>) => breaker.execute(...args)) as (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never>;
+  // Get or create the singleton breaker for this name
+  if (!circuitBreakerRegistry.has(name)) {
+    const breaker = new CircuitBreaker(fn, {
+      failureThreshold,
+      resetTimeoutMs: 30000,
+      name,
+    });
+    circuitBreakerRegistry.set(name, breaker);
+  }
+  const breaker = circuitBreakerRegistry.get(name)!;
+  return ((...args: Parameters<T>) => breaker.executeFn(() => fn(...args) as Promise<ReturnType<T> extends Promise<infer R> ? R : never>)) as (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never>;
 }

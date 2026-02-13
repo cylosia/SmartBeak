@@ -7,6 +7,7 @@
  */
 
 import { randomBytes } from 'crypto';
+import { LRUCache } from 'lru-cache';
 import { getRedis } from './redis';
 import { getLogger } from './logger';
 
@@ -32,6 +33,53 @@ export interface RateLimitResult {
 
 const DEFAULT_KEY_PREFIX = 'ratelimit';
 const logger = getLogger('rateLimiterRedis');
+
+// ============================================================================
+// In-Memory Fallback for Redis Unavailability
+// ============================================================================
+
+interface FallbackEntry {
+  count: number;
+  windowStart: number;
+}
+
+const fallbackCounters = new LRUCache<string, FallbackEntry>({
+  max: 10000,
+  ttl: 300000, // 5 min safety TTL
+});
+
+/**
+ * In-memory rate limit check used when Redis is unavailable.
+ * Maintains rate enforcement (fail-closed) while surviving Redis outages.
+ */
+function checkRateLimitInMemory(
+  key: string,
+  config: RateLimitConfig
+): RateLimitResult {
+  const now = Date.now();
+  const prefix = config.keyPrefix || DEFAULT_KEY_PREFIX;
+  const fullKey = `${prefix}:${key}`;
+  const entry = fallbackCounters.get(fullKey);
+
+  if (!entry || (now - entry.windowStart) > config.windowMs) {
+    fallbackCounters.set(fullKey, { count: 1, windowStart: now });
+    return {
+      allowed: true,
+      remaining: config.maxRequests - 1,
+      resetTime: now + config.windowMs,
+      limit: config.maxRequests,
+    };
+  }
+
+  entry.count++;
+  const allowed = entry.count <= config.maxRequests;
+  return {
+    allowed,
+    remaining: Math.max(0, config.maxRequests - entry.count),
+    resetTime: entry.windowStart + config.windowMs,
+    limit: config.maxRequests,
+  };
+}
 
 /**
  * Check rate limit using sliding window algorithm
@@ -60,7 +108,15 @@ export async function checkRateLimit(
   key: string,
   config: RateLimitConfig
 ): Promise<RateLimitResult> {
-  const redis = await getRedis();
+  let redis;
+  try {
+    redis = await getRedis();
+  } catch (redisError) {
+    // Redis unavailable - fall back to in-memory rate limiting
+    logger.warn(`[rateLimiter] Redis unavailable, using in-memory fallback: ${redisError instanceof Error ? redisError.message : String(redisError)}`);
+    return checkRateLimitInMemory(key, config);
+  }
+
   const prefix = config.keyPrefix || DEFAULT_KEY_PREFIX;
   const redisKey = `${prefix}:${key}`;
   const now = Date.now();
@@ -71,43 +127,49 @@ export async function checkRateLimit(
   // 2. Use crypto.randomBytes for member uniqueness (was Math.random)
   // 3. Check count before adding request (was add-then-remove race)
 
-  // Step 1: Clean old entries and get current count BEFORE adding
-  const pipeline = redis.pipeline();
-  pipeline.zremrangebyscore(redisKey, 0, windowStart);
-  pipeline.zcard(redisKey);
+  try {
+    // Step 1: Clean old entries and get current count BEFORE adding
+    const pipeline = redis.pipeline();
+    pipeline.zremrangebyscore(redisKey, 0, windowStart);
+    pipeline.zcard(redisKey);
 
-  const results = await pipeline.exec();
+    const results = await pipeline.exec();
 
-  if (!results) {
-    // AUDIT-FIX P0-01: Fail CLOSED on Redis error - deny request
-    logger.error('[rateLimiter] Redis pipeline failed - failing closed');
+    if (!results) {
+      // AUDIT-FIX P0-01: Fail CLOSED on Redis error - deny request
+      logger.error('[rateLimiter] Redis pipeline failed - failing closed');
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime: now + config.windowMs,
+        limit: config.maxRequests,
+      };
+    }
+
+    const currentCount = results[1]![1] as number;
+    const allowed = currentCount < config.maxRequests;
+    const remaining = Math.max(0, config.maxRequests - currentCount - (allowed ? 1 : 0));
+    const resetTime = now + config.windowMs;
+
+    // Step 2: Only add the request if allowed (fixes P0-03 race condition)
+    if (allowed) {
+      // AUDIT-FIX P0-02: Use crypto.randomBytes instead of Math.random for member uniqueness
+      const memberId = `${now}-${randomBytes(8).toString('hex')}`;
+      await redis.zadd(redisKey, now, memberId);
+      await redis.pexpire(redisKey, config.windowMs);
+    }
+
     return {
-      allowed: false,
-      remaining: 0,
-      resetTime: now + config.windowMs,
+      allowed,
+      remaining,
+      resetTime,
       limit: config.maxRequests,
     };
+  } catch (redisError) {
+    // Redis command error - fall back to in-memory rate limiting
+    logger.warn(`[rateLimiter] Redis command error, using in-memory fallback: ${redisError instanceof Error ? redisError.message : String(redisError)}`);
+    return checkRateLimitInMemory(key, config);
   }
-
-  const currentCount = results[1]![1] as number;
-  const allowed = currentCount < config.maxRequests;
-  const remaining = Math.max(0, config.maxRequests - currentCount - (allowed ? 1 : 0));
-  const resetTime = now + config.windowMs;
-
-  // Step 2: Only add the request if allowed (fixes P0-03 race condition)
-  if (allowed) {
-    // AUDIT-FIX P0-02: Use crypto.randomBytes instead of Math.random for member uniqueness
-    const memberId = `${now}-${randomBytes(8).toString('hex')}`;
-    await redis.zadd(redisKey, now, memberId);
-    await redis.pexpire(redisKey, config.windowMs);
-  }
-
-  return {
-    allowed,
-    remaining,
-    resetTime,
-    limit: config.maxRequests,
-  };
 }
 
 /**
