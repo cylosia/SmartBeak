@@ -1,4 +1,3 @@
-
 /**
  * P1-4 FIX (audit 2): This test file previously tested runMediaCanary from
  * mediaCanaries.ts instead of the youtubeCanary function. Rewritten to test

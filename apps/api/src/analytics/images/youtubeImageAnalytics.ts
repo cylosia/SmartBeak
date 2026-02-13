@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 /** P2-1 FIX (audit 2): .strict() rejects unexpected properties instead of silently stripping them */

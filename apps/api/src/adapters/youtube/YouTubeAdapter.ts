@@ -1,43 +1,29 @@
-import { z } from 'zod';
-import { API_BASE_URLS, API_VERSIONS, DEFAULT_TIMEOUTS } from '@config';
-import { validateNonEmptyString } from '../../utils/validation';
 import fetch from 'node-fetch';
+import { z } from 'zod';
+
+import { API_BASE_URLS, API_VERSIONS, DEFAULT_TIMEOUTS } from '@config';
+
 import { withRetry } from '../../utils/retry';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '../../utils/request';
+import { validateNonEmptyString } from '../../utils/validation';
 import type { CanaryAdapter } from '../../canaries/types';
 
 /**
  * YouTube Publishing Adapter
  *
- * Security audit fixes applied (audit 1):
- * - P0-1: response.text() in error path wrapped in try-catch
- * - P1-2: HealthCheckResult aligned with CanaryAdapter interface
- * - P1-6: parts parameter validated against allowlist
- * - P1-7: YouTubeVideoResponse derived from Zod schema via z.infer
- * - P2-1: healthCheck() consumes response body to prevent connection leak
- * - P2-2: Error body truncated to prevent credential leakage in logs
- * - P2-6: videoId sanitized in error messages
- * - P2-7: healthCheck 403 error message clarified
- * - P2-11: Private fields marked readonly
- * - P3-2: ApiError exported
- * - P3-3: YouTubeVideoListResponseSchema uses passthrough()
+ * Security audit 1: P0-1 (error body try-catch), P1-2 (HealthCheckResult),
+ *   P1-6 (parts allowlist), P1-7 (Zod-derived types), P2-1 (body consumption),
+ *   P2-2 (body truncation), P2-6 (videoId sanitization), P2-7 (403 clarity),
+ *   P2-11 (readonly fields), P3-2 (ApiError exported), P3-3 (strip)
  *
- * Security audit fixes applied (audit 2):
- * - P1-1: getVideo error path now consumes response body (connection leak fix)
- * - P1-2: Token factory pattern for OAuth token refresh
- * - P2-3: passthrough() changed to strip() on response schema
- * - P2-5: Class implements CanaryAdapter for compile-time contract enforcement
- * - P3-5: Warn when YouTube returns multiple items for single videoId
- * - P3-6: ApiError now carries truncated response body
+ * Security audit 2: P1-1 (getVideo body consumption), P1-2 (token factory),
+ *   P2-3 (strip), P2-5 (implements CanaryAdapter), P3-5 (multi-item warn),
+ *   P3-6 (ApiError carries body)
  *
- * Security audit fixes applied (audit 3):
- * - P1-1: Token factory return value validated at point-of-use
- * - P1-2: Token fetched inside retry loop for fresh token on each attempt
- * - P1-3: AbortController timeout cleared before body parsing in updateMetadata
- * - P2-1: Zod parse failures use non-retryable status 422 instead of 500
- * - P2-6: errorBody passed to ApiError in updateMetadata error paths
- * - P3-4: sanitizeVideoIdForLog returns '<invalid>' on empty result
- * - P3-8: YouTube 403 reason field sanitized before interpolation
+ * Security audit 3: P1-1 (token validation), P1-2 (token per retry),
+ *   P1-3 (clearTimeout before body parse), P2-1 (422 for schema errors),
+ *   P2-6 (errorBody in updateMetadata), P3-4 (empty sanitization),
+ *   P3-8 (reason sanitization)
  */
 
 /**
