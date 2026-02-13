@@ -1,5 +1,4 @@
 import { getLogger } from '@kernel/logger';
-import pLimit from 'p-limit';
 import { AhrefsAdapter } from '../adapters/keywords/ahrefs';
 import { GscAdapter } from '../adapters/keywords/gsc';
 import { PaaAdapter } from '../adapters/keywords/paa';
@@ -129,34 +128,28 @@ async function processAdapter(
 }
 
 /**
-* P0-FIX: Batch insert keyword suggestions with bounded concurrency
-* Prevents connection pool exhaustion with large suggestion sets
+* P1-6 FIX: Batch insert keyword suggestions in chunks sized by MAX_CONCURRENT_INSERTS.
+* Processes each chunk sequentially to prevent connection pool exhaustion.
 */
 async function batchInsertSuggestions(
   db: Database,
   suggestions: KeywordSuggestion[],
   domainId: string,
   source: string,
-  jobId: string,
-  batchSize = 100
+  jobId: string
 ): Promise<void> {
-  // P0-FIX: Use p-limit for bounded concurrency
-  const limit = pLimit(MAX_CONCURRENT_INSERTS);
-
-  for (let i = 0; i < suggestions.length; i += batchSize) {
-  const batch = suggestions.slice(i, i + batchSize);
-  await Promise.all(
-    batch.map(s =>
-    limit(() =>
+  for (let i = 0; i < suggestions.length; i += MAX_CONCURRENT_INSERTS) {
+    const chunk = suggestions.slice(i, i + MAX_CONCURRENT_INSERTS);
+    await Promise.all(
+      chunk.map(s =>
         db.keyword_suggestions.insert({
-        domain_id: domainId,
-        keyword: s.keyword,
-        source: source,
-        ...(s.metrics !== undefined ? { metrics: s.metrics } : {}),
-        ingestion_job_id: jobId
+          domain_id: domainId,
+          keyword: s.keyword,
+          source: source,
+          ...(s.metrics !== undefined ? { metrics: s.metrics } : {}),
+          ingestion_job_id: jobId
         })
-    )
-    )
-  );
+      )
+    );
   }
 }

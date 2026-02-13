@@ -51,6 +51,7 @@ export interface MaintenanceJobResult {
 
 /**
  * Execute database maintenance task
+ * P1-2 FIX: Acquires a distributed advisory lock to prevent concurrent execution.
  */
 export async function executeDatabaseMaintenance(
   data: MaintenanceJobData
@@ -58,9 +59,26 @@ export async function executeDatabaseMaintenance(
   const startTime = Date.now();
   const alerts: string[] = [];
   const errors: string[] = [];
-  
+
+  // P1-2 FIX: Use PostgreSQL advisory lock to prevent concurrent maintenance runs.
+  // Lock key is derived from a fixed namespace hash for 'db-maintenance'.
+  const LOCK_ID = 839271; // arbitrary fixed advisory lock ID for db-maintenance
+  const lockResult = await db.raw('SELECT pg_try_advisory_lock(?) AS acquired', [LOCK_ID]);
+  const acquired = lockResult.rows?.[0]?.acquired ?? false;
+  if (!acquired) {
+    logger.info('Skipping database maintenance — another instance holds the lock', { task: data.task });
+    return {
+      success: true,
+      task: data.task,
+      duration_ms: Date.now() - startTime,
+      alerts: [],
+      errors: [],
+      details: { skipped: true, reason: 'lock_unavailable' },
+    };
+  }
+
   logger.info('Starting database maintenance task', { task: data.task });
-  
+
   try {
     const result = await maintenance.scheduler.executeMaintenanceTask(
       db,
@@ -119,6 +137,11 @@ export async function executeDatabaseMaintenance(
       errors: [...errors, errorMessage],
       details: null,
     };
+  } finally {
+    // P1-2 FIX: Always release the advisory lock
+    await db.raw('SELECT pg_advisory_unlock(?)', [LOCK_ID]).catch((e: Error) => {
+      logger.error('Failed to release advisory lock', e);
+    });
   }
 }
 

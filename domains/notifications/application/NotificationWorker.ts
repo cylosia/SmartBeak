@@ -2,6 +2,7 @@
 
 
 import { Pool } from 'pg';
+import { randomUUID } from 'crypto';
 
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '@kernel/logger';
@@ -85,7 +86,8 @@ export class NotificationWorker {
     return { success: false, error: `Notification '${notificationId}' not found` };
     }
 
-    const attemptCount = await this.attempts.countByNotification(notification["id"]);
+    // P0-1 FIX: Pass transaction client to prevent phantom reads
+    const attemptCount = await this.attempts.countByNotification(notification["id"], client);
     const attempt = attemptCount + 1;
 
     // Check user preferences
@@ -103,6 +105,27 @@ export class NotificationWorker {
 
     return { success: true, skipped: true };
     }
+
+    // P0-3 FIX: Generate delivery token for idempotent delivery
+    // If notification already has a delivery_token and delivery_committed_at,
+    // it was already sent - skip re-sending to prevent split-brain duplicates
+    const existingToken = await client.query(
+    `SELECT delivery_token, delivery_committed_at FROM notifications WHERE id = $1`,
+    [notification["id"]]
+    );
+    const row = existingToken.rows[0];
+    if (row?.delivery_committed_at) {
+    // Already delivered in a previous attempt, skip external call
+    await client.query('COMMIT');
+    return { success: true, delivered: true };
+    }
+
+    // Generate and persist delivery token before external call
+    const deliveryToken = randomUUID();
+    await client.query(
+    `UPDATE notifications SET delivery_token = $1 WHERE id = $2`,
+    [deliveryToken, notification["id"]]
+    );
 
     // Start sending (immutable - returns new instance)
     const sendingNotification = notification.start();
@@ -123,18 +146,33 @@ export class NotificationWorker {
     };
 
     try {
-    // Attempt delivery
+    // Attempt delivery with idempotency key
     await adapter.send(message);
 
     // Success — P0-FIX: Use client for notification save within transaction
     await client.query('BEGIN');
-    await this.attempts.record(notification["id"], attempt, 'success');
+    // P0-1 FIX: Pass client to record within transaction
+    await this.attempts.record(notification["id"], attempt, 'success', undefined, client);
 
     const deliveredNotification = sendingNotification.succeed();
     await this.notifications.save(deliveredNotification, client);
 
+    // P0-3 FIX: Mark delivery as committed to prevent duplicate sends on retry
+    await client.query(
+    `UPDATE notifications SET delivery_committed_at = NOW() WHERE id = $1`,
+    [notification["id"]]
+    );
+
     await client.query('COMMIT');
-    await this.eventBus.publish(new NotificationSent().toEnvelope(notification["id"]));
+    // TODO: Migrate to a transactional outbox pattern in a future iteration.
+    // Currently eventBus.publish is called after COMMIT, so a crash here would
+    // lose the event. An outbox table written within the transaction would guarantee
+    // at-least-once delivery.
+    try {
+      await this.eventBus.publish(new NotificationSent().toEnvelope(notification["id"]));
+    } catch (publishError) {
+      logger.error('Failed to publish NotificationSent event (delivery was successful)', publishError instanceof Error ? publishError : new Error(String(publishError)));
+    }
 
     await this.auditLog('notification_sent', notification["orgId"], {
     channel: notification.channel,
@@ -155,14 +193,23 @@ export class NotificationWorker {
 
     // P0-FIX: Use client for notification save within transaction
     await client.query('BEGIN');
-    await this.attempts.record(notification["id"], attempt, 'failure', errorMessage);
+    // P0-1 FIX: Pass client to record within transaction
+    await this.attempts.record(notification["id"], attempt, 'failure', errorMessage, client);
 
     const failedNotification = sendingNotification.fail();
     await this.notifications.save(failedNotification, client);
 
     await this.dlq.record(notification["id"], notification.channel, errorMessage);
     await client.query('COMMIT');
-    await this.eventBus.publish(new NotificationFailed().toEnvelope(notification["id"], errorMessage));
+    // TODO: Migrate to a transactional outbox pattern in a future iteration.
+    // Currently eventBus.publish is called after COMMIT, so a crash here would
+    // lose the event. An outbox table written within the transaction would guarantee
+    // at-least-once delivery.
+    try {
+      await this.eventBus.publish(new NotificationFailed().toEnvelope(notification["id"], errorMessage));
+    } catch (publishError) {
+      logger.error('Failed to publish NotificationFailed event (failure was already recorded)', publishError instanceof Error ? publishError : new Error(String(publishError)));
+    }
 
     await this.auditLog('notification_failed', notification["orgId"], {
     channel: notification.channel,

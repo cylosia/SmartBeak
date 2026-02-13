@@ -75,6 +75,27 @@ export type GscRequest = Parameters<GscAdapter['fetchSearchAnalytics']>;
 export type FacebookRequest = Parameters<FacebookAdapter['publishPagePost']>;
 export type VercelRequest = Parameters<VercelAdapter['triggerDeploy']>;
 
+/**
+ * P1-4 FIX: Module-level registry to share circuit breaker state across adapter instances.
+ * Keyed by service name so all instances of the same adapter type share one circuit breaker.
+ */
+const circuitBreakerRegistry = new Map<string, (...args: unknown[]) => Promise<unknown>>();
+
+function getOrCreateCircuitBreaker<TArgs extends unknown[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>,
+  timeoutMs: number,
+  threshold: number,
+  name: string,
+): (...args: TArgs) => Promise<TResult> {
+  const existing = circuitBreakerRegistry.get(name);
+  if (existing) {
+    return (...args: TArgs) => existing(...args) as Promise<TResult>;
+  }
+  const wrapped = wrapWithCircuitBreakerAndTimeout(fn, timeoutMs, threshold, name);
+  circuitBreakerRegistry.set(name, wrapped as (...args: unknown[]) => Promise<unknown>);
+  return wrapped;
+}
+
 export class AdapterFactory {
   constructor(private readonly vault: VaultClient) {}
 
@@ -84,7 +105,7 @@ export class AdapterFactory {
 
     const adapter = new GaAdapter(creds);
     const originalFetchMetrics = adapter.fetchMetrics.bind(adapter);
-    adapter.fetchMetrics = wrapWithCircuitBreakerAndTimeout(
+    adapter.fetchMetrics = getOrCreateCircuitBreaker(
       originalFetchMetrics, GA_TIMEOUT, 3, 'ga'
     );
     return adapter;
@@ -98,7 +119,7 @@ export class AdapterFactory {
 
     const adapter = new GscAdapter(auth);
     const originalFetchSearchAnalytics = adapter.fetchSearchAnalytics.bind(adapter);
-    adapter.fetchSearchAnalytics = wrapWithCircuitBreakerAndTimeout(
+    adapter.fetchSearchAnalytics = getOrCreateCircuitBreaker(
       originalFetchSearchAnalytics, GSC_TIMEOUT, 3, 'gsc'
     );
     return adapter;
@@ -110,7 +131,7 @@ export class AdapterFactory {
 
     const adapter = new FacebookAdapter(tokenData.accessToken);
     const originalPublishPagePost = adapter.publishPagePost.bind(adapter);
-    adapter.publishPagePost = wrapWithCircuitBreakerAndTimeout(
+    adapter.publishPagePost = getOrCreateCircuitBreaker(
       originalPublishPagePost, FACEBOOK_TIMEOUT, 3, 'facebook'
     );
     return adapter;
@@ -122,7 +143,7 @@ export class AdapterFactory {
 
     const adapter = new VercelAdapter(tokenData.token);
     const originalTriggerDeploy = adapter.triggerDeploy.bind(adapter);
-    adapter.triggerDeploy = wrapWithCircuitBreakerAndTimeout(
+    adapter.triggerDeploy = getOrCreateCircuitBreaker(
       originalTriggerDeploy, VERCEL_TIMEOUT, 3, 'vercel'
     );
     return adapter;

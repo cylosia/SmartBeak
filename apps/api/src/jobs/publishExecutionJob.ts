@@ -116,6 +116,25 @@ async function executePublishJob(
     .first();
 
   if (existing) {
+    // P0-4 FIX: Handle incomplete saga - if status is 'started', Phase 3 may have
+    // failed on a previous attempt. Check if external call already succeeded.
+    if (existing.status === 'started') {
+    const successRecord = await trx('publish_executions')
+      .where({ intent_id: intentId, status: 'success' })
+      .first();
+    if (successRecord) {
+      // External call succeeded but Phase 3 failed - skip to finalization
+      logger.info('Recovering from incomplete saga: external call succeeded, finalizing', { intentId, key });
+      return { attempt: -1, skipExternalCall: true, existingResult: successRecord };
+    }
+    // External call status unknown - allow retry
+    logger.info('Recovering from incomplete saga: retrying external call', { intentId, key });
+    const countResult = await trx('publish_executions')
+      .where({ intent_id: intentId })
+      .count<{ count: string | number }>('* as count');
+    const count = Array.isArray(countResult) && countResult.length > 0 ? countResult[0].count : 0;
+    return Number(count) + 1;
+    }
     logger.info('Duplicate publish attempt detected, skipping', { intentId, key });
     return null;
   }
@@ -139,13 +158,28 @@ async function executePublishJob(
 
   if (!attempt) return;
 
+  // P0-4 FIX: Handle saga recovery - skip external call if already succeeded
+  let skipExternalCall = false;
+  let recoveredResult: PublishResult | null = null;
+  if (typeof attempt === 'object' && attempt.skipExternalCall) {
+  skipExternalCall = true;
+  recoveredResult = {
+    externalId: attempt.existingResult.external_id,
+    url: attempt.existingResult.external_url,
+    metadata: attempt.existingResult.metadata ? JSON.parse(attempt.existingResult.metadata) : null,
+  };
+  }
+
   // Phase 2: External API call with circuit breaker and retry
   // NOTE: This phase operates outside the database transaction intentionally.
   // The transaction in Phase 1 only handles the initial attempt recording.
   // External API calls should not be within DB transactions to avoid holding
   // Locks during potentially long network operations.
   let result: PublishResult;
-  try {
+  if (skipExternalCall && recoveredResult) {
+  result = recoveredResult;
+  logger.info('Skipped external call - using recovered result from incomplete saga', { intentId });
+  } else try {
   const circuitBreaker = getCircuitBreaker(adapter.name);
 
   result = await circuitBreaker.execute(async () => {
@@ -221,14 +255,13 @@ async function executePublishJob(
   // Set transaction timeout to prevent long-running queries
   await trx.raw('SET LOCAL statement_timeout = ?', [30000]); // 30 seconds
 
-  await trx('publish_executions').insert({
-    intent_id: intentId,
-    status: 'success',
-    external_id: result.externalId,
-    external_url: result['url'],
-    metadata: result.metadata ? JSON.stringify(result.metadata) : null,
-    completed_at: new Date(),
-  });
+  // P0-4 FIX: Use raw query with ON CONFLICT for idempotent finalization
+  await trx.raw(
+    `INSERT INTO publish_executions (intent_id, status, external_id, external_url, metadata, completed_at)
+    VALUES (?, 'success', ?, ?, ?, ?)
+    ON CONFLICT (intent_id, status) WHERE status = 'success' DO NOTHING`,
+    [intentId, result.externalId, result['url'], result.metadata ? JSON.stringify(result.metadata) : null, new Date()]
+  );
 
   await trx('job_executions')
     .where({ job_type: 'publish', idempotency_key: key })

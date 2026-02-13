@@ -1,7 +1,7 @@
 
 
 
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 
@@ -100,13 +100,14 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   * Upsert a notification preference
   * @param pref - NotificationPreference to upsert
   */
-  async upsert(pref: NotificationPreference): Promise<void> {
+  async upsert(pref: NotificationPreference, client?: PoolClient): Promise<void> {
   // Validate input
   if (!pref || typeof pref["id"] !== 'string') {
     throw new Error('preference must have a valid id');
   }
   try {
-    await this.pool.query(
+    const queryable = client || this.pool;
+    await queryable.query(
     `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
     VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (id)

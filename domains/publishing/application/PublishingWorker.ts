@@ -86,8 +86,8 @@ export class PublishingWorker {
     // P1-FIX: Begin transaction BEFORE any reads to ensure consistent snapshot
     await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
 
-    // Get job WITHIN transaction for proper isolation
-    const job = await this.jobs.getById(jobId);
+    // P0-5 FIX: Get job with FOR UPDATE to prevent stale reads under concurrency
+    const job = await this.jobs.getById(jobId, client, { forUpdate: true });
 
     // Handle not found case
     if (!job) {

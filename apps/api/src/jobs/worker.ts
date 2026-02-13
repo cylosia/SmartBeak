@@ -55,42 +55,62 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 }
 
-// P1-10 FIX: SIGTERM/SIGINT handlers now use same timeout protection as uncaughtException
-// P2-12 FIX: Wrapped in try/catch to prevent unhandled rejection on sync throw
+// P1-15 FIX: All signal handlers wrapped in try-catch to handle synchronous throws
+// from gracefulShutdown() in addition to async rejection handling
 process.on('SIGTERM', () => {
-  gracefulShutdown('SIGTERM')
-    .catch((err) => logger.error('SIGTERM handler error', err instanceof Error ? err : new Error(String(err))))
-    .finally(() => process.exit(0));
+  try {
+    gracefulShutdown('SIGTERM')
+      .catch((err) => logger.error('SIGTERM handler error', err instanceof Error ? err : new Error(String(err))))
+      .finally(() => process.exit(0));
+  } catch (syncErr) {
+    logger.error('Sync error in SIGTERM handler', syncErr instanceof Error ? syncErr : new Error(String(syncErr)));
+    process.exit(1);
+  }
 });
 
 process.on('SIGINT', () => {
-  gracefulShutdown('SIGINT')
-    .catch((err) => logger.error('SIGINT handler error', err instanceof Error ? err : new Error(String(err))))
-    .finally(() => process.exit(0));
+  try {
+    gracefulShutdown('SIGINT')
+      .catch((err) => logger.error('SIGINT handler error', err instanceof Error ? err : new Error(String(err))))
+      .finally(() => process.exit(0));
+  } catch (syncErr) {
+    logger.error('Sync error in SIGINT handler', syncErr instanceof Error ? syncErr : new Error(String(syncErr)));
+    process.exit(1);
+  }
 });
 
 // Handle uncaught errors
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught exception', err);
 
-  gracefulShutdown('uncaughtException')
-    .catch((shutdownErr) => logger.error('Shutdown error after uncaught exception', shutdownErr instanceof Error ? shutdownErr : new Error(String(shutdownErr))))
-    .finally(() => {
-      setTimeout(() => {
-        logger.error('Forcing exit after shutdown attempt');
-        process.exit(1);
-      }, 1000);
-    });
+  try {
+    gracefulShutdown('uncaughtException')
+      .catch((shutdownErr) => logger.error('Shutdown error after uncaught exception', shutdownErr instanceof Error ? shutdownErr : new Error(String(shutdownErr))))
+      .finally(() => {
+        setTimeout(() => {
+          logger.error('Forcing exit after shutdown attempt');
+          process.exit(1);
+        }, 1000);
+      });
+  } catch (syncErr) {
+    logger.error('Sync error in uncaughtException handler', syncErr instanceof Error ? syncErr : new Error(String(syncErr)));
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection', reason instanceof Error ? reason : new Error(String(reason)));
 
-  gracefulShutdown('unhandledRejection')
-    .catch((shutdownErr) => logger.error('Shutdown error after unhandled rejection', shutdownErr instanceof Error ? shutdownErr : new Error(String(shutdownErr))))
-    .finally(() => {
-      setTimeout(() => process.exit(1), 1000);
-    });
+  try {
+    gracefulShutdown('unhandledRejection')
+      .catch((shutdownErr) => logger.error('Shutdown error after unhandled rejection', shutdownErr instanceof Error ? shutdownErr : new Error(String(shutdownErr))))
+      .finally(() => {
+        setTimeout(() => process.exit(1), 1000);
+      });
+  } catch (syncErr) {
+    logger.error('Sync error in unhandledRejection handler', syncErr instanceof Error ? syncErr : new Error(String(syncErr)));
+    process.exit(1);
+  }
 });
 
 // Keep process alive but don't block shutdown

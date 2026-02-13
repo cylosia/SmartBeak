@@ -284,6 +284,16 @@ export class CursorPaginator<T extends Record<string, unknown>> {
       ? (sortOrder === 'asc' ? 'desc' : 'asc')
       : sortOrder;
 
+    // P0-8 FIX: Validate ORDER BY entries to prevent SQL injection
+    if (orderBy && orderBy.length > 0) {
+      const VALID_ORDER_BY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_.]*(\s+(ASC|DESC))?$/i;
+      for (const entry of orderBy) {
+        if (!VALID_ORDER_BY_PATTERN.test(entry.trim())) {
+          throw new Error(`Invalid ORDER BY entry: "${entry}". Must be a column name optionally followed by ASC/DESC.`);
+        }
+      }
+    }
+
     let orderByClause = orderBy && orderBy.length > 0
       ? `ORDER BY ${orderBy.join(', ')}`
       : `ORDER BY ${cursorColumn} ${effectiveSortOrder.toUpperCase()}`;

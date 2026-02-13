@@ -1,6 +1,6 @@
 
 
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
@@ -15,12 +15,14 @@ export class PostgresNotificationAttemptRepository {
 
   /**
   * Record a notification attempt
+  * P0-1 FIX: Accept optional client to run within caller's transaction
   */
   async record(
   notificationId: string,
   attempt: number,
   status: 'success' | 'failure',
-  error?: string
+  error?: string,
+  client?: PoolClient
   ): Promise<void> {
   // Validate inputs
   if (!notificationId || typeof notificationId !== 'string') {
@@ -33,8 +35,9 @@ export class PostgresNotificationAttemptRepository {
   // Limit error message length
   const safeError = error && error.length > 1000 ? error.slice(0, 1000) + '...' : error;
 
+  const queryable = client || this.pool;
   try {
-    await this.pool.query(
+    await queryable.query(
     `INSERT INTO notification_attempts (id, notification_id, attempt_number, status, error)
     VALUES ($1, $2, $3, $4, $5)`,
     [randomUUID(), notificationId, attempt, status, safeError ?? null]
@@ -88,14 +91,16 @@ export class PostgresNotificationAttemptRepository {
 
   /**
   * Count attempts for a notification
+  * P0-1 FIX: Accept optional client to run within caller's transaction
   */
-  async countByNotification(notificationId: string): Promise<number> {
+  async countByNotification(notificationId: string, client?: PoolClient): Promise<number> {
   // Validate input
   if (!notificationId || typeof notificationId !== 'string') {
     throw new Error('notificationId must be a non-empty string');
   }
+  const queryable = client || this.pool;
   try {
-    const { rows } = await this.pool.query(
+    const { rows } = await queryable.query(
     `SELECT COUNT(*) as count
     FROM notification_attempts
     WHERE notification_id = $1`,

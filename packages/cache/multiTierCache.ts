@@ -183,9 +183,9 @@ export class MultiTierCache {
 
     for (const [key, entry] of this.inFlightRequests) {
       const age = now - entry.createdAt;
-      
-      if (age > MAX_IN_FLIGHT_AGE_MS) {
-        // Request has been in-flight too long - likely hung
+
+      // P1-9 FIX: Evict entries that exceed either the configured TTL or the hard safety limit
+      if (age > this.options.inFlightTtlMs || age > MAX_IN_FLIGHT_AGE_MS) {
         if (entry.timeoutId) {
           clearTimeout(entry.timeoutId);
         }

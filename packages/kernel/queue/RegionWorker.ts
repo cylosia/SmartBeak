@@ -312,7 +312,11 @@ export class RegionWorker {
     // Release job lock
     this.jobLock.release(jobId);
     // Clean up old job state after a delay to allow for duplicate detection
-    const cleanupTimer = setTimeout(() => this.jobStates.delete(jobId), JOB_STATE_CLEANUP_DELAY_MS);
+    // P0-2 FIX: Remove timer from activeTimers after it fires to prevent Set growth
+    const cleanupTimer = setTimeout(() => {
+      this.jobStates.delete(jobId);
+      this.activeTimers.delete(cleanupTimer);
+    }, JOB_STATE_CLEANUP_DELAY_MS);
     this.activeTimers.add(cleanupTimer);
     }
   }

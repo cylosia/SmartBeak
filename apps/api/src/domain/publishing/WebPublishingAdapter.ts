@@ -74,7 +74,24 @@ const MAX_ACTIVE_CONTROLLERS = 10000;
  * Active fetch controllers for request cancellation
  * Maps request IDs to AbortControllers
  */
-const activeControllers = new Map<string, AbortController>();
+const activeControllers = new Map<string, { controller: AbortController; createdAt: number }>();
+
+/** P1-14 FIX: Periodic cleanup of stale controllers older than 5 minutes */
+const CONTROLLER_MAX_AGE_MS = 5 * 60 * 1000;
+const CONTROLLER_CLEANUP_INTERVAL_MS = 60 * 1000;
+
+const controllerCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of activeControllers) {
+    if (now - entry.createdAt > CONTROLLER_MAX_AGE_MS) {
+      entry.controller.abort();
+      activeControllers.delete(id);
+    }
+  }
+}, CONTROLLER_CLEANUP_INTERVAL_MS);
+if (controllerCleanupInterval.unref) {
+  controllerCleanupInterval.unref();
+}
 
 /**
  * Generate a unique request ID
@@ -96,7 +113,7 @@ export function registerRequestController(requestId: string, controller: AbortCo
       activeControllers.delete(oldest);
     }
   }
-  activeControllers.set(requestId, controller);
+  activeControllers.set(requestId, { controller, createdAt: Date.now() });
 }
 
 /**
@@ -112,9 +129,9 @@ export function unregisterRequestController(requestId: string): void {
  * @returns true if request was found and cancelled
  */
 export function cancelRequest(requestId: string): boolean {
-  const controller = activeControllers.get(requestId);
-  if (controller) {
-    controller.abort();
+  const entry = activeControllers.get(requestId);
+  if (entry) {
+    entry.controller.abort();
     activeControllers.delete(requestId);
     return true;
   }
@@ -127,8 +144,8 @@ export function cancelRequest(requestId: string): boolean {
  */
 export function cancelAllRequests(): number {
   let count = 0;
-  for (const [id, controller] of activeControllers) {
-    controller.abort();
+  for (const [id, entry] of activeControllers) {
+    entry.controller.abort();
     activeControllers.delete(id);
     count++;
   }

@@ -50,6 +50,8 @@ export class AnalyticsPipeline {
   private flushIntervalMs: number = 60000; // 1 minute
   // P1-FIX: Add max buffer size to prevent unbounded memory growth
   private maxBufferSize: number = 10000;
+  // P0-6 FIX: Global buffer limit across all types to cap total memory usage
+  private static readonly MAX_GLOBAL_BUFFER_SIZE = 20000;
   private buffer: {
   keywords: KeywordMetric[];
   social: SocialMetric[];
@@ -96,10 +98,27 @@ export class AnalyticsPipeline {
   }
 
   /**
+  * P0-6 FIX: Get total buffer size across all types
+  */
+  private get totalBufferSize(): number {
+  return this.buffer.keywords.length + this.buffer.social.length + this.buffer.content.length;
+  }
+
+  /**
+  * P0-6 FIX: Enforce global buffer limit, flush all if exceeded
+  */
+  private async enforceGlobalLimit(): Promise<void> {
+  if (this.totalBufferSize >= AnalyticsPipeline.MAX_GLOBAL_BUFFER_SIZE) {
+    await this.flush();
+  }
+  }
+
+  /**
   * Buffer keyword metrics for batch insert
   * P1-FIX: Added buffer overflow protection
   */
   async trackKeyword(metrics: KeywordMetric | KeywordMetric[]): Promise<void> {
+  await this.enforceGlobalLimit();
   const items = Array.isArray(metrics) ? metrics : [metrics];
   this.buffer.keywords.push(...items);
 
@@ -116,6 +135,7 @@ export class AnalyticsPipeline {
   * P1-FIX: Added buffer overflow protection
   */
   async trackSocial(metrics: SocialMetric | SocialMetric[]): Promise<void> {
+  await this.enforceGlobalLimit();
   const items = Array.isArray(metrics) ? metrics : [metrics];
   this.buffer.social.push(...items);
 
@@ -132,6 +152,7 @@ export class AnalyticsPipeline {
   * P1-FIX: Added buffer overflow protection
   */
   async trackContent(metrics: ContentPerformance | ContentPerformance[]): Promise<void> {
+  await this.enforceGlobalLimit();
   const items = Array.isArray(metrics) ? metrics : [metrics];
   this.buffer.content.push(...items);
 

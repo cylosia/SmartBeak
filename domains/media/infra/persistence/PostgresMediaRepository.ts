@@ -156,6 +156,37 @@ export class PostgresMediaRepository implements MediaRepository {
   // Limit chunk size for processing
   const BATCH_SIZE = 100;
   if (assets.length > BATCH_SIZE) {
+    // P1-8 FIX: When no client is provided, acquire a single client with
+    // BEGIN/COMMIT wrapping all chunks to ensure a single transaction boundary.
+    if (!client) {
+      const txClient = await this.pool.connect();
+      try {
+        await txClient.query('BEGIN');
+        await txClient.query('SET LOCAL statement_timeout = $1', [60000]);
+        const results = { saved: 0, failed: 0, errors: [] as string[] };
+        for (let i = 0; i < assets.length; i += BATCH_SIZE) {
+          const batch = assets.slice(i, i + BATCH_SIZE);
+          const batchResult = await this.executeBatchSave(batch, txClient);
+          results.saved += batchResult.saved;
+          results.failed += batchResult.failed;
+          results.errors.push(...batchResult.errors);
+        }
+        await txClient.query('COMMIT');
+        return results;
+      } catch (error: unknown) {
+        try {
+          await txClient.query('ROLLBACK');
+        } catch (rollbackError) {
+          logger.error('Batch save rollback failed', rollbackError as Error);
+        }
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error('Failed to batch save media assets', err, { count: assets.length });
+        return { saved: 0, failed: assets.length, errors: [err.message] };
+      } finally {
+        txClient.release();
+      }
+    }
+
     const results = { saved: 0, failed: 0, errors: [] as string[] };
     for (let i = 0; i < assets.length; i += BATCH_SIZE) {
     const batch = assets.slice(i, i + BATCH_SIZE);
