@@ -151,7 +151,9 @@ function isEncodedInternalIp(ip: string): boolean {
   }
 
   // Check for decimal IP encoding (2130706433 = 127.0.0.1)
-  const decimalIp = parseInt(cleanIp, 10);
+  // Only treat pure numeric strings as decimal IPs — parseInt stops at non-digit chars
+  // (e.g., parseInt('93.184.216.34', 10) = 93), causing false positives for dotted IPs.
+  const decimalIp = /^\d+$/.test(cleanIp) ? parseInt(cleanIp, 10) : NaN;
   if (!isNaN(decimalIp) && decimalIp > 0 && decimalIp < 0xFFFFFFFF) {
     const bytes = [
       (decimalIp >>> 24) & 0xFF,
@@ -500,8 +502,8 @@ export function normalizeIp(ip: string): string | null {
       return ipv4Mapped[1] ?? null;
     }
 
-    // Handle decimal notation
-    const decimal = parseInt(cleanIp, 10);
+    // Handle decimal notation — only for pure numeric strings
+    const decimal = /^\d+$/.test(cleanIp) ? parseInt(cleanIp, 10) : NaN;
     if (!isNaN(decimal) && decimal >= 0 && decimal <= 0xFFFFFFFF) {
       return [
         (decimal >>> 24) & 0xFF,

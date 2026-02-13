@@ -7,7 +7,7 @@ import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 
-export async function attributionRoutes(app: FastifyInstance, _pool: Pool) {
+export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   // GET /attribution/llm - LLM attribution report
   app.get('/attribution/llm', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
@@ -16,23 +16,30 @@ export async function attributionRoutes(app: FastifyInstance, _pool: Pool) {
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
   try {
-    // Return LLM citation and attribution data
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { rows } = await pool.query(
+    `SELECT service as source,
+        operation as usage,
+        COALESCE(SUM(cost), 0) as cost,
+        COALESCE(SUM(tokens), 0) as tokens
+    FROM cost_tracking
+    WHERE org_id = $1
+      AND date >= $2
+    GROUP BY service, operation
+    ORDER BY cost DESC`,
+    [ctx.orgId, thirtyDaysAgo.toISOString().split('T')[0]]
+    );
+
     const report = {
-    citations: [
-    {
-    source: 'OpenAI GPT-4',
-    usage: 'Content generation',
-    cost: 125.5,
-    tokens: 2500000,
-    },
-    {
-    source: 'Anthropic Claude',
-    usage: 'Research assistance',
-    cost: 45.0,
-    tokens: 900000,
-    },
-    ],
-    totalCost: 170.5,
+    citations: rows.map(r => ({
+      source: r.source,
+      usage: r.usage,
+      cost: parseFloat(r.cost),
+      tokens: parseInt(r.tokens, 10),
+    })),
+    totalCost: rows.reduce((sum: number, r: { cost: string }) => sum + parseFloat(r.cost), 0),
     period: 'last_30_days',
     };
 

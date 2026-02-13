@@ -7,6 +7,7 @@ import Fastify from 'fastify';
 import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
+import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
 
@@ -78,8 +79,39 @@ await app.register(cors, {
   // P2-SECURITY-FIX: Removed X-CSRF-Token from allowedHeaders. It was listed but
   // no CSRF validation middleware exists, creating a false sense of security.
   // For a Bearer-token-only API, CSRF protection is not required.
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'traceparent', 'tracestate'],
+  exposedHeaders: ['X-Request-ID', 'X-Trace-ID'],
 });
+
+// API Versioning: Backward compatibility for unversioned paths.
+// Redirects (or rewrites) requests like GET /domains to /v1/domains.
+// Health check routes are excluded — they are infrastructure, not API contract.
+// Control via API_LEGACY_PATH_MODE env var: 'redirect' (default) | 'rewrite' | 'off'
+const LEGACY_PATH_MODE = process.env['API_LEGACY_PATH_MODE'] || 'redirect';
+
+if (LEGACY_PATH_MODE !== 'off') {
+  app.addHook('onRequest', async (req, reply) => {
+    const pathname = req.url?.split('?')[0] ?? '';
+
+    // Already versioned — pass through
+    if (pathname.startsWith('/v1/') || pathname === '/v1') return;
+
+    // Health check routes stay at root — pass through
+    if (pathname === '/health' || pathname.startsWith('/health/')) return;
+
+    // Root path — pass through
+    if (pathname === '/' || pathname === '') return;
+
+    if (LEGACY_PATH_MODE === 'rewrite') {
+      // Silent rewrite: route to /v1 without client roundtrip
+      req.url = `/v1${req.url}`;
+    } else {
+      // 308 Permanent Redirect: preserves HTTP method (unlike 301 which changes POST to GET)
+      const query = req.url?.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+      return reply.redirect(308, `/v1${pathname}${query}`);
+    }
+  });
+}
 
 // SECURITY FIX: Add security headers (HSTS, CSP, etc.)
 app.addHook('onSend', async (request, reply, payload) => {
@@ -126,6 +158,22 @@ const pool = await getPoolInstance();
 
 // Initialize DI container
 const container = initializeContainer({ dbPool: pool });
+
+// Load cost tracking budgets from database
+try {
+  await container.costTracker.loadBudgetsFromDb();
+  logger.info('Cost tracking budgets loaded');
+} catch (error) {
+  logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+// Flush cost tracking buffer on shutdown
+registerShutdownHandler(async () => {
+  container.costTracker.stop();
+  logger.info('Cost tracker stopped and buffer flushed');
+});
 
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
@@ -291,6 +339,8 @@ app.setErrorHandler((error: unknown, request, reply) => {
     errorCode = 'NOT_FOUND';
   } else if (statusCode === 400) {
     errorCode = 'VALIDATION_ERROR';
+  } else if (statusCode === 402) {
+    errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
     errorCode = 'CONFLICT';
   }
@@ -327,12 +377,58 @@ app.setNotFoundHandler((request, reply) => {
 
 // Register all routes — business routes under /v1 prefix, infra routes at root
 async function registerRoutes(): Promise<void> {
-  // Make container available to routes via app decorator
+  // Make container available to routes via app decorator.
+  // Parent decorators are visible inside encapsulated child contexts.
   app.decorate('container', container);
 
   // All business routes registered under /v1 prefix via Fastify plugin encapsulation.
   // Individual route modules are unchanged — the prefix is applied automatically.
   await app.register(v1Routes, { prefix: '/v1', pool });
+  await app.register(async function v1Routes(v1) {
+    // Core routes
+    await planningRoutes(v1, pool);
+    await contentRoutes(v1, pool);
+    await domainRoutes(v1, pool);
+    await billingRoutes(v1, pool);
+    await orgRoutes(v1, pool);
+    await onboardingRoutes(v1, pool);
+    await notificationRoutes(v1, pool);
+    await searchRoutes(v1, pool);
+    await usageRoutes(v1, pool);
+    await seoRoutes(v1, pool);
+    await analyticsRoutes(v1, pool);
+    await publishingRoutes(v1, pool);
+    await mediaRoutes(v1, pool);
+    await queueRoutes(v1, pool);
+
+    // Additional routes
+    // C3-FIX: Removed contentListRoutes — it registered a duplicate GET /content that conflicted
+    // with contentRoutes above. The content.ts handler is the canonical one.
+    await contentRevisionRoutes(v1, pool);
+    await contentScheduleRoutes(v1);
+    await domainOwnershipRoutes(v1, pool);
+    await guardrailRoutes(v1, pool);
+    await mediaLifecycleRoutes(v1, pool);
+    await notificationAdminRoutes(v1, pool);
+    await publishingCreateJobRoutes(v1, pool);
+    await publishingPreviewRoutes(v1, pool);
+    await queueMetricsRoutes(v1, pool);
+
+    // New routes to fix missing API endpoints
+    await affiliateRoutes(v1, pool);
+    await diligenceRoutes(v1, pool);
+    await attributionRoutes(v1, pool);
+    await timelineRoutes(v1, pool);
+    await domainDetailsRoutes(v1, pool);
+    await themeRoutes(v1, pool);
+    await roiRiskRoutes(v1, pool);
+    await portfolioRoutes(v1, pool);
+    await llmRoutes(v1, pool);
+    await billingInvoiceRoutes(v1, pool);
+
+    // Migrated routes from apps/api/src/routes/
+    await registerAppsApiRoutes(v1, pool);
+  }, { prefix: '/v1' });
 }
 
 // P1-CRITICAL FIX: Deep health check with comprehensive dependency verification
@@ -612,6 +708,13 @@ async function start(): Promise<void> {
     logger.info('Closing Fastify server (draining connections)...');
     await app.close();
     logger.info('Fastify server closed');
+  });
+
+  // Flush pending OTel spans before process exit
+  registerShutdownHandler(async () => {
+    logger.info('Flushing telemetry spans...');
+    await shutdownTelemetry();
+    logger.info('Telemetry shutdown complete');
   });
   } catch (error) {
   logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));

@@ -429,7 +429,21 @@ export class CostTracker extends EventEmitter {
   }
 
   /**
-  * Check if operation is within budget
+  * Get current month's cost for an org
+  */
+  async getMonthCost(orgId: string): Promise<number> {
+  const { rows } = await this.db.query(
+    `SELECT COALESCE(SUM(cost), 0) as total
+    FROM cost_tracking
+    WHERE org_id = $1
+    AND date >= DATE_TRUNC('month', CURRENT_DATE)`,
+    [orgId]
+  );
+  return parseFloat(rows[0]?.total || 0);
+  }
+
+  /**
+  * Check if operation is within budget (daily + monthly)
   */
   async checkBudget(orgId: string, estimatedCost: number): Promise<{
   allowed: boolean;
@@ -440,8 +454,8 @@ export class CostTracker extends EventEmitter {
     return { allowed: true }; // No budget = no limit
   }
 
+  // Check daily limit
   const todayCost = await this.getTodayCost(orgId);
-
   if (todayCost + estimatedCost > budget.daily) {
     return {
     allowed: false,
@@ -449,15 +463,62 @@ export class CostTracker extends EventEmitter {
     };
   }
 
-  // Check if this would exceed 80% of daily budget
+  // Check monthly limit
+  const monthCost = await this.getMonthCost(orgId);
+  if (monthCost + estimatedCost > budget.monthly) {
+    return {
+    allowed: false,
+    reason: `Monthly budget exceeded. Spent: $${monthCost.toFixed(2)}, Budget: $${budget.monthly}`,
+    };
+  }
+
+  // 80% daily warning
   if (todayCost + estimatedCost > budget.daily * 0.8) {
     this.emit('budgetWarning', {
+    period: 'daily',
     current: todayCost,
     projected: todayCost + estimatedCost,
     budget: budget.daily,
     });
   }
 
+  // 80% monthly warning
+  if (monthCost + estimatedCost > budget.monthly * 0.8) {
+    this.emit('budgetWarning', {
+    period: 'monthly',
+    current: monthCost,
+    projected: monthCost + estimatedCost,
+    budget: budget.monthly,
+    });
+  }
+
   return { allowed: true };
+  }
+
+  /**
+  * Load org budgets from the org_llm_prefs table into the in-memory cache.
+  * Should be called at application startup.
+  */
+  async loadBudgetsFromDb(): Promise<void> {
+  try {
+    const { rows } = await this.db.query(
+    `SELECT org_id, preferences FROM org_llm_prefs`
+    );
+    let loaded = 0;
+    for (const row of rows) {
+    const prefs = row.preferences;
+    if (prefs?.costLimits) {
+      const monthly = prefs.costLimits.monthly ?? 0;
+      const daily = prefs.costLimits.daily ?? (monthly > 0 ? monthly / 30 : 0);
+      if (monthly > 0 || daily > 0) {
+      this.setBudget(row.org_id, daily, monthly);
+      loaded++;
+      }
+    }
+    }
+    logger.info(`Loaded budgets for ${loaded} organizations`);
+  } catch (error) {
+    logger["error"]('Failed to load budgets from database', error instanceof Error ? error : new Error(String(error)));
+  }
   }
 }

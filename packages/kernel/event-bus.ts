@@ -1,4 +1,5 @@
 import { DomainEventEnvelope } from '../types/domain-event';
+import { trace, context as otelContext, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 
 import { CircuitBreaker } from './retry';
 import { runSafely } from './safe-handler';
@@ -110,14 +111,58 @@ export class EventBus {
     return;
   }
 
+  // Create a span for the publish operation (non-critical — wrapped in try/catch)
+  let publishSpan: ReturnType<ReturnType<typeof trace.getTracer>['startSpan']> | undefined;
+  let tracer: ReturnType<typeof trace.getTracer> | undefined;
+  try {
+    tracer = trace.getTracer('smartbeak-eventbus', '1.0.0');
+    publishSpan = tracer.startSpan(`eventbus.publish ${event.name}`, {
+      kind: SpanKind.PRODUCER,
+      attributes: {
+        'eventbus.event_name': event.name,
+        'eventbus.handler_count': handlers.length,
+      },
+    });
+  } catch {
+    // OTel not available — proceed without tracing
+  }
+
   try {
     await this.circuitBreaker.execute(async () => {
     const results = await Promise.allSettled(
-    handlers.map(({ plugin, handle }) =>
-    runSafely(plugin, event.name, () => handle(event), async (f) => {
-        this.logger["error"]('[EventBus] Plugin failure:', f);
+    handlers.map(({ plugin, handle }) => {
+        // Create child span per handler
+        let handlerSpan: ReturnType<ReturnType<typeof trace.getTracer>['startSpan']> | undefined;
+        try {
+          if (tracer && publishSpan) {
+            const ctx = trace.setSpan(otelContext.active(), publishSpan);
+            handlerSpan = tracer.startSpan(`eventbus.handle ${event.name}`, {
+              kind: SpanKind.CONSUMER,
+              attributes: {
+                'eventbus.handler_plugin': plugin,
+                'eventbus.event_name': event.name,
+              },
+            }, ctx);
+          }
+        } catch {
+          // Continue without span
+        }
+
+        return runSafely(plugin, event.name, () => handle(event), async (f) => {
+          this.logger["error"]('[EventBus] Plugin failure:', f);
+        }).then(() => {
+          handlerSpan?.setStatus({ code: SpanStatusCode.OK });
+          handlerSpan?.end();
+        }).catch((err) => {
+          handlerSpan?.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          if (err instanceof Error) handlerSpan?.recordException(err);
+          handlerSpan?.end();
+          throw err;
+        });
     })
-    )
     );
 
     // Log any failures
@@ -136,10 +181,16 @@ export class EventBus {
     throw new Error(`All handlers failed for event: ${event.name}`);
     }
     });
+
+    publishSpan?.setStatus({ code: SpanStatusCode.OK });
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
+    publishSpan?.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+    publishSpan?.recordException(err);
     this.logger["error"](`[EventBus] Circuit breaker error for ${event.name}:`, err["message"]);
     throw error;
+  } finally {
+    publishSpan?.end();
   }
   }
 

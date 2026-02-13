@@ -36,6 +36,12 @@ async function loadHandler(provider: string): Promise<((req: NextApiRequest, res
     handlerCache[provider] = handler;
     return handler;
     }
+    case 'paddle': {
+    const paddleModule = await import('./paddle');
+    const handler = paddleModule.default as (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
+    handlerCache[provider] = handler;
+    return handler;
+    }
     default:
     return null;
   }
