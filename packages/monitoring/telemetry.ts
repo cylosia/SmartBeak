@@ -38,8 +38,8 @@ import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
-import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
-import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
+import { IORedisInstrumentation } from '@opentelemetry/instrumentation-ioredis';
+import { FastifyInstrumentation } from '@opentelemetry/instrumentation-fastify';
 
 import { getLogger } from '@kernel/logger';
 
@@ -205,13 +205,13 @@ export function initTelemetry(config: TelemetryConfig): void {
           new PgInstrumentation({
             enhancedDatabaseReporting: true,
           }),
-          new RedisInstrumentation({
+          new IORedisInstrumentation({
             dbStatementSerializer: (cmd: string, args: unknown[]) => {
               // Sanitize arguments - don't include sensitive data
               return `${cmd} [${args.length} args]`;
             },
           }),
-          new ExpressInstrumentation(),
+          new FastifyInstrumentation(),
         ],
       });
     }

@@ -1,27 +1,38 @@
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { SimpleSpanProcessor, ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base';
+/**
+ * OpenTelemetry tracing initialization
+ *
+ * Delegates to the shared monitoring package's telemetry module.
+ * The preload module (tracing-preload.ts) handles actual initialization
+ * before any instrumented libraries are imported.
+ *
+ * This module exists for backward compatibility with any code that imports it.
+ */
+import { isTelemetryInitialized, initTelemetry } from '@smartbeak/monitoring';
+import { getLogger } from '@kernel/logger';
 
-import { registerInstrumentations } from '@opentelemetry/instrumentation';
+const logger = getLogger('tracing');
 
 /**
-* OpenTelemetry tracing initialization
-*/
-
-/**
-* Initialize distributed tracing
-*/
+ * Initialize distributed tracing
+ * @deprecated Use tracing-preload.ts or initMonitoring() instead.
+ * This function is a no-op if telemetry is already initialized via the preload.
+ */
 export function initTracing(): void {
-  try {
-  const provider = new NodeTracerProvider();
-  provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
-  provider.register();
+  if (isTelemetryInitialized()) {
+    logger.info('Telemetry already initialized via preload, skipping initTracing()');
+    return;
+  }
 
-  registerInstrumentations({
-    instrumentations: [],
-  });
+  // Fallback: initialize with defaults if preload was not used
+  try {
+    initTelemetry({
+      serviceName: process.env['SERVICE_NAME'] || 'smartbeak-api',
+      serviceVersion: '1.0.0',
+      environment: process.env['NODE_ENV'] || 'development',
+      enableConsoleExporter: true,
+      samplingRate: 1.0,
+    });
   } catch (error) {
-  const timestamp = new Date().toISOString();
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`[${timestamp}] [ERROR] [tracing] Failed to initialize tracing: ${errorMessage}\n`);
+    logger.error('Failed to initialize tracing', error instanceof Error ? error : new Error(String(error)));
   }
 }
