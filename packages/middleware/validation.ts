@@ -1,13 +1,14 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { z, ZodSchema, ZodError } from 'zod';
-import crypto from 'crypto';
 
 import { isValidUUID } from '../security/input-validator';
 import { sanitizeErrorMessage } from '../security/logger';
+import { ErrorCodes, type ErrorCode, type ErrorResponse } from '@errors';
+import { sendError as canonicalSendError } from '@errors/responses';
 
 /**
 * Shared middleware for request validation across all routes
-* 
+*
 * P1-HIGH SECURITY FIXES:
 * - Issue 7: Missing input validation on query parameters
 * - Issue 8: UUID validation inconsistency
@@ -16,56 +17,37 @@ import { sanitizeErrorMessage } from '../security/logger';
 * - Issue 20: Dynamic SQL without column whitelist
 */
 
-export interface ErrorResponse {
-  error: string;
-  code: string;
-  details?: unknown;
-  requestId?: string;
-}
+// Re-export ErrorResponse for backward compatibility
+export type { ErrorResponse } from '@errors';
 
 /**
- * Generate request ID for error tracking
- * P1-12 FIX: Use crypto.randomUUID() instead of predictable Math.random()
- */
-function generateRequestId(): string {
-  return crypto.randomUUID();
-}
-
-/**
-* Create standardized error response
-* SECURITY FIX: Issue 11 - Consistent error response format
+* Create standardized error response object (without sending).
 */
 export function createErrorResponse(
   error: string,
   code?: string,
   _details?: unknown
 ): ErrorResponse {
-  // P1-13 FIX: Never expose internal validation details to clients, even in development.
-  // Details (e.g., Zod schema paths) reveal internal schema structure and aid reconnaissance.
-  // Log details server-side instead.
-  const response: ErrorResponse = {
+  return {
     error,
-    code: code || 'INTERNAL_ERROR',
-    requestId: generateRequestId(),
+    code: code || ErrorCodes.INTERNAL_ERROR,
+    requestId: '',
   };
-
-  return response;
 }
 
 /**
-* Send error response with proper status code
-* SECURITY FIX: Issue 11 - Consistent error handling
+* Send error response with proper status code.
+* Delegates to canonical sendError from @errors/responses.
 */
 export function sendError(
   res: FastifyReply,
   status: number,
   error: string,
-  code: string = 'INTERNAL_ERROR',
+  code: string = ErrorCodes.INTERNAL_ERROR,
   details?: unknown
 ) {
-  // SECURITY FIX: Issue 22 - Sanitize error messages
   const sanitizedError = sanitizeErrorMessage(error);
-  return res.status(status).send(createErrorResponse(sanitizedError, code, details));
+  return canonicalSendError(res, status, code as ErrorCode, sanitizedError, { details });
 }
 
 /**

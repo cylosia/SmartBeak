@@ -9,6 +9,7 @@ import { getLogger } from '@kernel/logger';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors, sendError } from '@errors/responses';
 
 // P2-6: Use structured logger instead of console.error
 const logger = getLogger('queue-routes');
@@ -53,10 +54,8 @@ function withErrorBoundary(
 
     // Send standardized error response
         if (error instanceof ExternalAPIError) {
-        return res.status(getStatusCodeForError(error.code)).send({
-        error: error.message,
-        code: error.code,
-        ...(error.details && { details: error.details }),
+        return sendError(res, getStatusCodeForError(error.code), error.code, error.message, {
+        details: error.details,
         });
     }
 
@@ -64,17 +63,11 @@ function withErrorBoundary(
                 const errorCode = classifyError(error);
         const statusCode = getStatusCodeForError(errorCode);
 
-                return res.status(statusCode).send({
-        error: getUserFriendlyErrorMessage(errorCode, error),
-        code: errorCode,
-        });
+                return sendError(res, statusCode, errorCode, getUserFriendlyErrorMessage(errorCode, error));
     }
 
     // Generic error fallback
-    return res.status(500).send({
-        error: 'An unexpected error occurred',
-        code: ErrorCodes.INTERNAL_ERROR,
-    });
+    return errors.internal(res);
     }
   };
 }

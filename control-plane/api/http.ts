@@ -3,10 +3,15 @@
 
 
 import cors from '@fastify/cors';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
+import { AppError, ErrorCodes, RateLimitError } from '@errors';
+import { errors as errHelpers } from '@errors/responses';
 
 import { getLogger } from '@kernel/logger';
 
@@ -113,6 +118,38 @@ await app.register(cors, {
   // no CSRF validation middleware exists, creating a false sense of security.
   // For a Bearer-token-only API, CSRF protection is not required.
   allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+});
+
+// OpenAPI documentation via @fastify/swagger.
+// Zod schemas on route definitions are auto-converted to JSON Schema.
+app.setValidatorCompiler(validatorCompiler);
+app.setSerializerCompiler(serializerCompiler);
+
+await app.register(swagger, {
+  openapi: {
+    openapi: '3.1.0',
+    info: {
+      title: 'SmartBeak Control Plane API',
+      version: '1.0.0',
+      description: 'API for managing content, domains, billing, publishing, and more.',
+    },
+    servers: [{ url: '/v1', description: 'API v1' }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [{ bearerAuth: [] }],
+  },
+});
+
+await app.register(swaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: { docExpansion: 'list' },
 });
 
 // API Versioning: Backward compatibility for unversioned paths.
@@ -246,11 +283,7 @@ app.addHook('onRequest', async (req, reply) => {
 
       if (current > AUTH_RATE_LIMIT_MAX) {
         const ttl = await redis.ttl(key);
-        return reply.status(429).send({
-          error: 'Too Many Requests',
-          message: 'Too many authentication attempts. Please try again later.',
-          retryAfter: ttl > 0 ? ttl : windowSeconds
-        });
+        return errHelpers.rateLimited(reply, ttl > 0 ? ttl : windowSeconds, 'Too many authentication attempts. Please try again later.');
       }
     } catch (error) {
       // P0-FIX #1: Fail CLOSED on Redis error for auth endpoints.
@@ -258,11 +291,7 @@ app.addHook('onRequest', async (req, reply) => {
       // we must deny auth attempts rather than allow unlimited brute-force.
       // This matches the fail-closed policy in rateLimiter.ts middleware.
       logger.error('Redis rate limiting error - denying auth request (fail-closed)', error as Error);
-      return reply.status(429).send({
-        error: 'Too Many Requests',
-        message: 'Rate limiting service unavailable. Please try again later.',
-        retryAfter: 60
-      });
+      return errHelpers.rateLimited(reply, 60, 'Rate limiting service unavailable. Please try again later.');
     }
   }
 
@@ -290,10 +319,7 @@ app.addHook('onRequest', async (req, reply) => {
         return;
       }
       // P0-FIX: Reject requests without auth to private routes
-      return reply.status(401).send({
-        error: 'Unauthorized',
-        message: 'Authentication required'
-      });
+      return errHelpers.unauthorized(reply);
     }
 
     (req as { auth: unknown }).auth = await authFromHeader(authHeader);
@@ -304,10 +330,7 @@ app.addHook('onRequest', async (req, reply) => {
     // leaking implementation details useful for targeted attacks.
     // The specific error is already logged server-side via the logger.
     logger.warn('Auth middleware rejected request', { error: error instanceof Error ? error.message : String(error) });
-    return reply.status(401).send({
-      error: 'Unauthorized',
-      message: 'Unauthorized'
-    });
+    return errHelpers.unauthorized(reply, 'Unauthorized');
   }
 });
 
@@ -336,61 +359,71 @@ app.addHook('preSerialization', async (_request, _reply, payload) => {
   return payload;
 });
 
-// P2-FIX #19: Enhanced error handler using Fastify's native statusCode property
-// instead of fragile string matching on error.message (which misclassifies errors
-// whose messages incidentally contain 'not found', 'invalid', etc.)
+// Global error handler — produces the canonical ErrorResponse shape for all errors.
+// Shape: { error, code, requestId, details?, retryAfter? }
 app.setErrorHandler((error: unknown, request, reply) => {
+  const requestId = (request.headers['x-request-id'] as string) || '';
   app.log["error"](error);
 
-  // Determine appropriate status code - prefer explicit statusCode on the error object
-  const errObj = error as { statusCode?: number; code?: string; message?: string };
-  let statusCode = errObj.statusCode ?? 500;
-  let errorCode = 'INTERNAL_ERROR';
+  // 1. AppError subclasses carry their own code + statusCode
+  if (error instanceof AppError) {
+    const isDev = process.env['NODE_ENV'] === 'development';
+    const body: Record<string, unknown> = {
+      error: error.message,
+      code: error.code,
+      requestId,
+    };
+    if (isDev && error.details !== undefined) {
+      body['details'] = error.details;
+    }
+    if (error instanceof RateLimitError) {
+      body['retryAfter'] = error.retryAfter;
+      void reply.header('Retry-After', String(error.retryAfter));
+    }
+    void reply.status(error.statusCode).send(body);
+    return;
+  }
 
-  // Check Fastify validation errors first (they have a code property)
+  // 2. Fastify validation errors + generic errors with statusCode
+  const errObj = error as { statusCode?: number; code?: string; message?: string; validation?: unknown };
+  let statusCode = errObj.statusCode ?? 500;
+  let errorCode: string = ErrorCodes.INTERNAL_ERROR;
+
   if (errObj.code === 'FST_ERR_VALIDATION') {
     statusCode = 400;
-    errorCode = 'VALIDATION_ERROR';
+    errorCode = ErrorCodes.VALIDATION_ERROR;
   } else if (statusCode === 401) {
-    errorCode = 'AUTH_ERROR';
+    errorCode = ErrorCodes.AUTH_ERROR;
   } else if (statusCode === 403) {
-    errorCode = 'FORBIDDEN';
+    errorCode = ErrorCodes.FORBIDDEN;
   } else if (statusCode === 404) {
-    errorCode = 'NOT_FOUND';
+    errorCode = ErrorCodes.NOT_FOUND;
   } else if (statusCode === 400) {
-    errorCode = 'VALIDATION_ERROR';
+    errorCode = ErrorCodes.VALIDATION_ERROR;
   } else if (statusCode === 409) {
-    errorCode = 'CONFLICT';
+    errorCode = ErrorCodes.CONFLICT;
+  } else if (statusCode === 429) {
+    errorCode = ErrorCodes.RATE_LIMIT_EXCEEDED;
   }
 
-  // P2-MEDIUM FIX: Only expose error details in development
   const isDevelopment = process.env['NODE_ENV'] === 'development';
-
-  const response: {
-  error: string;
-  code: string;
-  message?: string | undefined;
-  stack?: string | undefined;
-  details?: unknown | undefined;
-  } = {
-  error: statusCode === 500 ? 'Internal server error' : (errObj.message || 'An error occurred'),
-  code: errorCode,
+  const body: Record<string, unknown> = {
+    error: statusCode === 500 ? 'Internal server error' : (errObj.message || 'An error occurred'),
+    code: errorCode,
+    requestId,
   };
 
-  // F8-FIX: Only include sanitized error info in development.
-  // Previously serialized the full raw error object which could contain
-  // DB connection strings, internal paths, or secrets in error messages.
-  if (isDevelopment) {
-  response.message = errObj.message;
-  // Never include raw error objects - they may contain sensitive data
+  if (isDevelopment && errObj.message) {
+    body['details'] = { message: errObj.message };
   }
 
-  void reply.status(statusCode).send(response);
+  void reply.status(statusCode).send(body);
 });
 
-// 404 handler
+// 404 handler — canonical shape
 app.setNotFoundHandler((request, reply) => {
-  void reply.status(404).send({ error: 'Route not found', code: 'NOT_FOUND' });
+  const requestId = (request.headers['x-request-id'] as string) || '';
+  void reply.status(404).send({ error: 'Route not found', code: ErrorCodes.NOT_FOUND, requestId });
 });
 
 // Register all routes under /v1 prefix using Fastify's encapsulated plugin pattern.
@@ -669,10 +702,10 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
 app.get('/health/detailed', async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required for detailed health checks' });
+    return errHelpers.unauthorized(reply, 'Authentication required for detailed health checks');
   }
   // P0-AUDIT-FIX: Require admin/owner role — previously any authenticated user could access
-  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   const containerHealth = await container.getHealth();
   return {
   status: containerHealth.services["database"] ? 'healthy' : 'degraded',
@@ -685,10 +718,10 @@ app.get('/health/detailed', async (request, reply) => {
 app.get('/health/repositories', async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
+    return errHelpers.unauthorized(reply);
   }
   // P0-AUDIT-FIX: Require admin/owner role
-  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   return getRepositoryHealth();
 });
 
@@ -696,10 +729,10 @@ app.get('/health/repositories', async (request, reply) => {
 app.get('/health/sequences', async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
+    return errHelpers.unauthorized(reply);
   }
   // P0-AUDIT-FIX: Require admin/owner role
-  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   const sequenceHealth = await checkSequenceHealth();
 
   return reply.status(sequenceHealth.healthy ? 200 : 503).send({

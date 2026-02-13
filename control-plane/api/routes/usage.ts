@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 import { UsageService } from '../../services/usage';
+import { errors } from '@errors/responses';
 
 export interface UsageStats {
   orgId: string;
@@ -46,7 +47,7 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin']);
     // P1-FIX: Scope rate limit to org to prevent one user exhausting limit for all
@@ -57,19 +58,14 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     stats = await usage.getUsage(ctx["orgId"]) as unknown as UsageStats;
     } catch (serviceError) {
     console["error"]('[usage] Service error:', serviceError);
-    return res.status(503).send({
-    error: 'Service temporarily unavailable',
-    message: 'Unable to fetch usage data. Please try again later.'
-    });
+    return errors.serviceUnavailable(res, 'Unable to fetch usage data. Please try again later.');
     }
 
     return res.send(stats);
   } catch (error) {
     // P1-FIX: Log full error server-side but never expose raw error messages to clients
     console["error"]('[usage] Unexpected error:', error);
-    return res.status(500).send({
-    error: 'Internal server error'
-    });
+    return errors.internal(res);
   }
   });
 }

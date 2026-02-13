@@ -9,6 +9,8 @@ import { getAuthContext } from '../types';
 import { PostgresContentRevisionRepository } from '../../../domains/content/infra/persistence/PostgresContentRevisionRepository';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   const ownership = new DomainOwnershipService(pool);
@@ -26,10 +28,7 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   // Validate params
   const paramsResult = ParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid content ID',
-    code: 'INVALID_ID'
-    });
+    return errors.badRequest(res, 'Invalid content ID', ErrorCodes.INVALID_PARAMS);
   }
 
   const { id } = paramsResult.data;
@@ -46,10 +45,7 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   );
 
   if (rows.length === 0) {
-    return res.status(404).send({
-    error: 'Content not found',
-    code: 'CONTENT_NOT_FOUND'
-    });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
   }
 
   await ownership.assertOrgOwnsDomain(ctx["orgId"], rows[0].domain_id);

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
 import { SearchQueryService } from '../../services/search-query';
+import { errors } from '@errors/responses';
 
 export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new SearchQueryService(pool);
@@ -24,7 +25,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
   app.get('/search', async (req, res) => {
   const ctx = req.auth as AuthContext;
   if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
   }
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
   await rateLimit('search', 30);
@@ -32,11 +33,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
   // Validate query parameters
   const parseResult = SearchQuerySchema.safeParse(req.query);
   if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues
-    });
+    return errors.validationFailed(res, parseResult["error"].issues);
   }
 
   const { q, limit } = parseResult.data;

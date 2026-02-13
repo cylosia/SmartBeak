@@ -8,6 +8,7 @@ import { buildHeatmap } from '../portfolio/heatmap';
 import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('PortfolioHeatmapService');
 
@@ -49,10 +50,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
   try {
     const auth = req.auth;
     if (!auth) {
-        return res.status(401).send({
-        error: 'Unauthorized',
-        code: 'UNAUTHORIZED'
-        });
+        return errors.unauthorized(res);
     }
 
     requireRole(auth, ['owner', 'admin', 'editor', 'viewer']);
@@ -62,11 +60,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
 
     const parseResult = HeatmapQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult.error.issues
-    });
+    return errors.validationFailed(res, parseResult.error.issues);
     }
 
     const { domain_id, limit, offset } = parseResult.data;
@@ -88,11 +82,7 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     .limit(limit + 1)           .offset(offset);
     } catch (dbError) {
         logger.error('Database error', dbError as Error);
-    return res.status(503).send({
-    error: 'Database temporarily unavailable',
-    code: 'DB_UNAVAILABLE',
-    message: 'Unable to fetch heatmap data. Please try again later.'
-    });
+    return errors.serviceUnavailable(res, 'Unable to fetch heatmap data. Please try again later.');
     }
 
     // P2-FIX: Fetch limit+1 rows and check for overflow to determine hasMore accurately
@@ -124,17 +114,10 @@ export async function portfolioHeatmapRoutes(app: FastifyInstance): Promise<void
     (errWithCode.code === 'PERMISSION_DENIED' ||
     errWithCode.code === 'FORBIDDEN');
     if (hasPermissionError) {
-    return res.status(403).send({
-        error: 'Permission denied',
-        code: 'FORBIDDEN'
-    });
+    return errors.forbidden(res);
     }
 
-    return res.status(500).send({
-    error: 'Internal server error',
-    code: 'INTERNAL_ERROR',
-    message: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return errors.internal(res);
   }
   });
 }

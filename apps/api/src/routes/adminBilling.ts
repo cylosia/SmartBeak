@@ -8,6 +8,8 @@ import { adminRateLimit } from '../middleware/rateLimiter';
 import { sanitizeErrorMessage } from '@security/logger';
 import { isValidUUID } from '@security/input-validator';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('AdminBilling');
 
@@ -138,11 +140,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     // Check for admin authentication
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.status(401).send({ 
-        error: 'Unauthorized',
-        code: 'AUTH_REQUIRED',
-        message: 'Bearer token required.' 
-      });
+      return errors.unauthorized(reply, 'Bearer token required.');
     }
 
     const token = authHeader.slice(7);
@@ -150,25 +148,13 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
       // This should use the shared auth utility
       // For now, we check a simple admin token for protection
       if (!process.env['ADMIN_API_KEY']) {
-        return reply.status(500).send({ 
-          error: 'Server Configuration Error',
-          code: 'CONFIG_ERROR',
-          message: 'Admin API not configured' 
-        });
+        return errors.internal(reply, 'Admin API not configured');
       }
       if (!secureCompareToken(token, process.env['ADMIN_API_KEY'])) {
-        return reply.status(403).send({ 
-          error: 'Forbidden',
-          code: 'ACCESS_DENIED',
-          message: 'Admin access required.' 
-        });
+        return errors.forbidden(reply, 'Admin access required.');
       }
     } catch (err) {
-      return reply.status(401).send({ 
-        error: 'Unauthorized',
-        code: 'INVALID_TOKEN',
-        message: 'Invalid token' 
-      });
+      return errors.unauthorized(reply, 'Invalid token');
     }
   });
 
@@ -184,11 +170,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
       // Validate query parameters
       const parseResult = AdminBillingQuerySchema.safeParse(req.query);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid query parameters',
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
 
       const { limit, offset, sortBy, sortOrder } = parseResult.data;
@@ -198,11 +180,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
       try {
         validatedSortBy = validateColumnName(sortBy);
       } catch {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          code: 'INVALID_SORT_COLUMN',
-          message: 'Invalid sort column',
-        });
+        return errors.badRequest(reply, 'Invalid sort column');
       }
 
       // P0-FIX: IDOR Vulnerability - Previously returned ALL orgs without tenant isolation
@@ -210,17 +188,13 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
       const { orgId } = parseResult.data as { orgId: string };
       
       if (!orgId) {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          code: 'MISSING_ORG_ID',
-          message: 'orgId parameter is required',
-        });
+        return errors.badRequest(reply, 'orgId parameter is required', ErrorCodes.MISSING_PARAMETER);
       }
       
       // P0-FIX: Org membership verification to prevent IDOR
       const hasAccess = await verifyAdminOrgAccess(orgId);
       if (!hasAccess) {
-        return reply.status(403).send({ error: 'Forbidden', code: 'ACCESS_DENIED', message: 'Access denied to this organization' });
+        return errors.forbidden(reply, 'Access denied to this organization');
       }
       
       // Get total count for pagination metadata with validation (filtered by org)
@@ -255,12 +229,8 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
       // SECURITY FIX: Issue 22 - Sanitize error messages before logging and returning
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error["message"] : 'Failed to fetch billing data');
       logger.error('Error fetching billing data', { error: sanitizedError });
-      
-      return reply.status(500).send({ 
-        error: 'Internal Server Error',
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch billing data' 
-      });
+
+      return errors.internal(reply, 'Failed to fetch billing data');
     }
   });
   
@@ -278,21 +248,13 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
 
       // SECURITY FIX: Issue 8 - Validate UUID format consistently
       if (!isValidUUID(id)) {
-        return reply.status(400).send({
-          error: 'Bad Request',
-          code: 'INVALID_UUID',
-          message: 'Invalid organization ID format',
-        });
+        return errors.badRequest(reply, 'Invalid organization ID format', ErrorCodes.INVALID_UUID);
       }
 
       // P0-FIX: Org access verification was missing on this endpoint (IDOR)
       const hasAccess = await verifyAdminOrgAccess(id);
       if (!hasAccess) {
-        return reply.status(403).send({
-          error: 'Forbidden',
-          code: 'ACCESS_DENIED',
-          message: 'Access denied to this organization',
-        });
+        return errors.forbidden(reply, 'Access denied to this organization');
       }
 
       const org = await db('orgs')
@@ -301,11 +263,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
         .first();
       
       if (!org) {
-        return reply.status(404).send({
-          error: 'Not Found',
-          code: 'ORG_NOT_FOUND',
-          message: 'Organization not found',
-        });
+        return errors.notFound(reply, 'Organization');
       }
       
       return validateOrgBillingInfo(org);
@@ -313,12 +271,8 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error["message"] : 'Failed to fetch organization');
       logger.error('Error fetching organization', { error: sanitizedError });
-      
-      return reply.status(500).send({ 
-        error: 'Internal Server Error',
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch organization' 
-      });
+
+      return errors.internal(reply, 'Failed to fetch organization');
     }
   });
 }

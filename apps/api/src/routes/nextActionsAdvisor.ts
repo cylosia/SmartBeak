@@ -9,6 +9,7 @@ import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
 import { recommendNextActions } from '../advisor/nextActions';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const QUERY_TIMEOUT_MS = dbConfig.queryTimeoutMs;
 
@@ -64,21 +65,14 @@ export async function nextActionsAdvisorRoutes(app: FastifyInstance): Promise<vo
   try {
     const parseResult = QuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult.error.issues,
-    });
+    return errors.validationFailed(res, parseResult.error.issues);
     }
 
     const { domain_id, limit, offset } = parseResult.data;
 
     const auth = req.auth;
     if (!auth) {
-    return res.status(401).send({
-    error: 'Unauthorized',
-    code: 'UNAUTHORIZED'
-    });
+    return errors.unauthorized(res);
     }
     requireRole(auth, ['owner', 'admin', 'editor']);
 
@@ -93,10 +87,7 @@ export async function nextActionsAdvisorRoutes(app: FastifyInstance): Promise<vo
     .where('org_id', auth.orgId)
     .first();
     if (!domainOwnership) {
-    return res.status(403).send({
-        error: 'Access denied to domain',
-        code: 'FORBIDDEN'
-    });
+    return errors.forbidden(res, 'Access denied to domain');
     }
 
     // P1-FIX: Use SET LOCAL within a transaction so statement_timeout does not
@@ -124,11 +115,7 @@ export async function nextActionsAdvisorRoutes(app: FastifyInstance): Promise<vo
     });
     } catch (dbError) {
         logger.error('Database error', dbError as Error);
-    return res.status(503).send({
-    error: 'Database temporarily unavailable',
-    code: 'DB_UNAVAILABLE',
-    message: 'Unable to fetch content data. Please try again later.'
-    });
+    return errors.serviceUnavailable(res, 'Database temporarily unavailable');
     }
 
     const signals = rows.map((r) => ({

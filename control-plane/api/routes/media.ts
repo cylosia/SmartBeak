@@ -15,6 +15,7 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 import { resolveDomainDb } from '../../services/domain-registry';
 import { getPool } from '../../services/repository-factory';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('Media');
 
@@ -66,7 +67,7 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('media', 20, req, res);
@@ -74,11 +75,7 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     // Validate body
     const bodyResult = UploadIntentBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
 
     const { id, mimeType } = bodyResult.data;
@@ -94,10 +91,7 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     logger.error('[media/upload-intent] Error:', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     // P1-1 FIX: Do not leak internal error details to clients
-    return res.status(500).send({
-    error: 'Failed to create upload intent',
-    code: 'INTERNAL_ERROR'
-    });
+    return errors.internal(res, 'Failed to create upload intent');
   }
   });
 
@@ -108,7 +102,7 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('media', 20, req, res);
@@ -116,21 +110,14 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     // Validate params
     const paramsResult = CompleteUploadParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues
-    });
+    return errors.validationFailed(res, paramsResult["error"].issues);
     }
 
     const { id } = paramsResult.data;
 
     const isAuthorized = await verifyMediaOwnership(ctx.userId, id, pool);
     if (!isAuthorized) {
-    return res.status(404).send({
-    error: 'Media not found',
-    code: 'NOT_FOUND'
-    });
+    return errors.notFound(res, 'Media');
     }
 
     const repo = new PostgresMediaRepository(getPool(resolveDomainDb('media')));
@@ -142,10 +129,7 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     logger.error('[media/complete] Error:', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     // P1-1 FIX: Do not leak internal error details to clients
-    return res.status(500).send({
-    error: 'Failed to complete upload',
-    code: 'INTERNAL_ERROR'
-    });
+    return errors.internal(res, 'Failed to complete upload');
   }
   });
 }

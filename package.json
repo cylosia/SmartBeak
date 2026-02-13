@@ -35,12 +35,16 @@
     "migrate:rollback": "tsx scripts/migrate.ts rollback",
     "migrate:status": "tsx scripts/migrate.ts status",
     "migrate:make": "tsx scripts/migrate.ts make",
-    "migrate:baseline": "tsx scripts/migrate.ts baseline"
+    "migrate:baseline": "tsx scripts/migrate.ts baseline",
+    "openapi:generate": "tsx scripts/generate-openapi.ts",
+    "openapi:lint": "npx spectral lint docs/openapi.json --fail-severity warn"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.500.0",
     "@clerk/nextjs": "^6.0.0",
     "@fastify/cors": "11.0.0",
+    "@fastify/swagger": "9.7.0",
+    "@fastify/swagger-ui": "5.2.5",
     "@google-analytics/data": "^4.0.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/core": "^1.22.0",
@@ -60,6 +64,7 @@
     "async-mutex": "^0.5.0",
     "bullmq": "^5.0.0",
     "fastify": "5.7.4",
+    "fastify-type-provider-zod": "6.1.0",
     "fernet": "^0.3.2",
     "form-data": "^4.0.0",
     "googleapis": "^133.0.0",
@@ -80,6 +85,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@stoplight/spectral-cli": "6.15.0",
     "@tanstack/react-query-devtools": "^5.0.0",
     "@types/jest": "30.0.0",
     "@types/jsonwebtoken": "^9.0.0",

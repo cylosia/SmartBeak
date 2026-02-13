@@ -7,6 +7,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest as FRequest, HookHandlerD
 import { validateExperiment } from '../domain/experiments/validateExperiment';
 import type { FastifyRequest } from 'fastify';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('ExperimentService');
 
@@ -89,23 +90,20 @@ export async function experimentRoutes(app: FastifyInstance) {
 
     const auth = await verifyAuth(req);
     if (!auth) {
-      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
     try {
       // Validate input
       const parseResult = ExperimentBodySchema.safeParse(req.body);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid input',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
       const { domain_id, variants } = parseResult.data;
 
       const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId);
       if (!hasAccess) {
         logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to create experiment for domain ${domain_id}`);
-        return reply.status(403).send({ error: 'Access denied to domain' });
+        return errors.forbidden(reply, 'Access denied to domain');
       }
       validateExperiment(variants);
 
@@ -124,10 +122,7 @@ export async function experimentRoutes(app: FastifyInstance) {
     }
     catch (error) {
       logger.error('Error processing experiment request', error as Error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-        ...(process.env['NODE_ENV'] === 'development' && { message: (error as Error)["message"] })
-      });
+      return errors.internal(reply);
     }
   });
 }

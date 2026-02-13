@@ -84,3 +84,35 @@ jobs:
       - run: npm ci
       - run: npm run test:unit
       - run: npm run test:integration
+
+  openapi-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # Lint the committed OpenAPI spec with Spectral
+      - run: npm run openapi:lint
+      # Verify the committed spec matches what the code generates (drift detection).
+      # Requires DB + Redis to boot the server, but the spec file itself is
+      # committed so this step only checks the file against the Spectral ruleset.
+
+  openapi-breaking-changes:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Compare the PR's docs/openapi.json against the base branch
+      - name: Get baseline spec
+        run: git show origin/${{ github.base_ref }}:docs/openapi.json > /tmp/openapi-base.json 2>/dev/null || echo '{}' > /tmp/openapi-base.json
+      - name: Install oasdiff
+        run: |
+          curl -sSL https://github.com/Tufin/oasdiff/releases/latest/download/oasdiff_linux_amd64.tar.gz | tar xz
+          sudo mv oasdiff /usr/local/bin/
+      - name: Check for breaking changes
+        run: oasdiff breaking /tmp/openapi-base.json docs/openapi.json --fail-on ERR

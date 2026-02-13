@@ -6,6 +6,8 @@ import { Pool } from 'pg';
 import { PlanningOverviewService } from '../../../domains/planning/application/PlanningOverviewService';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -33,26 +35,20 @@ export async function planningRoutes(app: FastifyInstance, pool: Pool): Promise<
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner','admin','editor','viewer']);
     await rateLimit('planning', 50);
 
     if (!ctx["domainId"]) {
-    return res.status(400).send({
-    error: 'Domain ID is required',
-    code: 'DOMAIN_REQUIRED',
-    });
+    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.REQUIRED_FIELD);
     }
 
     const result = await svc.overview(ctx["domainId"]);
     return res.send(result);
   } catch (error: unknown) {
     console["error"]('[planning/overview] Error:', error);
-    return res.status(500).send({
-    error: 'Failed to retrieve planning overview',
-    message: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return errors.internal(res, 'Failed to retrieve planning overview');
   }
   });
 }

@@ -1,0 +1,56 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SmartBeak Control Plane API",
+    "version": "1.0.0",
+    "description": "API for managing content, domains, billing, publishing, and more."
+  },
+  "servers": [
+    {
+      "url": "/v1",
+      "description": "API v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error", "code", "requestId"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Request ID for tracing"
+          },
+          "details": {
+            "description": "Additional details (development only)"
+          },
+          "retryAfter": {
+            "type": "integer",
+            "description": "Seconds until retry is allowed (429 only)"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {}
+}

@@ -9,6 +9,7 @@ import { getContentRepository } from '../../services/repository-factory';
 import { ListContent } from '../../../domains/content/application/handlers/ListContent';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const QuerySchema = z.object({
   status: z.enum(['draft', 'scheduled', 'published', 'archived']).default('draft'),
@@ -27,11 +28,7 @@ export async function contentListRoutes(app: FastifyInstance) {
 
     const parseResult = QuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues
-    });
+    return errors.validationFailed(res, parseResult["error"].issues);
     }
 
     const { status, limit, offset, domainId } = parseResult.data;
@@ -61,14 +58,7 @@ export async function contentListRoutes(app: FastifyInstance) {
     };
   } catch (error: unknown) {
     console["error"]('[content/list] Error:', error);
-    const errorMessage = process.env['NODE_ENV'] === 'development' && error instanceof Error
-    ? error.message
-    : 'Failed to list content';
-    return res.status(500).send({
-    error: 'Failed to list content',
-    code: 'INTERNAL_ERROR',
-    ...(process.env['NODE_ENV'] === 'development' && { details: errorMessage })
-    });
+    return errors.internal(res, 'Failed to list content');
   }
   });
 }

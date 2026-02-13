@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { getLogger } from '../../../packages/kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('LLM');
 
@@ -70,7 +71,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
@@ -103,7 +104,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   } catch (error) {
     logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch LLM models' });
+    return errors.internal(res, 'Failed to fetch LLM models');
   }
   });
 
@@ -115,7 +116,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
     try {
@@ -148,7 +149,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   } catch (error) {
     logger.error('[llm/preferences] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch LLM preferences' });
+    return errors.internal(res, 'Failed to fetch LLM preferences');
   }
   });
 
@@ -160,7 +161,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin']);
     try {
@@ -174,11 +175,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
     // P3-FIX: Sanitize validation error details
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues.map(i => ({ path: i.path, message: i.message }))
-    });
+    return errors.validationFailed(res, parseResult["error"].issues.map(i => ({ path: i.path, message: i.message })));
     }
 
     const updates = parseResult.data;
@@ -195,7 +192,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   } catch (error) {
     logger.error('[llm/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to update LLM preferences' });
+    return errors.internal(res, 'Failed to update LLM preferences');
   }
   });
 }

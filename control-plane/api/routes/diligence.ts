@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 
 import { rateLimit } from '../../services/rate-limit';
+import { errors } from '@errors/responses';
 
 // H14-FIX: Use structured logger instead of console.error
 const logger = getLogger('diligence-routes');
@@ -30,7 +31,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (rows.length === 0) {
-    return res.status(404).send({ error: 'Invalid or expired diligence token' });
+    return errors.notFound(res, 'Diligence token');
     }
 
     const domainId = rows[0].domain_id;
@@ -47,7 +48,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (domainRows.length === 0) {
-    return res.status(404).send({ error: 'Domain not found' });
+    return errors.notFound(res, 'Domain');
     }
 
     const domain = domainRows[0];
@@ -82,7 +83,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     return overview;
   } catch (error) {
     logger.error('Diligence overview error', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Failed to fetch diligence overview' });
+    return errors.internal(res, 'Failed to fetch diligence overview');
   }
   });
 
@@ -100,7 +101,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (rows.length === 0) {
-    return res.status(404).send({ error: 'Invalid or expired diligence token' });
+    return errors.notFound(res, 'Diligence token');
     }
 
     const domainId = rows[0].domain_id;
@@ -130,7 +131,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     };
   } catch (error) {
     logger.error('Diligence affiliate-revenue error', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Failed to fetch affiliate revenue' });
+    return errors.internal(res, 'Failed to fetch affiliate revenue');
   }
   });
 }

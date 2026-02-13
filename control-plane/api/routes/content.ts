@@ -7,6 +7,8 @@ import { z } from 'zod';
 import crypto from 'crypto';
 
 import { getLogger } from '@kernel/logger';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('content');
 
@@ -56,34 +58,6 @@ const ContentQuerySchema = z.object({
   search: z.string().max(200).optional(),
 });
 
-export interface ErrorWithCode extends Error {
-  code?: string;
-}
-
-export interface ZodError extends Error {
-  issues?: Array<{ path: (string | number)[]; message: string; code: string }>;
-}
-
-function sanitizeErrorForClient(error: unknown): { error: string; code?: string } {
-  // Log full error server-side
-  const errorToLog = error instanceof Error ? error : new Error(String(error));
-  logger["error"]('[content] Internal error:', errorToLog);
-
-  // Return safe message to client
-  const errWithCode = error as { code?: string; name?: string };
-  if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
-  return { error: 'Domain not owned by organization', code: 'DOMAIN_NOT_OWNED' };
-  }
-  if (errWithCode.code === 'CONTENT_NOT_FOUND') {
-  return { error: 'Content not found', code: 'CONTENT_NOT_FOUND' };
-  }
-  if (errWithCode.name === 'ZodError') {
-  return { error: 'Invalid input data', code: 'VALIDATION_ERROR' };
-  }
-
-  // Generic message for all other errors (prevents info leakage)
-  return { error: 'An error occurred processing your request', code: 'INTERNAL_ERROR' };
-}
 
 export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   const ownership = new DomainOwnershipService(pool);
@@ -98,31 +72,24 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     await rateLimit('content', 50, req, res);
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin', 'editor', 'viewer']);
 
     // Validate orgId
     if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
     }
 
     const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
     if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
     }
 
     // Validate query params
     const queryResult = ContentQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-    return res.status(400).send({
-    error: 'Invalid query parameters',
-    code: 'VALIDATION_ERROR',
-    details: queryResult["error"].issues,
-    });
+    return errors.validationFailed(res, queryResult["error"].issues);
     }
 
     const { domainId, status, contentType, page, limit, search } = queryResult.data;
@@ -131,10 +98,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
     const MAX_SAFE_OFFSET = 10000;
     if (offset > MAX_SAFE_OFFSET) {
-    return res.status(400).send({
-    error: `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`,
-    code: 'PAGINATION_LIMIT',
-    });
+    return errors.badRequest(res, `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`);
     }
 
     // If domainId provided, verify ownership
@@ -144,7 +108,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     [domainId, ctx["orgId"]]
     );
     if (domainResult.rows.length === 0) {
-    return res.status(403).send({ error: 'Access denied to domain' });
+    return errors.forbidden(res, 'Access denied to domain');
     }
     }
 
@@ -218,8 +182,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     }
     };
   } catch (error: unknown) {
-    const { error: message, code } = sanitizeErrorForClient(error);
-    return res.status(500).send({ error: message, code });
+    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
   }
   });
 
@@ -228,38 +192,31 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin','editor']);
     await rateLimit('content', 50, req, res);
 
     // Validate orgId
     if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
     }
 
     const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
     if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
     }
 
     let validated;
     try {
     validated = CreateContentSchema.parse(req.body);
     } catch (validationError: unknown) {
-    const zodError = validationError as ZodError;
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: zodError.issues?.map((e) => ({
+    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
+    return errors.validationFailed(res, zodError.issues?.map((e) => ({
     path: e.path,
     message: e.message,
     code: e.code
-    }))
-    });
+    })));
     }
 
     // Verify org owns the domain
@@ -277,9 +234,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     );
     return { success: true, item };
   } catch (error: unknown) {
-    const { error: message, code } = sanitizeErrorForClient(error);
-    const status = code === 'DOMAIN_NOT_OWNED' ? 403 : code === 'CONTENT_NOT_FOUND' ? 404 : 500;
-    return res.status(status).send({ error: message, code });
+    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
+    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
+    return errors.internal(res);
   }
   });
 
@@ -288,7 +251,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin', 'editor', 'viewer']);
     await rateLimit('content', 50, req, res);
@@ -298,16 +261,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     try {
     params = ContentParamsSchema.parse(req.params);
     } catch (validationError: unknown) {
-    const zodError = validationError as ZodError;
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: zodError.issues?.map((e) => ({
+    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
+    return errors.validationFailed(res, zodError.issues?.map((e) => ({
     path: e.path,
     message: e.message,
     code: e.code
-    }))
-    });
+    })));
     }
 
     const repo = getContentRepository('content');
@@ -315,16 +274,22 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Get the item to verify domain ownership
     const item = await repo.getById(params["id"]);
     if (!item) {
-    return res.status(404).send({ error: 'Content not found', code: 'CONTENT_NOT_FOUND' });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
 
     return { success: true, item };
   } catch (error: unknown) {
-    const { error: message, code } = sanitizeErrorForClient(error);
-    const status = code === 'DOMAIN_NOT_OWNED' ? 403 : code === 'CONTENT_NOT_FOUND' ? 404 : 500;
-    return res.status(status).send({ error: message, code });
+    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
+    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
+    return errors.internal(res);
   }
   });
 
@@ -333,7 +298,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin','editor']);
     await rateLimit('content', 50, req, res);
@@ -343,16 +308,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     try {
     params = ContentParamsSchema.parse(req.params);
     } catch (validationError: unknown) {
-    const zodError = validationError as ZodError;
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: zodError.issues?.map((e) => ({
+    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
+    return errors.validationFailed(res, zodError.issues?.map((e) => ({
     path: e.path,
     message: e.message,
     code: e.code
-    }))
-    });
+    })));
     }
 
     // Validate body
@@ -360,16 +321,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     try {
     validated = UpdateContentSchema.parse(req.body);
     } catch (validationError: unknown) {
-    const zodError = validationError as ZodError;
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: zodError.issues?.map((e) => ({
+    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
+    return errors.validationFailed(res, zodError.issues?.map((e) => ({
     path: e.path,
     message: e.message,
     code: e.code
-    }))
-    });
+    })));
     }
 
     const repo = getContentRepository('content');
@@ -377,7 +334,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Get the item to verify domain ownership
     const item = await repo.getById(params["id"]);
     if (!item) {
-    return res.status(404).send({ error: 'Content not found', code: 'CONTENT_NOT_FOUND' });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
@@ -392,9 +349,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     return { success: true, item: updated };
   } catch (error: unknown) {
-    const { error: message, code } = sanitizeErrorForClient(error);
-    const status = code === 'DOMAIN_NOT_OWNED' ? 403 : code === 'CONTENT_NOT_FOUND' ? 404 : 500;
-    return res.status(status).send({ error: message, code });
+    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
+    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
+    return errors.internal(res);
   }
   });
 
@@ -403,7 +366,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin','editor']);
     await rateLimit('content', 20, req, res);
@@ -413,16 +376,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     try {
     params = ContentParamsSchema.parse(req.params);
     } catch (validationError: unknown) {
-    const zodError = validationError as ZodError;
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: zodError.issues?.map((e) => ({
+    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
+    return errors.validationFailed(res, zodError.issues?.map((e) => ({
     path: e.path,
     message: e.message,
     code: e.code
-    }))
-    });
+    })));
     }
 
     const repo = getContentRepository('content');
@@ -430,7 +389,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Get the item to verify domain ownership
     const item = await repo.getById(params["id"]);
     if (!item) {
-    return res.status(404).send({ error: 'Content not found', code: 'CONTENT_NOT_FOUND' });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
@@ -440,9 +399,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     return { success: true, event };
   } catch (error: unknown) {
-    const { error: message, code } = sanitizeErrorForClient(error);
-    const status = code === 'DOMAIN_NOT_OWNED' ? 403 : code === 'CONTENT_NOT_FOUND' ? 404 : 500;
-    return res.status(status).send({ error: message, code });
+    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
+    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
+    return errors.internal(res);
   }
   });
 
@@ -451,7 +416,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx as AuthContext, ['admin']);
     await rateLimit('content', 20, req, res);
@@ -461,16 +426,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     try {
     params = ContentParamsSchema.parse(req.params);
     } catch (validationError: unknown) {
-    const zodError = validationError as ZodError;
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: zodError.issues?.map((e) => ({
+    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
+    return errors.validationFailed(res, zodError.issues?.map((e) => ({
     path: e.path,
     message: e.message,
     code: e.code
-    }))
-    });
+    })));
     }
 
     const repo = getContentRepository('content');
@@ -478,7 +439,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // Get the item to verify domain ownership
     const item = await repo.getById(params["id"]);
     if (!item) {
-    return res.status(404).send({ error: 'Content not found', code: 'CONTENT_NOT_FOUND' });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
     await ownership.assertOrgOwnsDomain(ctx["orgId"], item["domainId"]);
@@ -492,9 +453,15 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
 
     return { success: true, id: params["id"], deleted: true };
   } catch (error: unknown) {
-    const { error: message, code } = sanitizeErrorForClient(error);
-    const status = code === 'DOMAIN_NOT_OWNED' ? 403 : code === 'CONTENT_NOT_FOUND' ? 404 : 500;
-    return res.status(status).send({ error: message, code });
+    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
+    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
+    return errors.internal(res);
   }
   });
 }

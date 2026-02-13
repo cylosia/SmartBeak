@@ -6,6 +6,8 @@ import { AlertService } from '../../services/alerts';
 import { FlagService } from '../../services/flags';
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const FeatureFlagKeySchema = z.string()
   .min(1, 'Key is required')
@@ -42,21 +44,13 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   // Validate params
   const paramsResult = FeatureFlagParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid flag key',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid flag key', ErrorCodes.VALIDATION_ERROR, paramsResult["error"].issues);
   }
 
   // Validate body
   const bodyResult = FeatureFlagBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Invalid flag value',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid flag value', ErrorCodes.VALIDATION_ERROR, bodyResult["error"].issues);
   }
 
   const { key } = paramsResult.data;
@@ -73,29 +67,18 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({
-    error: 'Organization ID is required',
-    code: 'MISSING_ORG_ID',
-    });
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    details: orgIdResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid organization ID', ErrorCodes.VALIDATION_ERROR, orgIdResult["error"].issues);
   }
 
   // Validate body
   const bodyResult = AlertBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Invalid alert configuration',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid alert configuration', ErrorCodes.VALIDATION_ERROR, bodyResult["error"].issues);
   }
 
   const { metric, threshold } = bodyResult.data;
@@ -111,11 +94,7 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   // Validate params
   const paramsResult = FeatureFlagParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid flag key',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid flag key', ErrorCodes.VALIDATION_ERROR, paramsResult["error"].issues);
   }
 
   const { key } = paramsResult.data;
@@ -130,18 +109,12 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({
-    error: 'Organization ID is required',
-    code: 'MISSING_ORG_ID',
-    });
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
   }
 
   const alertList = await alerts.getActiveAlerts(ctx["orgId"]);
