@@ -8,6 +8,8 @@ import { AnalyticsReadModel } from '../../services/analytics-read-model';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
   const rm = new AnalyticsReadModel(pool);
@@ -25,10 +27,7 @@ export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
   // Validate params
   const paramsResult = ParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid content ID',
-    code: 'INVALID_ID',
-    });
+    return errors.badRequest(res, 'Invalid content ID', ErrorCodes.INVALID_PARAMS);
   }
 
   const { id } = paramsResult.data;
@@ -39,7 +38,7 @@ export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
     [id, ctx["orgId"]]
   );
   if (rows.length === 0) {
-    return res.status(404).send({ error: 'Content not found' });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
   }
 
   return rm.getContentStats(id);

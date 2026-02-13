@@ -4,6 +4,7 @@ import { getDb } from '../db';
 import type { FastifyRequest } from 'fastify';
 import { getLogger } from '@kernel/logger';
 import { getAuthContext, logAuthEvent } from '@security/jwt';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('FeedbackService');
 
@@ -81,16 +82,13 @@ export async function feedbackRoutes(app: FastifyInstance) {
 
     const auth = verifyAuth(req);
     if (!auth) {
-      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
     try {
       // Validate query parameters
       const parseResult = FeedbackQuerySchema.safeParse(req.query);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid input',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
       const { domain_id, limit, offset } = parseResult.data;
 
@@ -98,7 +96,7 @@ export async function feedbackRoutes(app: FastifyInstance) {
         const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId);
         if (!hasAccess) {
           logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to access feedback for domain ${domain_id}`);
-          return reply.status(403).send({ error: 'Access denied to domain' });
+          return errors.forbidden(reply, 'Access denied to domain');
         }
       }
 
@@ -128,9 +126,7 @@ export async function feedbackRoutes(app: FastifyInstance) {
     }
     catch (error) {
       logger.error('Error processing feedback request', error as Error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
+      return errors.internal(reply);
     }
   });
 }

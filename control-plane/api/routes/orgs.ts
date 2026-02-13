@@ -11,6 +11,7 @@ import { MembershipService } from '../../services/membership-service';
 import { OrgService } from '../../services/org-service';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('Orgs');
 const handleError = createRouteErrorHandler({ logger });
@@ -58,7 +59,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin','owner']);
     await rateLimit(`orgs:create:${ctx.userId}`, 20);
@@ -66,16 +67,15 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     // SECURITY FIX: Validate org name with Zod
     const bodyResult = CreateOrgSchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
 
     const { name } = bodyResult.data;
     return await orgs.createOrg(name, ctx.userId);
   } catch (error) {
+    logger.error('[orgs] Error', error instanceof Error ? error : new Error(String(error)));
+    // FIX: Added return before reply.send()
+    return errors.internal(res, 'Failed to create organization');
     return handleError(res, error, 'create organization');
   }
   });
@@ -84,7 +84,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin','owner']);
     await rateLimit(`orgs:members:${ctx.userId}`, 50);
@@ -92,18 +92,21 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     // SECURITY FIX (H08): Validate route params
     const paramsResult = OrgIdParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({ error: 'Invalid organization ID', code: 'VALIDATION_ERROR' });
+    return errors.badRequest(res, 'Invalid organization ID');
     }
     const { id } = paramsResult.data;
 
     // IDOR FIX: Verify user has access to this org
     if (ctx["orgId"] !== id) {
     logger.warn(`[IDOR] User ${ctx.userId} attempted to access org ${id} members without permission`);
-    return res.status(404).send({ error: 'Organization not found' });
+    return errors.notFound(res, 'Organization');
     }
 
     return await orgs.listMembers(id);
   } catch (error) {
+    logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
+    // FIX: Added return before reply.send()
+    return errors.internal(res, 'Failed to retrieve members');
     return handleError(res, error, 'list organization members');
   }
   });
@@ -112,7 +115,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin','owner']);
     await rateLimit(`orgs:invite:${ctx.userId}`, 30);
@@ -120,28 +123,27 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     // SECURITY FIX (H08): Validate route params
     const paramsResult = OrgIdParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({ error: 'Invalid organization ID', code: 'VALIDATION_ERROR' });
+    return errors.badRequest(res, 'Invalid organization ID');
     }
     const { id } = paramsResult.data;
 
     // IDOR FIX: Verify user has access to this org
     if (ctx["orgId"] !== id) {
     logger.warn(`[IDOR] User ${ctx.userId} attempted to invite to org ${id} without permission`);
-    return res.status(404).send({ error: 'Organization not found' });
+    return errors.notFound(res, 'Organization');
     }
 
     // SECURITY FIX (C01): Validate invite body with Zod
     const bodyResult = InviteSchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-      error: 'Validation failed',
-      code: 'VALIDATION_ERROR',
-      details: bodyResult.error.issues,
-    });
+    return errors.validationFailed(res, bodyResult.error.issues);
     }
     const { email, role } = bodyResult.data;
     return await invites.invite(id, email, role);
   } catch (error) {
+    logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
+    // FIX: Added return before reply.send()
+    return errors.internal(res, 'Failed to send invite');
     return handleError(res, error, 'send organization invite');
   }
   });
@@ -150,7 +152,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin','owner']);
     await rateLimit(`orgs:members:add:${ctx.userId}`, 30);
@@ -158,29 +160,28 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     // SECURITY FIX (H08): Validate route params
     const paramsResult = OrgIdParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({ error: 'Invalid organization ID', code: 'VALIDATION_ERROR' });
+    return errors.badRequest(res, 'Invalid organization ID');
     }
     const { id } = paramsResult.data;
 
     // IDOR FIX: Verify user has access to this org
     if (ctx["orgId"] !== id) {
     logger.warn(`[IDOR] User ${ctx.userId} attempted to add member to org ${id} without permission`);
-    return res.status(404).send({ error: 'Organization not found' });
+    return errors.notFound(res, 'Organization');
     }
 
     // SECURITY FIX (C02): Validate add-member body with Zod
     const bodyResult = AddMemberSchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-      error: 'Validation failed',
-      code: 'VALIDATION_ERROR',
-      details: bodyResult.error.issues,
-    });
+    return errors.validationFailed(res, bodyResult.error.issues);
     }
     const { userId, role } = bodyResult.data;
     await members.addMember(id, userId, role);
     return { ok: true };
   } catch (error) {
+    logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
+    // FIX: Added return before reply.send()
+    return errors.internal(res, 'Failed to add member');
     return handleError(res, error, 'add organization member');
   }
   });

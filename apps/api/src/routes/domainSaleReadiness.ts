@@ -5,6 +5,7 @@ import { FastifyInstance } from 'fastify';
 import { getDb } from '../db';
 import { computeSaleReadiness } from '../domain/saleReadiness';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('DomainSaleReadiness');
 
@@ -85,23 +86,19 @@ export async function domainSaleReadinessRoutes(app: FastifyInstance) {
     // H06-FIX: Use auth context from middleware instead of custom JWT verification
     const auth = req.user as { userId: string; orgId: string } | undefined;
     if (!auth) {
-      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
     try {
       const parseResult = SaleReadinessBodySchema.safeParse(req.body);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid query parameters',
-          code: 'VALIDATION_ERROR',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
       const { domain_id, seo: seo_completeness, freshness: content_freshness_ratio, audience: audience_size, growth: audience_growth_rate, revenue: revenue_monthly, risks: compliance_flags } = parseResult.data;
 
       const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId);
       if (!hasAccess) {
         logger.warn('Unauthorized access attempt', { userId: auth.userId, domainId: domain_id, action: 'access_sale_readiness' });
-        return reply.status(403).send({ error: 'Access denied to domain' });
+        return errors.forbidden(reply, 'Access denied to domain');
       }
       const result = computeSaleReadiness({
         seo_completeness,
@@ -141,10 +138,7 @@ export async function domainSaleReadinessRoutes(app: FastifyInstance) {
     }
     catch (error) {
       logger.error('Error computing domain sale readiness', error instanceof Error ? error : new Error(String(error)));
-      return reply.status(500).send({
-        error: 'Internal server error',
-        ...(process.env['NODE_ENV'] === 'development' && { message: (error as Error)["message"] })
-      });
+      return errors.internal(reply);
     }
   });
 }

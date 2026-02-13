@@ -5,6 +5,8 @@ import { getLogger } from '@kernel/logger';
 import { createRouteErrorHandler } from '@errors';
 import { PublishingPreviewService } from '../../services/publishing-preview';
 import { requireRole, AuthContext, RoleAccessError } from '../../services/auth';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('publishing-preview');
 const handleError = createRouteErrorHandler({ logger });
@@ -58,21 +60,23 @@ export async function publishingPreviewRoutes(app: FastifyInstance, pool: Pool) 
   try {
     const { auth: ctx, query } = req as AuthenticatedRequest & { query: PreviewQueryParams };
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner','admin','editor','viewer']);
 
     const content_id = query.content_id;
     if (!content_id || typeof content_id !== 'string') {
-    return res.status(400).send({
-    error: 'Missing required parameter: content_id',
-    code: 'MISSING_PARAM'
-    });
+    return errors.badRequest(res, 'Missing required parameter: content_id', ErrorCodes.MISSING_PARAMETER);
     }
 
     const result = await svc.facebookPreview(content_id, ctx["orgId"]);
     return res.send(result);
   } catch (error) {
+    if (error instanceof RoleAccessError) {
+    return errors.forbidden(res);
+    }
+    console["error"]('Route error:', error);
+    return errors.internal(res);
     return handleError(res, error, 'generate Facebook preview');
   }
   });

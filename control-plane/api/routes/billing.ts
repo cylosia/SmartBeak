@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 import { createRouteErrorHandler } from '@errors';
 
 import { BillingService } from '../../services/billing';
@@ -32,17 +33,16 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
     // Validate input
     const parseResult = SubscribeSchema.safeParse(req.body);
     if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues
-    });
+    return errors.validationFailed(res, parseResult["error"].issues);
     }
 
     const { planId } = parseResult.data;
     await billing.assignPlan(ctx["orgId"], planId);
     return res.send({ ok: true });
   } catch (error) {
+    logger["error"]('[billing/subscribe] Error:', error instanceof Error ? error : new Error(String(error)));
+    // SECURITY FIX (Finding 7): Don't leak any error details to clients
+    return errors.internal(res);
     return handleError(res, error, 'subscribe to plan');
   }
   });
@@ -55,6 +55,9 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
     const plan = await billing.getActivePlan(ctx["orgId"]);
     return res.send(plan);
   } catch (error) {
+    logger["error"]('[billing/plan] Error:', error instanceof Error ? error : new Error(String(error)));
+    // SECURITY FIX (Finding 7): Don't leak raw error messages to clients
+    return errors.internal(res);
     return handleError(res, error, 'fetch billing plan');
   }
   });

@@ -7,6 +7,7 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('queue-metrics');
 
@@ -80,7 +81,7 @@ export async function queueMetricsRoutes(app: FastifyInstance, pool: Pool) {
   } catch (error) {
     // P2-6: Use structured logger instead of console.error
     logger.error('[admin/queues/metrics] Error:', error as Error);
-    return res.status(500).send({ error: 'Failed to retrieve queue metrics' });
+    return errors.internal(res, 'Failed to retrieve queue metrics');
   }
   });
 }

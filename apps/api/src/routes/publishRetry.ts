@@ -7,6 +7,7 @@ import { AuthContext } from '../types/fastify';
 import { getDb } from '../db';
 import { rateLimit } from '../utils/rateLimit';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('PublishRetryService');
 
@@ -46,10 +47,7 @@ export async function publishRetryRoutes(app: FastifyInstance): Promise<void> {
   try {
     const auth = req.auth;
     if (!auth) {
-    return reply.status(401).send({
-    error: 'Unauthorized',
-    code: 'UNAUTHORIZED'
-    });
+    return errors.unauthorized(reply);
     }
 
     requireRole(auth, ['owner', 'admin']);
@@ -59,11 +57,7 @@ export async function publishRetryRoutes(app: FastifyInstance): Promise<void> {
 
     const paramsResult = ParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return reply.status(400).send({
-    error: 'Invalid ID format',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult.error.issues
-    });
+    return errors.validationFailed(reply, paramsResult.error.issues);
     }
 
     const { id } = paramsResult.data;
@@ -78,25 +72,15 @@ export async function publishRetryRoutes(app: FastifyInstance): Promise<void> {
     .first();
     } catch (dbError) {
         logger.error('Database error', dbError as Error);
-    return reply.status(503).send({
-    error: 'Database temporarily unavailable',
-    code: 'DB_UNAVAILABLE',
-    message: 'Unable to fetch publish intent. Please try again later.'
-    });
+    return errors.serviceUnavailable(reply, 'Unable to fetch publish intent. Please try again later.');
     }
 
     if (!intent) {
-    return reply.code(404).send({
-    error: 'Publish intent not found',
-    code: 'NOT_FOUND'
-    });
+    return errors.notFound(reply, 'Publish intent');
     }
 
     if (intent.status !== 'failed') {
-    return reply.code(400).send({
-    error: 'Only failed intents can be retried',
-    code: 'INVALID_STATE'
-    });
+    return errors.badRequest(reply, 'Only failed intents can be retried');
     }
 
     // Enqueue publish_execution_job (idempotent)
@@ -108,11 +92,7 @@ export async function publishRetryRoutes(app: FastifyInstance): Promise<void> {
     .update({ status: 'pending' });
     } catch (dbError) {
         logger.error('Update error', dbError as Error);
-    return reply.status(503).send({
-    error: 'Failed to retry',
-    code: 'UPDATE_FAILED',
-    message: 'Unable to update publish intent. Please try again later.'
-    });
+    return errors.serviceUnavailable(reply, 'Unable to update publish intent. Please try again later.');
     }
 
     return reply.send({ status: 'requeued', intentId: id });
@@ -124,18 +104,10 @@ export async function publishRetryRoutes(app: FastifyInstance): Promise<void> {
     (error["message"].includes('permission') ||
     (error as Error & { code?: string }).code === 'PERMISSION_DENIED');
     if (hasPermissionError) {
-    return reply.status(403).send({
-    error: 'Permission denied',
-    code: 'FORBIDDEN'
-    });
+    return errors.forbidden(reply);
     }
 
-    // FIX: Added return before reply.send()
-    return reply.status(500).send({
-    error: 'Internal server error',
-    code: 'INTERNAL_ERROR',
-    message: error instanceof Error ? error["message"] : 'Unknown error'
-    });
+    return errors.internal(reply);
   }
   });
 }

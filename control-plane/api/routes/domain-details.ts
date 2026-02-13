@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 import { createRouteErrorHandler } from '@errors';
 
 const logger = getLogger('domain-details');
@@ -39,7 +41,7 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (rows.length === 0) {
-    return res.status(404).send({ error: 'Domain not found' });
+    return errors.notFound(res, 'Domain', ErrorCodes.DOMAIN_NOT_FOUND);
     }
 
     const domain = rows[0];
@@ -71,6 +73,8 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     },
     };
   } catch (error) {
+    logger.error('Failed to fetch domain details', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res, 'Failed to fetch domain details');
     return handleError(res, error, 'fetch domain details');
   }
   });

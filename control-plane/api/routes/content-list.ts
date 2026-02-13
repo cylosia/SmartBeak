@@ -11,6 +11,7 @@ import { getContentRepository } from '../../services/repository-factory';
 import { ListContent } from '../../../domains/content/application/handlers/ListContent';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('content-list');
 const handleError = createRouteErrorHandler({ logger });
@@ -32,11 +33,7 @@ export async function contentListRoutes(app: FastifyInstance) {
 
     const parseResult = QuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues
-    });
+    return errors.validationFailed(res, parseResult["error"].issues);
     }
 
     const { status, limit, offset, domainId } = parseResult.data;
@@ -65,6 +62,8 @@ export async function contentListRoutes(app: FastifyInstance) {
     }
     };
   } catch (error: unknown) {
+    console["error"]('[content/list] Error:', error);
+    return errors.internal(res, 'Failed to list content');
     return handleError(res, error, 'list content');
   }
   });

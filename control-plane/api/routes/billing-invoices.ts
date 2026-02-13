@@ -7,6 +7,7 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { billingConfig } from '@config/billing';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('billing-invoices');
 
@@ -87,8 +88,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return { invoices: [] };
     }
 
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch invoices' });
+    return errors.internal(res, 'Failed to fetch invoices');
   }
   });
 
@@ -110,7 +110,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     const stripeCustomerId = orgRows[0]?.stripe_customer_id;
 
     if (!stripeCustomerId) {
-    return res.status(404).send({ error: 'No billing data found' });
+    return errors.notFound(res, 'Billing data');
     }
 
     // P1-FIX: Use shared Stripe singleton
@@ -152,11 +152,10 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return res.type('text/csv').send(csvHeader + csvRows);
     }
 
-    return res.status(400).send({ error: 'Unsupported format. Use csv.' });
+    return errors.badRequest(res, 'Unsupported format. Use csv.');
   } catch (error) {
     logger.error('Error exporting invoices', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to export invoices' });
+    return errors.internal(res, 'Failed to export invoices');
   }
   });
 }

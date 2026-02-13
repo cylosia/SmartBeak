@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { getLogger } from '../../../packages/kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type AuthContext } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('ROIRisk');
 
@@ -20,7 +21,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
   try {
     const ctx = req.auth as AuthContext;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     await rateLimit('roi-risk', 50);
@@ -30,7 +31,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     const hasAccess = await verifyAssetOwnership(ctx["orgId"], assetId, pool);
     if (!hasAccess) {
     logger.warn(`[IDOR] User ${ctx.userId} attempted to access ROI/Risk for asset ${assetId} outside their org`);
-    return res.status(404).send({ error: 'Asset not found' });
+    return errors.notFound(res, 'Asset');
     }
 
     // Fetch ROI and risk data for the asset from database
@@ -47,7 +48,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     );
 
     if (!assetData) {
-    return res.status(404).send({ error: 'Asset not found' });
+    return errors.notFound(res, 'Asset');
     }
 
     // AUDIT-FIX P1-07: Add org_id to secondary queries to prevent
@@ -110,11 +111,11 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return analysis;
   } catch (error) {
     if (error instanceof RoleAccessError) {
-    return res.status(403).send({ error: 'Forbidden' });
+    return errors.forbidden(res);
     }
     logger.error('[roi-risk] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch ROI/Risk analysis' });
+    return errors.internal(res, 'Failed to fetch ROI/Risk analysis');
   }
   });
 }

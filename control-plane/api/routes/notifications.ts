@@ -11,6 +11,7 @@ import { NotificationPreferenceService } from '../../../domains/notifications/ap
 import { PostgresNotificationPreferenceRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationPreferenceRepository';
 import { PostgresNotificationRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationRepository';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('Notifications');
 const handleError = createRouteErrorHandler({ logger });
@@ -48,15 +49,12 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     const rateLimitResult = await checkRateLimitAsync(ctx.userId, 'notifications');
     if (!rateLimitResult.allowed) {
-    return res.status(429).send({
-    error: 'Rate limit exceeded',
-    retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
-    });
+    return errors.rateLimited(res, Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000));
     }
 
     // Parse pagination params
@@ -67,10 +65,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
     const MAX_SAFE_OFFSET = 10000;
     if (offset > MAX_SAFE_OFFSET) {
-    return res.status(400).send({
-    error: `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`,
-    code: 'PAGINATION_LIMIT',
-    });
+    return errors.badRequest(res, `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`);
     }
 
     let rows: Notification[];
@@ -112,10 +107,7 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     }
     } catch (dbError) {
     logger.error('[notifications] Database error', dbError instanceof Error ? dbError : new Error(String(dbError)));
-    return res.status(503).send({
-    error: 'Database temporarily unavailable',
-    message: 'Unable to fetch notifications. Please try again later.'
-    });
+    return errors.serviceUnavailable(res, 'Database temporarily unavailable');
     }
 
     return res.send({
@@ -125,6 +117,9 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     }
     });
   } catch (error) {
+    logger.error('[notifications] Unexpected error', error instanceof Error ? error : new Error(String(error)));
+    // P1-FIX: Removed error.message leak to client
+    return errors.internal(res);
     return handleError(res, error, 'fetch notifications');
   }
   });
@@ -136,19 +131,19 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     const rateLimitResult2 = await checkRateLimitAsync(ctx.userId, 'notifications:preferences');
     if (!rateLimitResult2.allowed) {
-    return res.status(429).send({
-    error: 'Rate limit exceeded',
-    retryAfter: Math.ceil((rateLimitResult2.resetTime - Date.now()) / 1000)
-    });
+    return errors.rateLimited(res, Math.ceil((rateLimitResult2.resetTime - Date.now()) / 1000));
     }
     const preferences = await prefs.list(ctx.userId);
     return res.send(preferences);
   } catch (error) {
+    logger.error('[notifications/preferences] Error', error instanceof Error ? error : new Error(String(error)));
+    // P1-FIX: Removed error.message leak to client
+    return errors.internal(res, 'Failed to fetch preferences');
     return handleError(res, error, 'fetch notification preferences');
   }
   });
@@ -160,25 +155,18 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     const rateLimitResult3 = await checkRateLimitAsync(ctx.userId, 'notifications:preferences:update');
     if (!rateLimitResult3.allowed) {
-    return res.status(429).send({
-    error: 'Rate limit exceeded',
-    retryAfter: Math.ceil((rateLimitResult3.resetTime - Date.now()) / 1000)
-    });
+    return errors.rateLimited(res, Math.ceil((rateLimitResult3.resetTime - Date.now()) / 1000));
     }
 
     // Validate body
     const bodyResult = PreferenceBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
 
     const { channel, enabled, frequency } = bodyResult.data;
@@ -186,6 +174,9 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     const result = await prefs.set(ctx.userId, channel, enabled, frequency ?? 'immediate');
     return res.send(result);
   } catch (error) {
+    logger.error('[notifications/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
+    // P1-FIX: Removed error.message leak to client
+    return errors.internal(res, 'Failed to update preferences');
     return handleError(res, error, 'update notification preferences');
   }
   });

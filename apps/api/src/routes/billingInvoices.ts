@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { verifyToken, extractBearerToken as extractTokenFromHeader, TokenExpiredError, TokenInvalidError, } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
 import { getDb } from '../db';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const billingInvoicesLogger = getLogger('billingInvoices');
 
@@ -71,7 +73,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
   const token = extractTokenFromHeader(authHeader);
 
   if (!token) {
-    return reply.status(401).send({ error: 'Unauthorized', code: 'NO_TOKEN' });
+    return errors.unauthorized(reply);
   }
 
   try {
@@ -86,12 +88,12 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     };
   } catch (error) {
     if (error instanceof TokenExpiredError) {
-    return reply.status(401).send({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
+    return errors.unauthorized(reply, 'Token expired');
     }
     if (error instanceof TokenInvalidError) {
-    return reply.status(401).send({ error: 'Invalid token', code: 'INVALID_TOKEN' });
+    return errors.unauthorized(reply, 'Invalid token');
     }
-    return reply.status(401).send({ error: 'Authentication failed', code: 'AUTH_FAILED' });
+    return errors.unauthorized(reply, 'Authentication failed');
   }
   });
 
@@ -106,25 +108,16 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
 
     // Require both userId and orgId for billing access
     if (!userId) {
-      return reply.status(401).send({
-        error: 'Authentication required',
-        code: 'AUTH_REQUIRED'
-      });
+      return errors.unauthorized(reply, 'Authentication required');
     }
     if (!orgId) {
-      return reply.status(403).send({
-        error: 'Organization context required for billing access',
-        code: 'ORG_CONTEXT_REQUIRED'
-      });
+      return errors.forbidden(reply, 'Organization context required for billing access');
     }
 
     // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
-      return reply.status(403).send({
-        error: 'Forbidden',
-        code: 'ORG_MEMBERSHIP_REQUIRED'
-      });
+      return errors.forbidden(reply, 'Forbidden');
     }
   });
 
@@ -140,16 +133,13 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     // Validate query params
     const queryResult = QuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-    return reply.status(400).send({
-    error: 'Invalid query parameters',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(reply, 'Invalid query parameters');
     }
 
     const { limit, startingAfter } = queryResult.data;
     const customerId = authReq.user?.stripeCustomerId;
     if (!customerId) {
-      return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+      return errors.unauthorized(reply);
     }
 
     const invoices = await stripe.invoices.list({
@@ -171,17 +161,11 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
                   error.message.includes('Stripe') ||
                   error.name === 'StripeError';
       if (isStripeError) {
-        return reply.status(502).send({
-          error: 'Payment provider error',
-          code: 'PROVIDER_ERROR',
-        });
+        return sendError(reply, 502, ErrorCodes.EXTERNAL_API_ERROR, 'Payment provider error');
       }
     }
 
-    return reply.status(500).send({
-    error: 'Internal server error',
-    code: 'INTERNAL_ERROR',
-    });
+    return errors.internal(reply);
   }
   });
 }

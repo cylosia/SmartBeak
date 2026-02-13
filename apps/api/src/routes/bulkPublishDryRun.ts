@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 import type { Knex } from 'knex';
 
@@ -96,7 +97,7 @@ export async function bulkPublishDryRunRoutes(app: FastifyInstance): Promise<voi
 
     const auth = await verifyAuth(req);
     if (!auth) {
-      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
     
     const db = await getDb();
@@ -105,28 +106,19 @@ export async function bulkPublishDryRunRoutes(app: FastifyInstance): Promise<voi
 
       const parseResult = BulkPublishDryRunSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid input',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
       const { domain_id, drafts, targets } = parseResult.data;
 
       const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId, db);
       if (!hasAccess) {
         logger.warn('Unauthorized access attempt', { userId: auth.userId, domainId: domain_id, action: 'bulk_publish_dry_run' });
-        return reply.status(403).send({ error: 'Access denied to domain' });
+        return errors.forbidden(reply, 'Access denied to domain');
       }
       // FIX: Calculate total combinations and validate
       const totalCombinations = drafts.length * targets.length;
       if (totalCombinations > MAX_COMBINATIONS) {
-        return reply.status(400).send({
-          error: 'Too many combinations',
-          message: `Requested ${totalCombinations} combinations, but maximum allowed is ${MAX_COMBINATIONS}. Please reduce the number of drafts or targets.`,
-          drafts: drafts.length,
-          targets: targets.length,
-          totalCombinations,
-        });
+        return errors.badRequest(reply, `Too many combinations: requested ${totalCombinations}, maximum allowed is ${MAX_COMBINATIONS}. Please reduce the number of drafts or targets.`);
       }
       // FIX: Use optimized batch processing instead of nested map (O(n*m) complexity)
       const summary = await generateSummaryBatched(drafts, targets);
@@ -154,13 +146,7 @@ export async function bulkPublishDryRunRoutes(app: FastifyInstance): Promise<voi
     }
     catch (error) {
       logger.error('Error processing bulk publish dry run', error instanceof Error ? error : new Error(String(error)));
-      const errorResponse: { error: string; message?: string } = {
-        error: 'Internal server error'
-      };
-      if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
-        errorResponse.message = error.message;
-      }
-      return reply.status(500).send(errorResponse);
+      return errors.internal(reply);
     }
   });
 }

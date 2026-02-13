@@ -8,6 +8,7 @@ import { createRouteErrorHandler } from '@errors';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
 import { UsageService } from '../../services/usage';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('usage-routes');
 const handleError = createRouteErrorHandler({ logger });
@@ -51,7 +52,7 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin']);
     // P1-FIX: Scope rate limit to org to prevent one user exhausting limit for all
@@ -61,6 +62,8 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
     try {
     stats = await usage.getUsage(ctx["orgId"]) as unknown as UsageStats;
     } catch (serviceError) {
+    console["error"]('[usage] Service error:', serviceError);
+    return errors.serviceUnavailable(res, 'Unable to fetch usage data. Please try again later.');
     logger.error('[usage] Service error', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
     return res.status(503).send({
     error: 'Usage service temporarily unavailable',
@@ -70,6 +73,9 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
 
     return res.send(stats);
   } catch (error) {
+    // P1-FIX: Log full error server-side but never expose raw error messages to clients
+    console["error"]('[usage] Unexpected error:', error);
+    return errors.internal(res);
     return handleError(res, error, 'fetch usage statistics');
   }
   });

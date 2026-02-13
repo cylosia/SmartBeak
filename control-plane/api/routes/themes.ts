@@ -5,6 +5,7 @@ import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('Themes');
 
@@ -100,7 +101,7 @@ export async function themeRoutes(app: FastifyInstance, pool: Pool) {
       return { themes, ...(degraded && { degraded: true }) };
     } catch (error) {
       logger.error('[themes] Error', error instanceof Error ? error : new Error(String(error)));
-      return res.status(500).send({ error: 'Failed to fetch themes' });
+      return errors.internal(res, 'Failed to fetch themes');
     }
   });
 }

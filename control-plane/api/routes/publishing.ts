@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { PublishingUIService } from '../../services/publishing-ui';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const TargetBodySchema = z.object({
   type: z.enum(['wordpress', 'webhook', 'api']),
@@ -24,16 +26,13 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   app.get('/publishing/targets', async (req, res) => {
   const ctx = req.auth as AuthContext;
   if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
   }
   requireRole(ctx, ['owner', 'admin', 'editor']);
   await rateLimit('publishing', 50);
 
   if (!ctx["domainId"]) {
-    return res.status(400).send({
-    error: 'Domain ID is required',
-    code: 'DOMAIN_REQUIRED',
-    });
+    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   return svc.listTargets(ctx["domainId"]);
@@ -42,25 +41,18 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   app.post('/publishing/targets', async (req, res) => {
   const ctx = req.auth as AuthContext;
   if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
   }
   requireRole(ctx, ['owner', 'admin']);
   await rateLimit('publishing', 30);
 
   if (!ctx["domainId"]) {
-    return res.status(400).send({
-    error: 'Domain ID is required',
-    code: 'DOMAIN_REQUIRED',
-    });
+    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   const bodyResult = TargetBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
   }
 
   const { type, config } = bodyResult.data;
@@ -70,16 +62,13 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   app.get('/publishing/jobs', async (req, res) => {
   const ctx = req.auth as AuthContext;
   if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
   }
   requireRole(ctx, ['owner', 'admin', 'editor']);
   await rateLimit('publishing', 50);
 
   if (!ctx["domainId"]) {
-    return res.status(400).send({
-    error: 'Domain ID is required',
-    code: 'DOMAIN_REQUIRED',
-    });
+    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   return svc.listJobs(ctx["domainId"]);
@@ -88,34 +77,25 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   app.get('/publishing/jobs/:id', async (req, res) => {
   const ctx = req.auth as AuthContext;
   if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
   }
   requireRole(ctx, ['owner', 'admin', 'editor']);
   await rateLimit('publishing', 50);
 
   const paramsResult = IdParamSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid job ID',
-    code: 'INVALID_ID',
-    });
+    return errors.badRequest(res, 'Invalid job ID', ErrorCodes.INVALID_PARAMS);
   }
 
   const { id } = paramsResult.data;
 
   const job = await getJobWithOwnership(pool, svc, id, ctx["orgId"]);
   if (!job) {
-    return res.status(404).send({
-    error: 'Job not found',
-    code: 'NOT_FOUND',
-    });
+    return errors.notFound(res, 'Job');
   }
 
   if (!job.hasAccess) {
-    return res.status(403).send({
-    error: 'Access denied',
-    code: 'ACCESS_DENIED',
-    });
+    return errors.forbidden(res, 'Access denied', ErrorCodes.ACCESS_DENIED);
   }
 
   // Return job without the internal hasAccess flag
@@ -126,27 +106,21 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   app.post('/publishing/jobs/:id/retry', async (req, res) => {
   const ctx = req.auth as AuthContext;
   if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
   }
   requireRole(ctx, ['owner', 'admin']);
   await rateLimit('publishing', 30);
 
   const paramsResult = IdParamSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid job ID',
-    code: 'INVALID_ID',
-    });
+    return errors.badRequest(res, 'Invalid job ID', ErrorCodes.INVALID_PARAMS);
   }
 
   const { id } = paramsResult.data;
 
   const hasAccess = await verifyJobOwnership(pool, id, ctx["orgId"]);
   if (!hasAccess) {
-    return res.status(403).send({
-    error: 'Access denied',
-    code: 'ACCESS_DENIED',
-    });
+    return errors.forbidden(res, 'Access denied', ErrorCodes.ACCESS_DENIED);
   }
 
   return svc.retryJob(id);

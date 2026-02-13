@@ -8,6 +8,8 @@ import { createRouteErrorHandler } from '@errors';
 import { PlanningOverviewService } from '../../../domains/planning/application/PlanningOverviewService';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('planning-routes');
 const handleError = createRouteErrorHandler({ logger });
@@ -38,21 +40,20 @@ export async function planningRoutes(app: FastifyInstance, pool: Pool): Promise<
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner','admin','editor','viewer']);
     await rateLimit('planning', 50);
 
     if (!ctx["domainId"]) {
-    return res.status(400).send({
-    error: 'Domain ID is required',
-    code: 'DOMAIN_REQUIRED',
-    });
+    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.REQUIRED_FIELD);
     }
 
     const result = await svc.overview(ctx["domainId"]);
     return res.send(result);
   } catch (error: unknown) {
+    console["error"]('[planning/overview] Error:', error);
+    return errors.internal(res, 'Failed to retrieve planning overview');
     return handleError(res, error, 'fetch planning overview');
   }
   });

@@ -9,6 +9,7 @@ import { createRouteErrorHandler } from '@errors';
 import { PublishingCreateJobService } from '../../services/publishing-create-job';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type Role } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('publishing-create-job');
 const handleError = createRouteErrorHandler({ logger });
@@ -38,7 +39,7 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner','admin','editor']);
     await rateLimit('content', 50);
@@ -46,11 +47,7 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
     // Validate input
     const parseResult = CreateJobSchema.safeParse(req.body);
     if (!parseResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult["error"].issues
-    });
+    return errors.validationFailed(res, parseResult["error"].issues);
     }
 
     const { contentId, targetId, scheduleAt } = parseResult.data;
@@ -62,6 +59,11 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
     ...(scheduleAt !== undefined && { scheduleAt }),
     });
   } catch (error) {
+    if (error instanceof RoleAccessError) {
+    return errors.forbidden(res);
+    }
+    console["error"]('Route error:', error);
+    return errors.internal(res);
     return handleError(res, error, 'create publishing job');
   }
   });

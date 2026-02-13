@@ -11,6 +11,8 @@ import { extractAndVerifyToken } from '@security/jwt';
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { getLogger } from '@kernel/logger';
 import { getDb } from '../db';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const billingPaddleLogger = getLogger('billingPaddle');
 
@@ -88,7 +90,7 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
     const result = extractAndVerifyToken(authHeader);
 
     if (!result.valid || !result.claims?.orgId) {
-    return reply.status(401).send({ error: result.error || 'Unauthorized' });
+    return errors.unauthorized(reply, result.error || 'Unauthorized');
     }
 
     // P1-FIX: Store full user context including id for membership verification
@@ -105,19 +107,13 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
     const orgId = authReq.user?.orgId;
     
     if (!userId || !orgId) {
-      return reply.status(401).send({ 
-        error: 'Unauthorized',
-        code: 'AUTH_REQUIRED'
-      });
+      return errors.unauthorized(reply);
     }
-    
+
     // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
-      return reply.status(403).send({ 
-        error: 'Forbidden',
-        code: 'ORG_MEMBERSHIP_REQUIRED'
-      });
+      return errors.forbidden(reply, 'Organization membership required');
     }
   });
 
@@ -136,32 +132,23 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
 
     const parseResult = CheckoutBodySchema.safeParse(whitelistedBody);
     if (!parseResult.success) {
-        return reply.status(400).send({
-        error: 'Invalid input',
-        code: 'VALIDATION_ERROR'
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
     }
 
     const { planId } = parseResult.data;
 
     if (!validatePlanId(planId)) {
-        return reply.status(400).send({
-        error: 'Invalid planId format',
-        code: 'VALIDATION_ERROR'
-        });
+        return errors.badRequest(reply, 'Invalid planId format');
     }
 
     const orgId = authReq.user?.orgId;
     if (!orgId) {
-      return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+      return errors.unauthorized(reply);
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(orgId)) {
-        return reply.status(400).send({
-        error: 'Invalid organization ID',
-        code: 'VALIDATION_ERROR'
-        });
+        return errors.badRequest(reply, 'Invalid organization ID', ErrorCodes.INVALID_UUID);
     }
 
     // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes
@@ -180,17 +167,11 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
                     error["message"].includes('Paddle') ||
                     error.name === 'PaddleError';
         if (isPaddleError) {
-        return reply.status(502).send({
-            error: 'Payment provider error',
-            code: 'PROVIDER_ERROR'
-        });
+        return sendError(reply, 502, ErrorCodes.EXTERNAL_API_ERROR, 'Payment provider error');
         }
     }
 
-    return reply.status(500).send({
-        error: 'Internal server error',
-        code: 'INTERNAL_ERROR',
-    });
+    return errors.internal(reply);
     }
   });
 }

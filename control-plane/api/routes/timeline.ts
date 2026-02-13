@@ -6,6 +6,8 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const _logger = getLogger('timeline');
 
@@ -54,21 +56,13 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     // Validate orgId using Zod schema
     const orgIdResult = z.string().uuid().safeParse(orgId);
     if (!orgIdResult.success) {
-      return res.status(400).send({
-        error: 'Invalid organization ID',
-        code: 'VALIDATION_ERROR',
-        details: orgIdResult.error.issues,
-      });
+      return errors.validationFailed(res, orgIdResult.error.issues);
     }
 
     // Parse and validate query params
     const queryResult = TimelineQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-      return res.status(400).send({
-        error: 'Invalid query parameters',
-        code: 'VALIDATION_ERROR',
-        details: queryResult.error.issues,
-      });
+      return errors.validationFailed(res, queryResult.error.issues);
     }
 
     const { limit, startDate, endDate, action, entityType } = queryResult.data;
@@ -135,11 +129,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
 
     const paramsResult = DomainParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-      return res.status(400).send({
-        error: 'Invalid domain ID',
-        code: 'INVALID_ID',
-        details: paramsResult.error.issues,
-      });
+      return errors.badRequest(res, 'Invalid domain ID', ErrorCodes.INVALID_PARAMS, paramsResult.error.issues);
     }
 
     const { domainId } = paramsResult.data;
@@ -147,10 +137,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     // Validate orgId
     const orgIdResult = z.string().uuid().safeParse(ctx.orgId);
     if (!orgIdResult.success) {
-      return res.status(400).send({
-        error: 'Invalid organization ID',
-        code: 'VALIDATION_ERROR',
-      });
+      return errors.badRequest(res, 'Invalid organization ID');
     }
 
     // P1-10 FIX: Return 404 instead of 403 to prevent domain ID enumeration
@@ -160,17 +147,13 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (domainRows.length === 0) {
-      return res.status(404).send({ error: 'Domain not found' });
+      return errors.notFound(res, 'Domain', ErrorCodes.DOMAIN_NOT_FOUND);
     }
 
     // Parse and validate query params
     const queryResult = TimelineQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-      return res.status(400).send({
-        error: 'Invalid query parameters',
-        code: 'VALIDATION_ERROR',
-        details: queryResult.error.issues,
-      });
+      return errors.validationFailed(res, queryResult.error.issues);
     }
 
     const { limit, startDate, endDate, action, entityType } = queryResult.data;

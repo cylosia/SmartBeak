@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 import { createRouteErrorHandler } from '@errors';
 
 import { BillingService } from '../../services/billing';
@@ -66,35 +68,25 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
   }
 
   // P1-2 FIX: Return 400 on validation failure instead of silent fallback to defaults
   const queryResult = DomainQuerySchema.safeParse(req.query);
   if (!queryResult.success) {
-    return res.status(400).send({
-    error: 'Invalid query parameters',
-    code: 'VALIDATION_ERROR',
-    details: queryResult.error.issues,
-    });
+    return errors.validationFailed(res, queryResult.error.issues);
   }
   const { status, page, limit } = queryResult.data;
 
   // P0-4 FIX: Cap maximum page to prevent OFFSET DoS (deep pages cause full table scans)
   const MAX_PAGE = 100;
   if (page > MAX_PAGE) {
-    return res.status(400).send({
-    error: `Page number must not exceed ${MAX_PAGE}. Use cursor-based pagination for deeper access.`,
-    code: 'PAGINATION_LIMIT',
-    });
+    return errors.badRequest(res, `Page number must not exceed ${MAX_PAGE}. Use cursor-based pagination for deeper access.`);
   }
 
   const offset = (page - 1) * limit;
@@ -134,6 +126,8 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
     return domains;
   } catch (error) {
+    logger["error"]('[domains] Error:', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res, 'Failed to fetch domains');
     return handleError(res, error, 'list domains');
   }
   });
@@ -145,15 +139,12 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
   }
 
   return pricing.getDomainAllowance(ctx["orgId"]);
@@ -166,25 +157,18 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
   }
 
   // Validate body
   const bodyResult = CreateDomainBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
   }
 
   const { name, domainType } = bodyResult.data;
@@ -209,11 +193,8 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
     if (maxDomains !== null && maxDomains !== undefined && currentDomainCount >= maxDomains) {
     await client.query('ROLLBACK');
-    return res.status(402).send({
-    error: 'Domain limit exceeded',
-    code: 'QUOTA_EXCEEDED',
-    current: currentDomainCount,
-    limit: maxDomains,
+    return sendError(res, 402, ErrorCodes.QUOTA_EXCEEDED, 'Domain limit exceeded', {
+    details: { current: currentDomainCount, limit: maxDomains },
     });
     }
 
@@ -252,6 +233,8 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     return { id: domainId, name, status: 'active' };
   } catch (error) {
     await client.query('ROLLBACK');
+    logger["error"]('[domains POST] Error:', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res, 'Failed to create domain');
     return handleError(res, error, 'create domain');
   } finally {
     client.release();
@@ -265,17 +248,13 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
   }
 
   // Validate params
   const paramsResult = DomainParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid domain ID',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.validationFailed(res, paramsResult["error"].issues);
   }
 
   const { domainId } = paramsResult.data;
@@ -287,7 +266,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   );
 
   if (domainRows.length === 0) {
-    return res.status(403).send({ error: 'Access denied to domain' });
+    return errors.forbidden(res, 'Access denied to domain');
   }
 
   try {
@@ -302,7 +281,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     if (rows.length === 0) {
-    return res.status(404).send({ error: 'Domain not found' });
+    return errors.notFound(res, 'Domain');
     }
 
     const row = rows[0];
@@ -317,6 +296,8 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     updatedAt: row.updated_at,
     };
   } catch (error) {
+    logger["error"]('[domains/:domainId] Error:', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res, 'Failed to fetch domain');
     return handleError(res, error, 'fetch domain');
   }
   });
@@ -328,27 +309,19 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
   }
 
   // Validate params
   const paramsResult = DomainParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid domain ID',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.validationFailed(res, paramsResult["error"].issues);
   }
 
   // Validate body
   const bodyResult = UpdateDomainBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
   }
 
   const { domainId } = paramsResult.data;
@@ -361,7 +334,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   );
 
   if (domainRows.length === 0) {
-    return res.status(403).send({ error: 'Access denied to domain' });
+    return errors.forbidden(res, 'Access denied to domain');
   }
 
   // H08-FIX: Wrap both updates in a transaction to prevent partial update
@@ -408,6 +381,8 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('ROLLBACK').catch((rollbackError: Error) => {
     logger.error('Rollback failed during PATCH', rollbackError);
     });
+    logger.error('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res, 'Failed to update domain');
     return handleError(res, error, 'update domain');
   } finally {
     client.release();
@@ -421,17 +396,13 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    return errors.badRequest(res, 'Organization ID is required');
   }
 
   // Validate params
   const paramsResult = DomainParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid domain ID',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.validationFailed(res, paramsResult["error"].issues);
   }
 
   const { domainId } = paramsResult.data;
@@ -443,7 +414,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   );
 
   if (domainRows.length === 0) {
-    return res.status(403).send({ error: 'Access denied to domain' });
+    return errors.forbidden(res, 'Access denied to domain');
   }
 
   // P0-5 FIX: Wrap delete + usage decrement in transaction to prevent quota corruption
@@ -471,6 +442,8 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('ROLLBACK').catch((rollbackError: Error) => {
     logger.error('Rollback failed during DELETE', rollbackError);
     });
+    logger.error('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res, 'Failed to delete domain');
     return handleError(res, error, 'delete domain');
   } finally {
     client.release();

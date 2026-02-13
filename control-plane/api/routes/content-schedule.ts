@@ -11,6 +11,8 @@ import { DomainOwnershipService } from '../../services/domain-ownership';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { ScheduleContent } from '../../../domains/content/application/handlers/ScheduleContent';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('content-schedule');
 const handleError = createRouteErrorHandler({ logger });
@@ -33,10 +35,7 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
 
     const paramsResult = ParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid content ID',
-    code: 'INVALID_ID',
-    });
+    return errors.badRequest(res, 'Invalid content ID', ErrorCodes.INVALID_PARAMS);
     }
 
     const { id } = paramsResult.data;
@@ -44,11 +43,7 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     // Validate body
     const bodyResult = BodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
 
     const { publishAt } = bodyResult.data;
@@ -60,10 +55,7 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     // before allowing schedule. Previously any editor could schedule any org's content.
     const contentItem = await repo.getById(id);
     if (!contentItem) {
-    return res.status(404).send({
-    error: 'Content not found',
-    code: 'CONTENT_NOT_FOUND',
-    });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
     // Verify org owns the domain that owns this content
     if (contentItem.domainId) {
@@ -83,6 +75,8 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     }
     };
   } catch (error: unknown) {
+    console["error"]('[content/schedule] Error:', error);
+    return errors.internal(res, 'Failed to schedule content');
     return handleError(res, error, 'schedule content');
   }
   });

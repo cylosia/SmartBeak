@@ -5,6 +5,7 @@ import { generateBuyerSeoReport, BuyerSeoReport } from '../seo/buyerReport';
 import { getDb } from '../db';
 import { optionalAuthFastify } from '@security/auth';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('BuyerSeoReport');
 
@@ -121,7 +122,7 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
   await optionalAuthFastify(req, reply);
   const auth = req.authContext;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+    return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
   }
 
   // P1-FIX (AUDIT): Moved Cache-Control headers inside the success path.
@@ -132,11 +133,7 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
     // Validate query parameters
     const parseResult = SeoReportQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return reply.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult.error.issues
-    });
+    return errors.validationFailed(reply, parseResult.error.issues);
     }
 
     const { domain, pages, clusters, freshness_ratio, schema_coverage } = parseResult.data;
@@ -151,13 +148,13 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
     const domainRecord = domainRecordResult ? validateDomainRecord(domainRecordResult) : undefined;
 
     if (!domainRecord) {
-    return reply.status(404).send({ error: 'Domain not found' });
+    return errors.notFound(reply, 'Domain');
     }
 
     const hasAccess = await canAccessDomain(auth.userId, domainRecord.domain_id, auth.orgId);
     if (!hasAccess) {
     logger.warn('Unauthorized access attempt', { userId: auth.userId, domain, action: 'access_seo_report' });
-    return reply.status(403).send({ error: 'Access denied to domain' });
+    return errors.forbidden(reply, 'Access denied to domain');
     }
 
     const report = generateBuyerSeoReport({
@@ -187,14 +184,7 @@ export async function buyerSeoReportRoutes(app: FastifyInstance): Promise<void> 
     return report;
   } catch (error) {
     logger.error('Error generating buyer SEO report', error instanceof Error ? error : new Error(String(error)));
-    const errorResponse: ErrorResponse = {
-    error: 'Internal server error'
-    };
-    // P1-FIX: Standardize dev error exposure with double-guard pattern
-    if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
-    errorResponse["message"] = error["message"];
-    }
-    return reply.status(500).send(errorResponse);
+    return errors.internal(reply);
   }
   });
 }
