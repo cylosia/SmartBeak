@@ -51,4 +51,15 @@ export class FlagService {
     [validatedKey, validatedValue]
   );
   }
+
+  async getAll(): Promise<Array<{ key: string; value: boolean; updatedAt: Date | null }>> {
+  const { rows } = await this.pool.query(
+    'SELECT key, value, updated_at FROM system_flags ORDER BY key'
+  );
+  return rows.map((r: { key: string; value: boolean; updated_at: Date | null }) => ({
+    key: r.key,
+    value: r.value,
+    updatedAt: r.updated_at,
+  }));
+  }
 }

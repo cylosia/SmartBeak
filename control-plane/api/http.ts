@@ -21,6 +21,7 @@ import { attributionRoutes } from './routes/attribution';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
 import { billingInvoiceRoutes } from './routes/billing-invoices';
 import { billingRoutes } from './routes/billing';
+import { cacheRoutes } from './routes/cache';
 // C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
 import { contentRevisionRoutes } from './routes/content-revisions';
 import { contentRoutes } from './routes/content';
@@ -451,6 +452,7 @@ async function registerRoutes(): Promise<void> {
     await publishingCreateJobRoutes(v1, pool);
     await publishingPreviewRoutes(v1, pool);
     await queueMetricsRoutes(v1, pool);
+    await cacheRoutes(v1, pool);
 
     // New routes to fix missing API endpoints
     await affiliateRoutes(v1, pool);

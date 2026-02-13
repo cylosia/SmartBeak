@@ -513,6 +513,50 @@ export class MultiTierCache {
   }
 
   /**
+   * Clear L2 cache (Redis) only, leaving L1 intact
+   */
+  async clearL2(): Promise<void> {
+    if (!this.redis) return;
+
+    try {
+      const pattern = `${this.options.keyPrefix}*`;
+      const SCAN_BATCH_SIZE = 100;
+      const DELETE_BATCH_SIZE = 1000;
+
+      let cursor = '0';
+      let totalDeleted = 0;
+      const keysToDelete: string[] = [];
+
+      do {
+        const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_BATCH_SIZE);
+        cursor = result[0];
+        const keys = result[1];
+
+        if (keys.length > 0) {
+          keysToDelete.push(...keys);
+
+          if (keysToDelete.length >= DELETE_BATCH_SIZE) {
+            const batch = keysToDelete.splice(0, DELETE_BATCH_SIZE);
+            await this.redis.del(...batch);
+            totalDeleted += batch.length;
+          }
+        }
+      } while (cursor !== '0');
+
+      if (keysToDelete.length > 0) {
+        await this.redis.del(...keysToDelete);
+        totalDeleted += keysToDelete.length;
+      }
+
+      if (totalDeleted > 0) {
+        logger.info(`Cleared ${totalDeleted} keys from L2 cache`);
+      }
+    } catch (error) {
+      logger.error('L2 clear error', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  /**
    * Clear all caches
    * P1-FIX: Uses SCAN + batch delete instead of KEYS to avoid blocking Redis
    */
