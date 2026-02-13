@@ -29,40 +29,47 @@ export function PublishIntentModal({ onSubmit }: PublishIntentModalProps) {
   }
 
   return (
-  <div>
-    <h2>Create Publish Intents</h2>
+  <div role="dialog" aria-modal="true" aria-labelledby="publish-intent-heading">
+    <h2 id="publish-intent-heading">Create Publish Intents</h2>
     <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
-    <label htmlFor='target-vercel'>
+    <fieldset>
+      <legend>Select publish targets</legend>
+      <label htmlFor='target-vercel'>
       <input
-      id='target-vercel'
-      type='checkbox'
-      checked={targets.includes('vercel')}
-      onChange={() => toggleTarget('vercel')}
+        id='target-vercel'
+        type='checkbox'
+        checked={targets.includes('vercel')}
+        onChange={() => toggleTarget('vercel')}
       />
       Web (Vercel)
-    </label>
+      </label>
 
-    <label htmlFor='target-wordpress'>
+      <label htmlFor='target-wordpress'>
       <input
-      id='target-wordpress'
-      type='checkbox'
-      checked={targets.includes('wordpress')}
-      onChange={() => toggleTarget('wordpress')}
+        id='target-wordpress'
+        type='checkbox'
+        checked={targets.includes('wordpress')}
+        onChange={() => toggleTarget('wordpress')}
       />
       WordPress
-    </label>
+      </label>
 
-    <label htmlFor='target-facebook'>
+      <label htmlFor='target-facebook'>
       <input
-      id='target-facebook'
-      type='checkbox'
-      checked={targets.includes('facebook')}
-      onChange={() => toggleTarget('facebook')}
+        id='target-facebook'
+        type='checkbox'
+        checked={targets.includes('facebook')}
+        onChange={() => toggleTarget('facebook')}
       />
       Facebook
-    </label>
+      </label>
+    </fieldset>
 
-    <button type='submit' disabled={targets.length === 0}>
+    <button
+      type='submit'
+      disabled={targets.length === 0}
+      aria-disabled={targets.length === 0}
+    >
       Create {targets.length} Publish Intent(s)
     </button>
     </form>
