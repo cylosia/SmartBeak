@@ -16,6 +16,9 @@ import { AbortController } from 'abort-controller';
  * API Docs: https://platform.openai.com/docs/api-reference/images
  */
 
+/** OpenAI DALL-E 2 image upload limit: 4MB */
+const MAX_IMAGE_UPLOAD_BYTES = 4 * 1024 * 1024;
+
 /**
  * API Error with status code and retry information
  */
@@ -250,6 +253,12 @@ export class OpenAIImageAdapter {
     if (!image || !(image instanceof Buffer) || image.length === 0) {
       throw new Error('image is required and must be a non-empty Buffer');
     }
+    if (image.length > MAX_IMAGE_UPLOAD_BYTES) {
+      throw new Error(`image size ${image.length} bytes exceeds maximum ${MAX_IMAGE_UPLOAD_BYTES} bytes (4MB)`);
+    }
+    if (mask && mask instanceof Buffer && mask.length > MAX_IMAGE_UPLOAD_BYTES) {
+      throw new Error(`mask size ${mask.length} bytes exceeds maximum ${MAX_IMAGE_UPLOAD_BYTES} bytes (4MB)`);
+    }
 
     this.logger.info('Editing image with OpenAI', context);
 
@@ -345,6 +354,9 @@ export class OpenAIImageAdapter {
 
     if (!image || !(image instanceof Buffer) || image.length === 0) {
       throw new Error('image is required and must be a non-empty Buffer');
+    }
+    if (image.length > MAX_IMAGE_UPLOAD_BYTES) {
+      throw new Error(`image size ${image.length} bytes exceeds maximum ${MAX_IMAGE_UPLOAD_BYTES} bytes (4MB)`);
     }
 
     this.logger.info('Creating image variation with OpenAI', context);

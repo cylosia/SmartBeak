@@ -5,6 +5,7 @@ import { LRUCache } from 'lru-cache';
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { withContext } from '@errors';
 
 import { PostgresSearchDocumentRepository } from '../../domains/search/infra/persistence/PostgresSearchDocumentRepository';
 
@@ -81,7 +82,11 @@ export class SearchQueryService {
     results = await this.searchBatched(query, limit, offset, ctx.orgId);
   } catch (error) {
     logger.error('Search error', error instanceof Error ? error : new Error(String(error)));
-    throw new Error('Search operation failed');
+    throw withContext(error, {
+    operation: 'search',
+    resource: 'documents',
+    metadata: { query, limit, offset, orgId: ctx.orgId },
+    });
   }
 
   CACHE.set(key, { value: results, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });

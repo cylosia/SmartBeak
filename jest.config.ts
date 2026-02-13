@@ -64,6 +64,21 @@ const config: Config = {
     },
   ],
 
+  
+  // Module path mapping (match tsconfig)
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
+    '^@kernel/(.*)$': '<rootDir>/packages/kernel/$1',
+    '^@security/(.*)$': '<rootDir>/packages/security/$1',
+    '^@database/(.*)$': '<rootDir>/packages/database/$1',
+    '^@config$': '<rootDir>/packages/config/index.ts',
+    '^@config/(.*)$': '<rootDir>/packages/config/$1',
+    '^@errors$': '<rootDir>/packages/errors/index.ts',
+  },
+  
+  // Setup files
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+  
   // Coverage configuration
   collectCoverageFrom: [
     'apps/**/*.{ts,tsx}',

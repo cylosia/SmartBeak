@@ -75,6 +75,19 @@ export {
 export { securityConfig, abuseGuardConfig } from './security';
 
 // ============================================================================
+// Security Headers (CSP, HSTS, Cross-Origin, etc.)
+// ============================================================================
+export {
+  BASE_SECURITY_HEADERS,
+  CSP_API,
+  buildWebAppCsp,
+  CSP_THEMES,
+  PERMISSIONS_POLICY_WEB_APP,
+  PERMISSIONS_POLICY_API,
+  PERMISSIONS_POLICY_THEMES,
+} from './headers';
+
+// ============================================================================
 // Cache Configuration
 // ============================================================================
 export { cacheConfig, redisConfig } from './cache';

@@ -80,7 +80,7 @@ export async function requireAuthNextJs(
     return null;
   }
 
-  if (!claims["orgId"]) {
+  if (!claims.orgId) {
     res.status(401).json({ error: 'Unauthorized. Organization context required.' });
     return null;
   }
@@ -93,7 +93,7 @@ export async function requireAuthNextJs(
 
   return {
     userId: claims.sub,
-    orgId: claims["orgId"],
+    orgId: claims.orgId,
     roles,
     sessionId: claims.jti,
     requestId: generateRequestId(),
@@ -146,7 +146,7 @@ export async function optionalAuthNextJs(
     return null;
   }
 
-  if (!claims.sub || !claims["orgId"]) {
+  if (!claims.sub || !claims.orgId) {
     return null;
   }
 
@@ -158,7 +158,7 @@ export async function optionalAuthNextJs(
 
   return {
     userId: claims.sub,
-    orgId: claims["orgId"],
+    orgId: claims.orgId,
     roles,
     sessionId: claims.jti,
     requestId: generateRequestId(),
@@ -204,7 +204,7 @@ export async function optionalAuthFastify(
       return;
     }
 
-    if (!claims.sub || !claims["orgId"]) {
+    if (!claims.sub || !claims.orgId) {
       return;
     }
 
@@ -220,7 +220,7 @@ export async function optionalAuthFastify(
     // Attach auth context to request
     req.authContext = {
       userId: claims.sub,
-      orgId: claims["orgId"],
+      orgId: claims.orgId,
       roles,
       sessionId: claims.jti,
       requestId: generateRequestId(),
@@ -261,7 +261,7 @@ export async function requireAuthFastify(
       return res.status(401).send({ error: 'Unauthorized. Token missing user ID.' });
     }
 
-    if (!claims["orgId"]) {
+    if (!claims.orgId) {
       return res.status(401).send({ error: 'Unauthorized. Organization context required.' });
     }
 
@@ -274,7 +274,7 @@ export async function requireAuthFastify(
     // Attach auth context to request
     req.authContext = {
       userId: claims.sub,
-      orgId: claims["orgId"],
+      orgId: claims.orgId,
       roles,
       sessionId: claims.jti,
       requestId: generateRequestId(),

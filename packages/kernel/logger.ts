@@ -1,4 +1,5 @@
 import { getRequestContext } from './request-context';
+import { sanitizeForLogging as redact, isSensitiveField as _isSensitiveField } from './redaction';
 
 /**
 * Structured Logger
@@ -125,63 +126,25 @@ function shouldLog(level: LogLevel): boolean {
 }
 
 // ============================================================================
-// Sensitive Data Redaction
+// Sensitive Data Redaction — delegated to @kernel/redaction
 // ============================================================================
 
-/**
-* Sensitive field patterns to redact
-*/
-const SENSITIVE_FIELDS = [
-  'password',
-  'token',
-  'apiKey',
-  'api_key',
-  'secret',
-  'authorization',
-  'auth',
-  'cookie',
-  'creditCard',
-  'credit_card',
-  'cvv',
-  'ssn',
-  'privateKey',
-  'private_key',
-];
+// Re-export the comprehensive isSensitiveField for external use
+const isSensitiveField = _isSensitiveField;
 
 /**
-* Check if a key is sensitive
-* @param key - Object key to check
-*/
-function isSensitiveField(key: string): boolean {
-  const lowerKey = key.toLowerCase();
-  return SENSITIVE_FIELDS.some(field =>
-  lowerKey.includes(field.toLowerCase())
-  );
-}
-
-/**
-* Redact sensitive data from an object
-* @param obj - Object to redact
-* @returns Redacted copy of the object
+* Redact sensitive data from an object using the consolidated redaction engine.
+* Uses comprehensive field-name and value-pattern matching (Stripe keys, JWTs,
+* AWS credentials, etc.) instead of basic field-name-only matching.
 */
 function redactSensitiveData(obj: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!obj || typeof obj !== 'object') {
-  return obj;
+    return obj;
   }
-
-  const redacted: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-  if (isSensitiveField(key)) {
-    redacted[key] = '[REDACTED]';
-  } else if (typeof value === 'object' && value !== null) {
-    redacted[key] = redactSensitiveData(value as Record<string, unknown>);
-  } else {
-    redacted[key] = value;
-  }
-  }
-
-  return redacted;
+  const result = redact(obj);
+  return (typeof result === 'object' && result !== null && !Array.isArray(result))
+    ? result as Record<string, unknown>
+    : { _redacted: result };
 }
 
 // ============================================================================

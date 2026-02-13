@@ -428,20 +428,25 @@ export default function App({ Component, pageProps }: AppProps) {
 }
 
 // CSS generators — SECURITY FIX P0 #7: Validate colors and sanitize custom CSS
-function generateAffiliateStyles(config: ThemeConfig): string {
-  const safeColor = validateCssColor(config.primaryColor);
+
+interface CssVariable { name: string; value: string }
+
+function buildThemeCss(
+  config: ThemeConfig,
+  variables: CssVariable[],
+  themeRules: string,
+): string {
   const safeCss = sanitizeCustomCss(config.customCss);
-  return `:root {
-  --primary-color: ${safeColor};
-  --text-color: #333;
-  --bg-color: #f5f5f5;
+  const vars = variables.map(v => `  ${v.name}: ${v.value};`).join('\n');
+  return `:root {\n${vars}\n}\n\n${themeRules}\n\n${safeCss}`;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+function generateAffiliateStyles(config: ThemeConfig): string {
+  return buildThemeCss(config, [
+    { name: '--primary-color', value: validateCssColor(config.primaryColor) },
+    { name: '--text-color', value: '#333' },
+    { name: '--bg-color', value: '#f5f5f5' },
+  ], `* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -449,22 +454,10 @@ body {
   color: var(--text-color);
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-}
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
 
-.header {
-  text-align: center;
-  padding: 3rem 0;
-}
-
-.header h1 {
-  font-size: 2.5rem;
-  color: var(--primary-color);
-  margin-bottom: 0.5rem;
-}
+.header { text-align: center; padding: 3rem 0; }
+.header h1 { font-size: 2.5rem; color: var(--primary-color); margin-bottom: 0.5rem; }
 
 .comparison-grid {
   display: grid;
@@ -490,34 +483,21 @@ body {
   font-size: 1rem;
   margin-top: 1rem;
 }
-
-.cta-button:hover {
-  opacity: 0.9;
-}
-
-${safeCss}`;
+.cta-button:hover { opacity: 0.9; }`);
 }
 
 function generateAuthorityStyles(config: ThemeConfig): string {
-  const safeColor = validateCssColor(config.primaryColor);
-  const safeCss = sanitizeCustomCss(config.customCss);
-  return `:root {
-  --primary-color: ${safeColor};
-  --text-color: #2c3e50;
-  --bg-color: #ffffff;
-}
-
-body {
+  return buildThemeCss(config, [
+    { name: '--primary-color', value: validateCssColor(config.primaryColor) },
+    { name: '--text-color', value: '#2c3e50' },
+    { name: '--bg-color', value: '#ffffff' },
+  ], `body {
   font-family: Georgia, 'Times New Roman', serif;
   line-height: 1.6;
   color: var(--text-color);
 }
 
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
+.container { max-width: 800px; margin: 0 auto; padding: 2rem; }
 
 .hero {
   text-align: center;
@@ -525,41 +505,18 @@ body {
   border-bottom: 2px solid var(--primary-color);
   margin-bottom: 3rem;
 }
+.hero h1 { font-size: 3rem; color: var(--primary-color); }
 
-.hero h1 {
-  font-size: 3rem;
-  color: var(--primary-color);
-}
-
-.tagline {
-  font-size: 1.25rem;
-  font-style: italic;
-  color: #666;
-}
-
-.featured-post {
-  padding: 2rem 0;
-}
-
-.read-more {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: bold;
-}
-
-${safeCss}`;
+.tagline { font-size: 1.25rem; font-style: italic; color: #666; }
+.featured-post { padding: 2rem 0; }
+.read-more { color: var(--primary-color); text-decoration: none; font-weight: bold; }`);
 }
 
 function generateLeadGenStyles(config: ThemeConfig): string {
-  const safeColor = validateCssColor(config.primaryColor);
-  const safeAccent = validateCssColor(config.secondaryColor || '#ff6b6b');
-  const safeCss = sanitizeCustomCss(config.customCss);
-  return `:root {
-  --primary-color: ${safeColor};
-  --accent-color: ${safeAccent};
-}
-
-body {
+  return buildThemeCss(config, [
+    { name: '--primary-color', value: validateCssColor(config.primaryColor) },
+    { name: '--accent-color', value: validateCssColor(config.secondaryColor || '#ff6b6b') },
+  ], `body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   margin: 0;
 }
@@ -572,31 +529,11 @@ body {
   background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
 }
 
-.hero {
-  text-align: center;
-  color: white;
-  padding: 2rem;
-  max-width: 600px;
-}
+.hero { text-align: center; color: white; padding: 2rem; max-width: 600px; }
+.hero h1 { font-size: 3rem; margin-bottom: 1rem; }
 
-.hero h1 {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.lead-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-.lead-form input {
-  padding: 1rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-}
+.lead-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; }
+.lead-form input { padding: 1rem; border: none; border-radius: 4px; font-size: 1rem; }
 
 .cta-button {
   background: var(--accent-color);
@@ -607,19 +544,13 @@ body {
   font-size: 1.1rem;
   font-weight: bold;
   cursor: pointer;
-}
-
-${safeCss}`;
+}`);
 }
 
 function generateLocalBusinessStyles(config: ThemeConfig): string {
-  const safeColor = validateCssColor(config.primaryColor);
-  const safeCss = sanitizeCustomCss(config.customCss);
-  return `:root {
-  --primary-color: ${safeColor};
-}
-
-body {
+  return buildThemeCss(config, [
+    { name: '--primary-color', value: validateCssColor(config.primaryColor) },
+  ], `body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -629,27 +560,11 @@ body {
   background: var(--primary-color);
   color: white;
 }
+.business-header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
 
-.business-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.services {
-  max-width: 600px;
-  margin: 3rem auto;
-  padding: 0 1rem;
-}
-
-.service-list {
-  list-style: none;
-  padding: 0;
-}
-
-.service-list li {
-  padding: 1rem;
-  border-bottom: 1px solid #eee;
-}
+.services { max-width: 600px; margin: 3rem auto; padding: 0 1rem; }
+.service-list { list-style: none; padding: 0; }
+.service-list li { padding: 1rem; border-bottom: 1px solid #eee; }
 
 .cta-button {
   background: var(--primary-color);
@@ -661,37 +576,21 @@ body {
   cursor: pointer;
   display: block;
   margin: 2rem auto;
-}
-
-${safeCss}`;
+}`);
 }
 
 function generateNewsletterStyles(config: ThemeConfig): string {
-  const safeColor = validateCssColor(config.primaryColor);
-  const safeCss = sanitizeCustomCss(config.customCss);
-  return `:root {
-  --primary-color: ${safeColor};
-}
-
-body {
+  return buildThemeCss(config, [
+    { name: '--primary-color', value: validateCssColor(config.primaryColor) },
+  ], `body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.6;
 }
 
-.newsletter-layout {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
+.newsletter-layout { max-width: 800px; margin: 0 auto; padding: 2rem; }
 
-header {
-  text-align: center;
-  padding: 2rem 0;
-}
-
-header h1 {
-  color: var(--primary-color);
-}
+header { text-align: center; padding: 2rem 0; }
+header h1 { color: var(--primary-color); }
 
 .subscribe-section {
   background: #f8f9fa;
@@ -701,19 +600,8 @@ header h1 {
   text-align: center;
 }
 
-.subscribe-form {
-  display: flex;
-  gap: 0.5rem;
-  max-width: 400px;
-  margin: 1rem auto;
-}
-
-.subscribe-form input {
-  flex: 1;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
+.subscribe-form { display: flex; gap: 0.5rem; max-width: 400px; margin: 1rem auto; }
+.subscribe-form input { flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; }
 
 .cta-button {
   background: var(--primary-color);
@@ -724,10 +612,5 @@ header h1 {
   cursor: pointer;
 }
 
-.privacy-note {
-  font-size: 0.875rem;
-  color: #666;
-}
-
-${safeCss}`;
+.privacy-note { font-size: 0.875rem; color: #666; }`);
 }

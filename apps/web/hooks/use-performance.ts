@@ -295,6 +295,8 @@ export function useVisibilityChange(
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleVisibilityChange = () => {
       const visible = document.visibilityState === 'visible';
       setIsVisible(visible);

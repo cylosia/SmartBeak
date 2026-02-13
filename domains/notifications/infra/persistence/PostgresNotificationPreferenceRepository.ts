@@ -1,12 +1,13 @@
 
 
 
+
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 
 import { NotificationPreference } from '../../domain/entities/NotificationPreference';
-import { NotificationPreferenceRepository } from '../../application/ports/NotificationPreferenceRepository';
+import { NotificationPreferenceRepository, LockOptions } from '../../application/ports/NotificationPreferenceRepository';
 
 const logger = getLogger('notification:preference:repository');
 
@@ -19,21 +20,25 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   /**
   * Get notification preferences for a user
   * @param userId - User ID
+  * @param client - Optional PoolClient for transaction participation
+  * @param options - Optional lock options (e.g., forUpdate)
   * @returns Array of NotificationPreference
   */
-  async getForUser(userId: string): Promise<NotificationPreference[]> {
+  async getForUser(userId: string, client?: PoolClient, options?: LockOptions): Promise<NotificationPreference[]> {
   // Validate input
   if (!userId || typeof userId !== 'string') {
     throw new Error('userId must be a non-empty string');
   }
   // Performance: Limit results to prevent unbounded queries
   const MAX_LIMIT = 100;
+  const lockClause = options?.forUpdate ? 'FOR UPDATE' : '';
 
   try {
-    const { rows } = await this.pool.query(
+    const queryable = client || this.pool;
+    const { rows } = await queryable.query(
     `SELECT id, user_id, channel, enabled, frequency
     FROM notification_preferences WHERE user_id = $1
-    LIMIT $2`,
+    LIMIT $2 ${lockClause}`,
     [userId, MAX_LIMIT]
     );
 
@@ -57,11 +62,15 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   * Get preference by user and channel
   * @param userId - User ID
   * @param channel - Channel name
+  * @param client - Optional PoolClient for transaction participation
+  * @param options - Optional lock options (e.g., forUpdate)
   * @returns NotificationPreference or null if not found
   */
   async getByUserAndChannel(
   userId: string,
-  channel: string
+  channel: string,
+  client?: PoolClient,
+  options?: LockOptions
   ): Promise<NotificationPreference | null> {
   // Validate inputs
   if (!userId || typeof userId !== 'string') {
@@ -70,11 +79,14 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   if (!channel || typeof channel !== 'string') {
     throw new Error('channel must be a non-empty string');
   }
+  const lockClause = options?.forUpdate ? 'FOR UPDATE' : '';
+
   try {
-    const { rows } = await this.pool.query(
+    const queryable = client || this.pool;
+    const { rows } = await queryable.query(
     `SELECT id, user_id, channel, enabled, frequency
     FROM notification_preferences
-    WHERE user_id = $1 AND channel = $2`,
+    WHERE user_id = $1 AND channel = $2 ${lockClause}`,
     [userId, channel]
     );
 
@@ -99,6 +111,7 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   /**
   * Upsert a notification preference
   * @param pref - NotificationPreference to upsert
+  * @param client - Optional PoolClient for transaction participation
   */
   async upsert(pref: NotificationPreference, client?: PoolClient): Promise<void> {
   // Validate input
@@ -127,14 +140,16 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   /**
   * Delete a preference
   * @param id - Preference ID to delete
+  * @param client - Optional PoolClient for transaction participation
   */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, client?: PoolClient): Promise<void> {
   // Validate input
   if (!id || typeof id !== 'string') {
     throw new Error('id must be a non-empty string');
   }
   try {
-    await this.pool.query(
+    const queryable = client || this.pool;
+    await queryable.query(
     'DELETE FROM notification_preferences WHERE id = $1',
     [id]
     );
@@ -148,8 +163,10 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   /**
   * Batch save preferences for better performance
   * @param prefs - Array of NotificationPreference to save
+  * @param client - Optional PoolClient for transaction participation. When provided,
+  *   the caller manages the transaction (no internal BEGIN/COMMIT).
   */
-  async batchSave(prefs: NotificationPreference[]): Promise<void> {
+  async batchSave(prefs: NotificationPreference[], client?: PoolClient): Promise<void> {
   // Validate input
   if (!Array.isArray(prefs)) {
     throw new Error('prefs must be an array');
@@ -170,16 +187,13 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   const CHUNK_SIZE = 100;
   if (prefs.length > CHUNK_SIZE) {
     for (let i = 0; i < prefs.length; i += CHUNK_SIZE) {
-    await this.batchSave(prefs.slice(i, i + CHUNK_SIZE));
+    await this.batchSave(prefs.slice(i, i + CHUNK_SIZE), client);
     }
     return;
   }
 
-  const client = await this.pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Use unnest for efficient batch insert
+  // When a client is provided, the caller manages the transaction
+  if (client) {
     await client.query(
     `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
     SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::bool[], $5::text[])
@@ -194,15 +208,38 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
     prefs.map(p => p.frequency)
     ]
     );
+    return;
+  }
 
-    await client.query('COMMIT');
+  // No client provided — manage our own transaction
+  const ownClient = await this.pool.connect();
+  try {
+    await ownClient.query('BEGIN');
+
+    // Use unnest for efficient batch insert
+    await ownClient.query(
+    `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
+    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::bool[], $5::text[])
+    ON CONFLICT (id) DO UPDATE SET
+    enabled = EXCLUDED.enabled,
+    frequency = EXCLUDED.frequency`,
+    [
+    prefs.map(p => p["id"]),
+    prefs.map(p => p.userId),
+    prefs.map(p => p.channel),
+    prefs.map(p => p.isEnabled()),
+    prefs.map(p => p.frequency)
+    ]
+    );
+
+    await ownClient.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK');
+    await ownClient.query('ROLLBACK');
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Failed to batch save preferences', err, { count: prefs.length });
     throw error;
   } finally {
-    client.release();
+    ownClient.release();
   }
   }
 }

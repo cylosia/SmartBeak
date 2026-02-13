@@ -57,12 +57,31 @@ export function generateSignedUploadUrl(storageKey: string, expiresInSeconds = 3
 
   // Create canonical request
   const method = 'PUT';
-  const canonicalUri = `/${storageKey}`;
-  const canonicalQuerystring = `X-Amz-Algorithm=AWS4-HMAC-SHA256&` +
-  `X-Amz-Credential=${encodeURIComponent(`${config.accessKeyId}/${credentialScope}`)}&` +
-  `X-Amz-Date=${amzDate}&` +
-  `X-Amz-Expires=${expiresInSeconds}&` +
-  `X-Amz-SignedHeaders=host`;
+
+  // SECURITY FIX: URI-encode each path segment per AWS SigV4 spec.
+  // Without this, special characters in storageKey cause signature mismatches.
+  const canonicalUri = '/' + storageKey
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+
+  // SECURITY FIX: Build canonical query string from sorted parameters using
+  // encodeURIComponent for both keys and values (RFC 3986 percent-encoding).
+  // Previously hard-coded parameter order was fragile, and url.searchParams.set()
+  // used application/x-www-form-urlencoded encoding (space='+') which differs
+  // from encodeURIComponent (space='%20'), causing signature mismatches.
+  const queryParams: Record<string, string> = {
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${config.accessKeyId}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': expiresInSeconds.toString(),
+    'X-Amz-SignedHeaders': 'host',
+  };
+
+  const canonicalQuerystring = Object.keys(queryParams)
+    .sort()
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key]!)}`)
+    .join('&');
 
   const canonicalHeaders = `host:${host}\n`;
   const signedHeaders = 'host';
@@ -89,21 +108,16 @@ export function generateSignedUploadUrl(storageKey: string, expiresInSeconds = 3
   const signingKey = getSigningKey(config.secretAccessKey, dateStamp, config.region, 's3');
   const signature = createHmac('sha256', signingKey).update(stringToSign).digest('hex');
 
-  // Build the signed URL
+  // Build the signed URL using the same canonical query string encoding
+  // to ensure the signature matches what the server computes from the URL.
   const baseUrl = config.endpoint
   ? `${config.endpoint}/${config.bucket}`
   : `https://${config.bucket}.s3.${config.region}.amazonaws.com`;
 
-  const url = new URL(`${baseUrl}/${storageKey}`);
-  url.searchParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256');
-  url.searchParams.set('X-Amz-Credential', `${config.accessKeyId}/${credentialScope}`);
-  url.searchParams.set('X-Amz-Date', amzDate);
-  url.searchParams.set('X-Amz-Expires', expiresInSeconds.toString());
-  url.searchParams.set('X-Amz-SignedHeaders', 'host');
-  url.searchParams.set('X-Amz-Signature', signature);
+  const signedUrl = `${baseUrl}/${storageKey}?${canonicalQuerystring}&X-Amz-Signature=${signature}`;
 
   return {
-  url: url.toString(),
+  url: signedUrl,
   expiresIn: expiresInSeconds
   };
 }

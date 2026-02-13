@@ -1,0 +1,168 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["Docker Build & Push"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Image tag to deploy (defaults to latest main SHA)'
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy-staging:
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name smartbeak-staging --region ${{ env.AWS_REGION }}
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.workflow_run.head_sha }}" ]; then
+            echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run database migrations
+        env:
+          IMAGE: ${{ steps.ecr-login.outputs.registry }}/smartbeak/api:${{ steps.tag.outputs.tag }}
+        run: |
+          kubectl run migration-${{ steps.tag.outputs.tag }} \
+            --rm -i --restart=Never \
+            --namespace=smartbeak-staging \
+            --image="$IMAGE" \
+            --override-type=strategic \
+            --overrides='{"spec":{"containers":[{"name":"migration-${{ steps.tag.outputs.tag }}","image":"'"$IMAGE"'","command":["node","--import","tsx/esm","scripts/migrate.ts","up"],"envFrom":[{"secretRef":{"name":"staging-smartbeak-secrets"}},{"configMapRef":{"name":"staging-smartbeak-config"}}]}]}}' \
+            --timeout=120s
+
+      - name: Deploy to staging
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          cd k8s/overlays/staging
+          kustomize edit set image \
+            "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/api=${ECR_REGISTRY}/smartbeak/api:${IMAGE_TAG}" \
+            "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/web=${ECR_REGISTRY}/smartbeak/web:${IMAGE_TAG}" \
+            "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/worker=${ECR_REGISTRY}/smartbeak/worker:${IMAGE_TAG}"
+          kubectl apply -k .
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/staging-api -n smartbeak-staging --timeout=300s
+          kubectl rollout status deployment/staging-web -n smartbeak-staging --timeout=300s
+          kubectl rollout status deployment/staging-worker -n smartbeak-staging --timeout=300s
+
+      - name: Smoke test
+        run: |
+          API_URL=$(kubectl get ingress -n smartbeak-staging -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          if [ -n "$API_URL" ]; then
+            curl -sf --max-time 10 "https://${API_URL}/health" || echo "Warning: smoke test could not reach /health"
+          else
+            echo "Warning: no ingress hostname found, skipping smoke test"
+          fi
+
+  deploy-production:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production  # Requires manual approval via GitHub Environment protection rules
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name smartbeak-production --region ${{ env.AWS_REGION }}
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run database migrations
+        env:
+          IMAGE: ${{ steps.ecr-login.outputs.registry }}/smartbeak/api:${{ steps.tag.outputs.tag }}
+        run: |
+          kubectl run migration-${{ steps.tag.outputs.tag }} \
+            --rm -i --restart=Never \
+            --namespace=smartbeak-production \
+            --image="$IMAGE" \
+            --override-type=strategic \
+            --overrides='{"spec":{"containers":[{"name":"migration-${{ steps.tag.outputs.tag }}","image":"'"$IMAGE"'","command":["node","--import","tsx/esm","scripts/migrate.ts","up"],"envFrom":[{"secretRef":{"name":"prod-smartbeak-secrets"}},{"configMapRef":{"name":"prod-smartbeak-config"}}]}]}}' \
+            --timeout=120s
+
+      - name: Deploy to production
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          cd k8s/overlays/production
+          kustomize edit set image \
+            "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/api=${ECR_REGISTRY}/smartbeak/api:${IMAGE_TAG}" \
+            "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/web=${ECR_REGISTRY}/smartbeak/web:${IMAGE_TAG}" \
+            "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/worker=${ECR_REGISTRY}/smartbeak/worker:${IMAGE_TAG}"
+          kubectl apply -k .
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/prod-api -n smartbeak-production --timeout=300s
+          kubectl rollout status deployment/prod-web -n smartbeak-production --timeout=300s
+          kubectl rollout status deployment/prod-worker -n smartbeak-production --timeout=300s
+
+      - name: Smoke test
+        run: |
+          API_URL=$(kubectl get ingress -n smartbeak-production -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          if [ -n "$API_URL" ]; then
+            curl -sf --max-time 10 "https://${API_URL}/health" || echo "Warning: smoke test could not reach /health"
+          else
+            echo "Warning: no ingress hostname found, skipping smoke test"
+          fi

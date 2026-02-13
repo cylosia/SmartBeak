@@ -10,7 +10,7 @@
  * 3. FTS injection risks (search documents)
  */
 
-import { escapeLikePattern, buildSafeIlikeQuery } from '../../apps/api/src/routes/emailSubscribers/utils';
+import { escapeLikePattern, buildSafeIlikeQuery } from '../../packages/database/sql-utils';
 
 // Mock the PostgresSearchDocumentRepository sanitizeFtsQuery method
 function sanitizeFtsQuery(query: string): string {
