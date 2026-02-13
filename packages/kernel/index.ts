@@ -43,7 +43,9 @@ export { TIME, TIME_SECONDS, DB, RATE_LIMIT, HTTP, CONTENT, JOBS, CACHE, SECURIT
 // Health checks (M7, M11)
 export { registerHealthCheck, checkAllHealth, getLastHealthCheck, createDatabaseHealthCheck, createExternalApiHealthCheck, createRedisHealthCheck, healthCheckMiddleware, } from './health-check';
 // Retry utilities (M8)
-export { withRetry, makeRetryable, Retryable, CircuitBreaker, } from './retry';
+export { withRetry, makeRetryable, Retryable, CircuitBreaker, AbortError, } from './retry';
+// Backpressure utilities
+export { Semaphore, PoolExhaustionError, QueueBackpressureError, } from './semaphore';
 // DLQ (M15)
 export { setDLQStorage, getDLQStorage, sendToDLQ, DLQ, withDLQ, } from './dlq';
 // Metrics (M5)
@@ -80,3 +82,6 @@ export {
   rateLimitMiddleware, createRateLimiter,
   type RateLimitConfig, type RateLimitResult,
 } from './rateLimiterRedis';
+
+// Transactional outbox relay for at-least-once event delivery
+export { OutboxRelay, type OutboxRelayOptions } from './outbox/OutboxRelay';

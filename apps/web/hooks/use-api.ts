@@ -445,15 +445,17 @@ export { fetchWithTimeout, createTimeoutController, DEFAULT_REQUEST_TIMEOUT_MS }
 export function useApi() {
   // P2-FIX: Memoize the API object to prevent new function references on every render
   return useMemo(() => ({
-    get: async (path: string) => {
+    get: async <T = unknown>(path: string): Promise<{ data: T }> => {
       const url = apiUrl(path.replace(/^\//, ''));
       const response = await fetchWithTimeout(url, {
         credentials: 'include',
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to GET ${path}`);
       return { data: await response.json() };
+      if (!response.ok) throw new Error(`Failed to GET ${path}`);
+      return { data: await response.json() as T };
     },
-    post: async (path: string, body: unknown) => {
+    post: async <T = unknown>(path: string, body: unknown): Promise<{ data: T }> => {
       const url = apiUrl(path.replace(/^\//, ''));
       const response = await fetchWithTimeout(url, {
         method: 'POST',
@@ -463,8 +465,10 @@ export function useApi() {
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to POST ${path}`);
       return { data: await response.json() };
+      if (!response.ok) throw new Error(`Failed to POST ${path}`);
+      return { data: await response.json() as T };
     },
-    patch: async (path: string, body: unknown) => {
+    patch: async <T = unknown>(path: string, body: unknown): Promise<{ data: T }> => {
       const url = apiUrl(path.replace(/^\//, ''));
       const response = await fetchWithTimeout(url, {
         method: 'PATCH',
@@ -474,8 +478,10 @@ export function useApi() {
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to PATCH ${path}`);
       return { data: await response.json() };
+      if (!response.ok) throw new Error(`Failed to PATCH ${path}`);
+      return { data: await response.json() as T };
     },
-    delete: async (path: string) => {
+    delete: async <T = unknown>(path: string): Promise<{ data: T }> => {
       const url = apiUrl(path.replace(/^\//, ''));
       const response = await fetchWithTimeout(url, {
         method: 'DELETE',
@@ -483,6 +489,8 @@ export function useApi() {
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to DELETE ${path}`);
       return { data: await response.json() };
+      if (!response.ok) throw new Error(`Failed to DELETE ${path}`);
+      return { data: await response.json() as T };
     },
   }), []);
 }

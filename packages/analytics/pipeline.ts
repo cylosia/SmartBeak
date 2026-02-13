@@ -345,6 +345,8 @@ export class AnalyticsPipeline {
   }>> {
   const { rows } = await this.db.query(
     `SELECT
+    keyword,
+    source,
     SUM(clicks) as total_clicks,
     AVG(position) as avg_position
     FROM keyword_metrics

@@ -46,8 +46,8 @@ export function useDiligenceCheck() {
   
   return useMutation({
     mutationFn: async ({ domainId, type }: { domainId: string; type: string }) => {
-      const response = await api.post(`/domains/${domainId}/diligence`, { type });
-      return response as unknown as DiligenceCheck;
+      const response = await api.post<DiligenceCheck>(`/domains/${domainId}/diligence`, { type });
+      return response.data;
     },
   });
 }
@@ -62,8 +62,8 @@ export function useDiligenceReport(domainId: string | undefined) {
     queryKey: [DILIGENCE_QUERY_KEY, domainId],
     queryFn: async () => {
       if (!domainId) throw new Error('Domain ID is required');
-      const response = await api.get(`/domains/${domainId}/diligence/report`);
-      return response as unknown as DiligenceReport;
+      const response = await api.get<DiligenceReport>(`/domains/${domainId}/diligence/report`);
+      return response.data;
     },
     enabled: !!domainId,
   });

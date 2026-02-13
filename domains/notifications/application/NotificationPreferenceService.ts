@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 
+import { withTransaction } from '@packages/database/transactions';
+
 import { NotificationPreference } from '../domain/entities/NotificationPreference';
 import { NotificationPreferenceRepository } from './ports/NotificationPreferenceRepository';
 
@@ -33,6 +35,10 @@ export interface PreferenceResult {
 *
 * This service provides operations for getting and setting user notification
 * preferences with proper validation and error handling.
+*
+* Read-modify-write operations (set, disableAll) are wrapped in transactions
+* with row-level locking (FOR UPDATE) to prevent race conditions from
+* concurrent updates.
 */
 export class NotificationPreferenceService {
   /** Allowed channels whitelist */
@@ -81,6 +87,9 @@ export class NotificationPreferenceService {
   /**
   * Set notification preference for a user
   *
+  * Uses a transaction with FOR UPDATE row locking to prevent read-modify-write
+  * race conditions when concurrent requests update preferences for the same user.
+  *
   * @param userId - User ID
   * @param channel - Notification channel
   * @param enabled - Whether notifications are enabled
@@ -108,37 +117,41 @@ export class NotificationPreferenceService {
   }
 
   try {
-    // Check for existing preference
-    const existing = await this.repo.getForUser(userId);
-    const existingPref = existing.find(p => p.channel === channel);
+    // Wrap in transaction with FOR UPDATE to prevent concurrent read-modify-write races.
+    // Without this, two concurrent set() calls for the same user could read stale data
+    // and the last write would silently overwrite the first.
+    return await withTransaction(async (client) => {
+    // Lock the specific user+channel row (or nothing if it doesn't exist yet)
+    const existingPref = await this.repo.getByUserAndChannel(
+      userId, channel, client, { forUpdate: true }
+    );
 
     let preference: NotificationPreference;
 
     if (existingPref) {
-    // Update existing preference (immutable)
-    if (existingPref.isEnabled() !== enabled) {
-    preference = enabled ? existingPref.enable() : existingPref.disable();
+      // Update existing preference (immutable)
+      preference = existingPref;
+      if (existingPref.isEnabled() !== enabled) {
+      preference = enabled ? preference.enable() : preference.disable();
+      }
+      if (existingPref.frequency !== frequency) {
+      preference = preference.setFrequency(frequency);
+      }
     } else {
-    preference = existingPref;
+      // Create new preference
+      preference = NotificationPreference.create(
+      randomUUID(),
+      userId,
+      channel,
+      enabled,
+      frequency,
+      );
     }
 
-    if (existingPref.frequency !== frequency) {
-    preference = preference.setFrequency(frequency);
-    }
-    } else {
-    // Create new preference
-    preference = NotificationPreference.create(
-    randomUUID(),
-    userId,
-    channel,
-    enabled,
-    frequency,
-    );
-    }
-
-    await this.repo.upsert(preference);
+    await this.repo.upsert(preference, client);
 
     return { success: true, preference };
+    });
   } catch (error) {
     return {
     success: false,
@@ -150,6 +163,9 @@ export class NotificationPreferenceService {
   /**
   * Disable all notifications for a user
   *
+  * Uses a transaction with FOR UPDATE row locking to prevent race conditions
+  * where a concurrent set() call could re-enable a channel between read and write.
+  *
   * @param userId - User ID
   * @returns Promise resolving to the result of the operation
   */
@@ -160,20 +176,18 @@ export class NotificationPreferenceService {
   }
 
   try {
-    const preferences = await this.repo.getForUser(userId);
+    // Wrap in transaction with FOR UPDATE to prevent concurrent modifications
+    // from re-enabling channels between our read and write.
+    return await withTransaction(async (client) => {
+    // Lock all preference rows for this user
+    const preferences = await this.repo.getForUser(userId, client, { forUpdate: true });
 
-    // P1-FIX: Batch update all preferences at once instead of N+1 individual saves
     const updated = preferences.map((pref) => pref.disable());
 
-    // Use batchSave if available, otherwise fall back to sequential upserts
-    if ('batchSave' in this.repo && typeof this.repo.batchSave === 'function') {
-    await this.repo.batchSave(updated);
-    } else {
-    // Fallback: Use Promise.all for parallel execution (better than sequential)
-    await Promise.all(updated.map((pref) => this.repo.upsert(pref)));
-    }
+    await this.repo.batchSave(updated, client);
 
     return { success: true, preferences: updated };
+    });
   } catch (error) {
     return {
     success: false,
