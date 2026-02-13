@@ -17,6 +17,20 @@ export interface RateLimitRecord {
   reset: number;
 }
 
+/** Default rate limit window in milliseconds (1 minute) */
+const DEFAULT_RATE_WINDOW_MS = 60000;
+
+/** Maximum entries in rate limit cache */
+const MAX_CACHE_ENTRIES = 10000;
+
+// In-memory cache for rate limiting
+const memoryCounters = new LRUCache<string, RateLimitRecord>({
+  max: MAX_CACHE_ENTRIES,
+  ttl: DEFAULT_RATE_WINDOW_MS,
+});
+
+// IP extraction — canonical implementation in @kernel/ip-utils
+import { getClientIp as kernelGetClientIp } from '@kernel/ip-utils';
 /**
 * Extract client IP from request
 * P1-FIX: IP Spoofing - Only trust X-Forwarded-For from trusted proxies
@@ -24,33 +38,8 @@ export interface RateLimitRecord {
 function getClientIp(req: FastifyRequest): string {
   const trustedProxies = process.env['TRUSTED_PROXIES']?.split(',').map(p => p.trim()) || [];
 
-  // Only trust X-Forwarded-If from trusted proxies is configured
-  if (trustedProxies.length > 0) {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded) {
-      const ips = forwarded.split(',').map(ip => ip.trim());
-      const clientIp = ips[0];
-      // Basic IP validation
-      if (clientIp && isValidIp(clientIp)) {
-        return clientIp;
-      }
-    }
-  }
-
-  // Fallback to direct connection IP
-  return req["ip"] || 'unknown';
-}
-
-/**
-* Validate IP address format (IPv4 or IPv6)
-*/
-function isValidIp(ip: string): boolean {
-  // IPv4 validation
-  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  // IPv6 validation (simplified)
-  const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
-
-  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+function getClientIp(req: FastifyRequest): string {
+  return kernelGetClientIp(req as unknown as { headers: Record<string, string | string[] | undefined>; ip?: string });
 }
 
 /**

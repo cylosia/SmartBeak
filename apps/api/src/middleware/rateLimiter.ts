@@ -4,6 +4,8 @@ import { LRUCache } from 'lru-cache';
 import { redisConfig } from '@config';
 import { emitMetric } from '../ops/metrics';
 import { getLogger } from '@kernel/logger';
+import { detectBot as _kernelDetectBot } from '@kernel/bot-detection';
+import { getClientIp as _kernelGetClientIp } from '@kernel/ip-utils';
 
 const logger = getLogger('rateLimiter');
 
@@ -22,91 +24,9 @@ const logger = getLogger('rateLimiter');
 // Bot Detection
 // ============================================================================
 
-/**
- * Suspicious user agent patterns for bot detection
- * SECURITY FIX: Issue 14 - Bot detection
- */
-const SUSPICIOUS_USER_AGENTS = [
-  'bot', 'crawler', 'spider', 'scrape', 'curl', 'wget',
-  'python', 'java', 'scrapy', 'httpclient', 'axios',
-  'postman', 'insomnia', 'burp', 'sqlmap', 'nikto',
-  'nmap', 'masscan', 'zgrab', 'gobuster', 'dirbuster',
-  'headless', 'phantomjs', 'selenium', 'puppeteer',
-  'playwright', 'cypress', 'webdriver',
-];
-
-/**
- * Bot detection result
- */
-export interface BotDetectionResult {
-  isBot: boolean;
-  confidence: number;
-  indicators: string[];
-}
-
-/**
- * Detect potential bot/scraper based on request characteristics
- * SECURITY FIX: Issue 14 - Bot detection in middleware
- * 
- * @param headers - Request headers
- * @returns Bot detection result
- */
-function detectBot(headers: Record<string, string | string[]>): BotDetectionResult {
-  const indicators: string[] = [];
-  let score = 0;
-
-  // Check user agent
-  const userAgent = String(headers['user-agent'] || '').toLowerCase();
-  
-  if (!userAgent || userAgent.length < 10) {
-    indicators.push('missing_user_agent');
-    score += 30;
-  } else {
-    for (const pattern of SUSPICIOUS_USER_AGENTS) {
-      if (userAgent.includes(pattern)) {
-        indicators.push(`suspicious_ua:${pattern}`);
-        score += 20;
-        break;
-      }
-    }
-    
-    // Check for headless browser indicators
-    if (userAgent.includes('headless') || 
-        userAgent.includes('phantomjs') ||
-        userAgent.includes('selenium') || 
-        userAgent.includes('puppeteer') ||
-        userAgent.includes('playwright')) {
-      indicators.push('headless_browser');
-      score += 25;
-    }
-  }
-
-  // Check for missing/standard headers
-  const acceptHeader = headers['accept'];
-  if (!acceptHeader) {
-    indicators.push('missing_accept_header');
-    score += 15;
-  }
-
-  const acceptLanguage = headers['accept-language'];
-  if (!acceptLanguage) {
-    indicators.push('missing_accept_language');
-    score += 10;
-  }
-
-  // Check for missing referer (not definitive, but adds to score)
-  const referer = headers['referer'];
-  if (!referer && !userAgent.includes('bot') && !userAgent.includes('crawler')) {
-    indicators.push('missing_referer');
-    score += 5;
-  }
-
-  // Determine bot status
-  const isBot = score >= 30;
-  const confidence = Math.min(score, 100);
-
-  return { isBot, confidence, indicators };
-}
+// Bot detection — canonical implementation in @kernel/bot-detection
+export type { BotDetectionResult } from '@kernel/bot-detection';
+const detectBot = _kernelDetectBot;
 
 // ============================================================================
 // Re-export types and class from canonical implementation
@@ -149,8 +69,9 @@ import { checkRateLimit as checkRateLimitRedis } from '@kernel/rateLimiterRedis'
 // creating a security footgun: any code importing checkRateLimit() directly would
 // bypass distributed rate limiting, allowing per-instance limits in scaled deployments.
 
+// IP extraction — canonical implementation in @kernel/ip-utils
 function getClientIP(request: FastifyRequest): string {
-  return (request as unknown as { ip?: string }).ip || 'unknown';
+  return _kernelGetClientIp(request as unknown as { headers: Record<string, string | string[] | undefined>; ip?: string });
 }
 
 /**

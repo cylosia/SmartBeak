@@ -1,57 +1,27 @@
-import { Mutex } from 'async-mutex';
-import { emitMetric } from '../ops/metrics';
-import { getLogger } from '@kernel/logger';
-
-const _logger = getLogger('resilience');
-// ============================================================================
-// Timeout Function
-// ============================================================================
 /**
- * Execute a promise with a timeout
- * @param promise - Promise to execute
- * @param ms - Timeout in milliseconds
- * @returns Promise result
- * @throws Error if timeout is exceeded
- * MEDIUM FIX M15: Bounded timeout
- */
-export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-    const boundedMs = Math.min(Math.max(1, ms), 300000);
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`Timeout exceeded after ${boundedMs}ms`)), boundedMs);
-  });
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  }
-  finally {
-    clearTimeout(timeoutId);
-  }
-}
-// ============================================================================
-// Circuit Breaker
-// ============================================================================
-/**
+ * @deprecated Import from @kernel/retry directly.
+ * This module re-exports resilience utilities for backward compatibility.
  * Circuit breaker implementation for fault tolerance
  * MEDIUM FIX M15: Bounded failures counter
  * Singleton per name: circuit breaker state is shared across all callers
  * using the same name, ensuring failures are tracked globally per service.
  */
 
+// Core resilience utilities — canonical implementations in packages/kernel/retry.ts
+export {
+  withTimeout,
+  CircuitBreaker,
+  CircuitOpenError,
+  withCircuitBreaker,
+  type CircuitBreakerOptions,
+} from '@kernel/retry';
 
-export interface CircuitBreakerConfig {
-  /** Number of failures before opening the circuit */
-  failureThreshold: number;
-  /** Time in milliseconds before attempting to close the circuit */
-  resetTimeoutMs: number;
-  /** Circuit breaker name for metrics */
-  name: string;
-  /** P1-FIX: Maximum attempts in half-open state before closing or re-opening */
-  halfOpenMaxAttempts?: number;
-}
-
+// App-specific adapter names (not part of kernel)
 const VALID_ADAPTER_NAMES = ['google-analytics', 'facebook', 'gsc', 'vercel', 'instagram', 'youtube', 'pinterest', 'linkedin', 'mailchimp', 'constant-contact', 'aweber'] as const;
 export type ValidAdapterName = typeof VALID_ADAPTER_NAMES[number];
 
+// Re-export CircuitBreakerConfig as an alias to CircuitBreakerOptions for backward compat
+export type { CircuitBreakerOptions as CircuitBreakerConfig } from '@kernel/retry';
 // ============================================================================
 // Singleton Circuit Breaker Registry
 // ============================================================================

@@ -1,5 +1,5 @@
 
-import { DomainEventEnvelope } from '@packages/types';
+import { DomainEventEnvelope } from '@types/domain-event';
 import { Queue } from 'bullmq';
 
 // P0-FIX: Parse Redis connection from REDIS_URL. Without this, BullMQ defaults
