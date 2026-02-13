@@ -142,6 +142,16 @@ export {
 } from './alerting-rules';
 
 // ============================================================================
+// Cost Tracking
+// ============================================================================
+export {
+  CostTracker,
+  type CostEntry,
+  type BudgetAlert,
+  type CostBreakdown,
+} from './costTracker';
+
+// ============================================================================
 // Legacy Exports (for backward compatibility)
 // ============================================================================
 export { JobOptimizer } from './jobOptimizer';

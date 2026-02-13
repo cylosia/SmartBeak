@@ -193,6 +193,22 @@ const pool = await getPoolInstance();
 // Initialize DI container
 const container = initializeContainer({ dbPool: pool });
 
+// Load cost tracking budgets from database
+try {
+  await container.costTracker.loadBudgetsFromDb();
+  logger.info('Cost tracking budgets loaded');
+} catch (error) {
+  logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+// Flush cost tracking buffer on shutdown
+registerShutdownHandler(async () => {
+  container.costTracker.stop();
+  logger.info('Cost tracker stopped and buffer flushed');
+});
+
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
   initializeRateLimiter();
@@ -361,6 +377,8 @@ app.setErrorHandler((error: unknown, request, reply) => {
     errorCode = 'NOT_FOUND';
   } else if (statusCode === 400) {
     errorCode = 'VALIDATION_ERROR';
+  } else if (statusCode === 402) {
+    errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
     errorCode = 'CONFLICT';
   }

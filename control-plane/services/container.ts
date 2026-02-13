@@ -5,6 +5,7 @@ import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '../../packages/kernel/logger';
 
 import { BillingService } from './billing';
+import { CostTracker } from '../../packages/monitoring/costTracker';
 import { DeliveryAdapter } from '../../domains/notifications/application/ports/DeliveryAdapter';
 import { DomainOwnershipService } from './domain-ownership';
 import { FacebookAdapter } from '../adapters/facebook/FacebookAdapter';
@@ -142,6 +143,10 @@ export class Container {
   */
   get billingService(): BillingService {
   return this.get('billingService', () => new BillingService(this.db));
+  }
+
+  get costTracker(): CostTracker {
+  return this.get('costTracker', () => new CostTracker(this.db));
   }
 
   get usageService(): UsageService {
