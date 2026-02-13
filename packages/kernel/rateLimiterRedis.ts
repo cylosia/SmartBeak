@@ -358,13 +358,14 @@ export function rateLimitMiddleware<T>(
 
       next();
     } catch (error) {
-      // Last resort: if even the in-memory fallback fails (should not happen),
-      // allow the request rather than returning a 500.
-      logger.error('[rateLimiter] Unexpected error in rate limit middleware - allowing request', {
+      // SECURITY FIX: Fail closed — deny request when rate limiter errors unexpectedly.
+      // Previously called next() (fail-open), which allowed unlimited traffic on failure.
+      logger.error('[rateLimiter] Unexpected error in rate limit middleware - failing closed (denying request)', {
         error: error instanceof Error ? error.message : String(error),
       });
       emitCounter('rate_limiter_middleware_error', 1);
-      next();
+      res.status(503);
+      res.json({ error: 'Service temporarily unavailable' });
     }
   };
 }

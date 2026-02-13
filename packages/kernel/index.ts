@@ -85,3 +85,9 @@ export {
   rateLimitMiddleware, createRateLimiter,
   type RateLimitConfig, type RateLimitResult,
 } from './rateLimiterRedis';
+
+// IP utilities — consolidated from control-plane/services/rate-limit.ts and apps/api/src/utils/rateLimit.ts
+export { getClientIp, isValidIp } from './ip-utils';
+
+// Bot detection — consolidated from apps/api/src/middleware/rateLimiter.ts
+export { detectBot, type BotDetectionResult } from './bot-detection';
