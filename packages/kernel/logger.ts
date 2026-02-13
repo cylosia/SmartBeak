@@ -233,17 +233,36 @@ function consoleHandler(entry: LogEntry): void {
 * @param handler - Handler function to add
 * @returns Function to remove the handler
 */
+/** P1-7 FIX: Track cleanup functions for auto-cleanup on process shutdown */
+const handlerCleanups: Array<() => void> = [];
+
 export function addLogHandler(handler: LogHandler): () => void {
   addHandler(handler);
-  
+
   // Return cleanup function
-  return () => {
+  const cleanup = () => {
     if (handlersFrozen) {
       throw new Error('Cannot remove handler after logger has been frozen');
     }
     handlers = handlers.filter(h => h !== handler);
   };
+
+  handlerCleanups.push(cleanup);
+
+  return cleanup;
 }
+
+/** P1-7 FIX: Auto-clean all registered handlers on process shutdown */
+process.once('beforeExit', () => {
+  for (const cleanup of handlerCleanups) {
+    try {
+      cleanup();
+    } catch {
+      // Ignore errors during shutdown cleanup (e.g. frozen handlers)
+    }
+  }
+  handlerCleanups.length = 0;
+});
 
 /**
 * Remove all log handlers

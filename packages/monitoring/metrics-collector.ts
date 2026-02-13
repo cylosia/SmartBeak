@@ -223,6 +223,8 @@ export class MetricsCollector extends EventEmitter {
       clearInterval(this.eventLoopLagInterval);
       this.eventLoopLagInterval = undefined;
     }
+    // P0-7 FIX: Remove all event listeners to prevent memory leaks
+    this.removeAllListeners();
     logger.info('Metrics collector stopped');
   }
 

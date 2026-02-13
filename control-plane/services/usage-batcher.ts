@@ -85,12 +85,32 @@ export class UsageBatcher {
   }
   }
 
+  // P1-13 FIX: Use promise-based deduplication to prevent race condition
+  private flushPromise: Promise<void> | null = null;
+
   async flush(): Promise<void> {
-  if (this.flushing || this.buffer.length === 0) {
+  if (this.buffer.length === 0) {
     return;
   }
 
-  this.flushing = true;
+  // P1-13 FIX: If a flush is already in-flight, wait for it then check for remaining data
+  if (this.flushPromise) {
+    await this.flushPromise;
+    if (this.buffer.length > 0) {
+    return this.flush();
+    }
+    return;
+  }
+
+  this.flushPromise = this.doFlush();
+  try {
+    await this.flushPromise;
+  } finally {
+    this.flushPromise = null;
+  }
+  }
+
+  private async doFlush(): Promise<void> {
   const batch = this.buffer.splice(0, this.buffer.length);
   clearTimeout(this.timer);
   this.timer = undefined;
@@ -113,8 +133,6 @@ export class UsageBatcher {
     requeued: Math.min(batch.length, availableSpace),
     }
     );
-  } finally {
-    this.flushing = false;
   }
   }
 

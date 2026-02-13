@@ -381,7 +381,10 @@ export class JobScheduler extends EventEmitter {
       logger.warn('Workers already running, skipping startWorkers()');
       return;
     }
-    
+
+    // P1-5 FIX: Set running flag immediately to prevent concurrent startWorkers() calls
+    this.running = true;
+
     // P1-FIX: Start auto-cleanup of stale abort controllers
     this.startAbortControllerCleanup();
 
@@ -469,8 +472,8 @@ export class JobScheduler extends EventEmitter {
       this.workers.set(queueName, worker);
     }
 
-    // P0-FIX: Mark as running after workers are created
-    this.running = true;
+    // P0-FIX: Running flag already set at method start (P1-5 FIX)
+    // If worker creation fails, the running flag should be reset by the caller
   }
 
   private async executeWithTimeout<T>(

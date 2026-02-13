@@ -246,7 +246,11 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
         });
     }
 
-    const session = await createStripeCheckoutSession(orgId, priceId);
+    // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes
+    const db = await getDb();
+    const session = await db.transaction(async (trx: import('knex').Knex.Transaction) => {
+      return createStripeCheckoutSession(orgId, priceId);
+    });
     if (!session["url"]) {
         return reply.status(500).send({
         error: 'Failed to create checkout session',

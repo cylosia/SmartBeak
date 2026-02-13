@@ -637,6 +637,22 @@ export class EmailAdapter implements DeliveryAdapter {
   }
 
   /**
+  * Destroy the adapter, closing any open connections.
+  * P1-3 FIX: Clean up cached SMTP transporter and SES client to prevent resource leaks.
+  */
+  async destroy(): Promise<void> {
+    if (this.smtpTransporter) {
+      this.smtpTransporter.close();
+      this.smtpTransporter = null;
+    }
+    if (this.sesClient) {
+      this.sesClient.destroy();
+      this.sesClient = null;
+    }
+    logger.info('EmailAdapter destroyed, connections closed');
+  }
+
+  /**
   * Validate email address format
   * MEDIUM FIX I6: Add format validation
   *

@@ -245,32 +245,49 @@ export class RateLimiter {
     }
   }
 
+  // P1-12 FIX: Timeout for Redis Lua script execution
+  private static readonly SCRIPT_TIMEOUT_MS = 5000;
+
   /**
   * Execute Lua script using EVALSHA, fallback to EVAL
+  * P1-12 FIX: Added timeout to prevent hanging on Redis issues
   */
   private async executeLuaScript(
     sha: string,
     keys: string[],
     args: (string | number)[]
   ): Promise<[number, number]> {
+    const executeWithTimeout = <T>(promise: Promise<T>): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Redis Lua script timeout')), RateLimiter.SCRIPT_TIMEOUT_MS)
+        ),
+      ]);
+    };
+
     try {
-      return await this.redis.evalsha(
-        sha,
-        keys.length,
-        ...keys,
-        ...args.map(String)
-      ) as [number, number];
+      return await executeWithTimeout(
+        this.redis.evalsha(
+          sha,
+          keys.length,
+          ...keys,
+          ...args.map(String)
+        ) as Promise<[number, number]>
+      );
     } catch (err: unknown) {
       // Fallback to EVAL if script not found (NOSCRIPT error)
       if (err instanceof Error && err["message"]?.includes('NOSCRIPT')) {
         this.luaScriptSha = undefined;
         const script = this.getTokenBucketScript();
-        return await this.redis.eval(
-          script,
-          keys.length,
-          ...keys,
-          ...args.map(String)
-        ) as [number, number];
+        return await executeWithTimeout(
+          this.redis.eval(
+            script,
+            keys.length,
+            ...keys,
+            ...args.map(String)
+          ) as Promise<[number, number]>
+        );
       }
       throw err;
     }

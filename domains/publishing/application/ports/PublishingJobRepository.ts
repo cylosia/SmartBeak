@@ -22,7 +22,8 @@ export interface PublishingJobRepository {
   * @returns Promise resolving to the publishing job, or null if not found
   * @throws {Error} If database connection fails or other infrastructure error occurs
   */
-  getById(id: string, client?: PoolClient): Promise<PublishingJob | null>;
+  // P0-5 FIX: Added forUpdate option for SELECT FOR UPDATE within transactions
+  getById(id: string, client?: PoolClient, options?: { forUpdate?: boolean }): Promise<PublishingJob | null>;
 
   /**
   * Save or update a publishing job

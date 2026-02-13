@@ -110,17 +110,18 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
 
   /**
   * Get publishing job by ID
-
+  * P0-5 FIX: Added forUpdate option for SELECT FOR UPDATE within transactions
   */
-  async getById(id: string, client?: PoolClient): Promise<PublishingJob | null> {
+  async getById(id: string, client?: PoolClient, options?: { forUpdate?: boolean }): Promise<PublishingJob | null> {
   try {
     const queryable = this.getQueryable(client);
+    const forUpdate = options?.forUpdate && client ? ' FOR UPDATE' : '';
     const { rows } = await queryable.query(
     `SELECT
     id, domain_id, content_id, target_id, status,
     error_message, started_at, completed_at, attempt_count
     FROM publishing_jobs
-    WHERE id = $1`,
+    WHERE id = $1${forUpdate}`,
     [id]
     );
 

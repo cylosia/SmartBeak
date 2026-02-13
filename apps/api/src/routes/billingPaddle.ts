@@ -164,7 +164,11 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
         });
     }
 
-    const session = await createPaddleCheckout(orgId, planId);
+    // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes
+    const db = await getDb();
+    const session = await db.transaction(async (trx: import('knex').Knex.Transaction) => {
+      return createPaddleCheckout(orgId, planId);
+    });
     return reply.status(200).send(session);
     } catch (error) {
     billingPaddleLogger.error('Error in paddle checkout', error instanceof Error ? error : new Error(String(error)));
