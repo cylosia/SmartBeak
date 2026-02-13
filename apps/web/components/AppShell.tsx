@@ -4,18 +4,20 @@
 import React from 'react';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '../lib/theme';
-
-const navLinks = [
-  { href: '/portfolio', label: 'Portfolio' },
-  { href: '/affiliates', label: 'Affiliates' },
-  { href: '/timeline', label: 'Timeline' },
-  { href: '/sell-ready', label: 'Sell Ready' },
-  { href: '/constitution', label: 'Constitution' },
-  { href: '/help', label: 'Help' },
-];
+import { useTranslation } from '../lib/i18n';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useTranslation();
+
+  const navLinks = [
+    { href: '/portfolio', label: t('nav.portfolio') },
+    { href: '/affiliates', label: t('nav.affiliates') },
+    { href: '/timeline', label: t('nav.timeline') },
+    { href: '/sell-ready', label: t('nav.sellReady') },
+    { href: '/constitution', label: t('nav.constitution') },
+    { href: '/help', label: t('nav.help') },
+  ];
 
   return (
   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr' }}>
@@ -32,9 +34,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       onFocus={(e) => { e.currentTarget.style.position = 'static'; e.currentTarget.style.width = 'auto'; e.currentTarget.style.height = 'auto'; }}
       onBlur={(e) => { e.currentTarget.style.position = 'absolute'; e.currentTarget.style.width = '1px'; e.currentTarget.style.height = '1px'; }}
     >
-      Skip to main content
+      {t('common.skipToMain')}
     </a>
-    <nav aria-label="Main navigation" style={{ borderRight: '1px solid var(--border)', padding: 16 }}>
+    <nav aria-label={t('a11y.mainNav')} style={{ borderRight: '1px solid var(--border)', padding: 16 }}>
     <h3>ACP</h3>
     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {navLinks.map(({ href, label }) => (
@@ -58,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ThemeToggle />
     </div>
     </nav>
-    <main id="main-content" aria-label="Page content" style={{ padding: 24 }}>{children}</main>
+    <main id="main-content" aria-label={t('a11y.pageContent')} style={{ padding: 24 }}>{children}</main>
   </div>
   );
 }

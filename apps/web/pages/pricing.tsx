@@ -1,21 +1,24 @@
 
 import { PublicShell } from '../components/PublicShell';
+import { useTranslation } from '../lib/i18n';
+
 export default function Pricing() {
+  const { t, formatCurrency } = useTranslation();
   return (
   <PublicShell>
-    <h1>Pricing</h1>
+    <h1>{t('pricing.title')}</h1>
 
-    <h2>Solo Operator</h2>
-    <p>$49 / month — single domain, full governance</p>
-    <a href='/checkout?plan=solo'>Subscribe</a>
+    <h2>{t('pricing.soloTitle')}</h2>
+    <p>{t('pricing.soloDescription', { price: formatCurrency(49) })}</p>
+    <a href='/checkout?plan=solo'>{t('pricing.subscribe')}</a>
 
-    <h2>Portfolio / Agency</h2>
-    <p>$199 / month — multiple domains, buyer diligence</p>
-    <a href='/checkout?plan=portfolio'>Subscribe</a>
+    <h2>{t('pricing.portfolioTitle')}</h2>
+    <p>{t('pricing.portfolioDescription', { price: formatCurrency(199) })}</p>
+    <a href='/checkout?plan=portfolio'>{t('pricing.subscribe')}</a>
 
-    <h2>Enterprise / Buyer</h2>
-    <p>Custom pricing — acquisition & governance</p>
-    <a href='/contact'>Contact sales</a>
+    <h2>{t('pricing.enterpriseTitle')}</h2>
+    <p>{t('pricing.enterpriseDescription')}</p>
+    <a href='/contact'>{t('pricing.contactSales')}</a>
   </PublicShell>
   );
 }

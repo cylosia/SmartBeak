@@ -78,10 +78,33 @@ export function t(key: string, params?: Record<string, string | number>): string
 }
 
 /**
+ * Format a number as USD currency.
+ * Uses Intl.NumberFormat for locale-aware formatting.
+ * Currently hardcoded to en-US / USD; locale parameter reserved for future use.
+ */
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+/**
+ * Format a Date (or ISO string) using en-US locale.
+ * Replaces bare toLocaleDateString() calls to ensure consistent MM/DD/YYYY output.
+ */
+export function formatDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Intl.DateTimeFormat('en-US').format(d);
+}
+
+/**
  * React hook for translations (returns the t function bound to current locale).
  * Simple wrapper for consistency with react-i18next API shape,
  * making future migration straightforward.
  */
 export function useTranslation() {
-  return { t, locale: currentLocale, setLocale };
+  return { t, locale: currentLocale, setLocale, formatCurrency, formatDate };
 }

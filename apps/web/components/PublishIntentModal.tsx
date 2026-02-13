@@ -1,5 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { useTranslation } from '../lib/i18n';
+import { useFocusTrap } from '../lib/use-focus-trap';
+
 export type Target = 'vercel' | 'wordpress' | 'facebook';
 
 export interface PublishIntent {
@@ -9,31 +12,35 @@ export interface PublishIntent {
 
 export interface PublishIntentModalProps {
   onSubmit: (intents: PublishIntent[]) => void;
+  onClose?: () => void;
 }
 
-export function PublishIntentModal({ onSubmit }: PublishIntentModalProps) {
+export function PublishIntentModal({ onSubmit, onClose }: PublishIntentModalProps) {
   const [targets, setTargets] = useState<Target[]>([]);
+  const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { onEscape: onClose });
 
-  function toggleTarget(t: Target) {
+  function toggleTarget(target: Target) {
   setTargets(prev =>
-    prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
+    prev.includes(target) ? prev.filter(x => x !== target) : [...prev, target]
   );
   }
 
   function submit() {
-  const intents: PublishIntent[] = targets.map(t => ({
-    target: t,
+  const intents: PublishIntent[] = targets.map(target => ({
+    target,
     scheduledFor: null
   }));
   onSubmit(intents);
   }
 
   return (
-  <div role="dialog" aria-modal="true" aria-labelledby="publish-intent-heading">
-    <h2 id="publish-intent-heading">Create Publish Intents</h2>
+  <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="publish-intent-heading">
+    <h2 id="publish-intent-heading">{t('publish.createIntents')}</h2>
     <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
     <fieldset>
-      <legend>Select publish targets</legend>
+      <legend>{t('publish.selectTargets')}</legend>
       <label htmlFor='target-vercel'>
       <input
         id='target-vercel'
@@ -41,7 +48,7 @@ export function PublishIntentModal({ onSubmit }: PublishIntentModalProps) {
         checked={targets.includes('vercel')}
         onChange={() => toggleTarget('vercel')}
       />
-      Web (Vercel)
+      {t('publish.targetVercel')}
       </label>
 
       <label htmlFor='target-wordpress'>
@@ -51,7 +58,7 @@ export function PublishIntentModal({ onSubmit }: PublishIntentModalProps) {
         checked={targets.includes('wordpress')}
         onChange={() => toggleTarget('wordpress')}
       />
-      WordPress
+      {t('publish.targetWordpress')}
       </label>
 
       <label htmlFor='target-facebook'>
@@ -61,7 +68,7 @@ export function PublishIntentModal({ onSubmit }: PublishIntentModalProps) {
         checked={targets.includes('facebook')}
         onChange={() => toggleTarget('facebook')}
       />
-      Facebook
+      {t('publish.targetFacebook')}
       </label>
     </fieldset>
 
@@ -70,7 +77,7 @@ export function PublishIntentModal({ onSubmit }: PublishIntentModalProps) {
       disabled={targets.length === 0}
       aria-disabled={targets.length === 0}
     >
-      Create {targets.length} Publish Intent(s)
+      {t('publish.createCount', { count: targets.length })}
     </button>
     </form>
   </div>
