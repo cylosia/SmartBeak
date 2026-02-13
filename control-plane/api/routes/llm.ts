@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { getLogger } from '../../../packages/kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+import { getContainer } from '../../services/container';
 
 const logger = getLogger('LLM');
 
@@ -125,7 +126,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       return;
     }
 
-    const preferences: LlmPreferences = {
+    const defaults: LlmPreferences = {
     defaultModel: 'gpt-4',
     fallbackModel: 'gpt-3.5-turbo',
     contentGeneration: {
@@ -143,6 +144,29 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     alertThreshold: 80,
     },
     };
+
+    let preferences = defaults;
+    try {
+    const { rows } = await pool.query(
+      `SELECT preferences FROM org_llm_prefs WHERE org_id = $1`,
+      [ctx.orgId]
+    );
+    if (rows.length > 0 && rows[0].preferences) {
+      const stored = rows[0].preferences;
+      preferences = { ...defaults, ...stored };
+      if (stored.contentGeneration) {
+      preferences.contentGeneration = { ...defaults.contentGeneration, ...stored.contentGeneration };
+      }
+      if (stored.imageGeneration) {
+      preferences.imageGeneration = { ...defaults.imageGeneration, ...stored.imageGeneration };
+      }
+      if (stored.costLimits) {
+      preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits };
+      }
+    }
+    } catch (dbError) {
+    logger.error('[llm/preferences] Database error, using defaults', dbError instanceof Error ? dbError : new Error(String(dbError)));
+    }
 
     return res.send(preferences);
   } catch (error) {
@@ -190,6 +214,20 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     ON CONFLICT (org_id) DO UPDATE SET preferences = $2, updated_at = NOW()`,
     [ctx.orgId, JSON.stringify(updates)]
     );
+
+    // Sync budget to CostTracker for immediate enforcement
+    if (updates.costLimits) {
+    try {
+      const container = getContainer();
+      const monthly = updates.costLimits.monthly ?? 0;
+      const daily = monthly > 0 ? monthly / 30 : 0;
+      container.costTracker.setBudget(ctx.orgId, daily, monthly);
+    } catch (syncErr) {
+      logger.warn('[llm/preferences] Failed to sync budget to CostTracker', {
+      error: syncErr instanceof Error ? syncErr.message : String(syncErr),
+      });
+    }
+    }
 
     return res.send({ updated: true, preferences: updates });
   } catch (error) {
