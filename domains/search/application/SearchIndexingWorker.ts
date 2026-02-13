@@ -2,6 +2,7 @@ import { Pool, PoolClient } from 'pg';
 
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '@kernel/logger';
+import { writeToOutbox, writeMultipleToOutbox } from '@packages/database/outbox';
 
 import { ContentRepository } from '../../content/application/ports/ContentRepository';
 import { IndexingJobRepository } from './ports/IndexingJobRepository';
@@ -156,10 +157,11 @@ export class SearchIndexingWorker {
     }
     const completedJob = processingJob.succeed();
     await this.jobs.save(completedJob, queryClient);
+    // Write event to outbox within the transaction for at-least-once delivery.
+    await writeToOutbox(queryClient, new SearchIndexed().toEnvelope(processingJob.contentId));
     if (shouldReleaseClient) {
     await queryClient.query('COMMIT');
     }
-    await this.eventBus.publish(new SearchIndexed().toEnvelope(processingJob.contentId));
 
     // Audit logging
     await this.auditLog('indexing_succeeded', processingJob.indexId, {
@@ -179,10 +181,11 @@ export class SearchIndexingWorker {
     await this.jobs.save(failedJob, queryClient);
 
     const errorMessage = err instanceof Error ? err.message : String(err);
+    // Write event to outbox within the transaction for at-least-once delivery.
+    await writeToOutbox(queryClient, new SearchIndexFailed().toEnvelope(processingJob.contentId, errorMessage));
     if (shouldReleaseClient) {
     await queryClient.query('COMMIT');
     }
-    await this.eventBus.publish(new SearchIndexFailed().toEnvelope(processingJob.contentId, errorMessage));
 
     // Audit logging
     await this.auditLog('indexing_failed', processingJob.indexId, {
@@ -291,7 +294,7 @@ export class SearchIndexingWorker {
 
     // Process indexing outside transaction (may call external services)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const completedJobs: Array<{ id: string; job: any; success: boolean; error?: string }> = [];
+    const completedJobs: Array<{ id: string; job: any; success: boolean; error?: string; contentId: string }> = [];
 
     for (const { id, job: originalJob } of pendingJobs) {
     const processingJob = originalJob.start();
@@ -318,21 +321,17 @@ export class SearchIndexingWorker {
     await this.docs.markDeleted(processingJob.contentId, client);
     }
 
-    completedJobs.push({ id, job: processingJob.succeed(), success: true });
+    completedJobs.push({ id, job: processingJob.succeed(), success: true, contentId: processingJob.contentId });
     results.set(id, { success: true });
-
-    await this.eventBus.publish(new SearchIndexed().toEnvelope(processingJob.contentId));
 
     } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    completedJobs.push({ id, job: processingJob.fail(), success: false, error: errorMessage });
+    completedJobs.push({ id, job: processingJob.fail(), success: false, error: errorMessage, contentId: processingJob.contentId });
     results.set(id, { success: false, error: errorMessage });
-
-    await this.eventBus.publish(new SearchIndexFailed().toEnvelope(processingJob.contentId, errorMessage));
     }
     }
 
-    // Update final statuses in batch
+    // Update final statuses and write events to outbox in a single batch transaction
     if (completedJobs.length > 0) {
     await client.query('BEGIN');
 
@@ -346,6 +345,14 @@ export class SearchIndexingWorker {
     await this.jobs.save(job, client);
     }
     }
+
+    // Write all events to outbox within the same transaction for at-least-once delivery
+    const outboxEvents = completedJobs.map(c =>
+    c.success
+      ? new SearchIndexed().toEnvelope(c.contentId)
+      : new SearchIndexFailed().toEnvelope(c.contentId, c.error ?? 'Unknown error')
+    );
+    await writeMultipleToOutbox(client, outboxEvents);
 
     await client.query('COMMIT');
     }
