@@ -1,0 +1,12 @@
+
+> lint:security
+> eslint . --ext .ts,.tsx --config .eslintrc.security.cjs --ignore-pattern 'node_modules/**' --ignore-pattern 'dist/**' --ignore-pattern 'build/**'
+
+
+Oops! Something went wrong! :(
+
+ESLint: 10.0.0
+
+A config object is using the "root" key, which is not supported in flat config system.
+
+Flat configs always act as if they are the root config file, so this key can be safely removed.

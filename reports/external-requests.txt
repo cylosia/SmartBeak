@@ -1,0 +1,20 @@
+control-plane/adapters/linkedin/LinkedInAdapter.ts:81:    const response = await fetch(
+control-plane/adapters/linkedin/LinkedInAdapter.ts:180:    const response = await fetch(`${this.baseUrl}/ugcPosts`, {
+control-plane/adapters/linkedin/LinkedInAdapter.ts:234:    const res = await fetch(
+control-plane/adapters/keywords/ahrefs_real.ts:19:  async fetch(_domain: string): Promise<never> {
+control-plane/adapters/keywords/types.ts:8:  fetch(domain: string): Promise<KeywordSuggestion[]>;
+control-plane/adapters/keywords/paa.ts:68:  async fetch(domain: string): Promise<KeywordSuggestion[]> {
+control-plane/adapters/keywords/paa.ts:145:    const response = await fetch(url.toString(), {
+control-plane/adapters/keywords/paa.ts:238:    const response = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/advanced', {
+control-plane/adapters/keywords/paa.ts:318:    const response = await fetch(`${customEndpoint}/paa`, {
+control-plane/adapters/keywords/gsc_real.ts:9:  async fetch(_domain: string) {
+control-plane/adapters/keywords/ahrefs.ts:54:  async fetch(domain: string): Promise<KeywordSuggestion[]> {
+control-plane/adapters/keywords/ahrefs.ts:78:    const response = await fetch(url.toString(), {
+control-plane/adapters/keywords/ahrefs.ts:177:    const response = await fetch(url.toString(), {
+control-plane/adapters/keywords/ahrefs.ts:252:    const res = await fetch(`${this.baseUrl}/v3/hello`, {
+control-plane/adapters/keywords/paa_real.ts:6:  async fetch(_domain: string) {
+control-plane/adapters/keywords/gsc.ts:100:  async fetch(domain: string, days: number = 90): Promise<KeywordSuggestion[]> {
+control-plane/adapters/affiliate/amazon.ts:110:    const response = await fetch(`${baseUrl}/paapi5/searchitems`, {
+control-plane/adapters/affiliate/cj.ts:101:    const response = await fetch(this.baseUrl, {
+control-plane/adapters/affiliate/cj.ts:195:    const response = await fetch(this.baseUrl, {
+control-plane/adapters/affiliate/cj.ts:275:    const response = await fetch(this.baseUrl, {

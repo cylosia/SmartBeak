@@ -1,0 +1,50 @@
+domains/search/infra/persistence/PostgresIndexingJobRepository.ts:188:    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::int[])
+domains/search/infra/persistence/PostgresSearchIndexRepository.ts:245:    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::int[], $5::text[])
+domains/search/infra/persistence/PostgresSearchIndexRepository.ts:295:    'SELECT COUNT(*) as count FROM search_indexes WHERE domain_id = $1',
+domains/notifications/infra/persistence/PostgresNotificationRepository.ts:340:    SELECT * FROM UNNEST(
+domains/notifications/infra/persistence/PostgresNotificationRepository.ts:392:    SELECT id FROM notifications
+domains/notifications/infra/persistence/PostgresNotificationPreferenceRepository.ts:184:    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::bool[], $5::text[])
+domains/publishing/infra/persistence/PostgresPublishingJobRepository.ts:333:    SELECT * FROM UNNEST(
+domains/publishing/application/PublishingService.ts:89:    'SELECT * FROM publish_targets WHERE id = $1 FOR UPDATE',
+domains/media/infra/persistence/PostgresMediaRepository.ts:209:    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[])
+domains/seo/infra/persistence/PostgresSeoRepository.ts:230:    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[])
+domains/content/infra/persistence/PostgresContentRevisionRepository.ts:178:    SELECT id FROM content_revisions
+domains/content/infra/persistence/PostgresContentRevisionRepository.ts:185:    AND id NOT IN (SELECT id FROM keep_ids)`,
+domains/content/infra/persistence/PostgresContentRevisionRepository.ts:211:    'SELECT COUNT(*) as count FROM content_revisions WHERE content_id = $1',
+domains/content/infra/persistence/PostgresContentRepository.ts:385:    'SELECT COUNT(*) as count FROM content_items WHERE domain_id = $1',
+domains/content/infra/persistence/PostgresContentRepository.ts:464:    SELECT * FROM UNNEST(
+domains/planning/application/PlanningOverviewService.ts:162:    'SELECT count(*) as count FROM keywords WHERE domain_id = $1',
+domains/planning/application/PlanningOverviewService.ts:180:    'SELECT count(*) as count FROM content_ideas WHERE domain_id = $1',
+control-plane/api/diligence.ts:37:    'SELECT domain_id, domain_name, traffic_monthly, revenue_monthly, content_count, niche, age_years, created_at FROM diligence_domain_snapshot WHERE domain_id = $1',
+control-plane/api/diligence.ts:56:      'SELECT id, domain_id, intent_type, requested_at, status FROM human_intents WHERE domain_id = $1 ORDER BY requested_at ASC',
+control-plane/api/diligence.ts:60:      'SELECT id, domain_id, artifact_type, created_at FROM ai_advisory_artifacts WHERE domain_id = $1 AND buyer_visible = true',
+control-plane/api/diligence.ts:82:    'SELECT domain_id, provider_name, replacement_count, estimated_revenue FROM buyer_affiliate_replacement_summary WHERE domain_id = $1',
+control-plane/api/exports/diligence-exports.ts:57:    'SELECT domain_id, domain_name, traffic_monthly, revenue_monthly, content_count, niche, age_years, created_at FROM diligence_domain_snapshot WHERE domain_id = $1',
+control-plane/api/exports/diligence-exports.ts:76:    'SELECT domain_id, domain_name, traffic_monthly, revenue_monthly, content_count, niche, age_years, created_at FROM diligence_domain_snapshot WHERE domain_id = $1',
+control-plane/api/timeline.ts:60:       WHERE dte.intent_id IN (SELECT id FROM human_intents WHERE domain_id = $1)
+control-plane/api/routes/diligence.ts:28:    'SELECT domain_id, expires_at FROM diligence_tokens WHERE token = $1 AND expires_at > NOW()',
+control-plane/api/routes/diligence.ts:98:    'SELECT domain_id FROM diligence_tokens WHERE token = $1 AND expires_at > NOW()',
+control-plane/api/routes/billing-invoices.ts:43:    'SELECT stripe_customer_id FROM organizations WHERE id = $1',
+control-plane/api/routes/billing-invoices.ts:106:    'SELECT stripe_customer_id FROM organizations WHERE id = $1',
+control-plane/api/routes/seo.ts:19:  `SELECT 1 FROM contents c
+control-plane/api/routes/publishing.ts:161:  `SELECT 1 FROM publishing_jobs pj
+control-plane/api/routes/publishing.ts:193:    `SELECT 1 FROM publishing_jobs pj
+control-plane/api/routes/media.ts:26:    SELECT 1 FROM media m
+control-plane/api/routes/content.ts:184:    `SELECT COUNT(*) FROM (${query}) as count_query`,
+control-plane/api/routes/content-revisions.ts:39:    `SELECT domain_id FROM content_items
+control-plane/api/routes/content-revisions.ts:41:    SELECT domain_id FROM memberships m
+control-plane/services/flags.test.ts:47:        'SELECT value FROM system_flags WHERE key=$1',
+control-plane/services/monetization-decay-advisor.ts:47:    'SELECT id, content_version_id, period_start, period_end, revenue_decline_pct, decay_flag, recommendations FROM monetization_decay_signals WHERE content_version_id = $1 ORDER BY period_start DESC LIMIT $2',
+control-plane/services/monetization-decay-advisor.ts:52:  const result = await db.query('SELECT id, content_version_id, period_start, period_end, revenue_decline_pct, decay_flag, recommendations FROM monetization_decay_signals WHERE decay_flag = TRUE LIMIT $1', [safeLimit]);
+control-plane/services/analytics-read-model.ts:86:    'SELECT * FROM analytics_content WHERE content_id = $1',
+control-plane/services/analytics-read-model.ts:151:    'SELECT * FROM analytics_content WHERE content_id = ANY($1)',
+control-plane/services/publishing-ui.ts:52:    'SELECT id, type, enabled, created_at FROM publish_targets WHERE domain_id=$1',
+control-plane/services/publishing-ui.ts:104:    `SELECT * FROM publishing_jobs WHERE id=$1`,
+control-plane/services/publishing-status-cache.ts:62:    'SELECT id, status, created_at FROM publishing_jobs WHERE domain_id=$1 ORDER BY created_at DESC LIMIT $2',
+control-plane/services/flags.ts:35:    'SELECT value FROM system_flags WHERE key=$1',
+control-plane/services/keyword-dedup-cluster.ts:63:  'SELECT id, keyword FROM keywords WHERE domain_id = $1 LIMIT $2',
+control-plane/services/affiliate-replacement-executor.ts:100:    'SELECT id FROM content_versions WHERE id = ANY($1::text[])',
+control-plane/services/publishing-create-job.ts:44:    'SELECT id FROM content_items WHERE id=$1',
+control-plane/services/publishing-create-job.ts:54:    'SELECT id, type, config, region FROM publish_targets WHERE id=$1 AND domain_id=$2',
+control-plane/services/invite-service.ts:66:    `SELECT 1 FROM memberships m
+control-plane/services/billing.ts:179:        'SELECT * FROM plans WHERE id = $1',

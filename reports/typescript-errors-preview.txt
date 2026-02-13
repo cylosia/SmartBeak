@@ -1,0 +1,200 @@
+
+> type-check
+> tsc --noEmit
+
+apps/api/src/adapters/AdapterFactory.ts(1,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/adapters/email/AWeberAdapter.ts(2,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/email/AWeberAdapter.ts(6,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/email/AWeberAdapter.ts(34,21): error TS2694: Namespace 'global.NodeJS' has no exported member 'Timeout'.
+apps/api/src/adapters/email/ConstantContactAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/email/ConstantContactAdapter.ts(2,26): error TS2307: Cannot find module 'lru-cache' or its corresponding type declarations.
+apps/api/src/adapters/email/ConstantContactAdapter.ts(11,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/email/ConstantContactAdapter.ts(38,21): error TS2694: Namespace 'global.NodeJS' has no exported member 'Timeout'.
+apps/api/src/adapters/email/MailchimpAdapter.ts(1,20): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/adapters/email/MailchimpAdapter.ts(2,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/email/MailchimpAdapter.ts(10,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/facebook/FacebookAdapter.ts(1,54): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/ga/GaAdapter.ts(2,49): error TS2307: Cannot find module '@google-analytics/data' or its corresponding type declarations.
+apps/api/src/adapters/ga/GaAdapter.ts(178,25): error TS2694: Namespace 'global.NodeJS' has no exported member 'Timeout'.
+apps/api/src/adapters/gbp/GbpAdapter.ts(1,24): error TS2307: Cannot find module 'googleapis' or its corresponding type declarations.
+apps/api/src/adapters/gbp/GbpAdapter.ts(2,89): error TS2307: Cannot find module 'googleapis' or its corresponding type declarations.
+apps/api/src/adapters/gbp/GbpAdapter.ts(3,63): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/adapters/gbp/GbpAdapter.ts(13,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(37,50): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(65,7): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(66,7): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(68,25): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(330,45): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(331,53): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(477,45): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(478,53): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(483,33): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/gbp/GbpAdapter.ts(600,27): error TS7006: Parameter 'loc' implicitly has an 'any' type.
+apps/api/src/adapters/gsc/GscAdapter.ts(3,48): error TS2307: Cannot find module 'googleapis' or its corresponding type declarations.
+apps/api/src/adapters/gsc/GscAdapter.ts(255,49): error TS7006: Parameter 'site' implicitly has an 'any' type.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(2,22): error TS2307: Cannot find module 'form-data' or its corresponding type declarations.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(9,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(85,10): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(86,10): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(93,10): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(107,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(250,38): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/OpenAIImageAdapter.ts(346,38): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(2,22): error TS2307: Cannot find module 'form-data' or its corresponding type declarations.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(9,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(89,10): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(92,10): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(104,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/images/StabilityImageAdapter.ts(264,38): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/instagram/InstagramAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/instagram/InstagramAdapter.ts(7,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/linkedin/LinkedInAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/linkedin/LinkedInAdapter.ts(7,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/pinterest/PinterestAdapter.ts(2,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/pinterest/PinterestAdapter.ts(4,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/soundcloud/SoundCloudAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/soundcloud/SoundCloudAdapter.ts(2,22): error TS2307: Cannot find module 'form-data' or its corresponding type declarations.
+apps/api/src/adapters/soundcloud/SoundCloudAdapter.ts(9,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/soundcloud/SoundCloudAdapter.ts(44,15): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(7,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(36,14): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(335,27): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(335,64): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(391,61): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/tiktok/TikTokAdapter.ts(401,31): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/vercel/VercelAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/vercel/VercelAdapter.ts(8,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/vercel/VercelDirectUpload.ts(9,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/vercel/VercelDirectUpload.ts(10,28): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/adapters/vercel/VercelDirectUpload.ts(125,20): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/vercel/VercelDirectUpload.ts(217,29): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/vercel/VercelDirectUpload.ts(397,51): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/vimeo/VimeoAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/vimeo/VimeoAdapter.ts(8,33): error TS2307: Cannot find module 'abort-controller' or its corresponding type declarations.
+apps/api/src/adapters/wordpress/WordPressAdapter.ts(73,16): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/wordpress/WordPressAdapter.ts(145,16): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/wordpress/WordPressAdapter.ts(229,18): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/adapters/youtube/YouTubeAdapter.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/adapters/youtube/YouTubeAdapter.ts(2,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/analytics/images/pinterestImageAnalytics.ts(2,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/analytics/images/youtubeImageAnalytics.ts(1,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/analytics/media/attribution.ts(2,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/analytics/media/pinterestAnalytics.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/analytics/media/youtubeAnalytics.ts(1,19): error TS2307: Cannot find module 'node-fetch' or its corresponding type declarations.
+apps/api/src/analytics/media/youtubeAnalytics.ts(2,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/analytics/media/youtubeAnalytics.ts(165,31): error TS7006: Parameter 'r' implicitly has an 'any' type.
+apps/api/src/auth/oauth/linkedin.ts(24,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/auth/oauth/linkedin.ts(27,28): error TS7006: Parameter 'd' implicitly has an 'any' type.
+apps/api/src/billing/paddle.ts(1,20): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/billing/paddle.ts(57,18): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddle.ts(58,23): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddle.ts(182,24): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddleWebhook.ts(2,20): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/billing/paddleWebhook.ts(21,41): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddleWebhook.ts(29,20): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddleWebhook.ts(30,21): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddleWebhook.ts(71,12): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddleWebhook.ts(76,18): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/paddleWebhook.ts(162,33): error TS7006: Parameter 'trx' implicitly has an 'any' type.
+apps/api/src/billing/paddleWebhook.ts(199,33): error TS7006: Parameter 'trx' implicitly has an 'any' type.
+apps/api/src/billing/planManager.ts(15,31): error TS7006: Parameter 'trx' implicitly has an 'any' type.
+apps/api/src/billing/stripe.ts(1,20): error TS2307: Cannot find module 'stripe' or its corresponding type declarations.
+apps/api/src/billing/stripe.ts(2,20): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/billing/stripe.ts(19,25): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripe.ts(33,15): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripe.ts(33,41): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripe.ts(157,11): error TS7006: Parameter 'session' implicitly has an 'any' type.
+apps/api/src/billing/stripeWebhook.ts(2,20): error TS2307: Cannot find module 'stripe' or its corresponding type declarations.
+apps/api/src/billing/stripeWebhook.ts(16,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripeWebhook.ts(92,12): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripeWebhook.ts(155,12): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripeWebhook.ts(158,25): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/billing/stripeWebhook.ts(224,35): error TS7006: Parameter 'trx' implicitly has an 'any' type.
+apps/api/src/billing/stripeWebhook.ts(264,35): error TS7006: Parameter 'trx' implicitly has an 'any' type.
+apps/api/src/config/index.ts(286,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/config/index.ts(287,18): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/config/index.ts(289,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/config/index.ts(293,18): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(1,28): error TS2307: Cannot find module 'knex' or its corresponding type declarations.
+apps/api/src/db.ts(19,26): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(31,25): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(31,50): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(34,28): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(50,19): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(51,34): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(88,10): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(88,55): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(292,22): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(295,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(376,22): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db.ts(395,22): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/db/readOnly.ts(2,27): error TS2307: Cannot find module 'knex' or its corresponding type declarations.
+apps/api/src/domain/audit/bulkAudit.ts(3,20): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/domain/audit/bulkAudit.ts(4,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/domain/experiments/validateExperiment.ts(1,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/domain/experiments/validateExperiment.ts(26,49): error TS7006: Parameter 'v' implicitly has an 'any' type.
+apps/api/src/domain/experiments/validateExperiment.ts(27,47): error TS7006: Parameter 'v' implicitly has an 'any' type.
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(1,29): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/domain/publishing/WebPublishingAdapter.ts(231,26): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/email/domainAuth.ts(3,17): error TS2307: Cannot find module 'dns/promises' or its corresponding type declarations.
+apps/api/src/email/domainAuth.ts(29,26): error TS7006: Parameter 'r' implicitly has an 'any' type.
+apps/api/src/email/domainAuth.ts(37,28): error TS7006: Parameter 'r' implicitly has an 'any' type.
+apps/api/src/email/domainAuth.ts(46,27): error TS7006: Parameter 'r' implicitly has an 'any' type.
+apps/api/src/email/doubleOptin.ts(2,20): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/email/embed.ts(2,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/email/provider/fallback.ts(104,14): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/email/schema/emailBlocks.ts(1,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/email/schema/emailBlocks.ts(8,4): error TS7006: Parameter 'u' implicitly has an 'any' type.
+apps/api/src/jobs/JobScheduler.ts(1,36): error TS2307: Cannot find module 'bullmq' or its corresponding type declarations.
+apps/api/src/jobs/JobScheduler.ts(2,19): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+apps/api/src/jobs/JobScheduler.ts(4,30): error TS2307: Cannot find module 'events' or its corresponding type declarations.
+apps/api/src/jobs/JobScheduler.ts(5,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/jobs/JobScheduler.ts(96,51): error TS2694: Namespace 'global.NodeJS' has no exported member 'Timeout'.
+apps/api/src/jobs/JobScheduler.ts(108,8): error TS2339: Property 'on' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(108,21): error TS7006: Parameter 'err' implicitly has an 'any' type.
+apps/api/src/jobs/JobScheduler.ts(111,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/jobs/JobScheduler.ts(118,21): error TS7006: Parameter 'times' implicitly has an 'any' type.
+apps/api/src/jobs/JobScheduler.ts(121,12): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(132,24): error TS7006: Parameter 'err' implicitly has an 'any' type.
+apps/api/src/jobs/JobScheduler.ts(138,12): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(151,10): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(161,10): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(167,10): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(225,10): error TS2339: Property 'off' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(228,10): error TS2339: Property 'once' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(303,12): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(306,12): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(311,12): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(417,16): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(446,20): error TS2339: Property 'emit' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(795,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(796,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(797,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(798,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(799,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(800,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(801,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/JobScheduler.ts(802,10): error TS2339: Property 'removeAllListeners' does not exist on type 'JobScheduler'.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(2,21): error TS2307: Cannot find module 'bullmq' or its corresponding type declarations.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(3,39): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(4,22): error TS2307: Cannot find module 'knex' or its corresponding type declarations.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(5,22): error TS2307: Cannot find module 'pg' or its corresponding type declarations.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(6,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(156,11): error TS2339: Property 'rows' does not exist on type 'unknown'.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(171,42): error TS7006: Parameter 'k' implicitly has an 'any' type.
+apps/api/src/jobs/contentIdeaGenerationJob.ts(185,46): error TS7006: Parameter 'trx' implicitly has an 'any' type.
+apps/api/src/jobs/databaseMaintenanceJob.ts(12,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/jobs/databaseMaintenanceJob.ts(16,27): error TS2307: Cannot find module 'knex' or its corresponding type declarations.
+apps/api/src/jobs/domainExportJob.ts(1,19): error TS2307: Cannot find module 'zod' or its corresponding type declarations.
+apps/api/src/jobs/domainExportJob.ts(2,18): error TS2307: Cannot find module 'path' or its corresponding type declarations.
+apps/api/src/jobs/domainExportJob.ts(4,28): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+apps/api/src/jobs/domainExportJob.ts(9,26): error TS2307: Cannot find module 'bullmq' or its corresponding type declarations.
+apps/api/src/jobs/domainExportJob.ts(125,18): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/jobs/domainExportJob.ts(125,67): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+apps/api/src/jobs/domainExportJob.ts(184,11): error TS2339: Property 'rows' does not exist on type 'unknown'.
+apps/api/src/jobs/domainExportJob.ts(185,19): error TS7006: Parameter 'row' implicitly has an 'any' type.
+apps/api/src/jobs/domainExportJob.ts(254,15): error TS18046: 'keywordMetrics' is of type 'unknown'.
+apps/api/src/jobs/domainExportJob.ts(255,14): error TS18046: 'contentPerformance' is of type 'unknown'.
