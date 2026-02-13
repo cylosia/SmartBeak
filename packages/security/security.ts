@@ -282,7 +282,7 @@ export class SecurityAlertManager extends EventEmitter {
   ).length;
 
   if (failedAttempts >= 5) {
-    this.triggerAlert(
+    void this.triggerAlert(
     'high',
     'multiple_failed_attempts',
     `User ${userId} has ${failedAttempts} failed attempts in the last hour`,
@@ -298,7 +298,7 @@ export class SecurityAlertManager extends EventEmitter {
   );
 
   if (knownIPs.size > 0 && !knownIPs.has(event["ip"])) {
-    this.triggerAlert(
+    void this.triggerAlert(
     'medium',
     'suspicious_login',
     `Login from new IP address: ${event["ip"]}`,

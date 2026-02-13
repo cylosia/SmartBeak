@@ -18,7 +18,7 @@ const ALLOWED_READINESS_FIELDS = [
   'risk_score',
   'rationale'
 ];
-const SaleReadinessQuerySchema = z.object({
+const _SaleReadinessQuerySchema = z.object({
   domain_id: z.string().uuid('domain_id must be a valid UUID'),
   seo: z.coerce.number().min(0).max(100).default(0),
   freshness: z.coerce.number().min(0).max(1).default(0),
@@ -78,7 +78,7 @@ const SaleReadinessBodySchema = z.object({
 export async function domainSaleReadinessRoutes(app: FastifyInstance) {
   // C05-FIX: Changed from GET to POST — this endpoint performs an INSERT, which is
   // not idempotent. GET requests bypass CSRF, can be triggered by prefetch/crawlers.
-  app.post('/domain/sale-readiness', { preHandler: optionalAuthFastify }, async (req, reply) => {
+  app.post('/domain/sale-readiness', { preHandler: (...args: Parameters<typeof optionalAuthFastify>) => { void optionalAuthFastify(...args); } }, async (req, reply) => {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
 
     // H06-FIX: Use auth context from middleware instead of custom JWT verification

@@ -91,14 +91,14 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     it('should handle race between commit and timeout', async () => {
       let _commitStarted = false;
       
-      mockClient.query.mockImplementation((sql: string) => {
+      mockClient.query.mockImplementation(((sql: string) => {
         if (sql === 'COMMIT') {
           _commitStarted = true;
           // Simulate slow commit
           return new Promise(resolve => setTimeout(() => resolve({}), 150));
         }
         return Promise.resolve({});
-      });
+      }) as (...args: unknown[]) => void);
 
       const transactionPromise = withTransaction(
         async () => ({ result: 'success' }),
@@ -181,12 +181,12 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     });
 
     it('should clear timeout only once even with multiple errors', async () => {
-      mockClient.query.mockImplementation((sql: string) => {
+      mockClient.query.mockImplementation(((sql: string) => {
         if (sql === 'ROLLBACK') {
           throw new Error('Rollback also failed');
         }
         return Promise.resolve({});
-      });
+      }) as (...args: unknown[]) => void);
 
       const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
 
@@ -296,13 +296,13 @@ describe('Database Transactions - Async/Concurrency Tests', () => {
     });
 
     it('should handle timeout during rollback', async () => {
-      mockClient.query.mockImplementation((sql: string) => {
+      mockClient.query.mockImplementation(((sql: string) => {
         if (sql === 'ROLLBACK') {
           // Simulate slow rollback
           return new Promise(resolve => setTimeout(() => resolve({}), 200));
         }
         return Promise.resolve({});
-      });
+      }) as (...args: unknown[]) => void);
 
       const transactionPromise = withTransaction(
         async () => {

@@ -58,7 +58,7 @@ export function useCreateAffiliate() {
       return response.data as Affiliate;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AFFILIATE_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: [AFFILIATE_QUERY_KEY] });
     },
   });
 }
@@ -69,14 +69,14 @@ export function useCreateAffiliate() {
 export function useUpdateAffiliate() {
   const api = useApi();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ affiliateId, input }: { affiliateId: string; input: UpdateAffiliateInput }): Promise<Affiliate> => {
       const response = await api.patch(`/affiliates/${affiliateId}`, input);
       return response.data as Affiliate;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AFFILIATE_QUERY_KEY] });
+      void queryClient.invalidateQueries({ queryKey: [AFFILIATE_QUERY_KEY] });
     },
   });
 }

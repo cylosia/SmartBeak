@@ -2,7 +2,7 @@
 import pLimit from 'p-limit';
 import { z } from 'zod';
 
-import { TIME } from '@kernel/constants';
+import { TIME as _TIME } from '@kernel/constants';
 import { getLogger } from '@kernel/logger';
 import { withRetry } from '@kernel/retry';
 
@@ -227,8 +227,8 @@ async function processEntityWindow(
  * can detect and avoid scheduling the job until integration is complete.
  */
 async function fetchFeedbackMetrics(
-  entityId: string,
-  window: WindowSize,
+  _entityId: string,
+  _window: WindowSize,
   _source: string,
   _orgId: string
 ): Promise<FeedbackWindow['metrics']> {

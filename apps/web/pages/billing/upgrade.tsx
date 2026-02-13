@@ -61,7 +61,7 @@ export default function UpgradePage() {
     <div>
       <h1>Upgrade Plan</h1>
       {error && <p style={{ color: 'red' }}>{error}</p>}
-      <BillingProviderSelector onSelect={startCheckout} />
+      <BillingProviderSelector onSelect={(provider: string) => void startCheckout(provider)} />
       {loading && <p>Redirecting to checkout...</p>}
     </div>
   );

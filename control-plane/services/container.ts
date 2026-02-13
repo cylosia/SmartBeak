@@ -417,7 +417,7 @@ export function getContainer(): Container {
 */
 export function resetContainer(): void {
   if (globalContainer) {
-  globalContainer.dispose();
+  void globalContainer.dispose();
   globalContainer = null;
   }
 }

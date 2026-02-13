@@ -76,8 +76,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
     try { await rateLimit('llm', 30, req, res); } catch (_e) { return; }
 
-    let models: LlmModel[];
-    try {
     // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
     let models: LlmModel[] = [];
     try {
@@ -161,12 +159,11 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
     // P3-FIX: Sanitize validation error details
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: parseResult["error"].issues.map(i => ({ path: i.path, message: i.message }))
     });
-    return;
     }
 
     const updates = parseResult.data;

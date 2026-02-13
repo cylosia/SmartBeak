@@ -32,14 +32,14 @@ export function whitelistFields<T extends Record<string, unknown>>(
 */
 export function addSecurityHeaders(reply: FastifyReply): void {
   // HSTS - HTTP Strict Transport Security
-  reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   // Prevent clickjacking
-  reply.header('X-Frame-Options', 'DENY');
+  void reply.header('X-Frame-Options', 'DENY');
   // Prevent MIME type sniffing
-  reply.header('X-Content-Type-Options', 'nosniff');
+  void reply.header('X-Content-Type-Options', 'nosniff');
   // P2-FIX: X-XSS-Protection '1; mode=block' is deprecated and can introduce
   // vulnerabilities in older browsers. Disable it and rely on CSP instead.
-  reply.header('X-XSS-Protection', '0');
+  void reply.header('X-XSS-Protection', '0');
   // Referrer Policy
-  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
 }

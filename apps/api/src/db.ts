@@ -263,7 +263,7 @@ async function createAnalyticsDbConnection(replicaUrl: string): Promise<Knex> {
   // Test connection before returning
   await instance.raw('SELECT 1');
 
-  instance.on('error', async (err: Error) => {
+  instance.on('error', (err: Error) => {
     logger.error('Analytics DB runtime error', err);
     // Update error state for backoff
     lastAnalyticsError = Date.now();
@@ -273,12 +273,9 @@ async function createAnalyticsDbConnection(replicaUrl: string): Promise<Knex> {
     analyticsDbInstance = null;
     analyticsDbPromise = null;
     if (inst) {
-      try {
-        await inst.destroy();
-      }
-      catch {
+      void inst.destroy().catch(() => {
         // Ignore destroy errors
-      }
+      });
     }
   });
   return instance;

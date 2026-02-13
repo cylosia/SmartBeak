@@ -237,19 +237,19 @@ export function setupShutdownHandlers(): void {
   isRegistered = true;
 
   // Handle graceful shutdown signals
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
   // Handle uncaught exceptions
   process.on('uncaughtException', (error) => {
     logger.error('Uncaught exception:', error instanceof Error ? error : new Error(String(error)));
-    gracefulShutdown('uncaughtException');
+    void gracefulShutdown('uncaughtException');
   });
 
   // Handle unhandled rejections
   process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled rejection: ' + (reason instanceof Error ? reason.message : String(reason)));
-    gracefulShutdown('unhandledRejection');
+    void gracefulShutdown('unhandledRejection');
   });
 
   logger.debug('Shutdown handlers registered');

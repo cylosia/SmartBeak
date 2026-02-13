@@ -3,8 +3,7 @@
 
 
 import cors from '@fastify/cors';
-import Fastify, { FastifyRequest } from 'fastify';
-import { Pool } from 'pg';
+import Fastify from 'fastify';
 import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler } from '@shutdown';
 import { validateEnv } from '@config';
@@ -119,32 +118,32 @@ await app.register(cors, {
 // SECURITY FIX: Add security headers (HSTS, CSP, etc.)
 app.addHook('onSend', async (request, reply, payload) => {
   // HSTS - HTTP Strict Transport Security
-  reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
   // Content Security Policy
-  reply.header('Content-Security-Policy', 'default-src \'self\'; frame-ancestors \'none\';');
+  void reply.header('Content-Security-Policy', 'default-src \'self\'; frame-ancestors \'none\';');
 
   // Prevent clickjacking
-  reply.header('X-Frame-Options', 'DENY');
+  void reply.header('X-Frame-Options', 'DENY');
 
   // Prevent MIME type sniffing
-  reply.header('X-Content-Type-Options', 'nosniff');
+  void reply.header('X-Content-Type-Options', 'nosniff');
 
   // XSS Protection
-  reply.header('X-XSS-Protection', '1; mode=block');
+  void reply.header('X-XSS-Protection', '1; mode=block');
 
   // Referrer Policy
-  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
 
   // Permissions Policy
-  reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  void reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
   // Prevent caching of sensitive authenticated responses
   const authHeader = request.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
-  reply.header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-  reply.header('Pragma', 'no-cache');
-  reply.header('Expires', '0');
+  void reply.header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+  void reply.header('Pragma', 'no-cache');
+  void reply.header('Expires', '0');
   }
 
   return payload;
@@ -351,12 +350,12 @@ app.setErrorHandler((error: unknown, request, reply) => {
   // Never include raw error objects - they may contain sensitive data
   }
 
-  reply.status(statusCode).send(response);
+  void reply.status(statusCode).send(response);
 });
 
 // 404 handler
 app.setNotFoundHandler((request, reply) => {
-  reply.status(404).send({ error: 'Route not found', code: 'NOT_FOUND' });
+  void reply.status(404).send({ error: 'Route not found', code: 'NOT_FOUND' });
 });
 
 // Register all routes
@@ -644,7 +643,7 @@ async function start(): Promise<void> {
   }
 }
 
-start();
+void start();
 
 // P2-AUDIT-FIX: Removed pool export — consumers should import from @database/pool
 // to ensure connection monitoring, exhaustion alerts, and metrics are active.

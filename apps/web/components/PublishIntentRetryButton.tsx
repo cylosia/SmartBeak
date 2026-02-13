@@ -45,7 +45,7 @@ export function PublishIntentRetryButton({ intentId, onRetry }: PublishIntentRet
 
   return (
   <div>
-    <button type='button' onClick={handleRetry} disabled={loading}>
+    <button type='button' onClick={() => void handleRetry()} disabled={loading}>
     {loading ? 'Retrying…' : 'Retry'}
     </button>
     {success && <div style={{ color: 'green' }}>Retry queued</div>}

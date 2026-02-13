@@ -49,7 +49,7 @@ export async function planningRoutes(app: FastifyInstance, pool: Pool): Promise<
     return res.send(result);
   } catch (error: unknown) {
     console["error"]('[planning/overview] Error:', error);
-    res.status(500).send({
+    return res.status(500).send({
     error: 'Failed to retrieve planning overview',
     message: error instanceof Error ? error.message : 'Unknown error'
     });

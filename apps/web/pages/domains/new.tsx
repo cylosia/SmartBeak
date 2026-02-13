@@ -34,7 +34,7 @@ export default function NewDomain() {
       }
 
       const domain = await res.json();
-      router.push(`/domains/${domain.id}`);
+      void router.push(`/domains/${domain.id}`);
     } catch {
       setError('Network error. Please try again.');
     } finally {
@@ -52,7 +52,7 @@ export default function NewDomain() {
 
     {error && <p style={{ color: 'red' }}>{error}</p>}
 
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={(e) => void handleSubmit(e)}>
     <label>
       Domain name<br />
       <input

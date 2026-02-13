@@ -279,7 +279,7 @@ export function useUpdateLlmPreferences() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.llmPreferences });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.llmPreferences });
     },
   });
 }

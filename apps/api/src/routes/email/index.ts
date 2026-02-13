@@ -120,7 +120,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     const db = await getDb();
     let query = db('lead_magnets')
         .whereIn('domain_id', function() {
-        this.select('domain_id')
+        void this.select('domain_id')
             .from('domain_registry')
             .where('org_id', auth.orgId);
         });
@@ -241,7 +241,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     const db = await getDb();
     let query = db('email_sequences')
         .whereIn('domain_id', function() {
-        this.select('domain_id')
+        void this.select('domain_id')
             .from('domain_registry')
             .where('org_id', auth.orgId);
         });
@@ -362,7 +362,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     const db = await getDb();
     let query = db('email_optin_forms')
         .whereIn('domain_id', function() {
-        this.select('domain_id')
+        void this.select('domain_id')
             .from('domain_registry')
             .where('org_id', auth.orgId);
         });

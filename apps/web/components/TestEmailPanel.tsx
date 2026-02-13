@@ -69,7 +69,7 @@ export function TestEmailPanel({ onSend }: TestEmailPanelProps) {
     aria-describedby={error ? errorId : undefined}
     disabled={loading}
     />
-    <button type='button' onClick={send} disabled={loading || !email}>
+    <button type='button' onClick={() => void send()} disabled={loading || !email}>
     {loading ? 'Sending…' : 'Send Test'}
     </button>
     {error && <div id={errorId} style={{ color: 'red' }}>{error}</div>}

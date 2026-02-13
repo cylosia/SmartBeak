@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "control-plane/**/*.ts",
+    "domains/**/*.ts",
+    "packages/**/*.ts",
+    "plugins/**/*.ts",
+    "types/**/*.d.ts",
+    "test/**/*.ts",
+    "themes/**/*.ts",
+    "themes/**/*.tsx",
+    "*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**"
+  ]
+}

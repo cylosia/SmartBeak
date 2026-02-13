@@ -123,7 +123,7 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         // SECURITY FIX: Properly escape LIKE wildcards and use ESCAPE clause
         const escapedSearch = escapeLikePattern(sanitizedSearch);
         query = query.where(function() {
-          this.where('email_hash', hashEmail(sanitizedSearch))
+          void this.where('email_hash', hashEmail(sanitizedSearch))
             .orWhereRaw("first_name ILIKE ? ESCAPE '\\'", [`%${escapedSearch}%`])
             .orWhereRaw("last_name ILIKE ? ESCAPE '\\'", [`%${escapedSearch}%`]);
         });

@@ -69,14 +69,14 @@ export async function closeRedis(): Promise<void> {
 // Redis connections leak on every deploy because closeRedis() existed
 // but was never called during graceful shutdown (unlike the DB connection
 // which is properly registered via registerShutdownHandler in db.ts).
-process.on('SIGTERM', async () => {
+process.on('SIGTERM', () => {
   logger.info('SIGTERM received - closing Redis connection');
-  await closeRedis();
+  void closeRedis();
 });
 
-process.on('SIGINT', async () => {
+process.on('SIGINT', () => {
   logger.info('SIGINT received - closing Redis connection');
-  await closeRedis();
+  void closeRedis();
 });
 
 export { Redis };

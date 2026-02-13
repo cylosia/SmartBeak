@@ -51,12 +51,11 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
     // Validate query params (P3-7 FIX: pagination now in Zod schema)
     const queryResult = QuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-    res.status(400).send({
+    return res.status(400).send({
     error: 'Validation failed',
     code: 'VALIDATION_ERROR',
     details: queryResult["error"].issues
     });
-    return;
     }
 
     const { days, page, limit } = queryResult.data;
@@ -72,11 +71,10 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
     } catch (serviceError) {
     // P1-10 FIX: Use structured logger
     logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
-    res.status(503).send({
+    return res.status(503).send({
     error: 'Service temporarily unavailable',
     code: 'SERVICE_UNAVAILABLE'
     });
-    return;
     }
 
     const result: LifecycleStats = {

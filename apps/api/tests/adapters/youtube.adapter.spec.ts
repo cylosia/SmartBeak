@@ -387,11 +387,15 @@ describe('YouTubeAdapter', () => {
       const { withRetry: mockRetry } = await import('../../src/utils/retry');
       const mockRetryFn = mockRetry as ReturnType<typeof vi.fn>;
       // Simulate 2 retry attempts: first fails, second succeeds
-      let callCount = 0;
-      mockRetryFn.mockImplementationOnce(async (fn: () => Promise<unknown>) => {
-        try { callCount++; await fn(); } catch { /* first attempt fails */ }
-        callCount++;
-        return fn(); // second attempt succeeds
+      let _callCount = 0;
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      mockRetryFn.mockImplementationOnce((fn: () => Promise<unknown>) => {
+        const run = async () => {
+          try { _callCount++; await fn(); } catch { /* first attempt fails */ }
+          _callCount++;
+          return fn(); // second attempt succeeds
+        };
+        return run();
       });
 
       const responseBody = { items: [{ id: 'vid789', snippet: { title: 'Test' } }] };

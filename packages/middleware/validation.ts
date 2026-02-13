@@ -153,7 +153,7 @@ function extractZodIssues(error: ZodError): Array<{ path: (string | number)[]; m
 export function validateContentType(
   allowedTypes: string[] = ['application/json']
 ): (req: FastifyRequest, res: FastifyReply, done: () => void) => void {
-  return (req: FastifyRequest, res: FastifyReply, done: () => void) => {
+  return (req: FastifyRequest, res: FastifyReply, done: () => void): void => {
     const contentType = req.headers['content-type'];
     
     if (!contentType) {
@@ -181,7 +181,7 @@ export function validateContentType(
 export function validateUUIDParam(
   paramName: string = 'id'
 ): (req: FastifyRequest, res: FastifyReply, done: () => void) => void {
-  return (req: FastifyRequest, res: FastifyReply, done: () => void) => {
+  return (req: FastifyRequest, res: FastifyReply, done: () => void): void => {
     const value = (req.params as Record<string, string>)[paramName];
     
     if (!value) {

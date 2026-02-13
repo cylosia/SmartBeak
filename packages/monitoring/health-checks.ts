@@ -167,9 +167,9 @@ export class HealthChecksRegistry extends EventEmitter {
 
     // Set up periodic checks if interval specified
     if (config.intervalMs && config.intervalMs > 0) {
-      const interval = setInterval(async () => {
+      const interval = setInterval(() => {
         if (config.enabled !== false) {
-          await this.runCheck(config.name);
+          void this.runCheck(config.name);
         }
       }, config.intervalMs).unref();
       

@@ -79,7 +79,7 @@ export function useCreateTimelineEvent() {
       return response.data as TimelineEvent;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [TIMELINE_QUERY_KEY, variables["domainId"]] });
+      void queryClient.invalidateQueries({ queryKey: [TIMELINE_QUERY_KEY, variables["domainId"]] });
     },
   });
 }

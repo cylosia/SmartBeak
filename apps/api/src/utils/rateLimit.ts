@@ -94,13 +94,13 @@ export async function rateLimit(
   memoryCounters.set(key, entry);
 
   // Set rate limit headers
-  res.header('X-RateLimit-Limit', limit);
-  res.header('X-RateLimit-Remaining', Math.max(0, limit - entry["count"]));
-  res.header('X-RateLimit-Reset', Math.ceil(entry.reset / 1000));
+  void res.header('X-RateLimit-Limit', limit);
+  void res.header('X-RateLimit-Remaining', Math.max(0, limit - entry["count"]));
+  void res.header('X-RateLimit-Reset', Math.ceil(entry.reset / 1000));
 
   if (entry["count"] > limit) {
   // P0-FIX: Just return after sending response - don't throw to prevent double response
-  res.status(429).send({
+  void res.status(429).send({
     error: 'Too many requests',
     message: `Rate limit exceeded for ${endpoint}. Please try again later.`,
     retryAfter: Math.ceil((entry.reset - now) / 1000),

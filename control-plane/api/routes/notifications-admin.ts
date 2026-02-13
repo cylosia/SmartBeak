@@ -45,7 +45,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve notifications');
       logger.error(`[admin/notifications] Error: ${sanitizedError}`);
-      res.status(500).send({ error: 'Failed to retrieve notifications' });
+      return res.status(500).send({ error: 'Failed to retrieve notifications' });
     }
   });
 
@@ -81,7 +81,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
         return res.status(404).send({ error: 'Notification not found' });
       }
       
-      res.status(500).send({ error: 'Failed to retry notification' });
+      return res.status(500).send({ error: 'Failed to retry notification' });
     }
   });
 
@@ -104,7 +104,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve DLQ');
       logger.error(`[admin/notifications/dlq] Error: ${sanitizedError}`);
-      res.status(500).send({ error: 'Failed to retrieve DLQ' });
+      return res.status(500).send({ error: 'Failed to retrieve DLQ' });
     }
   });
 
@@ -126,10 +126,10 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve metrics');
       logger.error(`[admin/notifications/metrics] Error: ${sanitizedError}`);
-      res.status(500).send({ error: 'Failed to retrieve metrics' });
+      return res.status(500).send({ error: 'Failed to retrieve metrics' });
     }
   });
-  
+
   // SECURITY FIX: Issue 19 - Add cancel endpoint with ownership check
   app.post('/admin/notifications/:id/cancel', async (req, res) => {
     try {
@@ -162,7 +162,7 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
         return res.status(404).send({ error: 'Notification not found' });
       }
       
-      res.status(500).send({ error: 'Failed to cancel notification' });
+      return res.status(500).send({ error: 'Failed to cancel notification' });
     }
   });
 }

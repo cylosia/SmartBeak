@@ -146,7 +146,7 @@ export class AlertingSystem extends EventEmitter {
   */
   start(checkIntervalMs: number = 60000): void {
   this.checkInterval = setInterval(() => {
-    this.runChecks();
+    void this.runChecks();
   }, checkIntervalMs).unref();
   logger.info('[Alerting] Started monitoring');
   }

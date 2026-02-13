@@ -90,11 +90,12 @@ export function registerHealthCheck(check: HealthCheck): void {
     clearInterval(existingTimer);
     }
 
-    const timer = setInterval(async () => {
-    try {
+    const timer = setInterval(() => {
+    void (async () => {
+      try {
         const result = await check.check();
         getMutableLastResults().set(check.name, result);
-    } catch (err: unknown) {
+      } catch (err: unknown) {
         logger.error(`Health check '${check.name}' failed:`, err as Error);
         const errorMessage = err instanceof Error ? err.message : String(err);
         getMutableLastResults().set(check.name, {
@@ -103,7 +104,8 @@ export function registerHealthCheck(check: HealthCheck): void {
         latency: 0,
         error: errorMessage,
         });
-    }
+      }
+    })();
     }, check.intervalMs).unref();
 
     // P1-FIX: Store timer for cleanup
