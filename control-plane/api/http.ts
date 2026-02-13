@@ -7,6 +7,7 @@ import Fastify from 'fastify';
 import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
+import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
 
@@ -112,7 +113,8 @@ await app.register(cors, {
   // P2-SECURITY-FIX: Removed X-CSRF-Token from allowedHeaders. It was listed but
   // no CSRF validation middleware exists, creating a false sense of security.
   // For a Bearer-token-only API, CSRF protection is not required.
-  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID']
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Request-ID', 'traceparent', 'tracestate'],
+  exposedHeaders: ['X-Request-ID', 'X-Trace-ID'],
 });
 
 // API Versioning: Backward compatibility for unversioned paths.
@@ -190,6 +192,22 @@ const pool = await getPoolInstance();
 
 // Initialize DI container
 const container = initializeContainer({ dbPool: pool });
+
+// Load cost tracking budgets from database
+try {
+  await container.costTracker.loadBudgetsFromDb();
+  logger.info('Cost tracking budgets loaded');
+} catch (error) {
+  logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+// Flush cost tracking buffer on shutdown
+registerShutdownHandler(async () => {
+  container.costTracker.stop();
+  logger.info('Cost tracker stopped and buffer flushed');
+});
 
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
@@ -359,6 +377,8 @@ app.setErrorHandler((error: unknown, request, reply) => {
     errorCode = 'NOT_FOUND';
   } else if (statusCode === 400) {
     errorCode = 'VALIDATION_ERROR';
+  } else if (statusCode === 402) {
+    errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
     errorCode = 'CONFLICT';
   }
@@ -726,6 +746,13 @@ async function start(): Promise<void> {
     logger.info('Closing Fastify server (draining connections)...');
     await app.close();
     logger.info('Fastify server closed');
+  });
+
+  // Flush pending OTel spans before process exit
+  registerShutdownHandler(async () => {
+    logger.info('Flushing telemetry spans...');
+    await shutdownTelemetry();
+    logger.info('Telemetry shutdown complete');
   });
   } catch (error) {
   logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));

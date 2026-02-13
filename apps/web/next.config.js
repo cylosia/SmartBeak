@@ -9,6 +9,9 @@ const nextConfig = {
   // Enable standalone output for Docker containerization
   output: 'standalone',
 
+  // Enable source maps in production browser builds for debugging
+  productionBrowserSourceMaps: true,
+
   // Security: Disable X-Powered-By header
   poweredByHeader: false,
 

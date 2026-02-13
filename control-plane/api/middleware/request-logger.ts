@@ -87,6 +87,11 @@ export async function requestLoggerMiddleware(
   // Add request ID to response headers
   void res.header('X-Request-ID', requestId);
 
+  // Expose trace ID for client-side correlation (bridged from OTel)
+  if (requestContext.traceId) {
+    void res.header('X-Trace-ID', requestContext.traceId);
+  }
+
   // P2-MEDIUM FIX: Properly clean up event listeners to prevent memory leak
   const cleanup = () => {
     res.raw.removeListener('finish', onFinish);

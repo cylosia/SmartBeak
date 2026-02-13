@@ -55,6 +55,7 @@ export async function fetchWordPressPosts(
   }
 
   // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
+  // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
   throw new Error(`SSRF protection: ${urlCheck.reason}`);
@@ -65,7 +66,9 @@ export async function fetchWordPressPosts(
   throw new Error('HTTPS is required when using authentication credentials');
   }
 
-  const url = new URL(`${config.baseUrl}/wp-json/wp/v2/posts`);
+  // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
+  const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
+  const url = new URL(`${baseUrl}/wp-json/wp/v2/posts`);
   url.searchParams.set('per_page', String(perPage));
   url.searchParams.set('page', String(page));
 
@@ -128,6 +131,7 @@ export async function createWordPressPost(
   }
 
   // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
+  // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
   throw new Error(`SSRF protection: ${urlCheck.reason}`);
@@ -138,7 +142,9 @@ export async function createWordPressPost(
   throw new Error('HTTPS is required when using authentication credentials');
   }
 
-  const url = `${config.baseUrl}/wp-json/wp/v2/posts`;
+  // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
+  const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
+  const url = `${baseUrl}/wp-json/wp/v2/posts`;
 
   const headers: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -210,6 +216,7 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   }
 
   // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
+  // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
   return {
@@ -223,7 +230,9 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-  const url = `${config.baseUrl}/wp-json/wp/v2/posts?per_page=1`;
+  // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
+  const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
+  const url = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
   const headers: Record<string, string> = {
     'Accept': 'application/json',
   };
