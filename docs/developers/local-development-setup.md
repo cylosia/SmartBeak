@@ -10,10 +10,10 @@ This guide walks through setting up the SmartBeak development environment on you
 
 | Software | Version | Purpose |
 |----------|---------|---------|
-| Node.js | >= 18.x | Runtime |
-| npm | >= 9.x | Package manager |
-| PostgreSQL | >= 14.x | Database |
-| Redis | >= 6.x | Job queue, cache |
+| Node.js | >= 20.0.0 | Runtime |
+| npm | >= 10.0.0 | Package manager |
+| PostgreSQL | >= 15 | Database |
+| Redis | >= 7 | Job queue, cache |
 | Git | >= 2.30 | Version control |
 
 ### Optional but Recommended
@@ -37,16 +37,16 @@ cd smartbeak
 # Copy environment template
 cp .env.example .env
 
-# Start all services
-docker-compose up -d
+# Start all services (postgres, redis, api, worker, web)
+# Health checks ensure services start in the correct order
+docker compose up -d
 
 # Run database migrations
-docker-compose exec api npm run migrate
-
-# Seed development data
-docker-compose exec api npm run seed
+docker compose exec api npm run migrate
 
 # Access the application
+# Web app: http://localhost:3000
+# API:     http://localhost:3001/health
 open http://localhost:3000
 ```
 
@@ -62,17 +62,8 @@ cd smartbeak
 ### 2. Install Dependencies
 
 ```bash
-# Install root dependencies
+# Install all dependencies (npm workspaces handles sub-packages automatically)
 npm install
-
-# Install web app dependencies
-cd apps/web && npm install && cd ../..
-
-# Install API dependencies
-cd apps/api && npm install && cd ../..
-
-# Install control plane dependencies
-cd control-plane && npm install && cd ..
 ```
 
 ### 3. Database Setup
@@ -81,8 +72,8 @@ cd control-plane && npm install && cd ..
 
 ```bash
 # macOS with Homebrew
-brew install postgresql@14
-brew services start postgresql@14
+brew install postgresql@15
+brew services start postgresql@15
 
 # Create databases
 createdb smartbeak_control_plane
@@ -102,7 +93,7 @@ docker run -d \
   -e POSTGRES_PASSWORD=dev_password \
   -e POSTGRES_DB=smartbeak_control_plane \
   -p 5432:5432 \
-  postgres:14-alpine
+  postgres:15-alpine
 
 # Create additional databases
 docker exec smartbeak-postgres createdb -U smartbeak smartbeak_domain_template
@@ -163,48 +154,41 @@ EOF
 ### 6. Database Migrations
 
 ```bash
-# Run control plane migrations
-npx knex migrate:latest --knexfile control-plane/db/knexfile.js
+# Run all pending migrations (control plane and domain tables)
+npm run migrate
 
-# Run domain migrations (for template domain)
-psql $CONTROL_PLANE_DB -f domains/content/db/migrations/001_init.sql
-psql $CONTROL_PLANE_DB -f domains/publishing/db/migrations/001_init.sql
-psql $CONTROL_PLANE_DB -f domains/media/db/migrations/001_init.sql
-psql $CONTROL_PLANE_DB -f domains/notifications/db/migrations/001_init.sql
+# Check migration status
+npm run migrate:status
 ```
+
+All migrations live in `migrations/sql/` and are managed by `scripts/migrate.ts` using Knex with a custom `SqlMigrationSource`. Migration files follow the naming convention `YYYYMMDDHHMMSS_[cp|dom|infra|pkg]_description.[up|down].sql`.
 
 ### 7. Start Development Servers
 
-Using npm workspaces:
-
 ```bash
-# Start all services
+# Terminal 1: Control Plane API (Fastify, port 3001)
 npm run dev
 
-# Or start individually:
-
-# Terminal 1: Web app
+# Terminal 2: Web app (Next.js, port 3000)
 cd apps/web && npm run dev
 
-# Terminal 2: API server
-cd apps/api && npm run dev
-
-# Terminal 3: Control plane
-cd control-plane && npm run dev
-
-# Terminal 4: Worker processes
-cd apps/api && npm run worker
+# Terminal 3: Worker processes (optional, for background job processing)
+npm run worker
 ```
+
+`npm run dev` starts the control-plane API server with OpenTelemetry tracing enabled. The API routes from `apps/api` are registered within the control-plane server, so there is no need to start them separately.
 
 ### 8. Verify Setup
 
 ```bash
-# Health check
-curl http://localhost:3000/api/health
+# API health check
 curl http://localhost:3001/health
 
-# Database check
-psql $CONTROL_PLANE_DB -c "SELECT COUNT(*) FROM orgs;"
+# Web app check
+curl http://localhost:3000
+
+# Database check (confirm migrations ran)
+npm run migrate:status
 
 # Redis check
 redis-cli ping
@@ -221,9 +205,7 @@ Recommended extensions:
 {
   "recommendations": [
     "dbaeumer.vscode-eslint",
-    "esbenp.prettier-vscode",
     "bradlc.vscode-tailwindcss",
-    "Prisma.prisma",
     "ms-vscode.vscode-typescript-next",
     "eamodio.gitlens",
     "ms-vscode.vscode-json"
@@ -237,9 +219,8 @@ Settings:
 // .vscode/settings.json
 {
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "typescript.tsdk": "node_modules/typescript/lib",
-  "eslint.workingDirectories": ["apps/web", "apps/api", "control-plane"]
+  "eslint.workingDirectories": [{ "mode": "auto" }]
 }
 ```
 
@@ -248,7 +229,6 @@ Settings:
 1. Open project root
 2. Configure TypeScript compiler for each module
 3. Set up ESLint integration
-4. Configure Prettier as default formatter
 
 ## Development Workflow
 
@@ -278,18 +258,11 @@ test: add unit tests for auth service
 ### Running Tests
 
 ```bash
-# All tests
-npm test
+# Unit tests
+npm run test:unit
 
-# Specific package
-cd apps/web && npm test
-cd apps/api && npm test
-
-# With coverage
-npm run test:coverage
-
-# E2E tests
-npm run test:e2e
+# Integration tests (runs serially with --runInBand)
+npm run test:integration
 ```
 
 ### Code Quality
@@ -298,14 +271,11 @@ npm run test:e2e
 # Lint all files
 npm run lint
 
-# Fix linting issues
-npm run lint:fix
+# Security-focused linting
+npm run lint:security
 
 # Type check
 npm run type-check
-
-# Format code
-npm run format
 ```
 
 ## External Services Setup
@@ -379,8 +349,9 @@ brew services list | grep postgresql
 # Check connection string
 psql postgresql://user:pass@localhost:5432/dbname
 
-# Reset database
-npm run db:reset
+# Rollback and re-apply migrations
+npm run migrate:rollback
+npm run migrate
 ```
 
 #### Redis Connection Failed
@@ -404,8 +375,11 @@ npm install
 #### TypeScript Errors
 
 ```bash
-# Rebuild TypeScript
-npm run build:types
+# Type check
+npm run type-check
+
+# Full build
+npm run build
 
 # Clear TS cache
 rm -rf apps/*/tsconfig.tsbuildinfo
@@ -440,10 +414,7 @@ SSL_KEY_FILE=.cert/key.pem
 
 ```bash
 # Start with debugger
-node --inspect-brk apps/api/dist/index.js
-
-# Or with npm
-npm run dev:debug
+node --inspect-brk control-plane/api/http.ts
 ```
 
 Then attach in VS Code or Chrome DevTools.
@@ -453,19 +424,13 @@ Then attach in VS Code or Chrome DevTools.
 ```bash
 # Debug logging
 LOG_LEVEL=debug npm run dev
-
-# Request logging
-DEBUG=express:* npm run dev
 ```
 
 ### Performance Profiling
 
 ```bash
-# Build with profiling
-npm run build:profile
-
-# Analyze bundle
-npm run analyze
+# Analyze bundle size
+npm run analyze:bundle
 ```
 
 ## Next Steps
@@ -479,5 +444,5 @@ npm run analyze
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Fastify Documentation](https://fastify.dev/docs/)
-- [Prisma Documentation](https://www.prisma.io/docs)
+- [Knex.js Documentation](https://knexjs.org/guide/)
 - [BullMQ Documentation](https://docs.bullmq.io/)
