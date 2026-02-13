@@ -5,15 +5,27 @@
  * protocol/port restrictions, and encoding bypass prevention.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   isInternalIp,
   isAllowedProtocol,
   isAllowedPort,
   validateUrl,
+  validateUrlWithDns,
+  validateResolvedIps,
   extractSafeUrl,
   normalizeIp,
 } from '../ssrf';
+
+const { mockResolve4, mockResolve6 } = vi.hoisted(() => ({
+  mockResolve4: vi.fn(),
+  mockResolve6: vi.fn(),
+}));
+vi.mock('dns/promises', () => ({
+  default: { resolve4: mockResolve4, resolve6: mockResolve6 },
+  resolve4: mockResolve4,
+  resolve6: mockResolve6,
+}));
 
 describe('SSRF Protection', () => {
   // ============================================================================
@@ -252,6 +264,125 @@ describe('SSRF Protection', () => {
 
     it('should pass through normal IPs', () => {
       expect(normalizeIp('8.8.8.8')).toBe('8.8.8.8');
+    });
+  });
+
+  // ============================================================================
+  // validateUrlWithDns
+  // ============================================================================
+
+  describe('validateUrlWithDns', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should allow URL that resolves to public IP', async () => {
+      mockResolve4.mockResolvedValue(['93.184.216.34']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateUrlWithDns('https://example.com/api');
+      expect(result.allowed).toBe(true);
+      expect(result.sanitizedUrl).toBeDefined();
+    });
+
+    it('should block URL whose domain resolves to 127.0.0.1 (DNS rebinding)', async () => {
+      mockResolve4.mockResolvedValue(['127.0.0.1']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateUrlWithDns('https://evil.attacker.com/api');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('internal IP');
+    });
+
+    it('should block URL whose domain resolves to AWS metadata IP', async () => {
+      mockResolve4.mockResolvedValue(['169.254.169.254']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateUrlWithDns('https://evil.attacker.com/latest/meta-data');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('internal IP');
+    });
+
+    it('should block URL resolving to private 10.x.x.x range', async () => {
+      mockResolve4.mockResolvedValue(['10.0.0.5']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateUrlWithDns('https://evil.attacker.com/');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('internal IP');
+    });
+
+    it('should block URL resolving to private 192.168.x.x range', async () => {
+      mockResolve4.mockResolvedValue(['192.168.1.1']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateUrlWithDns('https://evil.attacker.com/');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('internal IP');
+    });
+
+    it('should fail closed when hostname does not resolve', async () => {
+      mockResolve4.mockRejectedValue(new Error('NXDOMAIN'));
+      mockResolve6.mockRejectedValue(new Error('NXDOMAIN'));
+      const result = await validateUrlWithDns('https://nonexistent.example.com/');
+      expect(result.allowed).toBe(false);
+    });
+
+    it('should still block string-level violations before DNS check', async () => {
+      const result = await validateUrlWithDns('https://127.0.0.1/admin');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('Internal IP');
+      // DNS should NOT have been called since sync check failed first
+      expect(mockResolve4).not.toHaveBeenCalled();
+    });
+
+    it('should respect allowHttp option', async () => {
+      mockResolve4.mockResolvedValue(['93.184.216.34']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateUrlWithDns('http://example.com/', { allowHttp: true });
+      expect(result.allowed).toBe(true);
+    });
+
+    it('should reject HTTP when requireHttps is default', async () => {
+      const result = await validateUrlWithDns('http://example.com/');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('HTTPS required');
+    });
+  });
+
+  // ============================================================================
+  // validateResolvedIps
+  // ============================================================================
+
+  describe('validateResolvedIps', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should allow hostname resolving to all public IPs', async () => {
+      mockResolve4.mockResolvedValue(['93.184.216.34', '93.184.216.35']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateResolvedIps('example.com');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('should block if any resolved IP is internal', async () => {
+      mockResolve4.mockResolvedValue(['93.184.216.34', '10.0.0.1']);
+      mockResolve6.mockResolvedValue([]);
+      const result = await validateResolvedIps('example.com');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('internal IP');
+    });
+
+    it('should block if IPv6 resolves to internal address', async () => {
+      mockResolve4.mockResolvedValue(['93.184.216.34']);
+      mockResolve6.mockResolvedValue(['::1']);
+      const result = await validateResolvedIps('example.com');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('internal IP');
+    });
+
+    it('should fail closed when no IPs resolve', async () => {
+      mockResolve4.mockRejectedValue(new Error('NXDOMAIN'));
+      mockResolve6.mockRejectedValue(new Error('NXDOMAIN'));
+      const result = await validateResolvedIps('nonexistent.example.com');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('could not be resolved');
     });
   });
 });
