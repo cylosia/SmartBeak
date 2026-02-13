@@ -38,7 +38,8 @@ export interface BatchResult {
 export async function processInBatches<T>(
   items: T[],
   batchSize: number,
-  fn: (item: T) => Promise<void>
+  fn: (item: T) => Promise<void>,
+  signal?: AbortSignal
 ): Promise<BatchResult> {
   // Input validation
   if (!Array.isArray(items)) {
@@ -62,6 +63,12 @@ export async function processInBatches<T>(
   };
 
   for (let i = 0; i < items.length; i += batchSize) {
+  // Check abort signal between batches
+  if (signal?.aborted) {
+    logger.info(`Batch processing aborted after ${result.successCount} successes, ${result.failureCount} failures`);
+    break;
+  }
+
   const batch = items.slice(i, i + batchSize);
   const batchNumber = Math.floor(i / batchSize) + 1;
   const totalBatches = Math.ceil(items.length / batchSize);
@@ -102,7 +109,8 @@ export async function processInBatches<T>(
 export async function processInBatchesStrict<T>(
   items: T[],
   batchSize: number,
-  fn: (item: T) => Promise<void>
+  fn: (item: T) => Promise<void>,
+  signal?: AbortSignal
 ): Promise<number> {
   // Input validation
   if (!Array.isArray(items)) {
@@ -121,6 +129,12 @@ export async function processInBatchesStrict<T>(
   let processedCount = 0;
 
   for (let i = 0; i < items.length; i += batchSize) {
+  // Check abort signal between batches
+  if (signal?.aborted) {
+    logger.info(`[batch-strict] Aborted after processing ${processedCount} items`);
+    throw new Error('Batch processing aborted');
+  }
+
   const batch = items.slice(i, i + batchSize);
   const batchNumber = Math.floor(i / batchSize) + 1;
   const totalBatches = Math.ceil(items.length / batchSize);
@@ -171,7 +185,8 @@ export async function processInBatchesStrict<T>(
 export async function mapInBatches<T, R>(
   items: T[],
   batchSize: number,
-  fn: (item: T) => Promise<R>
+  fn: (item: T) => Promise<R>,
+  signal?: AbortSignal
 ): Promise<{ results: R[]; errors: Array<{ item: T; error: Error }> }> {
   // Input validation
   if (!Array.isArray(items)) {
@@ -191,6 +206,12 @@ export async function mapInBatches<T, R>(
   const errors: Array<{ item: T; error: Error }> = [];
 
   for (let i = 0; i < items.length; i += batchSize) {
+  // Check abort signal between batches
+  if (signal?.aborted) {
+    logger.info(`[map-batch] Aborted after ${results.length} successes, ${errors.length} failures`);
+    break;
+  }
+
   const batch = items.slice(i, i + batchSize);
   const batchNumber = Math.floor(i / batchSize) + 1;
   const totalBatches = Math.ceil(items.length / batchSize);

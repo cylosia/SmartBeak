@@ -71,12 +71,16 @@ export async function closeRedis(): Promise<void> {
 // which is properly registered via registerShutdownHandler in db.ts).
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received - closing Redis connection');
-  void closeRedis();
+  closeRedis().catch((err) => {
+    logger.error('Failed to close Redis during SIGTERM', err instanceof Error ? err : new Error(String(err)));
+  });
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received - closing Redis connection');
-  void closeRedis();
+  closeRedis().catch((err) => {
+    logger.error('Failed to close Redis during SIGINT', err instanceof Error ? err : new Error(String(err)));
+  });
 });
 
 export { Redis };

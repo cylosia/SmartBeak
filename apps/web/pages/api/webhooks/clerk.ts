@@ -214,15 +214,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(503).json({ error: 'Service temporarily unavailable' });
   }
   const dedupeKey = `webhook:clerk:${eventId}`;
-  const alreadyProcessed = await redis.get(dedupeKey);
-  
-  if (alreadyProcessed) {
+  // SECURITY FIX: Atomic set-if-not-exists to prevent race condition.
+  // Previous code used non-atomic get() then setex(), allowing two concurrent
+  // identical webhooks to both pass the get() check before either calls setex().
+  // NX = only set if key does not exist; EX = set TTL in seconds.
+  const setResult = await redis.set(dedupeKey, '1', 'EX', 86400, 'NX');
+
+  if (setResult === null) {
+    // Key already existed — this is a duplicate delivery
     logger.info('Duplicate event ignored', { eventId });
     return res.status(200).json({ received: true, duplicate: true });
   }
-  
-  // Mark as processed with 24h TTL
-  await redis.setex(dedupeKey, 86400, '1');
   
   logger.info('Processing event', { eventType: event.type, userId: event.data["id"] });
 

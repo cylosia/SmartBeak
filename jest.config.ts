@@ -31,6 +31,7 @@ const config: Config = {
     '^@security/(.*)$': '<rootDir>/packages/security/$1',
     '^@database/(.*)$': '<rootDir>/packages/database/$1',
     '^@config$': '<rootDir>/packages/config/index.ts',
+    '^@config/(.*)$': '<rootDir>/packages/config/$1',
     '^@errors$': '<rootDir>/packages/errors/index.ts',
   },
   

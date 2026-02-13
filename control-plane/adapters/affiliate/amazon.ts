@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { createHmac, createHash } from 'crypto';
 
 import { timeoutConfig } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
@@ -107,12 +108,11 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
 
   try {
     const res = await withRetry(async () => {
+    // Content-Type is now included in buildPAAPIHeaders output
+    // as part of the SigV4 signed headers
     const response = await fetch(`${baseUrl}/paapi5/searchitems`, {
     method: 'POST',
-    headers: {
-    'Content-Type': 'application/json',
-    ...headers,
-    },
+    headers,
     body: JSON.stringify(payload),
     signal: controller.signal,
     });
@@ -204,16 +204,92 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
   }
 
   /**
-  * Build PAAPI 5.0 headers with AWS Signature Version 4
+  * PAAPI marketplace to AWS region mapping.
+  * Amazon PAAPI 5.0 uses specific regional endpoints.
+  */
+  private static readonly PAAPI_REGION_MAP: Record<string, string> = {
+    'US': 'us-east-1', 'CA': 'us-east-1', 'MX': 'us-east-1', 'BR': 'us-east-1',
+    'UK': 'eu-west-1', 'DE': 'eu-west-1', 'FR': 'eu-west-1',
+    'IN': 'eu-west-1', 'AE': 'eu-west-1', 'TR': 'eu-west-1',
+    'JP': 'us-west-2', 'AU': 'us-west-2', 'SG': 'us-west-2',
+  };
+
+  /**
+  * Build PAAPI 5.0 headers with complete AWS Signature Version 4.
+  *
+  * SECURITY FIX: Previous implementation only included the Credential component
+  * in the Authorization header — missing SignedHeaders and Signature. Without
+  * the HMAC signature, all PAAPI requests would be rejected with 403.
+  *
+  * Full SigV4 flow:
+  * 1. Build canonical request (method, path, query, headers, payload hash)
+  * 2. Create string to sign (algorithm, date, scope, canonical request hash)
+  * 3. Derive signing key (HMAC chain: date → region → service → aws4_request)
+  * 4. Compute signature (HMAC of string-to-sign with signing key)
   */
   private buildPAAPIHeaders(payload: unknown, timestamp: string): Record<string, string> {
-  const date = timestamp.split('T')[0]!.replace(/-/g, '');
+  const amzDate = timestamp.replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const dateStamp = timestamp.split('T')[0]!.replace(/-/g, '');
+  const marketplace = this.credentials.marketplace || 'US';
+  const region = AmazonAdapter.PAAPI_REGION_MAP[marketplace] || 'us-east-1';
+  const service = 'ProductAdvertisingAPI';
+  const baseUrl = this.baseUrls[marketplace] || this.baseUrls['US']!;
+  const host = new URL(baseUrl).host;
+  const target = 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems';
+  const contentType = 'application/json; charset=utf-8';
+  const contentEncoding = 'amz-1.0';
+
+  const payloadString = JSON.stringify(payload);
+  const payloadHash = createHash('sha256').update(payloadString).digest('hex');
+
+  // Step 1: Create canonical request
+  const canonicalHeaders = [
+    `content-encoding:${contentEncoding}`,
+    `content-type:${contentType}`,
+    `host:${host}`,
+    `x-amz-date:${amzDate}`,
+    `x-amz-target:${target}`,
+  ].join('\n') + '\n';
+
+  const signedHeaders = 'content-encoding;content-type;host;x-amz-date;x-amz-target';
+
+  const canonicalRequest = [
+    'POST',
+    '/paapi5/searchitems',
+    '', // empty canonical query string for POST
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join('\n');
+
+  // Step 2: Create string to sign
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    createHash('sha256').update(canonicalRequest).digest('hex'),
+  ].join('\n');
+
+  // Step 3: Derive signing key (HMAC chain)
+  const kDate = createHmac('sha256', `AWS4${this.credentials.secretKey}`).update(dateStamp).digest();
+  const kRegion = createHmac('sha256', kDate).update(region).digest();
+  const kService = createHmac('sha256', kRegion).update(service).digest();
+  const kSigning = createHmac('sha256', kService).update('aws4_request').digest();
+
+  // Step 4: Compute signature
+  const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+
+  // Build complete Authorization header
+  const authorization = `AWS4-HMAC-SHA256 Credential=${this.credentials.accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   return {
-    'X-Amz-Date': timestamp.replace(/[-:]/g, '').split('.')[0] + 'Z',
-    'X-Amz-Target': 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems',
-    'Content-Encoding': 'amz-1.0',
-    'Authorization': `AWS4-HMAC-SHA256 Credential=${this.credentials.accessKey}/${date}/us-east-1/ProductAdvertisingAPI/aws4_request`,
+    'Content-Type': contentType,
+    'Content-Encoding': contentEncoding,
+    'Host': host,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Target': target,
+    'Authorization': authorization,
   };
   }
 

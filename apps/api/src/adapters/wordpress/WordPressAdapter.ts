@@ -1,6 +1,10 @@
 import { getLogger } from '@kernel/logger';
 import { MetricsCollector } from '@kernel/request';
 import { withRetry } from '../../utils/retry';
+// SECURITY FIX: Use DNS-validated URL check to prevent DNS rebinding SSRF attacks.
+// validateUrl() only checks hostname strings against patterns but never resolves DNS.
+// An attacker can register a domain that resolves to 127.0.0.1 or 169.254.169.254
+// to bypass the string-based check. validateUrlWithDns() resolves DNS first.
 import { validateUrlWithDns } from '@security/ssrf';
 
 import { DEFAULT_TIMEOUTS } from '@config';
@@ -50,6 +54,7 @@ export async function fetchWordPressPosts(
   throw new Error('Invalid WordPress config: baseUrl is required');
   }
 
+  // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
   // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
@@ -125,6 +130,7 @@ export async function createWordPressPost(
   throw new Error('Invalid WordPress config: baseUrl is required');
   }
 
+  // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
   // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
@@ -209,6 +215,7 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   };
   }
 
+  // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
   // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
