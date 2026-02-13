@@ -1,6 +1,10 @@
 
 import Stripe from 'stripe';
 
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('stripe');
+
 /**
 * Stripe configuration
 * Server-side only - never expose secret keys to client
@@ -91,9 +95,7 @@ export const stripe: Stripe = new Proxy({} as Stripe, {
 export function getStripeWebhookSecret(): string {
   const key = process.env['STRIPE_WEBHOOK_SECRET'];
   if (!key || key.includes('placeholder')) {
-  console.warn(
-    '[stripe] STRIPE_WEBHOOK_SECRET is not set. Webhook verification will fail.'
-  );
+  logger.warn('STRIPE_WEBHOOK_SECRET is not set. Webhook verification will fail.');
   return '';
   }
   // Validate webhook secret format

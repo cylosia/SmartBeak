@@ -3,6 +3,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 import { requireAuth, validateMethod, canAccessDomain, sendError } from '../../../lib/auth';
 import { pool } from '../../../lib/db';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('diligence:integrations');
 
 /**
 * GET /api/diligence/integrations
@@ -46,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // AUTHORIZATION CHECK: Verify user has access to the domain
     const hasAccess = await canAccessDomain(auth.userId, domainIdStr, pool);
     if (!hasAccess) {
-    console.warn(`[diligence/integrations] Unauthorized access attempt: user ${auth.userId} tried to access integrations for domain ${domainIdStr}`);
+    logger.warn('Unauthorized access attempt', { userId: auth.userId, domainId: domainIdStr });
     return sendError(res, 403, 'Access denied to domain');
     }
   }
@@ -72,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (err.code === '42P01') {
     // Table doesn't exist yet - expected during development
     } else {
-    console.error('[diligence/integrations] Error fetching org integrations:', err.message);
+    logger.error('Error fetching org integrations', { error: err.message });
     throw dbError;
     }
   }
@@ -96,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (err.code === '42P01') {
       // Table doesn't exist yet - expected during development
     } else {
-      console.error('[diligence/integrations] Error fetching domain integrations:', err.message);
+      logger.error('Error fetching domain integrations', { error: err.message });
       throw dbError;
     }
     }
@@ -133,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.json(integrations);
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
-  console.error('[diligence/integrations] Error:', error);
+  logger.error('Error fetching integrations', { error });
 
   if (error instanceof Error && error.message?.includes('DATABASE_NOT_CONFIGURED')) {
     return sendError(res, 503, 'Service unavailable. Database not configured.');

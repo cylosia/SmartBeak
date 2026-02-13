@@ -14,7 +14,9 @@ export interface AuthContext {
   requestId: string;
 }
 import { Pool } from 'pg';
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiRequest, NextApiResponse, GetServerSidePropsContext } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
+import { getPoolInstance } from './db';
 
 const logger = getLogger('Auth');
 
@@ -507,6 +509,32 @@ export async function canAccessDomain(userId: string, domainId: string, db: Pool
     logger.error('Error checking domain access', error instanceof Error ? error : new Error(String(error)));
     return false;
   }
+}
+/**
+ * Verify domain access in getServerSideProps.
+ * Combines Clerk auth + domain ownership check.
+ * Returns userId if authorized, or a redirect/notFound result for early return.
+ */
+export async function requireDomainAccess(
+  req: GetServerSidePropsContext['req'],
+  domainId: string
+): Promise<
+  | { authorized: true; userId: string }
+  | { authorized: false; result: { notFound: true } | { redirect: { destination: string; permanent: false } } }
+> {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    return {
+      authorized: false,
+      result: { redirect: { destination: '/login', permanent: false } },
+    };
+  }
+  const pool = await getPoolInstance();
+  const hasAccess = await canAccessDomain(userId, domainId, pool);
+  if (!hasAccess) {
+    return { authorized: false, result: { notFound: true } };
+  }
+  return { authorized: true, userId };
 }
 /**
  * Check if user is org admin

@@ -1,5 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('webhook');
+
 /**
 * Webhook Handler Router
 * Routes incoming webhooks to appropriate handlers
@@ -36,7 +40,7 @@ async function loadHandler(provider: string): Promise<((req: NextApiRequest, res
     return null;
   }
   } catch (error) {
-  console.error(`[Webhook] Failed to load handler for ${provider}:`, error);
+  logger.error('Failed to load handler', { provider, error });
   return null;
   }
 }
@@ -63,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return;
   } catch (error: unknown) {
   const err = error instanceof Error ? error : new Error(String(error));
-  console.error(`[Webhook] ${provider} error:`, err);
+  logger.error('Provider error', { provider, error: err });
 
   const errorMessage = process.env['NODE_ENV'] === 'development'
     ? err.message

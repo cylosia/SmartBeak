@@ -6,6 +6,10 @@
 * - Type safety
 */
 
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('SaleReadiness');
+
 export type SaleReadinessInput = {
   seo_completeness: number;       // 0-100
   content_freshness_ratio: number; // 0-1
@@ -113,7 +117,7 @@ function validateInput(input: SaleReadinessInput): { valid: boolean; errors: str
 export function computeSaleReadiness(input: SaleReadinessInput): SaleReadinessOutput {
   const validation = validateInput(input);
   if (!validation.valid) {
-  console.error('[computeSaleReadiness] Invalid input:', validation.errors);
+  logger.error('Invalid input', { errors: validation.errors });
   return {
     score: 0,
     breakdown: { seo: 0, content: 0, audience: 0, revenue: 0, risk: 0 },
@@ -166,7 +170,7 @@ export function computeSaleReadiness(input: SaleReadinessInput): SaleReadinessOu
     valid: true,
   };
   } catch (error) {
-    console.error('[computeSaleReadiness] Error computing sale readiness:', error);
+    logger.error('Error computing sale readiness', { error });
   return {
     score: 0,
     breakdown: { seo: 0, content: 0, audience: 0, revenue: 0, risk: 0 },

@@ -15,6 +15,9 @@ import type {
   MaintenanceOptions,
   TableAutovacuumConfig,
 } from './types';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('vacuumManager');
 
 const vacuumLogger = getLogger('vacuumManager');
 
@@ -342,6 +345,7 @@ async function logMaintenanceOperation(
     });
   } catch (err) {
     // P1-9 FIX: Log failure instead of silently swallowing
+    logger.error('Failed to log maintenance operation', { error: err instanceof Error ? err.message : String(err) });
     vacuumLogger.error('Failed to log maintenance operation', err instanceof Error ? err : new Error(String(err)));
   }
 }
@@ -493,6 +497,7 @@ export async function runVacuumMaintenance(
       try {
         validateTableName(table);
       } catch {
+        logger.error('Skipping table with invalid name from db_vacuum_statistics', { table });
         vacuumLogger.error(`Skipping table with invalid name from db_vacuum_statistics: ${table}`);
         continue;
       }

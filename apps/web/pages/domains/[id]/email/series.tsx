@@ -1,4 +1,5 @@
 import type { GetServerSidePropsContext } from 'next';
+import { requireDomainAccess } from '../../../../lib/auth';
 import { getAuth } from '@clerk/nextjs/server';
 import { canAccessDomain } from '../../../../lib/auth';
 import { getPoolInstance } from '../../../../lib/db';
@@ -42,11 +43,16 @@ export default function Series({ domainId }: SeriesProps) {
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const id = context.params?.['id'];
-  if (typeof id !== 'string') {
+  if (typeof id !== 'string' || !UUID_RE.test(id)) {
     return { notFound: true };
   }
+  const authCheck = await requireDomainAccess(context.req, id);
+  if (!authCheck.authorized) {
+    return authCheck.result;
   // P1-13 FIX: Domain authorization check to prevent IDOR
   const { userId } = getAuth(context.req);
   if (!userId) {

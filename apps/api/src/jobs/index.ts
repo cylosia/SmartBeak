@@ -5,6 +5,9 @@ import { registerExperimentStartJob } from './experimentStartJob';
 import { registerContentIdeaJob } from './contentIdeaGenerationJob';
 import { JobScheduler } from './JobScheduler';
 import { registerDomainExportJob } from './domainExportJob';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('Jobs');
 
 /**
  * Jobs Module
@@ -43,8 +46,7 @@ export function initializeJobScheduler(redisUrl?: string, pool?: Pool) {
   if (!scheduler.isRunning()) {
     scheduler.startWorkers(5);
   }
-  // Use console for initialization message (structured logger will be used in jobs)
-  console.log('[Jobs] Scheduler initialized with all registered jobs');
+  logger.info('Scheduler initialized with all registered jobs');
   return scheduler;
 }
 /**

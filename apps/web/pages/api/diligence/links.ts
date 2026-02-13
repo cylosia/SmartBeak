@@ -109,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
-  console.error('[diligence/links] Error:', error);
+  getLogger('diligence:links').error('Error fetching link summary', { error });
   sendError(res, 500, 'Failed to fetch link summary');
   }
 }

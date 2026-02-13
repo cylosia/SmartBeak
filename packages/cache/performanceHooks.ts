@@ -12,6 +12,7 @@ import { MultiTierCache, CacheStats } from './multiTierCache';
 import { QueryCacheStats } from './queryCache';
 import { getLogger } from '@kernel/logger';
 
+const logger = getLogger('PerformanceHooks');
 const perfLogger = getLogger('PerformanceMonitor');
 
 // ============================================================================
@@ -161,6 +162,7 @@ export class PerformanceMonitor {
       this.collectMetrics();
     }, this.options.sampleIntervalMs).unref();
 
+    logger.info('Started monitoring');
     perfLogger.info('Started monitoring');
   }
 
@@ -173,6 +175,7 @@ export class PerformanceMonitor {
       clearInterval(this.sampleIntervalId);
       this.sampleIntervalId = null;
     }
+    logger.info('Stopped monitoring');
     perfLogger.info('Stopped monitoring');
   }
 

@@ -10,6 +10,13 @@ const logger = getLogger('database:transactions');
 const VALID_ISOLATION_LEVELS = ['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SERIALIZABLE'] as const;
 export type IsolationLevel = typeof VALID_ISOLATION_LEVELS[number];
 
+const ISOLATION_SQL: Record<IsolationLevel, string> = {
+  'READ UNCOMMITTED': 'BEGIN ISOLATION LEVEL READ UNCOMMITTED',
+  'READ COMMITTED': 'BEGIN ISOLATION LEVEL READ COMMITTED',
+  'REPEATABLE READ': 'BEGIN ISOLATION LEVEL REPEATABLE READ',
+  'SERIALIZABLE': 'BEGIN ISOLATION LEVEL SERIALIZABLE',
+};
+
 /**
  * Validate isolation level against whitelist
  */
@@ -84,7 +91,7 @@ export async function withTransaction<T>(
     const validatedIsolation = isolationLevel
       ? validateIsolationLevel(isolationLevel)
       : DEFAULT_ISOLATION_LEVEL;
-    await client.query(`BEGIN ISOLATION LEVEL ${validatedIsolation}`);
+    await client.query(ISOLATION_SQL[validatedIsolation]);
     await client.query('SET LOCAL statement_timeout = $1', [timeoutMs]);
 
     const abortController = new AbortController();

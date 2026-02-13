@@ -1,5 +1,6 @@
 
 import { GetServerSideProps } from 'next';
+import { requireDomainAccess } from '../../../lib/auth';
 import { getAuth } from '@clerk/nextjs/server';
 import { canAccessDomain } from '../../../lib/auth';
 import { getPoolInstance } from '../../../lib/db';
@@ -67,13 +68,21 @@ export default function DomainIntegrations({ domainId, integrations }: DomainInt
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const getServerSideProps: GetServerSideProps = async ({ params, req }) => {
   const domainId = params?.['id'];
 
-  if (!domainId || typeof domainId !== 'string') {
+  if (!domainId || typeof domainId !== 'string' || !UUID_RE.test(domainId)) {
     return { notFound: true };
   }
 
+  const authCheck = await requireDomainAccess(req, domainId);
+  if (!authCheck.authorized) {
+    return authCheck.result;
+  }
+
+  // TODO: Wire to domain_integrations table once migration is complete
   // P1-13 FIX: Domain authorization check to prevent IDOR
   const { userId } = getAuth(req);
   if (!userId) {
