@@ -5,7 +5,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '../../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { MediaLifecycleService } from '../../services/media-lifecycle';
 import { requireRole, AuthContext } from '../../services/auth';
 

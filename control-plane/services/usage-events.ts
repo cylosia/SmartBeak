@@ -24,21 +24,22 @@ export interface ContentPublishedEvent {
 * @param usage - Usage service instance
 */
 export function registerUsageEventHandlers(eventBus: EventBus, usage: UsageService): void {
-  eventBus.subscribe('content.published', 'usage', async (event: ContentPublishedEvent) => {
+  eventBus.subscribe('content.published', 'usage', async (event) => {
+  const typedEvent = event as unknown as ContentPublishedEvent;
   try {
     // P0-FIX: Require orgId for correct usage tracking against org_usage table.
     // Previously used domainId which created orphaned rows in org_usage.
-    if (!event?.["meta"]?.["orgId"]) {
+    if (!typedEvent?.meta?.orgId) {
     const timestamp = new Date().toISOString();
     process.stderr.write(`[${timestamp}] [ERROR] [usage-events] Invalid event: missing orgId\n`);
     return;
     }
-    if (!event?.["meta"]?.["domainId"]) {
+    if (!typedEvent?.meta?.domainId) {
     const timestamp = new Date().toISOString();
     process.stderr.write(`[${timestamp}] [ERROR] [usage-events] Invalid event: missing domainId\n`);
     return;
     }
-    await usage.increment(event["meta"]["orgId"], 'publish_count', 1);
+    await usage.increment(typedEvent.meta.orgId, 'publish_count', 1);
   } catch (error) {
     const timestamp = new Date().toISOString();
     const errorMessage = error instanceof Error ? error.message : String(error);

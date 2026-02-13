@@ -261,7 +261,7 @@ class NotImplementedError extends Error {
 */
 async function storeFeedbackMetrics(
   windows: FeedbackWindow[],
-  _orgId: string
+  orgId: string
 ): Promise<void> {
   const db = await getDb();
 

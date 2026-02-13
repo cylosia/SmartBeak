@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { PublishingCreateJobService } from '../../services/publishing-create-job';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, RoleAccessError } from '../../services/auth';
+import { requireRole, RoleAccessError, type Role } from '../../services/auth';
 
 export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool) {
   const svc = new PublishingCreateJobService(pool);
@@ -25,7 +25,7 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
     userId: string;
     orgId: string;
     domainId?: string;
-    roles: string[];
+    roles: Role[];
   };
   }
 

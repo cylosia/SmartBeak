@@ -25,6 +25,8 @@ export interface RetryOptions {
   retryableStatuses?: number[];
   /** Callback invoked on each retry */
   onRetry?: (attempt: number, error: Error, delayMs: number) => void;
+  /** Custom function to determine if error is retryable */
+  shouldRetry?: (error: Error) => boolean;
 }
 
 /**

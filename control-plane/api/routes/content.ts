@@ -96,7 +96,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
     // P1-11 FIX: Rate limit BEFORE auth to prevent CPU exhaustion via JWT verification DDoS.
     // Previously auth (expensive JWT verify) ran before rate limit.
     await rateLimit('content', 50, req, res);
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
+    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
@@ -217,7 +217,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   // POST /content - Create new content draft
   app.post('/content', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
+    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
@@ -277,7 +277,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   // GET /content/:id - Get specific content
   app.get('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
+    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
@@ -322,7 +322,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   // PATCH /content/:id - Update content draft
   app.patch('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
+    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
@@ -392,7 +392,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   // POST /content/:id/publish - Publish content
   app.post('/content/:id/publish', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
+    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }
@@ -440,7 +440,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool) {
   // DELETE /content/:id - Delete content (soft delete)
   app.delete('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; role: string } }).auth;
+    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
     if (!ctx) {
     return res.status(401).send({ error: 'Unauthorized' });
     }

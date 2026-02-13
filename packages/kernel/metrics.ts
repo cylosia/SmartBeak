@@ -127,7 +127,7 @@ export function emitTimer(name: string, durationMs: number, labels?: Record<stri
   emitMetric({
   name: `${name}_duration_ms`,
   value: durationMs,
-  labels, // P0-5 FIX: Pass labels through (was silently dropped)
+  ...(labels != null ? { labels } : {}),
   });
 }
 
@@ -141,7 +141,7 @@ export function emitCounter(name: string, increment = 1, labels?: Record<string,
   emitMetric({
   name: `${name}_total`,
   value: increment,
-  labels, // P0-5 FIX: Pass labels through (was silently dropped)
+  ...(labels != null ? { labels } : {}),
   });
 }
 
@@ -154,7 +154,7 @@ export function emitCounter(name: string, increment = 1, labels?: Record<string,
 export function emitGauge(name: string, value: number, labels?: Record<string, string>): void {
   emitMetric({
   name: `${name}_gauge`,
-  value, // P0-4 FIX: Pass value through (was silently dropped)
-  labels, // P0-5 FIX: Pass labels through (was silently dropped)
+  value,
+  ...(labels != null ? { labels } : {}),
   });
 }

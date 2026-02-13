@@ -3,7 +3,12 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function Domains({ domains }: Record<string, unknown>) {
+
+interface DomainsProps {
+  domains: Record<string, unknown>[];
+}
+
+export default function Domains({ domains }: DomainsProps) {
   return (
   <AppShell>
     <h1>Domains</h1>
@@ -20,13 +25,13 @@ export default function Domains({ domains }: Record<string, unknown>) {
       </tr>
     </thead>
     <tbody>
-      {(domains as Record<string, unknown>[]).map((d: Record<string, unknown>) => (
-      <tr key={d["id"]}>
-        <td><a href={`/domains/${d["id"]}`}>{d.name}</a></td>
-        <td>{d.status}</td>
-        <td>{d.domainType}</td>
-        <td>{d.revenueConfidence ?? '—'}</td>
-        <td>{d.replaceability ?? '—'}</td>
+      {domains.map((d) => (
+      <tr key={String(d['id'])}>
+        <td><a href={`/domains/${String(d['id'])}`}>{String(d['name'] ?? '')}</a></td>
+        <td>{String(d['status'] ?? '')}</td>
+        <td>{String(d['domainType'] ?? '')}</td>
+        <td>{String(d['revenueConfidence'] ?? '—')}</td>
+        <td>{String(d['replaceability'] ?? '—')}</td>
       </tr>
       ))}
     </tbody>

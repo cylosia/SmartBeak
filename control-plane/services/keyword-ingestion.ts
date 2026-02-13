@@ -82,8 +82,8 @@ export async function runKeywordIngestion(
   // Log any failures
   for (let i = 0; i < results.length; i++) {
   const result = results[i];
-  if (result.status === 'rejected') {
-    logger.error(`Adapter ${adapters[i].source} failed unexpectedly: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+  if (result && result.status === 'rejected') {
+    logger.error(`Adapter ${adapters[i]?.source ?? 'unknown'} failed unexpectedly: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
   }
   }
 }

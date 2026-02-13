@@ -119,7 +119,7 @@ async function createClusterWithMembers(
     for (let j = 0; j < batch.length; j++) {
     const offset = j * 2;
     placeholders.push(`($${offset + 1}, $${offset + 2})`);
-    values.push(clusterId, batch[j].id);
+    values.push(clusterId, batch[j]!.id);
     }
 
     // P0-03: Fixed table name to cluster_keywords (matches migration)

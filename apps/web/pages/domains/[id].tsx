@@ -3,11 +3,17 @@ import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
-export default function DomainDetail({ domain, themes }: Record<string, unknown>) {
+
+interface DomainDetailProps {
+  domain: Record<string, unknown>;
+  themes: Record<string, unknown>[];
+}
+
+export default function DomainDetail({ domain, themes }: DomainDetailProps) {
   return (
   <AppShell>
-    <h1>{domain.name}</h1>
-    <p>Status: {domain.status}</p>
+    <h1>{String(domain['name'] ?? '')}</h1>
+    <p>Status: {String(domain['status'] ?? '')}</p>
 
     <section>
     <h2>Overview</h2>
@@ -18,8 +24,8 @@ export default function DomainDetail({ domain, themes }: Record<string, unknown>
     <h2>Theme</h2>
     <form>
       <select>
-      {(themes as Record<string, unknown>[]).map((t: Record<string, unknown>) => (
-        <option key={t.id} value={t.id}>{t.name}</option>
+      {themes.map((t) => (
+        <option key={String(t['id'])} value={String(t['id'])}>{String(t['name'] ?? '')}</option>
       ))}
       </select>
       <button type='submit'>Bind theme</button>

@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 
 import { getLogger } from '../../../packages/kernel/logger';
 import { PostgresNotificationDLQRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationDLQRepository';
-import { requireRole } from '../../services/auth';
+import { requireRole, type Role } from '../../services/auth';
 import { NotificationAdminService } from '../../services/notification-admin';
 import { rateLimit } from '../../services/rate-limit';
 import { sanitizeErrorMessage } from '../../../packages/security/logger';
@@ -16,7 +16,7 @@ export interface AuthContext {
   userId: string;
   orgId: string;
   domainId?: string;
-  roles: string[];
+  roles: Role[];
 }
 
 export interface AuthenticatedRequest extends FastifyRequest {

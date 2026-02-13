@@ -17,11 +17,11 @@ export class ErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+  override componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, info.componentStack);
   }
 
-  render(): React.ReactNode {
+  override render(): React.ReactNode {
     if (this.state.hasError) {
       return (
         <div style={{ padding: 48, textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>

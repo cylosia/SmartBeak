@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 
 import { apiConfig, timeoutConfig } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
-import { validateNonEmptyString } from '@kernel/validation';
+import { validateNonEmptyString, isFacebookPostResponse } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
 
@@ -104,7 +104,7 @@ export class FacebookAdapter {
 
     const data: FacebookPostResponse = {
     id: rawData.id,
-    post_id: (rawData as Record<string, unknown>)['post_id'] as string | undefined,
+    ...(rawData.post_id !== undefined ? { post_id: rawData.post_id } : {}),
     };
 
     const latency = Date.now() - startTime;

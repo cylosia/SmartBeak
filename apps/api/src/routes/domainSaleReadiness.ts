@@ -18,7 +18,7 @@ const ALLOWED_READINESS_FIELDS = [
   'risk_score',
   'rationale'
 ];
-const _SaleReadinessQuerySchema = z.object({
+const SaleReadinessQuerySchema = z.object({
   domain_id: z.string().uuid('domain_id must be a valid UUID'),
   seo: z.coerce.number().min(0).max(100).default(0),
   freshness: z.coerce.number().min(0).max(1).default(0),
@@ -27,6 +27,7 @@ const _SaleReadinessQuerySchema = z.object({
   revenue: z.coerce.number().min(0).max(100000000).default(0),
   risks: z.coerce.number().min(0).max(100).default(0),
 });
+type SaleReadinessQueryType = z.infer<typeof SaleReadinessQuerySchema>;
 // H06-FIX: Removed custom verifyAuth — using @security/auth middleware instead
 
 async function canAccessDomain(userId: string, domainId: string, orgId: string) {

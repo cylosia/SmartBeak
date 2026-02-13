@@ -406,7 +406,8 @@ export type TypeMap<S extends string, T> = {
 
 // P2-2 FIX: Re-export ErrorCode from types-base to avoid duplicate definitions
 // with divergent member sets. The canonical definition is in types-base.ts.
-export type { ErrorCode } from './types-base';
+import type { ErrorCode } from './types-base';
+export type { ErrorCode };
 
 // ============================================================================
 // Base Validation Error

@@ -439,7 +439,7 @@ export async function validateUrlWithDns(
 
   return {
     allowed: true,
-    sanitizedUrl: stringResult.sanitizedUrl,
+    ...(stringResult.sanitizedUrl != null ? { sanitizedUrl: stringResult.sanitizedUrl } : {}),
   };
 }
 

@@ -164,10 +164,11 @@ export function validateContentType(
     const baseType = contentType.split(';')[0]?.trim().toLowerCase() || '';
     
     if (!allowedTypes.includes(baseType)) {
-      return res.status(415).send(createErrorResponse(
+      res.status(415).send(createErrorResponse(
         `Unsupported Content-Type: ${baseType}. Allowed: ${allowedTypes.join(', ')}`,
         'UNSUPPORTED_MEDIA_TYPE'
       ));
+      return;
     }
     
     done();
@@ -185,17 +186,19 @@ export function validateUUIDParam(
     const value = (req.params as Record<string, string>)[paramName];
     
     if (!value) {
-      return res.status(400).send(createErrorResponse(
+      res.status(400).send(createErrorResponse(
         `Missing required parameter: ${paramName}`,
         'MISSING_PARAMETER'
       ));
+      return;
     }
-    
+
     if (!isValidUUID(value)) {
-      return res.status(400).send(createErrorResponse(
+      res.status(400).send(createErrorResponse(
         `Invalid UUID format for parameter: ${paramName}`,
         'INVALID_UUID'
       ));
+      return;
     }
     
     done();

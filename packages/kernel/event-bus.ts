@@ -66,7 +66,7 @@ export class EventBus {
     throw new Error(`Maximum handlers exceeded for event: ${eventName}`);
   }
 
-  existing.push({ plugin, handle: handler });
+  existing.push({ plugin, handle: handler as (e: DomainEventEnvelope<unknown>) => Promise<void> });
   this.handlers.set(eventName, existing);
 
   this.logger.log(`[EventBus] Plugin ${plugin} subscribed to ${eventName}`);

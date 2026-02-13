@@ -8,7 +8,7 @@ const logger = getLogger('EmailRenderer');
 type EmailBlock =
   | { type: 'heading'; level: 1 | 2 | 3; text: string }
   | { type: 'paragraph'; text: string }
-  | { type: 'image'; src: string; alt: string; link?: string }
+  | { type: 'image'; src: string; alt: string; link?: string | undefined }
   | { type: 'button'; text: string; url: string }
   | { type: 'divider' };
 
