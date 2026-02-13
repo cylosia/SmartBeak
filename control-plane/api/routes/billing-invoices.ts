@@ -22,7 +22,7 @@ async function getStripeClient(): Promise<import('stripe').default> {
   if (!stripeClient) {
     const Stripe = (await import('stripe')).default;
     stripeClient = new Stripe(billingConfig.stripeSecretKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2023-10-16',
     });
   }
   return stripeClient;
