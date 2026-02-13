@@ -163,9 +163,49 @@ export function validateTokenFormat(token: string): boolean {
   return TOKEN_FORMAT_REGEX.test(token);
 }
 
+/**
+ * SECURITY: Allowed JWT algorithms whitelist.
+ * Only HS256 is permitted. This prevents algorithm confusion attacks where
+ * an attacker switches to RS256 (using a leaked public key as HMAC secret)
+ * or "none" (removing signature verification entirely).
+ */
+const ALLOWED_ALGORITHMS = new Set(['HS256']);
+
+/**
+ * Pre-verification algorithm check (defense-in-depth).
+ * Decodes the JWT header WITHOUT signature verification and rejects
+ * disallowed algorithms BEFORE passing to jwt.verify(). This catches
+ * algorithm confusion attacks even if the jsonwebtoken library has a
+ * bypass bug in its algorithms option.
+ *
+ * @param token - Raw JWT string (already format-validated)
+ * @throws {TokenInvalidError} if algorithm is not in ALLOWED_ALGORITHMS
+ */
+export function rejectDisallowedAlgorithm(token: string): void {
+  const decoded = jwt.decode(token, { complete: true });
+  if (!decoded || typeof decoded === 'string') {
+    throw new TokenInvalidError('Unable to decode token header');
+  }
+  const alg = decoded.header?.alg;
+  if (!alg || !ALLOWED_ALGORITHMS.has(alg)) {
+    throw new TokenInvalidError(`Disallowed algorithm: ${alg || 'none'}`);
+  }
+}
+
 // ============================================================================
 // Key Management
 // ============================================================================
+
+/**
+ * SECURITY: Detect PEM-formatted keys to prevent algorithm confusion.
+ * If an RSA/EC public key is used as an HS256 secret, an attacker who
+ * knows the public key can forge tokens.
+ */
+const PEM_PATTERN = /-----BEGIN\s+(RSA\s+)?(PUBLIC|PRIVATE|CERTIFICATE|EC)\s+KEY-----/i;
+
+function isPemKey(key: string): boolean {
+  return PEM_PATTERN.test(key.trim());
+}
 
 function getKeys(): string[] {
   const key1 = process.env['JWT_KEY_1'];
@@ -173,9 +213,22 @@ function getKeys(): string[] {
   const keys: string[] = [];
 
   if (key1 && key1.length >= 32) {
+    if (isPemKey(key1)) {
+      throw new TokenInvalidError(
+        'JWT_KEY_1 appears to be a PEM-formatted key. ' +
+        'HS256 requires a symmetric secret, not an asymmetric key. ' +
+        'Using a PEM key with HS256 enables algorithm confusion attacks.'
+      );
+    }
     keys.push(key1);
   }
   if (key2 && key2.length >= 32) {
+    if (isPemKey(key2)) {
+      throw new TokenInvalidError(
+        'JWT_KEY_2 appears to be a PEM-formatted key. ' +
+        'HS256 requires a symmetric secret, not an asymmetric key.'
+      );
+    }
     keys.push(key2);
   }
 
@@ -257,6 +310,10 @@ export function verifyToken(
   if (!validateTokenFormat(token)) {
     throw new TokenInvalidError('Invalid token format');
   }
+
+  // SECURITY FIX: Pre-verification algorithm check (defense-in-depth)
+  // Reject disallowed algorithms before attempting signature verification
+  rejectDisallowedAlgorithm(token);
 
   // SECURITY FIX: Constant-time verification to prevent timing attacks
   // Process all keys regardless of success/failure to maintain consistent timing

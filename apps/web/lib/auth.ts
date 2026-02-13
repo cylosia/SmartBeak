@@ -292,10 +292,13 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
   }
   try {
 
-    // SECURITY FIX: Consolidate to JWT_SECRET (was JWT_KEY_1, causing split-brain with packages/security/auth.ts)
-    const jwtKey = process.env['JWT_SECRET'];
-    if (!jwtKey) {
-      logger.error('JWT_SECRET not configured');
+    // SECURITY FIX: Use JWT_KEY_1/JWT_KEY_2 to match the signing service
+    // (control-plane/services/jwt.ts). JWT_SECRET was a different env var that
+    // caused tokens signed by the control plane to fail verification here.
+    const jwtKey1 = process.env['JWT_KEY_1'];
+    const jwtKey2 = process.env['JWT_KEY_2'];
+    if (!jwtKey1) {
+      logger.error('JWT_KEY_1 not configured');
       emitAuthAudit({
         timestamp: new Date(),
         type: 'auth.failure',
@@ -306,34 +309,52 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
       res.status(500).json({ error: 'Authentication service misconfigured' });
       throw new AuthError('JWT signing key not configured');
     }
-    if (jwtKey.length < 32) {
-      logger.error('JWT_SECRET too short (must be >= 32 characters)');
+    if (jwtKey1.length < 32) {
+      logger.error('JWT_KEY_1 too short (must be >= 32 characters)');
       res.status(500).json({ error: 'Authentication service misconfigured' });
       throw new AuthError('JWT signing key too short');
     }
-    // Verify JWT token locally
+    // Verify JWT token locally with key rotation support
+    const jwtVerifyOptions: jwt.VerifyOptions = {
+      audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
+      issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
+      algorithms: ['HS256'],
+      clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
+      complete: false,
+    };
     let claims: jwt.JwtPayload;
     try {
-      claims = jwt.verify(token, jwtKey, {
-        audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
-        issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
-        algorithms: ['HS256'],
-        clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
-
-        complete: false,
-      }) as jwt.JwtPayload;
+      claims = jwt.verify(token, jwtKey1, jwtVerifyOptions) as jwt.JwtPayload;
     }
-    catch (err) {
-      const errorMsg = err instanceof Error ? err['message'] : 'Unknown error';
-      emitAuthAudit({
-        timestamp: new Date(),
-        type: 'auth.failure',
-        ip: clientInfo.ip,
-        userAgent: clientInfo.userAgent,
-        reason: `Token verification failed: ${errorMsg}`,
-      });
-      res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
-      throw new AuthError('Token verification failed');
+    catch (primaryErr) {
+      // Try second key for rotation support
+      if (jwtKey2 && jwtKey2.length >= 32) {
+        try {
+          claims = jwt.verify(token, jwtKey2, jwtVerifyOptions) as jwt.JwtPayload;
+        } catch (secondaryErr) {
+          const errorMsg = secondaryErr instanceof Error ? secondaryErr['message'] : 'Unknown error';
+          emitAuthAudit({
+            timestamp: new Date(),
+            type: 'auth.failure',
+            ip: clientInfo.ip,
+            userAgent: clientInfo.userAgent,
+            reason: `Token verification failed: ${errorMsg}`,
+          });
+          res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
+          throw new AuthError('Token verification failed');
+        }
+      } else {
+        const errorMsg = primaryErr instanceof Error ? primaryErr['message'] : 'Unknown error';
+        emitAuthAudit({
+          timestamp: new Date(),
+          type: 'auth.failure',
+          ip: clientInfo.ip,
+          userAgent: clientInfo.userAgent,
+          reason: `Token verification failed: ${errorMsg}`,
+        });
+        res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
+        throw new AuthError('Token verification failed');
+      }
     }
 
     if (!claims.sub) {
@@ -435,20 +456,33 @@ export async function optionalAuth(req: NextApiRequest): Promise<AuthResult | nu
   }
   try {
 
-    // SECURITY FIX: Consolidate to JWT_SECRET (was JWT_KEY_1, causing split-brain with packages/security/auth.ts)
-    const jwtKey = process.env['JWT_SECRET'];
-    if (!jwtKey || jwtKey.length < 32) {
-      logger.error('JWT_SECRET not configured or too short');
+    // SECURITY FIX: Use JWT_KEY_1/JWT_KEY_2 to match the signing service
+    const jwtKey1 = process.env['JWT_KEY_1'];
+    const jwtKey2 = process.env['JWT_KEY_2'];
+    if (!jwtKey1 || jwtKey1.length < 32) {
+      logger.error('JWT_KEY_1 not configured or too short');
       return null;
     }
 
-    const claims = jwt.verify(token, jwtKey, {
+    const optionalVerifyOptions: jwt.VerifyOptions = {
       audience: process.env['JWT_AUDIENCE'] || 'smartbeak',
       issuer: process.env['JWT_ISSUER'] || 'smartbeak-api',
       algorithms: ['HS256'],
       clockTolerance: 30, // SECURITY FIX: Allow 30 seconds clock skew
       complete: false,
-    }) as jwt.JwtPayload;
+    };
+
+    let claims: jwt.JwtPayload;
+    try {
+      claims = jwt.verify(token, jwtKey1, optionalVerifyOptions) as jwt.JwtPayload;
+    } catch {
+      // Try second key for rotation support
+      if (jwtKey2 && jwtKey2.length >= 32) {
+        claims = jwt.verify(token, jwtKey2, optionalVerifyOptions) as jwt.JwtPayload;
+      } else {
+        throw new Error('Token verification failed');
+      }
+    }
     // SECURITY FIX: Explicitly check exp claim
     if (!claims.exp || claims.exp * 1000 < Date.now()) {
       return null;
