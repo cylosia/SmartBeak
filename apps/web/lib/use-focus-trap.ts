@@ -10,7 +10,7 @@ const FOCUSABLE_SELECTOR =
  */
 export function useFocusTrap(
   containerRef: RefObject<HTMLElement | null>,
-  options: { onEscape?: () => void; active?: boolean } = {},
+  options: { onEscape?: (() => void) | undefined; active?: boolean | undefined } = {},
 ): void {
   const { onEscape, active = true } = options;
   const previousActiveElement = useRef<Element | null>(null);

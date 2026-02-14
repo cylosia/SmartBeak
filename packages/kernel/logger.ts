@@ -318,7 +318,7 @@ export function warn(message: string, metadata?: Record<string, unknown>): void 
 * @param err - Optional error object
 * @param metadata - Additional metadata
 */
-export function error(message: string, err?: Error, metadata?: Record<string, unknown>): void {
+export function error(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
   const entry = createLogEntry('error', message, {
   ...metadata,
   error: err?.["message"],
@@ -333,7 +333,7 @@ export function error(message: string, err?: Error, metadata?: Record<string, un
 * @param err - Optional error object
 * @param metadata - Additional metadata
 */
-export function fatal(message: string, err?: Error, metadata?: Record<string, unknown>): void {
+export function fatal(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
   const entry = createLogEntry('fatal', message, {
   ...metadata,
   error: err?.["message"],
@@ -453,7 +453,7 @@ export class Logger {
   * @param err - Optional error object
   * @param metadata - Additional metadata
   */
-  error(message: string, err?: Error, metadata?: Record<string, unknown>): void {
+  error(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
   if (shouldLog('error')) {
     const entry = this.createServiceLogEntry('error', message, metadata, err);
     getHandlers().forEach(h => h(entry));
@@ -466,7 +466,7 @@ export class Logger {
   * @param err - Optional error object
   * @param metadata - Additional metadata
   */
-  fatal(message: string, err?: Error, metadata?: Record<string, unknown>): void {
+  fatal(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
   if (shouldLog('fatal')) {
     const entry = this.createServiceLogEntry('fatal', message, metadata, err);
     getHandlers().forEach(h => h(entry));

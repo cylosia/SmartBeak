@@ -60,7 +60,7 @@ export interface TelemetryConfig {
   /** Deployment environment */
   environment?: string;
   /** OTLP collector endpoint */
-  collectorEndpoint?: string;
+  collectorEndpoint?: string | undefined;
   /** Enable console exporter (for debugging) */
   enableConsoleExporter?: boolean;
   /** Sampling rate (0.0 to 1.0) */
