@@ -26,9 +26,6 @@ import { BASE_SECURITY_HEADERS, CSP_API, PERMISSIONS_POLICY_API } from '@config/
 // await import() inside route handlers, making the first request to each endpoint slow.
 import { getRepositoryHealth } from '../services/repository-factory';
 import { checkSequenceHealth } from '@database/health';
-import { affiliateRoutes } from './routes/affiliates';
-import { analyticsRoutes } from './routes/analytics';
-import { attributionRoutes } from './routes/attribution';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
 import { billingInvoiceRoutes } from './routes/billing-invoices';
 import { billingRoutes } from './routes/billing';
@@ -45,27 +42,7 @@ import { guardrailRoutes } from './routes/guardrails';
 import { initializeContainer } from '../services/container';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
-import { llmRoutes } from './routes/llm';
-import { mediaLifecycleRoutes } from './routes/media-lifecycle';
-import { mediaRoutes } from './routes/media';
-import { notificationAdminRoutes } from './routes/notifications-admin';
-import { notificationRoutes } from './routes/notifications';
-import { onboardingRoutes } from './routes/onboarding';
-import { orgRoutes } from './routes/orgs';
-import { planningRoutes } from './routes/planning';
-import { portfolioRoutes } from './routes/portfolio';
-import { publishingCreateJobRoutes } from './routes/publishing-create-job';
-import { publishingPreviewRoutes } from './routes/publishing-preview';
-import { publishingRoutes } from './routes/publishing';
-import { queueMetricsRoutes } from './routes/queue-metrics';
-import { queueRoutes } from './routes/queues';
-import { registerAppsApiRoutes } from './routes/apps-api-routes';
-import { roiRiskRoutes } from './routes/roi-risk';
-import { searchRoutes } from './routes/search';
-import { seoRoutes } from './routes/seo';
-import { themeRoutes } from './routes/themes';
-import { timelineRoutes } from './routes/timeline';
-import { usageRoutes } from './routes/usage';
+import { v1Routes } from './plugins/v1-routes';
 
 try {
   validateEnv();
@@ -291,12 +268,8 @@ const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 // Previous startsWith('/auth') matched /authors, /authorization etc.
 // Previous regex /(login|signin|signup|password-reset)$/ didn't match URLs with query strings.
 const AUTH_ENDPOINT_PATHS = new Set([
-  // Versioned paths (canonical)
   '/v1/login', '/v1/signin', '/v1/signup', '/v1/password-reset',
   '/v1/auth/login', '/v1/auth/signin', '/v1/auth/signup', '/v1/auth/password-reset',
-  // Legacy unversioned paths (for backward compat during transition)
-  '/login', '/signin', '/signup', '/password-reset',
-  '/auth/login', '/auth/signin', '/auth/signup', '/auth/password-reset',
 ]);
 
 app.addHook('onRequest', async (req, reply) => {
@@ -469,15 +442,15 @@ app.setNotFoundHandler((request, reply) => {
   void reply.status(404).send({ error: 'Route not found', code: ErrorCodes.NOT_FOUND, requestId });
 });
 
-// Register all routes under /v1 prefix using Fastify's encapsulated plugin pattern.
-// Parent-level hooks (CORS, auth, security headers, BigInt serialization, error handler)
-// automatically propagate to routes registered inside the /v1 plugin.
-// Health check routes (registered directly on app below) stay at root.
+// Register all routes — business routes under /v1 prefix, infra routes at root
 async function registerRoutes(): Promise<void> {
   // Make container available to routes via app decorator.
   // Parent decorators are visible inside encapsulated child contexts.
   app.decorate('container', container);
 
+  // All business routes registered under /v1 prefix via Fastify plugin encapsulation.
+  // Individual route modules are unchanged — the prefix is applied automatically.
+  await app.register(v1Routes, { prefix: '/v1', pool });
   await app.register(async function v1Routes(v1) {
     // Core routes
     await planningRoutes(v1, pool);

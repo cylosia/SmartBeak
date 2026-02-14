@@ -76,12 +76,16 @@ jobs:
         image: redis:7
         ports:
           - 6379:6379
+    env:
+      CONTROL_PLANE_DB: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - run: npm ci
+      - name: Apply migrations
+        run: npm run migrate
       - run: npm run test:unit
       - run: npm run test:integration
 
@@ -96,6 +100,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
+          POSTGRES_USER: smartbeak
+          POSTGRES_PASSWORD: smartbeak
+          POSTGRES_DB: smartbeak_migrations_test
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -107,6 +114,40 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    env:
+      CONTROL_PLANE_DB: postgresql://smartbeak:smartbeak@localhost:5432/smartbeak_migrations_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Apply all migrations
+        run: npm run migrate
+
+      - name: Verify no pending migrations
+        run: |
+          OUTPUT=$(npx tsx scripts/migrate.ts status 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "Pending migrations (0)"; then
+            echo "All migrations applied successfully."
+          else
+            echo "ERROR: Pending migrations detected after running 'up'."
+            exit 1
+          fi
+
+      - name: Rollback all migrations
+        run: npm run migrate:rollback -- --all
+
+      - name: Re-apply all migrations (roundtrip verification)
+        run: npm run migrate
+
+      - name: Final migration status
+        run: npx tsx scripts/migrate.ts status
       redis:
         image: redis:7
         ports:
