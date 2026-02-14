@@ -450,7 +450,7 @@ export class AlertingSystem extends EventEmitter {
       for (const key of queueKeys) {
         const queueName = key.split(':')[1];
         if (queueName) {
-          const queue = new Queue(queueName, { connection: redis });
+          const queue = new Queue(queueName, { connection: redis as unknown as import('bullmq').ConnectionOptions });
           const count = await queue.getWaitingCount();
           totalBacklog += count;
           await queue.close();

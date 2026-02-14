@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS content_media_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   content_id UUID NOT NULL,
-  media_id UUID NOT NULL,
+  media_id TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   CONSTRAINT fk_content_media_links_media

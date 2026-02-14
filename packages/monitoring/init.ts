@@ -327,7 +327,9 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
   let resourceMetricsCollector: ResourceMetricsCollector;
   try {
     resourceMetricsCollector = initResourceMetrics({
-      pollingIntervalMs: config.resourceMetrics?.pollingIntervalMs,
+      ...(config.resourceMetrics?.pollingIntervalMs !== undefined && {
+        pollingIntervalMs: config.resourceMetrics.pollingIntervalMs,
+      }),
     });
 
     if (config.resourceMetrics?.enabled !== false) {

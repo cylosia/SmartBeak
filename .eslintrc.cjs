@@ -11,6 +11,7 @@ module.exports = {
     },
     // P1-9 FIX: Enable type-aware linting for no-floating-promises rule
     project: './tsconfig.eslint.json',
+    tsconfigRootDir: __dirname,
   },
 
   env: {

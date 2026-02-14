@@ -36,3 +36,56 @@ export const roleHierarchy: Record<UserRole, number> = {
   owner: 4,
 };
 
+/**
+ * Check if a user has a specific role
+ */
+export function hasRole(roles: string[], role: string): boolean {
+  return roles.includes(role);
+}
+
+/**
+ * Check if a user has any of the specified roles
+ */
+export function hasAnyRole(roles: string[], requiredRoles: string[]): boolean {
+  return requiredRoles.some(role => roles.includes(role));
+}
+
+/**
+ * Check if a user has all of the specified roles
+ */
+export function hasAllRoles(roles: string[], requiredRoles: string[]): boolean {
+  return requiredRoles.every(role => roles.includes(role));
+}
+
+/**
+ * Get the highest privilege role from a list of roles
+ */
+export function getHighestRole(roles: string[]): UserRole | undefined {
+  let highest: UserRole | undefined;
+  let highestLevel = 0;
+  for (const role of roles) {
+    const level = roleHierarchy[role as UserRole];
+    if (level !== undefined && level > highestLevel) {
+      highest = role as UserRole;
+      highestLevel = level;
+    }
+  }
+  return highest;
+}
+
+/**
+ * Require a specific role, throwing if not present
+ */
+export function requireRole(roles: string[], role: UserRole): void {
+  if (!hasRole(roles, role)) {
+    throw new Error(`Required role '${role}' not found`);
+  }
+}
+
+/**
+ * Check if user's role meets or exceeds the required role level
+ */
+export function hasRequiredRole(userRole: UserRole, requiredRole: UserRole): boolean {
+  return (roleHierarchy[userRole] ?? 0) >= (roleHierarchy[requiredRole] ?? 0);
+}
+
