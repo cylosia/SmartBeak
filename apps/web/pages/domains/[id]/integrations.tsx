@@ -1,9 +1,6 @@
 
 import { GetServerSideProps } from 'next';
 import { requireDomainAccess } from '../../../lib/auth';
-import { getAuth } from '@clerk/nextjs/server';
-import { canAccessDomain } from '../../../lib/auth';
-import { getPoolInstance } from '../../../lib/db';
 
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
@@ -80,18 +77,6 @@ export const getServerSideProps: GetServerSideProps = async ({ params, req }) =>
   const authCheck = await requireDomainAccess(req, domainId);
   if (!authCheck.authorized) {
     return authCheck.result;
-  }
-
-  // TODO: Wire to domain_integrations table once migration is complete
-  // P1-13 FIX: Domain authorization check to prevent IDOR
-  const { userId } = getAuth(req);
-  if (!userId) {
-    return { redirect: { destination: '/login', permanent: false } };
-  }
-  const pool = await getPoolInstance();
-  const hasAccess = await canAccessDomain(userId, domainId, pool);
-  if (!hasAccess) {
-    return { notFound: true };
   }
 
   // TODO: Wire to domain_integrations table
