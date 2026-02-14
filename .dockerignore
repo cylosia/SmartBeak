@@ -22,3 +22,12 @@ Thumbs.db
 .cache
 *.tmp
 *.temp
+
+# Audit reports & generated artifacts
+audit-reports
+docs
+*.patch
+*.csv
+*.sql
+*.md
+!README.md
