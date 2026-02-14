@@ -66,10 +66,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 CMD ["node", "apps/web/server.js"]
 
-# =============================================================================
-# Target: api — Fastify control-plane API
-# =============================================================================
-FROM base AS api
+# ---------------------------------------------------------------------------
+# Stage: runtime-base — shared base for api and worker targets
+# ---------------------------------------------------------------------------
+FROM base AS runtime-base
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 smartbeak
@@ -90,9 +90,15 @@ COPY apps/api/ ./apps/api/
 # Install tsx for TypeScript execution with path alias support
 RUN npm install -g tsx
 
+ENV NODE_ENV=production
+
+# =============================================================================
+# Target: api — Fastify control-plane API
+# =============================================================================
+FROM runtime-base AS api
+
 USER smartbeak
 
-ENV NODE_ENV=production
 ENV PORT=3001
 
 EXPOSE 3001
@@ -105,29 +111,8 @@ CMD ["node", "--import", "tsx/esm", "control-plane/api/http.ts"]
 # =============================================================================
 # Target: worker — BullMQ background job processor
 # =============================================================================
-FROM base AS worker
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 smartbeak
-
-# Production node_modules
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY package.json ./
-
-# Source files needed by tsx at runtime (path alias resolution)
-COPY tsconfig.json tsconfig.base.json ./
-COPY packages/ ./packages/
-COPY control-plane/ ./control-plane/
-COPY domains/ ./domains/
-COPY plugins/ ./plugins/
-COPY themes/ ./themes/
-COPY apps/api/ ./apps/api/
-
-# Install tsx for TypeScript execution with path alias support
-RUN npm install -g tsx
+FROM runtime-base AS worker
 
 USER smartbeak
-
-ENV NODE_ENV=production
 
 CMD ["node", "--import", "tsx/esm", "apps/api/src/jobs/worker.ts"]

@@ -33,6 +33,7 @@ spec:
           protocol: TCP
   egress:
     # To PostgreSQL (RDS)
+    # TODO: Replace 0.0.0.0/0 with actual RDS subnet CIDR via Kustomize overlay per environment
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -40,6 +41,7 @@ spec:
         - port: 5432
           protocol: TCP
     # To Redis (ElastiCache)
+    # TODO: Replace 0.0.0.0/0 with actual ElastiCache subnet CIDR via Kustomize overlay per environment
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -131,6 +133,7 @@ spec:
   ingress: []
   egress:
     # To PostgreSQL (RDS)
+    # TODO: Replace 0.0.0.0/0 with actual RDS subnet CIDR via Kustomize overlay per environment
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -138,6 +141,7 @@ spec:
         - port: 5432
           protocol: TCP
     # To Redis (ElastiCache)
+    # TODO: Replace 0.0.0.0/0 with actual ElastiCache subnet CIDR via Kustomize overlay per environment
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

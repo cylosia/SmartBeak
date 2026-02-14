@@ -18,4 +18,7 @@ rules:
   info-contact: off
 
   # Allow info.license to be optional
+  info-license: off
+
+  # Downgrade schema validation to warn for incremental adoption
   oas3-schema: warn

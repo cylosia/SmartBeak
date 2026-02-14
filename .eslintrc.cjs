@@ -45,8 +45,8 @@ module.exports = {
     '@typescript-eslint/no-var-requires': 'warn',
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-empty-function': 'off',
-    '@typescript-eslint/ban-ts-comment': 'warn',
-    '@typescript-eslint/ban-types': 'warn',
+    '@typescript-eslint/ban-ts-comment': 'warn', // deprecated in v8; migrate to @typescript-eslint/ts-comment
+    '@typescript-eslint/no-restricted-types': 'warn',
     '@typescript-eslint/no-namespace': 'warn',
     '@typescript-eslint/no-unnecessary-type-constraint': 'warn',
 
