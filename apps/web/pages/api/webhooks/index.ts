@@ -46,7 +46,7 @@ async function loadHandler(provider: string): Promise<((req: NextApiRequest, res
     return null;
   }
   } catch (error) {
-  logger.error('Failed to load handler', { provider, error });
+  logger.error('Failed to load handler', error instanceof Error ? error : undefined, { provider, error: String(error) });
   return null;
   }
 }
@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return;
   } catch (error: unknown) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('Provider error', { provider, error: err });
+  logger.error('Provider error', err, { provider });
 
   const errorMessage = process.env['NODE_ENV'] === 'development'
     ? err.message

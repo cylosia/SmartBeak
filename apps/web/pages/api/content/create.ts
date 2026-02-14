@@ -103,7 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updatedAt: now.toISOString(),
     });
   } catch (error: unknown) {
-    logger.error('Error creating content', { error });
+    logger.error('Error creating content', error instanceof Error ? error : undefined, { error: String(error) });
 
     // Handle specific database errors
     const pgError = error as { code?: string; message?: string };

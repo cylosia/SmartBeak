@@ -140,7 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Content has been archived and can be restored later.',
     });
   } catch (error: unknown) {
-    logger.error('Error archiving content', { error });
+    logger.error('Error archiving content', error instanceof Error ? error : undefined, { error: String(error) });
 
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     const message = error instanceof Error ? error.message : '';

@@ -55,7 +55,7 @@ export class ConstantContactAdapter implements EmailProviderAdapter {
   constructor(private readonly accessToken: string) {
     validateNonEmptyString(accessToken, 'accessToken');
 
-    this.baseUrl = `${API_BASE_URLS.constantcontact}/${API_VERSIONS.constantcontact}`;
+    this.baseUrl = `${API_BASE_URLS['constantContact']}/${API_VERSIONS['constantContact']}`;
     this.logger = new StructuredLogger('ConstantContactAdapter');
     this.metrics = new MetricsCollector('ConstantContactAdapter');
 

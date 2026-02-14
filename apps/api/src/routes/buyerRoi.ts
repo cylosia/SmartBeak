@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
-import { generateBuyerRoiSummary } from '../roi/buyerRoiSummary';
+import { generateBuyerRoiSummary, type RoiRow as SummaryRoiRow } from '../roi/buyerRoiSummary';
 import { getDb } from '../db';
 import { optionalAuthFastify } from '@security/auth';
 import { getLogger } from '@kernel/logger';
@@ -18,7 +18,7 @@ const RoiRowSchema = z.object({
   content_id: z.string().optional(),
   roi_value: z.number().optional(),
   created_at: z.coerce.date().optional(),
-}).passthrough();
+});
 
 export type RoiRow = z.infer<typeof RoiRowSchema>;
 
@@ -163,7 +163,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     const summary = await generateBuyerRoiSummary({
     domain: domain,
     domain_id: domain,
-    roi_rows: validatedRows
+    roi_rows: validatedRows as SummaryRoiRow[]
     });
     // P1-FIX: Removed unsafe double assertion (as unknown as X). The summary
     // type is now trusted directly — if there's a mismatch, tsc will catch it.

@@ -225,6 +225,7 @@ export class PostgresContentRepository implements ContentRepository {
   limit: number,
   offset: number,
   domainId?: string,
+  orgId?: string,
   client?: PoolClient
   ): Promise<ContentItem[]> {
   // Validate status to prevent injection

@@ -130,7 +130,7 @@ export class VaultClient {
     }
 
     // P1-FIX: Secret Leakage - Redact sensitive info in error logs
-    logger.error('Error retrieving secret for org [REDACTED]', {
+    logger.error('Error retrieving secret for org [REDACTED]', undefined, {
     error: error instanceof Error ? '[REDACTED_ERROR]' : 'Unknown error' });
     throw new Error(`Failed to retrieve secret: ${error instanceof Error ? error["message"] : 'Unknown error'}`);
   }

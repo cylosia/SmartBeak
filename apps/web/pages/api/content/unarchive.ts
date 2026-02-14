@@ -134,7 +134,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       client.release();
     }
   } catch (error: unknown) {
-    logger.error('Error unarchiving content', { error });
+    logger.error('Error unarchiving content', error instanceof Error ? error : undefined, { error: String(error) });
 
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     const message = error instanceof Error ? error.message : '';

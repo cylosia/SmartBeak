@@ -54,7 +54,7 @@ function withErrorBoundary(
 
     // Send standardized error response
         if (error instanceof ExternalAPIError) {
-        return sendError(res, getStatusCodeForError(error.code), error.code, error.message, {
+        return sendError(res, getStatusCodeForError(error.code as ErrorCode), error.code as ErrorCode, error.message, {
         details: error.details,
         });
     }

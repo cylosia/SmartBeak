@@ -75,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (err.code === '42P01') {
     // Table doesn't exist yet - expected during development
     } else {
-    logger.error('Error fetching org integrations', { error: err.message });
+    logger.error('Error fetching org integrations', undefined, { error: err.message });
     throw dbError;
     }
   }
@@ -99,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (err.code === '42P01') {
       // Table doesn't exist yet - expected during development
     } else {
-      logger.error('Error fetching domain integrations', { error: err.message });
+      logger.error('Error fetching domain integrations', undefined, { error: err.message });
       throw dbError;
     }
     }
@@ -136,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.json(integrations);
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
-  logger.error('Error fetching integrations', { error });
+  logger.error('Error fetching integrations', error instanceof Error ? error : undefined, { error: String(error) });
 
   if (error instanceof Error && error.message?.includes('DATABASE_NOT_CONFIGURED')) {
     return sendError(res, 503, 'Service unavailable. Database not configured.');

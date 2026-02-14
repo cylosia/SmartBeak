@@ -357,7 +357,7 @@ export class QueryCache {
     if (utilization >= VERSION_ALERT_THRESHOLD && 
         (now - this.lastAlertTime) > VERSION_ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      logger.error('Version keys approaching limit', {
+      logger.error('Version keys approaching limit', undefined, {
         current: this.queryVersions.size,
         max: MAX_VERSION_KEYS,
         utilization: `${(utilization * 100).toFixed(1)}%`,
