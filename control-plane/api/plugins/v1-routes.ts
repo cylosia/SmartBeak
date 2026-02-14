@@ -6,6 +6,7 @@ import { analyticsRoutes } from '../routes/analytics';
 import { attributionRoutes } from '../routes/attribution';
 import { billingInvoiceRoutes } from '../routes/billing-invoices';
 import { billingRoutes } from '../routes/billing';
+import { cacheRoutes } from '../routes/cache';
 import { contentRevisionRoutes } from '../routes/content-revisions';
 import { contentRoutes } from '../routes/content';
 import { contentScheduleRoutes } from '../routes/content-schedule';
@@ -83,6 +84,7 @@ export async function v1Routes(app: FastifyInstance, opts: { pool: Pool }): Prom
   await publishingCreateJobRoutes(app, pool);
   await publishingPreviewRoutes(app, pool);
   await queueMetricsRoutes(app, pool);
+  await cacheRoutes(app, pool);
 
   // New routes to fix missing API endpoints
   await affiliateRoutes(app, pool);

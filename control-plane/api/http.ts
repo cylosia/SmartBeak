@@ -7,16 +7,12 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { getPoolInstance } from '@database/pool';
+import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
 import { AppError, ErrorCodes, RateLimitError } from '@errors';
 import { errors as errHelpers } from '@errors/responses';
-import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
 import type { Pool } from 'pg';
-import { getPoolInstance } from '@database/pool';
-import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
-import { validateEnv } from '@config';
 import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
@@ -27,18 +23,6 @@ import { BASE_SECURITY_HEADERS, CSP_API, PERMISSIONS_POLICY_API } from '@config/
 import { getRepositoryHealth } from '../services/repository-factory';
 import { checkSequenceHealth } from '@database/health';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
-import { billingInvoiceRoutes } from './routes/billing-invoices';
-import { billingRoutes } from './routes/billing';
-import { cacheRoutes } from './routes/cache';
-// C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
-import { contentRevisionRoutes } from './routes/content-revisions';
-import { contentRoutes } from './routes/content';
-import { contentScheduleRoutes } from './routes/content-schedule';
-import { diligenceRoutes } from './routes/diligence';
-import { domainDetailsRoutes } from './routes/domain-details';
-import { domainOwnershipRoutes } from './routes/domain-ownership';
-import { domainRoutes } from './routes/domains';
-import { guardrailRoutes } from './routes/guardrails';
 import { initializeContainer } from '../services/container';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
@@ -229,22 +213,6 @@ app.addHook('onRequest', async (request, reply) => {
 let pool: Pool;
 let container: ReturnType<typeof initializeContainer>;
 
-// Load cost tracking budgets from database
-try {
-  await container.costTracker.loadBudgetsFromDb();
-  logger.info('Cost tracking budgets loaded');
-} catch (error) {
-  logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
-    error: error instanceof Error ? error.message : String(error),
-  });
-}
-
-// Flush cost tracking buffer on shutdown
-registerShutdownHandler(async () => {
-  container.costTracker.stop();
-  logger.info('Cost tracker stopped and buffer flushed');
-});
-
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
   initializeRateLimiter();
@@ -413,7 +381,6 @@ app.setErrorHandler((error: unknown, request, reply) => {
     errorCode = ErrorCodes.NOT_FOUND;
   } else if (statusCode === 400) {
     errorCode = ErrorCodes.VALIDATION_ERROR;
-    errorCode = 'VALIDATION_ERROR';
   } else if (statusCode === 402) {
     errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
@@ -451,52 +418,6 @@ async function registerRoutes(): Promise<void> {
   // All business routes registered under /v1 prefix via Fastify plugin encapsulation.
   // Individual route modules are unchanged — the prefix is applied automatically.
   await app.register(v1Routes, { prefix: '/v1', pool });
-  await app.register(async function v1Routes(v1) {
-    // Core routes
-    await planningRoutes(v1, pool);
-    await contentRoutes(v1, pool);
-    await domainRoutes(v1, pool);
-    await billingRoutes(v1, pool);
-    await orgRoutes(v1, pool);
-    await onboardingRoutes(v1, pool);
-    await notificationRoutes(v1, pool);
-    await searchRoutes(v1, pool);
-    await usageRoutes(v1, pool);
-    await seoRoutes(v1, pool);
-    await analyticsRoutes(v1, pool);
-    await publishingRoutes(v1, pool);
-    await mediaRoutes(v1, pool);
-    await queueRoutes(v1, pool);
-
-    // Additional routes
-    // C3-FIX: Removed contentListRoutes — it registered a duplicate GET /content that conflicted
-    // with contentRoutes above. The content.ts handler is the canonical one.
-    await contentRevisionRoutes(v1, pool);
-    await contentScheduleRoutes(v1);
-    await domainOwnershipRoutes(v1, pool);
-    await guardrailRoutes(v1, pool);
-    await mediaLifecycleRoutes(v1, pool);
-    await notificationAdminRoutes(v1, pool);
-    await publishingCreateJobRoutes(v1, pool);
-    await publishingPreviewRoutes(v1, pool);
-    await queueMetricsRoutes(v1, pool);
-    await cacheRoutes(v1, pool);
-
-    // New routes to fix missing API endpoints
-    await affiliateRoutes(v1, pool);
-    await diligenceRoutes(v1, pool);
-    await attributionRoutes(v1, pool);
-    await timelineRoutes(v1, pool);
-    await domainDetailsRoutes(v1, pool);
-    await themeRoutes(v1, pool);
-    await roiRiskRoutes(v1, pool);
-    await portfolioRoutes(v1, pool);
-    await llmRoutes(v1, pool);
-    await billingInvoiceRoutes(v1, pool);
-
-    // Migrated routes from apps/api/src/routes/
-    await registerAppsApiRoutes(v1, pool);
-  }, { prefix: '/v1' });
 }
 
 // P1-CRITICAL FIX: Deep health check with comprehensive dependency verification
@@ -725,7 +646,6 @@ app.get('/health/detailed', async (request, reply) => {
   }
   // P0-AUDIT-FIX: Require admin/owner role — previously any authenticated user could access
   try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
-  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
   if (!container) throw new Error('Container not initialized');
   const containerHealth = await container.getHealth();
   return {
@@ -770,6 +690,22 @@ async function start(): Promise<void> {
   // imported without requiring a live database connection)
   pool = await getPoolInstance();
   container = initializeContainer({ dbPool: pool });
+
+  // Load cost tracking budgets from database
+  try {
+    await container.costTracker.loadBudgetsFromDb();
+    logger.info('Cost tracking budgets loaded');
+  } catch (error) {
+    logger.warn('Failed to load cost tracking budgets, spending limits may not be enforced', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Flush cost tracking buffer on shutdown
+  registerShutdownHandler(async () => {
+    container.costTracker.stop();
+    logger.info('Cost tracker stopped and buffer flushed');
+  });
 
   await registerRoutes();
   const port = Number(process.env['PORT']) || 3000; // P3-FIX: Use Number() || fallback instead of parseInt to avoid NaN
