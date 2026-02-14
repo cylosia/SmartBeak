@@ -5,7 +5,6 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '../../../packages/kernel/logger';
-import { createRouteErrorHandler } from '@errors';
 import { InviteService } from '../../services/invite-service';
 import { MembershipService } from '../../services/membership-service';
 import { OrgService } from '../../services/org-service';
@@ -14,7 +13,6 @@ import { requireRole, AuthContext } from '../../services/auth';
 import { errors } from '@errors/responses';
 
 const logger = getLogger('Orgs');
-const handleError = createRouteErrorHandler({ logger });
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -76,7 +74,6 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     logger.error('[orgs] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to create organization');
-    return handleError(res, error, 'create organization');
   }
   });
 
@@ -107,7 +104,6 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to retrieve members');
-    return handleError(res, error, 'list organization members');
   }
   });
 
@@ -144,7 +140,6 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to send invite');
-    return handleError(res, error, 'send organization invite');
   }
   });
 
@@ -182,7 +177,6 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to add member');
-    return handleError(res, error, 'add organization member');
   }
   });
 }

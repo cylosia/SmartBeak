@@ -6,7 +6,6 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
-import { createRouteErrorHandler } from '@errors';
 
 import { PostgresSeoRepository } from '../../../domains/seo/infra/persistence/PostgresSeoRepository';
 import { rateLimit } from '../../services/rate-limit';
@@ -16,7 +15,6 @@ import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 const logger = getLogger('seo-routes');
-const handleError = createRouteErrorHandler({ logger });
 
 async function verifyContentOwnership(userId: string, contentId: string, pool: Pool): Promise<boolean> {
   const result = await pool.query(
@@ -76,7 +74,6 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   } catch (error) {
     logger["error"]('Route error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
-    return handleError(res, error, 'update SEO metadata');
   }
   });
 }

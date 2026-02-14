@@ -99,21 +99,12 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     // P1-11 FIX: Rate limit BEFORE auth to prevent CPU exhaustion via JWT verification DDoS.
     // Previously auth (expensive JWT verify) ran before rate limit.
     await rateLimit('content', 50, req, res);
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx as AuthContext, ['admin', 'editor', 'viewer']);
-
-    // Validate orgId
-    if (!ctx?.["orgId"]) {
-    return errors.badRequest(res, 'Organization ID is required');
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
 
     // Validate orgId
-    if (!ctx.orgId) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    if (!ctx?.["orgId"]) {
+    return errors.badRequest(res, 'Organization ID is required');
     }
 
     const orgIdResult = z.string().uuid().safeParse(ctx.orgId);
@@ -125,11 +116,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     const queryResult = ContentQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
     return errors.validationFailed(res, queryResult["error"].issues);
-    return res.status(400).send({
-    error: 'Invalid query parameters',
-    code: 'VALIDATION_ERROR',
-    details: queryResult.error.issues,
-    });
     }
 
     const { domainId, status, contentType, page, limit, search } = queryResult.data;
@@ -230,23 +216,13 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // POST /content - Create new content draft
   app.post('/content', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx as AuthContext, ['admin','editor']);
-    await rateLimit('content', 50, req, res);
-
-    // Validate orgId
-    if (!ctx?.["orgId"]) {
-    return errors.badRequest(res, 'Organization ID is required');
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 50, req, res);
 
     // Validate orgId
-    if (!ctx.orgId) {
-    return res.status(400).send({ error: 'Organization ID is required' });
+    if (!ctx?.["orgId"]) {
+    return errors.badRequest(res, 'Organization ID is required');
     }
 
     const orgIdResult = z.string().uuid().safeParse(ctx.orgId);
@@ -296,11 +272,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // GET /content/:id - Get specific content
   app.get('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx as AuthContext, ['admin', 'editor', 'viewer']);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
     await rateLimit('content', 50, req, res);
@@ -345,11 +316,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // PATCH /content/:id - Update content draft
   app.patch('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx as AuthContext, ['admin','editor']);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 50, req, res);
@@ -415,11 +381,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // POST /content/:id/publish - Publish content
   app.post('/content/:id/publish', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx as AuthContext, ['admin','editor']);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 20, req, res);
@@ -467,11 +428,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // DELETE /content/:id - Delete content (soft delete)
   app.delete('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    const ctx = (req as unknown as { auth: { orgId: string; userId: string; roles: string[] } }).auth;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx as AuthContext, ['admin']);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
     await rateLimit('content', 20, req, res);
