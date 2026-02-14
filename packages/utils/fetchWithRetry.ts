@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { LRUCache } from './lruCache';
 
 import { getLogger } from '@kernel/logger';
+import { sleep } from '@kernel/retry';
 
 
 /**
@@ -199,10 +200,7 @@ function calculateDelay(attempt: number, baseDelayMs: number, maxDelayMs: number
   return Math.floor(cappedDelay + jitter);
 }
 
-// P1-FIX: Sleep utility
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+// sleep() is now imported from @kernel/retry
 
 /**
 * Generate cache key for request

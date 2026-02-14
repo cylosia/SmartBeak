@@ -142,6 +142,68 @@ export {
 } from './alerting-rules';
 
 // ============================================================================
+// Resource Metrics
+// ============================================================================
+export {
+  // Classes
+  ResourceMetricsCollector,
+
+  // Initialization
+  initResourceMetrics,
+  getResourceMetrics,
+
+  // Hook Functions
+  recordRetryAttempt,
+  recordRetryExhaustion,
+  recordCircuitBreakerStateChange,
+  recordCircuitBreakerExecution,
+  recordCircuitBreakerRejection,
+  recordRateLimitCheck,
+
+  // Types
+  type ResourceMetricsConfig,
+} from './resource-metrics';
+
+// ============================================================================
+// SLO Tracker
+// ============================================================================
+export {
+  // Classes
+  SloTracker,
+
+  // Initialization
+  initSloTracker,
+  getSloTracker,
+
+  // Defaults
+  defaultSloDefinitions,
+  saturationThresholds,
+
+  // Types
+  type SloTrackerConfig,
+} from './slo-tracker';
+
+// ============================================================================
+// Business KPIs
+// ============================================================================
+export {
+  // Classes
+  BusinessKpiTracker,
+
+  // Initialization
+  initBusinessKpis,
+  getBusinessKpis,
+} from './business-kpis';
+
+// ============================================================================
+// Types (Extended)
+// ============================================================================
+export type {
+  SloConfig,
+  SloStatus,
+  GoldenSignalThresholds,
+  ErrorBudgetAlertLevel,
+} from './types';
 // Cost Tracking
 // ============================================================================
 export {

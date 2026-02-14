@@ -11,6 +11,41 @@ import { getLogger } from '@kernel/logger';
 const logger = getLogger('retry');
 
 // ============================================================================
+// Metrics Hooks (set by monitoring package during initialization)
+// ============================================================================
+
+interface RetryMetricsHook {
+  onAttempt: (operation: string, attempt: number, delayMs: number) => void;
+  onExhaustion: (operation: string, totalAttempts: number) => void;
+}
+
+let _retryMetricsHook: RetryMetricsHook | null = null;
+
+/**
+ * Register a metrics hook for retry operations.
+ * Called by the monitoring package during initialization.
+ */
+export function setRetryMetricsHook(hook: RetryMetricsHook): void {
+  _retryMetricsHook = hook;
+}
+
+interface CircuitBreakerMetricsHook {
+  onStateChange: (name: string, fromState: string, toState: string) => void;
+  onExecution: (name: string, success: boolean, durationMs: number) => void;
+  onRejection: (name: string) => void;
+}
+
+let _circuitBreakerMetricsHook: CircuitBreakerMetricsHook | null = null;
+
+/**
+ * Register a metrics hook for circuit breaker operations.
+ * Called by the monitoring package during initialization.
+ */
+export function setCircuitBreakerMetricsHook(hook: CircuitBreakerMetricsHook): void {
+  _circuitBreakerMetricsHook = hook;
+}
+
+// ============================================================================
 // Types and Interfaces
 // ============================================================================
 
@@ -32,6 +67,22 @@ export interface RetryOptions {
   shouldRetry?: (error: Error) => boolean;
   /** Callback invoked on each retry attempt */
   onRetry?: (error: Error, attempt: number) => void;
+  /** Optional AbortSignal to cancel the retry loop */
+  signal?: AbortSignal;
+}
+
+// ============================================================================
+// AbortError
+// ============================================================================
+
+/**
+* Error thrown when an operation is aborted via AbortSignal
+*/
+export class AbortError extends Error {
+  constructor(message = 'Operation aborted') {
+    super(message);
+    this.name = 'AbortError';
+  }
 }
 
 /**
@@ -205,12 +256,30 @@ function calculateDelay(attempt: number, options: RetryOptions): number {
 }
 
 /**
-* Sleep for specified milliseconds
+* Sleep for specified milliseconds, abortable via signal
 * @param ms - Milliseconds to sleep
-* @returns Promise that resolves after the delay
+* @param signal - Optional AbortSignal to cancel the sleep
+* @returns Promise that resolves after the delay or rejects on abort
 */
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new AbortError());
+  if (!signal) return new Promise(resolve => setTimeout(resolve, ms));
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    function onAbort() {
+      clearTimeout(timeoutId);
+      reject(new AbortError());
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 // ============================================================================
@@ -233,13 +302,26 @@ export async function withRetry<T>(
   const retryKey = `${fn.name || 'anonymous'}_${Date.now()}_${randomUUID()}`;
 
   for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
+  // Check abort signal before each attempt
+  if (opts.signal?.aborted) {
+    throw new AbortError('Retry aborted');
+  }
+
   try {
     return await fn();
   } catch (error: unknown) {
+    // Propagate AbortError immediately without retry
+    if (error instanceof AbortError) {
+    throw error;
+    }
+
     const err = error instanceof Error ? error : new Error(String(error));
     const isLastAttempt = attempt > opts.maxRetries;
 
     if (isLastAttempt || !isRetryableError(err, opts)) {
+    if (isLastAttempt) {
+      _retryMetricsHook?.onExhaustion(retryKey, attempt);
+    }
     throw err;
     }
 
@@ -247,6 +329,7 @@ export async function withRetry<T>(
 
     // P1-FIX: Track retry attempt to prevent unbounded growth
     trackRetryAttempt(retryKey, Date.now());
+    _retryMetricsHook?.onAttempt(retryKey, attempt, delay);
 
     logger.warn(`Retry attempt ${attempt}/${opts.maxRetries} after ${delay}ms: ${err["message"]}`, {
     error: err["message"],
@@ -254,7 +337,7 @@ export async function withRetry<T>(
 
     opts.onRetry?.(error as Error, attempt);
 
-    await sleep(delay);
+    await sleep(delay, opts.signal);
   }
   }
 
@@ -344,10 +427,15 @@ export class CircuitBreaker {
   /**
   * Execute a function with circuit breaker protection
   * @param fn - Function to execute
+  * @param signal - Optional AbortSignal to cancel execution
   * @returns Promise resolving to function result
   * @throws Error if circuit is open
+  * @throws AbortError if signal is aborted
   */
-  async execute<T>(fn: () => Promise<T>): Promise<T> {
+  async execute<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) {
+    throw new AbortError('Circuit breaker execution aborted');
+  }
 
   const release = await this.stateLock.acquire();
 
@@ -356,10 +444,12 @@ export class CircuitBreaker {
     const timeSinceLastFailure = Date.now() - (this.lastFailureTime || 0);
 
     if (timeSinceLastFailure < this.opts.resetTimeoutMs) {
+    _circuitBreakerMetricsHook?.onRejection(this.name);
     throw new Error(`Circuit breaker open for ${this.name}`);
     }
 
     // Transition to half-open
+    _circuitBreakerMetricsHook?.onStateChange(this.name, 'open', 'half-open');
     this.state = CircuitState.HALF_OPEN;
     this.halfOpenCalls = 0;
     logger.info(`Circuit breaker half-open for ${this.name}`);
@@ -367,6 +457,7 @@ export class CircuitBreaker {
 
     if (this.state === CircuitState.HALF_OPEN) {
     if (this.halfOpenCalls >= this.opts.halfOpenMaxCalls) {
+    _circuitBreakerMetricsHook?.onRejection(this.name);
     throw new Error(`Circuit breaker half-open limit reached for ${this.name}`);
     }
     this.halfOpenCalls++;
@@ -375,11 +466,18 @@ export class CircuitBreaker {
     release();
   }
 
+  const startTime = Date.now();
   try {
     const result = await fn();
+    _circuitBreakerMetricsHook?.onExecution(this.name, true, Date.now() - startTime);
     await this.onSuccess();
     return result;
   } catch (error) {
+    _circuitBreakerMetricsHook?.onExecution(this.name, false, Date.now() - startTime);
+    // Don't count abort errors as circuit breaker failures
+    if (error instanceof AbortError) {
+    throw error;
+    }
     // P1-FIX: Pass error to onFailure for classification
     await this.onFailure(error);
     throw error;
@@ -390,6 +488,7 @@ export class CircuitBreaker {
   const release = await this.stateLock.acquire();
   try {
     if (this.state === CircuitState.HALF_OPEN) {
+    _circuitBreakerMetricsHook?.onStateChange(this.name, 'half-open', 'closed');
     this.state = CircuitState.CLOSED;
     this.failures = 0;
     this.halfOpenCalls = 0;
@@ -457,7 +556,9 @@ export class CircuitBreaker {
     this.lastFailureTime = Date.now();
 
     if (this.failures >= this.opts.failureThreshold) {
+    const previousState = this.state;
     this.state = CircuitState.OPEN;
+    _circuitBreakerMetricsHook?.onStateChange(this.name, previousState, 'open');
     logger["error"](`Circuit breaker opened for ${this.name} (${this.failures} failures)`);
     }
   } finally {
@@ -479,4 +580,125 @@ export class CircuitBreaker {
     release();
   }
   }
+}
+
+// ============================================================================
+// HTTP Retry Utilities (consolidated from apps/api/src/utils/retry.ts)
+// ============================================================================
+
+/**
+* Options for jittered backoff
+*/
+export interface JitteredBackoffOptions {
+  /** Base milliseconds */
+  baseMs?: number;
+  /** Maximum milliseconds */
+  maxMs?: number;
+}
+
+/**
+* Calculate jittered backoff delay
+* @param attempt - Current attempt number
+* @param options - Backoff options
+* @returns Delay in milliseconds
+*/
+export function jitteredBackoff(attempt: number, options: JitteredBackoffOptions = {}): number {
+  const { baseMs = 1000, maxMs = 30000 } = options;
+  const exponentialDelay = baseMs * Math.pow(2, attempt);
+  const cappedDelay = Math.min(exponentialDelay, maxMs);
+  const jitter = Math.random() * cappedDelay;
+  return Math.floor(jitter);
+}
+
+/**
+* Check if an HTTP status code is retryable
+* @param status - HTTP status code
+* @param retryableStatuses - List of retryable statuses
+* @returns Whether status is retryable
+*/
+export function isRetryableStatus(
+  status: number,
+  retryableStatuses: number[] = [408, 429, 500, 502, 503, 504]
+): boolean {
+  return retryableStatuses.includes(status);
+}
+
+/**
+* Parse Retry-After header value
+* @param headerValue - Header value string (seconds or HTTP date)
+* @returns Delay in milliseconds
+*/
+export function parseRetryAfter(headerValue: string | null): number {
+  if (!headerValue) return 0;
+
+  // Try parsing as seconds first
+  const seconds = parseInt(headerValue, 10);
+  if (!isNaN(seconds)) {
+    return seconds * 1000;
+  }
+
+  // Try parsing as HTTP date
+  const date = new Date(headerValue);
+  if (!isNaN(date.getTime())) {
+    return Math.max(0, date.getTime() - Date.now());
+  }
+
+  return 0;
+}
+
+// ============================================================================
+// Timeout & Circuit Breaker Factory (consolidated from apps/api/src/utils/resilience.ts)
+// ============================================================================
+
+/**
+* Error thrown when circuit breaker is open
+*/
+export class CircuitOpenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CircuitOpenError';
+  }
+}
+
+/**
+* Execute a promise with a timeout
+* @param promise - Promise to execute
+* @param ms - Timeout in milliseconds (clamped to 1..300000)
+* @returns Promise result
+* @throws Error if timeout is exceeded
+*/
+export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  const boundedMs = Math.min(Math.max(1, ms), 300000);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`Timeout exceeded after ${boundedMs}ms`)), boundedMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+* Factory function for creating circuit breaker wrapped functions.
+* Uses the kernel CircuitBreaker internally.
+* @param fn - Function to wrap
+* @param failureThreshold - Number of failures before opening (default: 3)
+* @param name - Circuit breaker name (default: 'unknown')
+* @returns Wrapped function
+*/
+export function withCircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>>(
+  fn: T,
+  failureThreshold = 3,
+  name = 'unknown'
+): (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never> {
+  const breaker = new CircuitBreaker(name, {
+    failureThreshold,
+    resetTimeoutMs: 30000,
+    halfOpenMaxCalls: 3,
+  });
+  return (async (...args: Parameters<T>) => {
+    return breaker.execute(() => fn(...args));
+  }) as (...args: Parameters<T>) => Promise<ReturnType<T> extends Promise<infer R> ? R : never>;
 }

@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 
+import { withSpan, addSpanAttributes } from '@packages/monitoring';
+
 import { Notification, NotificationPayload } from '../domain/entities/Notification';
 import { NotificationRepository } from './ports/NotificationRepository';
 
@@ -75,35 +77,47 @@ export class NotificationService {
   template: string,
   payload: NotificationPayload
   ): Promise<CreateNotificationResult> {
-  // Validate inputs
-  const validationError = this.validateInputs(orgId, userId, channel, template, payload);
-  if (validationError) {
+  return withSpan({
+    spanName: 'NotificationService.create',
+    attributes: {
+    'notification.org_id': orgId,
+    'notification.channel': channel,
+    'notification.template': template,
+    },
+  }, async () => {
+    // Validate inputs
+    const validationError = this.validateInputs(orgId, userId, channel, template, payload);
+    if (validationError) {
+    addSpanAttributes({ 'notification.result': 'validation_failed' });
     return { success: false, error: validationError };
-  }
+    }
 
-  // Sanitize payload
-  const sanitizedPayload = this.sanitizePayload(payload);
+    // Sanitize payload
+    const sanitizedPayload = this.sanitizePayload(payload);
 
-  try {
+    try {
     const notification = Notification.create(
-    randomUUID(),
-    orgId,
-    userId,
-    channel,
-    template,
-    sanitizedPayload,
-    'pending'
+      randomUUID(),
+      orgId,
+      userId,
+      channel,
+      template,
+      sanitizedPayload,
+      'pending'
     );
 
     await this.notifications.save(notification);
 
+    addSpanAttributes({ 'notification.result': 'success' });
     return { success: true, notification };
-  } catch (error) {
+    } catch (error) {
+    addSpanAttributes({ 'notification.result': 'error' });
     return {
-    success: false,
-    error: error instanceof Error ? error.message : 'Failed to create notification'
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create notification'
     };
-  }
+    }
+  });
   }
 
   // ============================================================================

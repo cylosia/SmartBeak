@@ -47,6 +47,7 @@
       "@kernel/*": ["packages/kernel/*"],
       "@security/*": ["packages/security/*"],
       "@errors": ["packages/errors/index.ts"],
+      "@errors/*": ["packages/errors/*"],
       "@config": ["packages/config/index.ts"],
       "@config/*": ["packages/config/*"],
       "@database": ["packages/database/index.ts"],
@@ -54,6 +55,7 @@
       "@utils/*": ["packages/utils/*"],
       "@types/*": ["packages/types/*"],
       "@domain/*": ["domains/*"],
+      "@adapters/*": ["packages/adapters/*"],
       "@packages/*": ["packages/*"],
       "@shutdown": ["packages/shutdown/index.ts"]
     }
@@ -73,6 +75,7 @@
     { "path": "./packages/utils" },
     { "path": "./packages/shutdown" },
     { "path": "./packages/ml" },
-    { "path": "./packages/db" }
+    { "path": "./packages/db" },
+    { "path": "./packages/adapters" }
   ]
 }

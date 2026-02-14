@@ -6,13 +6,17 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 
 import { PostgresSeoRepository } from '../../../domains/seo/infra/persistence/PostgresSeoRepository';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
 import { UpdateSeo } from '../../../domains/seo/application/handlers/UpdateSeo';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('seo-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 async function verifyContentOwnership(userId: string, contentId: string, pool: Pool): Promise<boolean> {
   const result = await pool.query(
@@ -39,7 +43,7 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   try {
     const ctx = req.auth as AuthContext;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 50);
@@ -47,20 +51,13 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // Validate params
     const paramsResult = ParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid content ID',
-    code: 'INVALID_ID',
-    });
+    return errors.badRequest(res, 'Invalid content ID', ErrorCodes.INVALID_PARAMS);
     }
 
     // Validate body
     const bodyResult = UpdateSeoSchema.safeParse(req.body);
     if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues
-    });
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
 
     const { id } = paramsResult.data;
@@ -68,10 +65,7 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     const isAuthorized = await verifyContentOwnership(ctx.userId, id, pool);
     if (!isAuthorized) {
-    return res.status(404).send({
-    error: 'Content not found',
-    code: 'NOT_FOUND'
-    });
+    return errors.notFound(res, 'Content');
     }
 
     const repo = new PostgresSeoRepository(pool);
@@ -81,7 +75,8 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return { ok: true, event };
   } catch (error) {
     logger["error"]('Route error:', error instanceof Error ? error : new Error(String(error)));
-    return res.status(500).send({ error: 'Internal server error' });
+    return errors.internal(res);
+    return handleError(res, error, 'update SEO metadata');
   }
   });
 }

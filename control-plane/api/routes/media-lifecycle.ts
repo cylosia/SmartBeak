@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { MediaLifecycleService } from '../../services/media-lifecycle';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 // P1-10 FIX: Use structured logger instead of console["error"]
 const logger = getLogger('media-lifecycle');
@@ -44,18 +45,14 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin']);
 
     // Validate query params (P3-7 FIX: pagination now in Zod schema)
     const queryResult = QuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-    return res.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: queryResult["error"].issues
-    });
+    return errors.validationFailed(res, queryResult["error"].issues);
     }
 
     const { days, page, limit } = queryResult.data;
@@ -71,10 +68,7 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
     } catch (serviceError) {
     // P1-10 FIX: Use structured logger
     logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
-    return res.status(503).send({
-    error: 'Service temporarily unavailable',
-    code: 'SERVICE_UNAVAILABLE'
-    });
+    return errors.serviceUnavailable(res);
     }
 
     const result: LifecycleStats = {
@@ -93,10 +87,7 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
     // P1-10 FIX: Use structured logger
     logger.error('[media-lifecycle] Unexpected error:', error instanceof Error ? error : new Error(String(error)));
     // P1-1 FIX: Do not leak internal error details to clients
-    return res.status(500).send({
-    error: 'Internal server error',
-    code: 'INTERNAL_ERROR'
-    });
+    return errors.internal(res);
   }
   });
 }

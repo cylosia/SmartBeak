@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { createStripeCheckoutSession } from '../billing/stripe';
 import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const billingStripeLogger = getLogger('billingStripe');
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
@@ -153,13 +155,13 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     const result = extractAndVerifyToken(authHeader);
 
     if (!result.valid || !result.claims?.orgId) {
-    return reply.status(401).send({ error: result.error || 'Unauthorized' });
+    return errors.unauthorized(reply, result.error || 'Authentication required');
     }
 
     // P1-FIX: Store full user context including id for membership verification
-    (req as AuthenticatedRequest).user = { 
+    (req as AuthenticatedRequest).user = {
       id: result.claims.sub,
-      orgId: result.claims.orgId 
+      orgId: result.claims.orgId
     };
   });
 
@@ -168,21 +170,15 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.user?.id;
     const orgId = authReq.user?.orgId;
-    
+
     if (!userId || !orgId) {
-      return reply.status(401).send({ 
-        error: 'Unauthorized',
-        code: 'AUTH_REQUIRED'
-      });
+      return errors.unauthorized(reply);
     }
-    
+
     // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
-      return reply.status(403).send({ 
-        error: 'Forbidden',
-        code: 'ORG_MEMBERSHIP_REQUIRED'
-      });
+      return errors.forbidden(reply, 'Forbidden');
     }
   });
 
@@ -192,7 +188,7 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     const authReq = req as AuthenticatedRequest;
     const orgId = authReq.user?.orgId;
     if (!orgId) {
-      return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+      return errors.unauthorized(reply);
     }
 
     const token = await generateBillingCsrfToken(orgId);
@@ -215,35 +211,26 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
 
     const parseResult = CheckoutBodySchema.safeParse(whitelistedBody);
     if (!parseResult.success) {
-        return reply.status(400).send({
-        error: 'Invalid input',
-        code: 'VALIDATION_ERROR'
-        });
+        return errors.badRequest(reply, 'Invalid input');
     }
 
     const { priceId, csrfToken } = parseResult.data;
 
     const orgId = authReq.user?.orgId;
     if (!orgId) {
-      return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+      return errors.unauthorized(reply);
     }
 
     // SECURITY FIX: Issue 13 - Validate CSRF token
     // CRITICAL-FIX: Now properly awaits async validation
     const isValidCsrf = await validateBillingCsrfToken(csrfToken, orgId);
     if (!isValidCsrf) {
-        return reply.status(403).send({
-        error: 'Invalid or expired CSRF token',
-        code: 'CSRF_INVALID'
-        });
+        return errors.forbidden(reply, 'Invalid or expired CSRF token');
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(orgId)) {
-        return reply.status(400).send({
-        error: 'Invalid organization ID',
-        code: 'VALIDATION_ERROR'
-        });
+        return errors.badRequest(reply, 'Invalid organization ID');
     }
 
     // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes

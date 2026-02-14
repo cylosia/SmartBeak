@@ -1,0 +1,21 @@
+extends:
+  - spectral:oas
+
+rules:
+  # Ensure all operations have at least one 4xx response documented
+  operation-4xx-response: warn
+
+  # Ensure descriptions exist on operations
+  operation-description: warn
+
+  # Ensure API servers are defined
+  oas3-api-servers: error
+
+  # Ensure operation IDs are unique
+  operation-operationId-unique: error
+
+  # Allow info.contact to be optional
+  info-contact: off
+
+  # Allow info.license to be optional
+  oas3-schema: warn

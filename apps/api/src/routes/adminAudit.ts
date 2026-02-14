@@ -4,6 +4,8 @@ import { isValidUUID } from '@security/input-validator';
 import { getLogger } from '@kernel/logger';
 import { adminRateLimit } from '../middleware/rateLimiter';
 import crypto from 'crypto';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('adminAudit');
 
@@ -115,7 +117,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
     // Check for admin authentication
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
 
     const token = authHeader.slice(7);
@@ -123,7 +125,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       // This should use the shared auth utility
       // For now, we check a simple admin token for protection
       if (!process.env['ADMIN_API_KEY']) {
-        return reply.status(500).send({ error: 'Admin API not configured' });
+        return errors.internal(reply, 'Admin API not configured');
       }
       // P0-FIX: Use constant-time comparison to prevent timing attacks
       // Pad both buffers to max length to avoid leaking key length via early return
@@ -132,7 +134,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       const expectedBuf = Buffer.from(expectedKey, 'utf8');
       const maxLen = Math.max(tokenBuf.length, expectedBuf.length);
       if (maxLen === 0) {
-        return reply.status(403).send({ error: 'Forbidden. Admin access required.' });
+        return errors.forbidden(reply, 'Forbidden. Admin access required.');
       }
       const tokenPadded = Buffer.alloc(maxLen, 0);
       const expectedPadded = Buffer.alloc(maxLen, 0);
@@ -141,10 +143,10 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       const isEqual = crypto.timingSafeEqual(tokenPadded, expectedPadded) && tokenBuf.length === expectedBuf.length;
 
       if (!isEqual) {
-        return reply.status(403).send({ error: 'Forbidden. Admin access required.' });
+        return errors.forbidden(reply, 'Forbidden. Admin access required.');
       }
     } catch (err) {
-      return reply.status(401).send({ error: 'Invalid token' });
+      return errors.unauthorized(reply, 'Invalid token');
     }
   });
 
@@ -169,21 +171,21 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       if (from) {
         fromDate = new Date(from);
         if (isNaN(fromDate.getTime())) {
-          return reply.status(400).send({ error: 'Invalid from date format' });
+          return errors.badRequest(reply, 'Invalid from date format');
         }
       }
 
       if (to) {
         toDate = new Date(to);
         if (isNaN(toDate.getTime())) {
-          return reply.status(400).send({ error: 'Invalid to date format' });
+          return errors.badRequest(reply, 'Invalid to date format');
         }
       }
 
       if (fromDate && toDate) {
         const daysDiff = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
         if (daysDiff > 90) {
-          return reply.status(400).send({ error: 'Date range cannot exceed 90 days' });
+          return errors.badRequest(reply, 'Date range cannot exceed 90 days');
         }
       }
 
@@ -191,10 +193,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       if (action) {
         const validation = validateAction(action);
         if (!validation.success) {
-          return reply.status(400).send({
-            error: 'Invalid action parameter',
-            allowedActions: ALLOWED_AUDIT_ACTIONS
-          });
+          return errors.badRequest(reply, 'Invalid action parameter');
         }
         validatedAction = validation.data;
       }
@@ -203,26 +202,26 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       // Previously: any admin could query any org's data by changing orgId parameter
       // Now: org_id is required and we verify admin membership with user identity
       if (!orgId) {
-        return reply.status(400).send({ error: 'orgId is required' });
+        return errors.badRequest(reply, 'orgId is required');
       }
       
       // P0-FIX: Use consistent UUID validation (isValidUUID from input-validator)
       // instead of weak regex that accepts non-UUID 36-char hex strings
       if (!isValidUUID(orgId)) {
-        return reply.status(400).send({ error: 'Invalid orgId format' });
+        return errors.badRequest(reply, 'Invalid orgId format', ErrorCodes.INVALID_UUID);
       }
 
       // P1-FIX: Require x-admin-id header to identify the admin user
       // NOTE: x-admin-id should be replaced with JWT-derived identity in future
       const adminId = req.headers['x-admin-id'] as string | undefined;
       if (!adminId) {
-        return reply.status(400).send({ error: 'x-admin-id header is required' });
+        return errors.badRequest(reply, 'x-admin-id header is required', ErrorCodes.MISSING_PARAMETER);
       }
 
       // P0-FIX: Org membership verification to prevent IDOR — now checks specific user
       const hasAccess = await verifyAdminOrgAccess(adminId, orgId);
       if (!hasAccess) {
-        return reply.status(403).send({ error: 'Access denied to this organization' });
+        return errors.forbidden(reply, 'Access denied to this organization');
       }
       
       const db = await getDb();
@@ -266,13 +265,7 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       };
     } catch (error) {
       logger.error('Admin audit query failed', error instanceof Error ? error : new Error(String(error)));
-      const errorResponse: { error: string; message?: string } = {
-        error: 'Internal server error'
-      };
-      if (process.env['NODE_ENV'] === 'development' && error instanceof Error) {
-        errorResponse["message"] = error["message"];
-      }
-      return reply.status(500).send(errorResponse);
+      return errors.internal(reply);
     }
   });
 }

@@ -5,6 +5,7 @@ import { csrfProtection } from '../middleware/csrf';
 import { FastifyInstance } from 'fastify';
 import { computeContentRoi } from '../roi/contentRoi';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('ContentRoi');
 
@@ -152,7 +153,7 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
 
       const auth = await verifyAuth(req as unknown as { headers: { authorization?: string } });
       if (!auth) {
-        return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+        return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
       }
 
       const body = (req.body || {}) as Record<string, unknown>;
@@ -166,23 +167,20 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
         revenue_per_conversion: body['revenue_per_conversion'],
       });
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid input',
-          details: parseResult.error.issues,
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
       const { domain_id, content_id, production_cost_usd, monthly_traffic, conversion_rate, revenue_per_conversion } = parseResult.data;
 
       const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId);
       if (!hasAccess) {
         logger.warn('Unauthorized access attempt', { userId: auth.userId, domainId: domain_id, action: 'access_roi' });
-        return reply.status(403).send({ error: 'Access denied to domain' });
+        return errors.forbidden(reply, 'Access denied to domain');
       }
 
       const canModify = await canModifyContent(auth.userId, domain_id, auth.orgId);
       if (!canModify) {
         logger.warn('Unauthorized modification attempt', { userId: auth.userId, domainId: domain_id, action: 'create_roi' });
-        return reply.status(403).send({ error: 'Editor or admin access required' });
+        return errors.forbidden(reply, 'Editor or admin access required');
       }
 
       const db = await getDb();
@@ -191,7 +189,7 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
         .where({ id: content_id, domain_id })
         .first();
       if (!contentExists) {
-        return reply.status(404).send({ error: 'Content not found in domain' });
+        return errors.notFound(reply, 'Content');
       }
       const roi = computeContentRoi({
         production_cost_usd,
@@ -244,11 +242,7 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
     }
     catch (error) {
       logger.error('Error processing content ROI', error instanceof Error ? error : new Error(String(error)));
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return reply.status(500).send({
-        error: 'Internal server error',
-        ...(process.env['NODE_ENV'] === 'development' && { message: errorMessage })
-      });
+      return errors.internal(reply);
     }
   });
 }

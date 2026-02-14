@@ -21,6 +21,7 @@ import {
   rollbackShard,
 } from '../../services/shard-deployment';
 import { generateShardFiles, ThemeConfig, VALID_THEME_IDS } from '../../services/shard-generator';
+import { errors } from '@errors/responses';
 
 /**
  * Verify the authenticated user owns the given siteId.
@@ -56,21 +57,17 @@ export default async function shardRoutes(fastify: FastifyInstance) {
 
       // Validate required fields
       if (!body.siteId || !body.themeId || !body.vercelProjectId) {
-        return reply.status(400).send({
-          error: 'Missing required fields: siteId, themeId, vercelProjectId',
-        });
+        return errors.badRequest(reply, 'Missing required fields: siteId, themeId, vercelProjectId');
       }
 
       // SECURITY FIX P1 #17: Validate themeId against known themes
       if (!VALID_THEME_IDS.includes(body.themeId)) {
-        return reply.status(400).send({
-          error: `Invalid themeId. Must be one of: ${VALID_THEME_IDS.join(', ')}`,
-        });
+        return errors.badRequest(reply, `Invalid themeId. Must be one of: ${VALID_THEME_IDS.join(', ')}`);
       }
 
       // SECURITY FIX P0 #4: Verify site ownership
       if (!(await verifySiteOwnership(request, body.siteId))) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return errors.forbidden(reply);
       }
 
       // 1. Generate shard files from template
@@ -90,10 +87,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
       const deployment = await deployShardToVercel(shardId, body.vercelProjectId);
 
       if (!deployment.success) {
-        return reply.status(500).send({
-          error: 'Deployment failed',
-          shardId,
-        });
+        return errors.internal(reply, 'Deployment failed');
       }
 
       return reply.send({
@@ -106,9 +100,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
     } catch (error) {
       // SECURITY FIX P1 #13: Don't expose internal error messages
       fastify.log.error(error);
-      return reply.status(500).send({
-        error: 'Internal server error',
-      });
+      return errors.internal(reply);
     }
   });
 
@@ -121,7 +113,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
 
       // SECURITY FIX P0 #4: Verify site ownership
       if (!(await verifySiteOwnership(request, siteId))) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return errors.forbidden(reply);
       }
 
       const versions = await listShardVersions(siteId);
@@ -140,7 +132,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: 'Failed to fetch versions' });
+      return errors.internal(reply, 'Failed to fetch versions');
     }
   });
 
@@ -156,22 +148,18 @@ export default async function shardRoutes(fastify: FastifyInstance) {
       };
 
       if (!targetVersion || !vercelProjectId) {
-        return reply.status(400).send({
-          error: 'Missing required fields: targetVersion, vercelProjectId',
-        });
+        return errors.badRequest(reply, 'Missing required fields: targetVersion, vercelProjectId');
       }
 
       // SECURITY FIX P0 #4: Verify site ownership
       if (!(await verifySiteOwnership(request, siteId))) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return errors.forbidden(reply);
       }
 
       const result = await rollbackShard(siteId, targetVersion, vercelProjectId);
 
       if (!result.success) {
-        return reply.status(500).send({
-          error: 'Rollback failed',
-        });
+        return errors.internal(reply, 'Rollback failed');
       }
 
       return reply.send({
@@ -182,7 +170,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: 'Rollback failed' });
+      return errors.internal(reply, 'Rollback failed');
     }
   });
 }

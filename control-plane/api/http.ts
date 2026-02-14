@@ -3,19 +3,42 @@
 
 
 import cors from '@fastify/cors';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { getPoolInstance } from '@database/pool';
+import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
+import { validateEnv } from '@config';
+import { AppError, ErrorCodes, RateLimitError } from '@errors';
+import { errors as errHelpers } from '@errors/responses';
+import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
+import type { Pool } from 'pg';
 import { getPoolInstance } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
 import { validateEnv } from '@config';
 import { shutdownTelemetry } from '@smartbeak/monitoring';
 
 import { getLogger } from '@kernel/logger';
+import { BASE_SECURITY_HEADERS, CSP_API, PERMISSIONS_POLICY_API } from '@config/headers';
 
 // P2-PERF-FIX: Moved dynamic imports to top-level. Previously these were
 // await import() inside route handlers, making the first request to each endpoint slow.
 import { getRepositoryHealth } from '../services/repository-factory';
 import { checkSequenceHealth } from '@database/health';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
+import { billingInvoiceRoutes } from './routes/billing-invoices';
+import { billingRoutes } from './routes/billing';
+import { cacheRoutes } from './routes/cache';
+// C3-FIX: Removed contentListRoutes import (duplicate GET /content route)
+import { contentRevisionRoutes } from './routes/content-revisions';
+import { contentRoutes } from './routes/content';
+import { contentScheduleRoutes } from './routes/content-schedule';
+import { diligenceRoutes } from './routes/diligence';
+import { domainDetailsRoutes } from './routes/domain-details';
+import { domainOwnershipRoutes } from './routes/domain-ownership';
+import { domainRoutes } from './routes/domains';
+import { guardrailRoutes } from './routes/guardrails';
 import { initializeContainer } from '../services/container';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
@@ -83,6 +106,38 @@ await app.register(cors, {
   exposedHeaders: ['X-Request-ID', 'X-Trace-ID'],
 });
 
+// OpenAPI documentation via @fastify/swagger.
+// Zod schemas on route definitions are auto-converted to JSON Schema.
+app.setValidatorCompiler(validatorCompiler);
+app.setSerializerCompiler(serializerCompiler);
+
+await app.register(swagger, {
+  openapi: {
+    openapi: '3.1.0',
+    info: {
+      title: 'SmartBeak Control Plane API',
+      version: '1.0.0',
+      description: 'API for managing content, domains, billing, publishing, and more.',
+    },
+    servers: [{ url: '/v1', description: 'API v1' }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [{ bearerAuth: [] }],
+  },
+});
+
+await app.register(swaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: { docExpansion: 'list' },
+});
+
 // API Versioning: Backward compatibility for unversioned paths.
 // Redirects (or rewrites) requests like GET /domains to /v1/domains.
 // Health check routes are excluded — they are infrastructure, not API contract.
@@ -113,28 +168,19 @@ if (LEGACY_PATH_MODE !== 'off') {
   });
 }
 
-// SECURITY FIX: Add security headers (HSTS, CSP, etc.)
+// SECURITY FIX: Add security headers (HSTS, CSP, Cross-Origin, etc.)
+// Values sourced from packages/config/headers.ts (canonical source of truth)
 app.addHook('onSend', async (request, reply, payload) => {
-  // HSTS - HTTP Strict Transport Security
-  void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // Apply baseline security headers (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+  for (const [key, value] of Object.entries(BASE_SECURITY_HEADERS)) {
+    void reply.header(key, value);
+  }
 
-  // Content Security Policy
-  void reply.header('Content-Security-Policy', 'default-src \'self\'; frame-ancestors \'none\';');
+  // Content Security Policy — maximally restrictive for JSON-only API
+  void reply.header('Content-Security-Policy', CSP_API);
 
-  // Prevent clickjacking
-  void reply.header('X-Frame-Options', 'DENY');
-
-  // Prevent MIME type sniffing
-  void reply.header('X-Content-Type-Options', 'nosniff');
-
-  // XSS Protection
-  void reply.header('X-XSS-Protection', '1; mode=block');
-
-  // Referrer Policy
-  void reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-  // Permissions Policy
-  void reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Permissions Policy — fully restrictive (no payment needed for API)
+  void reply.header('Permissions-Policy', PERMISSIONS_POLICY_API);
 
   // Prevent caching of sensitive authenticated responses
   const authHeader = request.headers.authorization;
@@ -147,17 +193,41 @@ app.addHook('onSend', async (request, reply, payload) => {
   return payload;
 });
 
-// P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a
-// duplicate Pool here. The managed pool has exhaustion monitoring, statement_timeout,
-// idle_in_transaction_session_timeout, and proper metrics - this standalone pool had none.
-// Previously this created a second pool with max:20, doubling total connections to 30/process.
-// SECURITY FIX (Finding 5): Use shared pool from @database/pool instead of creating a duplicate
-// Previously: new Pool({ max: 20 }) - created a second pool alongside the shared pool (max: 10)
-// Combined: up to 30 connections per function * 100+ Vercel functions = connection storm
-const pool = await getPoolInstance();
+// Backpressure hook: reject requests early when DB pool is critically loaded
+app.addHook('onRequest', async (request, reply) => {
+  // Skip health check endpoints
+  if (request.url?.startsWith('/health') || request.url === '/readyz' || request.url === '/livez') return;
 
-// Initialize DI container
-const container = initializeContainer({ dbPool: pool });
+  const metrics = getConnectionMetrics();
+  const backpressure = getBackpressureMetrics();
+
+  // Reject if pool utilization is critical or too many waiters
+  const totalConns = metrics.totalConnections;
+  const activeConns = totalConns - metrics.idleConnections;
+  const utilization = totalConns > 0 ? activeConns / totalConns : 0;
+
+  if (utilization > 0.9 || metrics.waitingClients > 8 || backpressure.waiting > 8) {
+    logger.warn('Backpressure: rejecting request due to pool pressure', {
+      waiting: metrics.waitingClients,
+      active: activeConns,
+      total: totalConns,
+      semaphoreWaiting: backpressure.waiting,
+      semaphoreAvailable: backpressure.available,
+    });
+    return reply.status(503).send({
+      error: 'Service temporarily unavailable',
+      message: 'Server under heavy load. Please retry shortly.',
+      retryAfter: 5,
+    });
+  }
+});
+
+// P0-FIX #7: Use the managed pool from packages/database/pool instead of creating a
+// Pool and container are initialized lazily in start() to avoid connecting to the
+// database at module import time. Previously, a top-level await here meant that
+// any import of this module would block until the database was reachable.
+let pool: Pool;
+let container: ReturnType<typeof initializeContainer>;
 
 // Load cost tracking budgets from database
 try {
@@ -226,11 +296,7 @@ app.addHook('onRequest', async (req, reply) => {
 
       if (current > AUTH_RATE_LIMIT_MAX) {
         const ttl = await redis.ttl(key);
-        return reply.status(429).send({
-          error: 'Too Many Requests',
-          message: 'Too many authentication attempts. Please try again later.',
-          retryAfter: ttl > 0 ? ttl : windowSeconds
-        });
+        return errHelpers.rateLimited(reply, ttl > 0 ? ttl : windowSeconds, 'Too many authentication attempts. Please try again later.');
       }
     } catch (error) {
       // P0-FIX #1: Fail CLOSED on Redis error for auth endpoints.
@@ -238,11 +304,7 @@ app.addHook('onRequest', async (req, reply) => {
       // we must deny auth attempts rather than allow unlimited brute-force.
       // This matches the fail-closed policy in rateLimiter.ts middleware.
       logger.error('Redis rate limiting error - denying auth request (fail-closed)', error as Error);
-      return reply.status(429).send({
-        error: 'Too Many Requests',
-        message: 'Rate limiting service unavailable. Please try again later.',
-        retryAfter: 60
-      });
+      return errHelpers.rateLimited(reply, 60, 'Rate limiting service unavailable. Please try again later.');
     }
   }
 
@@ -270,10 +332,7 @@ app.addHook('onRequest', async (req, reply) => {
         return;
       }
       // P0-FIX: Reject requests without auth to private routes
-      return reply.status(401).send({
-        error: 'Unauthorized',
-        message: 'Authentication required'
-      });
+      return errHelpers.unauthorized(reply);
     }
 
     (req as { auth: unknown }).auth = await authFromHeader(authHeader);
@@ -284,10 +343,7 @@ app.addHook('onRequest', async (req, reply) => {
     // leaking implementation details useful for targeted attacks.
     // The specific error is already logged server-side via the logger.
     logger.warn('Auth middleware rejected request', { error: error instanceof Error ? error.message : String(error) });
-    return reply.status(401).send({
-      error: 'Unauthorized',
-      message: 'Unauthorized'
-    });
+    return errHelpers.unauthorized(reply, 'Unauthorized');
   }
 });
 
@@ -316,63 +372,74 @@ app.addHook('preSerialization', async (_request, _reply, payload) => {
   return payload;
 });
 
-// P2-FIX #19: Enhanced error handler using Fastify's native statusCode property
-// instead of fragile string matching on error.message (which misclassifies errors
-// whose messages incidentally contain 'not found', 'invalid', etc.)
+// Global error handler — produces the canonical ErrorResponse shape for all errors.
+// Shape: { error, code, requestId, details?, retryAfter? }
 app.setErrorHandler((error: unknown, request, reply) => {
+  const requestId = (request.headers['x-request-id'] as string) || '';
   app.log["error"](error);
 
-  // Determine appropriate status code - prefer explicit statusCode on the error object
-  const errObj = error as { statusCode?: number; code?: string; message?: string };
-  let statusCode = errObj.statusCode ?? 500;
-  let errorCode = 'INTERNAL_ERROR';
+  // 1. AppError subclasses carry their own code + statusCode
+  if (error instanceof AppError) {
+    const isDev = process.env['NODE_ENV'] === 'development';
+    const body: Record<string, unknown> = {
+      error: error.message,
+      code: error.code,
+      requestId,
+    };
+    if (isDev && error.details !== undefined) {
+      body['details'] = error.details;
+    }
+    if (error instanceof RateLimitError) {
+      body['retryAfter'] = error.retryAfter;
+      void reply.header('Retry-After', String(error.retryAfter));
+    }
+    void reply.status(error.statusCode).send(body);
+    return;
+  }
 
-  // Check Fastify validation errors first (they have a code property)
+  // 2. Fastify validation errors + generic errors with statusCode
+  const errObj = error as { statusCode?: number; code?: string; message?: string; validation?: unknown };
+  let statusCode = errObj.statusCode ?? 500;
+  let errorCode: string = ErrorCodes.INTERNAL_ERROR;
+
   if (errObj.code === 'FST_ERR_VALIDATION') {
     statusCode = 400;
-    errorCode = 'VALIDATION_ERROR';
+    errorCode = ErrorCodes.VALIDATION_ERROR;
   } else if (statusCode === 401) {
-    errorCode = 'AUTH_ERROR';
+    errorCode = ErrorCodes.AUTH_ERROR;
   } else if (statusCode === 403) {
-    errorCode = 'FORBIDDEN';
+    errorCode = ErrorCodes.FORBIDDEN;
   } else if (statusCode === 404) {
-    errorCode = 'NOT_FOUND';
+    errorCode = ErrorCodes.NOT_FOUND;
   } else if (statusCode === 400) {
+    errorCode = ErrorCodes.VALIDATION_ERROR;
     errorCode = 'VALIDATION_ERROR';
   } else if (statusCode === 402) {
     errorCode = 'BUDGET_EXCEEDED';
   } else if (statusCode === 409) {
-    errorCode = 'CONFLICT';
+    errorCode = ErrorCodes.CONFLICT;
+  } else if (statusCode === 429) {
+    errorCode = ErrorCodes.RATE_LIMIT_EXCEEDED;
   }
 
-  // P2-MEDIUM FIX: Only expose error details in development
   const isDevelopment = process.env['NODE_ENV'] === 'development';
-
-  const response: {
-  error: string;
-  code: string;
-  message?: string | undefined;
-  stack?: string | undefined;
-  details?: unknown | undefined;
-  } = {
-  error: statusCode === 500 ? 'Internal server error' : (errObj.message || 'An error occurred'),
-  code: errorCode,
+  const body: Record<string, unknown> = {
+    error: statusCode === 500 ? 'Internal server error' : (errObj.message || 'An error occurred'),
+    code: errorCode,
+    requestId,
   };
 
-  // F8-FIX: Only include sanitized error info in development.
-  // Previously serialized the full raw error object which could contain
-  // DB connection strings, internal paths, or secrets in error messages.
-  if (isDevelopment) {
-  response.message = errObj.message;
-  // Never include raw error objects - they may contain sensitive data
+  if (isDevelopment && errObj.message) {
+    body['details'] = { message: errObj.message };
   }
 
-  void reply.status(statusCode).send(response);
+  void reply.status(statusCode).send(body);
 });
 
-// 404 handler
+// 404 handler — canonical shape
 app.setNotFoundHandler((request, reply) => {
-  void reply.status(404).send({ error: 'Route not found', code: 'NOT_FOUND' });
+  const requestId = (request.headers['x-request-id'] as string) || '';
+  void reply.status(404).send({ error: 'Route not found', code: ErrorCodes.NOT_FOUND, requestId });
 });
 
 // Register all routes — business routes under /v1 prefix, infra routes at root
@@ -413,6 +480,7 @@ async function registerRoutes(): Promise<void> {
     await publishingCreateJobRoutes(v1, pool);
     await publishingPreviewRoutes(v1, pool);
     await queueMetricsRoutes(v1, pool);
+    await cacheRoutes(v1, pool);
 
     // New routes to fix missing API endpoints
     await affiliateRoutes(v1, pool);
@@ -552,6 +620,7 @@ interface HealthStatus {
  * SECURITY FIX (Finding 5): Uses the shared pool instance
  */
 async function checkDatabase(): Promise<{ latency: number }> {
+  if (!pool) throw new Error('Database pool not initialized');
   const start = Date.now();
   const TIMEOUT_MS = 5000;
   // P0-FIX: Rewritten to fix two bugs in the original Promise.race pattern:
@@ -621,6 +690,7 @@ async function checkRedisHealth(): Promise<{ latency: number; mode: string }> {
  * Check queue health - look for stalled and failed jobs
  */
 async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number; pendingJobs: number }> {
+  if (!pool) throw new Error('Database pool not initialized');
   // P1-FIX: Combined 3 sequential queries into 1 to reduce pool connection usage.
   // Previously consumed 3 pool connections per health check request.
   const result = await pool.query(
@@ -651,10 +721,12 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
 app.get('/health/detailed', async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required for detailed health checks' });
+    return errHelpers.unauthorized(reply, 'Authentication required for detailed health checks');
   }
   // P0-AUDIT-FIX: Require admin/owner role — previously any authenticated user could access
+  try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  if (!container) throw new Error('Container not initialized');
   const containerHealth = await container.getHealth();
   return {
   status: containerHealth.services["database"] ? 'healthy' : 'degraded',
@@ -667,10 +739,10 @@ app.get('/health/detailed', async (request, reply) => {
 app.get('/health/repositories', async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
+    return errHelpers.unauthorized(reply);
   }
   // P0-AUDIT-FIX: Require admin/owner role
-  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   return getRepositoryHealth();
 });
 
@@ -678,10 +750,10 @@ app.get('/health/repositories', async (request, reply) => {
 app.get('/health/sequences', async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
+    return errHelpers.unauthorized(reply);
   }
   // P0-AUDIT-FIX: Require admin/owner role
-  try { requireRole(auth, ['admin', 'owner']); } catch { return reply.status(403).send({ error: 'Forbidden', message: 'Admin access required' }); }
+  try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   const sequenceHealth = await checkSequenceHealth();
 
   return reply.status(sequenceHealth.healthy ? 200 : 503).send({
@@ -694,6 +766,11 @@ app.get('/health/sequences', async (request, reply) => {
 // Start server
 async function start(): Promise<void> {
   try {
+  // Initialize database pool (moved from module scope so the module can be
+  // imported without requiring a live database connection)
+  pool = await getPoolInstance();
+  container = initializeContainer({ dbPool: pool });
+
   await registerRoutes();
   const port = Number(process.env['PORT']) || 3000; // P3-FIX: Use Number() || fallback instead of parseInt to avoid NaN
   await app.listen({ port, host: '0.0.0.0' });

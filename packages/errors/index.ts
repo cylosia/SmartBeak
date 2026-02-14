@@ -32,10 +32,21 @@ export const ErrorCodes = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_PARAMS: 'INVALID_PARAMS',
   INVALID_INPUT: 'INVALID_INPUT',
+  INVALID_UUID: 'INVALID_UUID',
+  INVALID_FORMAT: 'INVALID_FORMAT',
+  INVALID_EMAIL: 'INVALID_EMAIL',
+  INVALID_URL: 'INVALID_URL',
+  INVALID_DATE: 'INVALID_DATE',
+  INVALID_RANGE: 'INVALID_RANGE',
+  INVALID_LENGTH: 'INVALID_LENGTH',
+  REQUIRED_FIELD: 'REQUIRED_FIELD',
+  UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
+  MISSING_PARAMETER: 'MISSING_PARAMETER',
 
   // Authentication Errors
   AUTH_ERROR: 'AUTH_ERROR',
   AUTH_REQUIRED: 'AUTH_REQUIRED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
   INVALID_TOKEN: 'INVALID_TOKEN',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
   INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
@@ -55,6 +66,7 @@ export const ErrorCodes = {
   // Database Errors
   DATABASE_ERROR: 'DATABASE_ERROR',
   DUPLICATE_ENTRY: 'DUPLICATE_ENTRY',
+  DUPLICATE_KEY: 'DUPLICATE_KEY',
   CONNECTION_ERROR: 'CONNECTION_ERROR',
   QUERY_TIMEOUT: 'QUERY_TIMEOUT',
 
@@ -62,6 +74,8 @@ export const ErrorCodes = {
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+  CIRCUIT_OPEN: 'CIRCUIT_OPEN',
 
   // Business Logic Errors
   PUBLISH_FAILED: 'PUBLISH_FAILED',
@@ -79,6 +93,12 @@ export const ErrorCodes = {
   // Conflict Errors
   CONFLICT: 'CONFLICT',
   RESOURCE_CONFLICT: 'RESOURCE_CONFLICT',
+
+  // External API Errors
+  EXTERNAL_API_ERROR: 'EXTERNAL_API_ERROR',
+  STRIPE_ERROR: 'STRIPE_ERROR',
+  WEBHOOK_ERROR: 'WEBHOOK_ERROR',
+  PAYMENT_ERROR: 'PAYMENT_ERROR',
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
@@ -116,9 +136,10 @@ export class AppError extends Error {
   code: ErrorCode = ErrorCodes.INTERNAL_ERROR,
   statusCode: number = 500,
   details?: unknown,
-  requestId: string | undefined = undefined
+  requestId: string | undefined = undefined,
+  options?: { cause?: Error }
   ) {
-  super(message);
+  super(message, options?.cause ? { cause: options.cause } : undefined);
   this.name = this.constructor.name;
   this.code = code;
   this.statusCode = statusCode;
@@ -141,8 +162,9 @@ export class AppError extends Error {
   }
 
   /**
-  * Get sanitized version for client exposure
-  * P2-MEDIUM FIX: Only expose safe error details
+  * Get sanitized version for client exposure.
+  * requestId is always included (needed for support/tracing).
+  * details are only included in development.
   */
   toClientJSON(): ErrorResponse {
   const isDevelopment = process.env['NODE_ENV'] === 'development';
@@ -151,7 +173,7 @@ export class AppError extends Error {
     error: this.message,
     code: this.code,
     ...(isDevelopment && this.details !== undefined && { details: this.details }),
-    ...(isDevelopment && this.requestId !== undefined && { requestId: this.requestId }),
+    ...(this.requestId !== undefined && { requestId: this.requestId }),
   };
   }
 }
@@ -472,9 +494,19 @@ export function getStatusCodeForErrorCode(code: ErrorCode): number {
   case ErrorCodes.VALIDATION_ERROR:
   case ErrorCodes.INVALID_PARAMS:
   case ErrorCodes.INVALID_INPUT:
+  case ErrorCodes.INVALID_UUID:
+  case ErrorCodes.INVALID_FORMAT:
+  case ErrorCodes.INVALID_EMAIL:
+  case ErrorCodes.INVALID_URL:
+  case ErrorCodes.INVALID_DATE:
+  case ErrorCodes.INVALID_RANGE:
+  case ErrorCodes.INVALID_LENGTH:
+  case ErrorCodes.REQUIRED_FIELD:
+  case ErrorCodes.MISSING_PARAMETER:
     return 400;
   case ErrorCodes.AUTH_ERROR:
   case ErrorCodes.AUTH_REQUIRED:
+  case ErrorCodes.UNAUTHORIZED:
   case ErrorCodes.INVALID_TOKEN:
   case ErrorCodes.TOKEN_EXPIRED:
     return 401;
@@ -492,16 +524,22 @@ export function getStatusCodeForErrorCode(code: ErrorCode): number {
   case ErrorCodes.METHOD_NOT_ALLOWED:
     return 405;
   case ErrorCodes.DUPLICATE_ENTRY:
+  case ErrorCodes.DUPLICATE_KEY:
   case ErrorCodes.CONFLICT:
   case ErrorCodes.RESOURCE_CONFLICT:
     return 409;
   case ErrorCodes.PAYLOAD_TOO_LARGE:
   case ErrorCodes.JSONB_SIZE_EXCEEDED:
     return 413;
+  case ErrorCodes.UNSUPPORTED_MEDIA_TYPE:
+    return 415;
   case ErrorCodes.RATE_LIMIT_EXCEEDED:
     return 429;
   case ErrorCodes.SERVICE_UNAVAILABLE:
+  case ErrorCodes.CIRCUIT_OPEN:
     return 503;
+  case ErrorCodes.TIMEOUT_ERROR:
+    return 504;
   case ErrorCodes.INTERNAL_ERROR:
   case ErrorCodes.DATABASE_ERROR:
   case ErrorCodes.CONNECTION_ERROR:
@@ -509,6 +547,10 @@ export function getStatusCodeForErrorCode(code: ErrorCode): number {
   case ErrorCodes.PUBLISH_FAILED:
   case ErrorCodes.INTENT_RETRIEVAL_FAILED:
   case ErrorCodes.BILLING_ERROR:
+  case ErrorCodes.EXTERNAL_API_ERROR:
+  case ErrorCodes.STRIPE_ERROR:
+  case ErrorCodes.WEBHOOK_ERROR:
+  case ErrorCodes.PAYMENT_ERROR:
   default:
     return 500;
   }
@@ -560,6 +602,15 @@ export function safeStringifyError(error: unknown): string {
   }
 }
 
+/**
+ * Extract error message from unknown catch parameter.
+ * Standardized pattern for catch blocks across the codebase.
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 // ============================================================================
 // Export all error codes as individual constants for convenience
 // ============================================================================
@@ -568,11 +619,23 @@ export const {
   VALIDATION_ERROR,
   INVALID_PARAMS,
   INVALID_INPUT,
+  INVALID_UUID,
+  INVALID_FORMAT,
+  INVALID_EMAIL,
+  INVALID_URL,
+  INVALID_DATE,
+  INVALID_RANGE,
+  INVALID_LENGTH,
+  REQUIRED_FIELD,
+  UNSUPPORTED_MEDIA_TYPE,
+  MISSING_PARAMETER,
   AUTH_ERROR,
   AUTH_REQUIRED,
+  UNAUTHORIZED,
   INVALID_TOKEN,
   TOKEN_EXPIRED,
   INSUFFICIENT_PERMISSIONS,
+  FORBIDDEN,
   NOT_FOUND,
   CONTENT_NOT_FOUND,
   DOMAIN_NOT_FOUND,
@@ -582,11 +645,14 @@ export const {
   ACCESS_DENIED,
   DATABASE_ERROR,
   DUPLICATE_ENTRY,
+  DUPLICATE_KEY,
   CONNECTION_ERROR,
   QUERY_TIMEOUT,
   INTERNAL_ERROR,
   SERVICE_UNAVAILABLE,
   RATE_LIMIT_EXCEEDED,
+  TIMEOUT_ERROR,
+  CIRCUIT_OPEN,
   PUBLISH_FAILED,
   INTENT_RETRIEVAL_FAILED,
   BILLING_ERROR,
@@ -594,5 +660,13 @@ export const {
   METHOD_NOT_ALLOWED,
   PAYLOAD_TOO_LARGE,
   JSONB_SIZE_EXCEEDED,
+  CONFLICT,
   RESOURCE_CONFLICT,
+  EXTERNAL_API_ERROR,
+  STRIPE_ERROR,
+  WEBHOOK_ERROR,
+  PAYMENT_ERROR,
 } = ErrorCodes;
+
+export { withContext, type OperationContext } from './error-context';
+export { createRouteErrorHandler } from './route-error-handler';

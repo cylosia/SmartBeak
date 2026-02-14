@@ -5,6 +5,7 @@ import { generateBuyerRoiSummary } from '../roi/buyerRoiSummary';
 import { getDb } from '../db';
 import { optionalAuthFastify } from '@security/auth';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('BuyerRoi');
 
@@ -123,16 +124,12 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     await optionalAuthFastify(req, reply);
     const auth = req.authContext;
     if (!auth) {
-    return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+    return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
 
     const parseResult = BuyerRoiQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return reply.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: parseResult.error.issues
-    });
+    return errors.validationFailed(reply, parseResult.error.issues);
     }
 
     const { domain } = parseResult.data;
@@ -140,7 +137,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     const hasAccess = await canAccessDomain(auth.userId, domain, auth.orgId);
     if (!hasAccess) {
     logger.warn('Unauthorized access attempt', { userId: auth.userId, domainId: domain, action: 'access_roi_summary' });
-    return reply.status(403).send({ error: 'Access denied to domain' });
+    return errors.forbidden(reply, 'Access denied to domain');
     }
 
     const db = await getDb();
@@ -173,13 +170,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(200).send(summary);
   } catch (error) {
     logger.error('Error generating buyer ROI summary', error instanceof Error ? error : new Error(String(error)));
-    const errorResponse: ErrorResponse = {
-    error: 'Internal server error',
-    };
-    if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
-    errorResponse["message"] = error["message"];
-    }
-    return reply.status(500).send(errorResponse);
+    return errors.internal(reply);
   }
   });
 }

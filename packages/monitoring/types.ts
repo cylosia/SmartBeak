@@ -221,3 +221,25 @@ export interface Incident {
   resolvedAt?: Date;
   assignedTo?: string;
 }
+
+// ============================================================================
+// Golden Signals & Error Budget Types
+// ============================================================================
+
+/**
+ * Saturation thresholds for golden signal monitoring
+ */
+export interface GoldenSignalThresholds {
+  latency: { p99Warning: number; p99Critical: number };
+  errorRate: { warning: number; critical: number };
+  saturation: {
+    memoryWarning: number; memoryCritical: number;
+    cpuWarning: number; cpuCritical: number;
+    queueDepthWarning: number; queueDepthCritical: number;
+  };
+}
+
+/**
+ * Error budget consumption level for SLO burn rate alerts
+ */
+export type ErrorBudgetAlertLevel = 'normal' | 'slow_burn' | 'fast_burn' | 'exhausted';

@@ -1,9 +1,9 @@
 import fetch from 'node-fetch';
 import { AbortController } from 'abort-controller';
 import { getLogger } from '@kernel/logger';
+import { API_BASE_URLS } from '@config';
 
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
-import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('ImpactAdapter');
 
@@ -85,7 +85,7 @@ export class ImpactAdapter implements AffiliateRevenueAdapter {
   this.credentials = {
     accountSid: credentials?.accountSid || process.env['IMPACT_ACCOUNT_SID'] || '',
     authToken: credentials?.authToken || process.env['IMPACT_AUTH_TOKEN'] || '',
-    apiUrl: credentials?.apiUrl || process.env['IMPACT_API_URL'] || 'https://api.impact.com',
+    apiUrl: credentials?.apiUrl || process.env['IMPACT_API_URL'] || API_BASE_URLS.impact,
   };
 
   if (!this.credentials.accountSid) {

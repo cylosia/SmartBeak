@@ -199,35 +199,9 @@ export function sendSanitizedError(
   void reply.status(statusCode).send(sanitized);
 }
 
-/**
- * Common error codes for consistent handling
- * SECURITY FIX: Issue 11 - Standardized error codes
- */
-export const ErrorCodes = {
-  // 4xx Client Errors
-  BAD_REQUEST: 'BAD_REQUEST',
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  FORBIDDEN: 'FORBIDDEN',
-  NOT_FOUND: 'NOT_FOUND',
-  CONFLICT: 'CONFLICT',
-  RATE_LIMITED: 'RATE_LIMIT_EXCEEDED',
-  CSRF_INVALID: 'CSRF_INVALID',
-  
-  // 5xx Server Errors
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
-  DB_ERROR: 'DB_ERROR',
-  DB_CONNECTION_ERROR: 'DB_CONNECTION_ERROR',
-  DB_TIMEOUT_ERROR: 'DB_TIMEOUT_ERROR',
-  DB_DUPLICATE_ERROR: 'DB_DUPLICATE_ERROR',
-  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  
-  // External Service Errors
-  EXTERNAL_API_ERROR: 'EXTERNAL_API_ERROR',
-  PAYMENT_ERROR: 'PAYMENT_ERROR',
-  STRIPE_ERROR: 'STRIPE_ERROR',
-  WEBHOOK_ERROR: 'WEBHOOK_ERROR',
-} as const;
+// Re-export canonical error codes from @errors (single source of truth).
+// Local aliases kept for backward compatibility of existing imports.
+export { ErrorCodes } from '@errors';
 
 /**
  * Sanitize external API errors (Stripe, Paddle, etc.)

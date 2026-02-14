@@ -6,6 +6,9 @@ import { AlertService } from '../../services/alerts';
 import { FlagService } from '../../services/flags';
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
+import { featureFlags } from '@config/features';
 
 const FeatureFlagKeySchema = z.string()
   .min(1, 'Key is required')
@@ -42,21 +45,13 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   // Validate params
   const paramsResult = FeatureFlagParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid flag key',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid flag key', ErrorCodes.VALIDATION_ERROR, paramsResult["error"].issues);
   }
 
   // Validate body
   const bodyResult = FeatureFlagBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Invalid flag value',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid flag value', ErrorCodes.VALIDATION_ERROR, bodyResult["error"].issues);
   }
 
   const { key } = paramsResult.data;
@@ -73,29 +68,18 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({
-    error: 'Organization ID is required',
-    code: 'MISSING_ORG_ID',
-    });
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    details: orgIdResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid organization ID', ErrorCodes.VALIDATION_ERROR, orgIdResult["error"].issues);
   }
 
   // Validate body
   const bodyResult = AlertBodySchema.safeParse(req.body);
   if (!bodyResult.success) {
-    return res.status(400).send({
-    error: 'Invalid alert configuration',
-    code: 'VALIDATION_ERROR',
-    details: bodyResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid alert configuration', ErrorCodes.VALIDATION_ERROR, bodyResult["error"].issues);
   }
 
   const { metric, threshold } = bodyResult.data;
@@ -111,16 +95,49 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   // Validate params
   const paramsResult = FeatureFlagParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
-    return res.status(400).send({
-    error: 'Invalid flag key',
-    code: 'VALIDATION_ERROR',
-    details: paramsResult["error"].issues,
-    });
+    return errors.badRequest(res, 'Invalid flag key', ErrorCodes.VALIDATION_ERROR, paramsResult["error"].issues);
   }
 
   const { key } = paramsResult.data;
   const value = await flags.isEnabled(key);
   return { key, value };
+  });
+
+  // GET /admin/flags - List all feature flags (env-based + database-backed)
+  app.get('/admin/flags', async (req) => {
+  const ctx = getAuthContext(req);
+  requireRole(ctx, ['owner', 'admin']);
+
+  // Collect env-based flags
+  const envEntries = Object.entries(featureFlags).map(([key, value]) => ({
+    key,
+    value,
+    source: 'env' as const,
+    updatedAt: null as string | null,
+  }));
+
+  // Collect database-backed flags
+  const dbFlags = await flags.getAll();
+  const dbKeys = new Set(dbFlags.map(f => f.key));
+
+  // Merge: env flags first, then DB flags override or add
+  const merged = new Map<string, { key: string; value: boolean; source: 'env' | 'database'; updatedAt: string | null }>();
+
+  for (const entry of envEntries) {
+    merged.set(entry.key, entry);
+  }
+
+  for (const dbFlag of dbFlags) {
+    merged.set(dbFlag.key, {
+    key: dbFlag.key,
+    value: dbFlag.value,
+    source: 'database',
+    updatedAt: dbFlag.updatedAt ? dbFlag.updatedAt.toISOString() : null,
+    });
+  }
+
+  const result = [...merged.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return { flags: result };
   });
 
   // GET /alerts - List alerts for organization
@@ -130,18 +147,12 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
 
   // Validate orgId
   if (!ctx?.["orgId"]) {
-    return res.status(400).send({
-    error: 'Organization ID is required',
-    code: 'MISSING_ORG_ID',
-    });
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   const orgIdResult = z.string().uuid().safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    return res.status(400).send({
-    error: 'Invalid organization ID',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid organization ID');
   }
 
   const alertList = await alerts.getActiveAlerts(ctx["orgId"]);

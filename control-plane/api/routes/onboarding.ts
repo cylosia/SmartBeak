@@ -8,6 +8,7 @@ import { getLogger } from '../../../packages/kernel/logger';
 import { OnboardingService } from '../../services/onboarding';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('Onboarding');
 
@@ -47,7 +48,7 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
     // SECURITY FIX (C03): Use per-user identifier instead of global static string
@@ -59,9 +60,7 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     // SECURITY FIX (H04): Use structured logger instead of console.error
     logger.error('[onboarding] Error', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX (H01): Do not expose internal error messages to clients
-    return res.status(500).send({
-    error: 'Failed to fetch onboarding status',
-    });
+    return errors.internal(res, 'Failed to fetch onboarding status');
   }
   });
 
@@ -95,7 +94,7 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
     // SECURITY FIX (C03): Use per-user identifier instead of global static string
@@ -104,11 +103,7 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     // SECURITY FIX (H02): Validate step against enum at route boundary
     const paramsResult = StepParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-    return res.status(400).send({
-      error: 'Validation failed',
-      code: 'VALIDATION_ERROR',
-      details: paramsResult.error.issues
-    });
+    return errors.validationFailed(res, paramsResult.error.issues);
     }
 
     const { step } = paramsResult.data;
@@ -118,9 +113,7 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     // SECURITY FIX (H04): Use structured logger instead of console.error
     logger.error('[onboarding/step] Error', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX (H01): Do not expose internal error messages to clients
-    return res.status(500).send({
-    error: 'Failed to mark onboarding step',
-    });
+    return errors.internal(res, 'Failed to mark onboarding step');
   }
   });
 }

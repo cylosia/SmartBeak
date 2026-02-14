@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { adminRateLimit } from '../middleware/rateLimiter';
 import { getDb } from '../db';
 import { getLogger } from '@kernel/logger';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('AdminAuditExport');
 
@@ -87,25 +89,21 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+    return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
 
     // MEDIUM FIX C2: Environment validation at startup
     if (!process.env['ADMIN_API_KEY']) {
-    return reply.status(500).send({ error: 'Admin API not configured' });
+    return errors.internal(reply, 'Admin API not configured');
     }
 
     const token = authHeader.slice(7);
     if (!secureCompareToken(token, process.env['ADMIN_API_KEY'])) {
-    return reply.status(403).send({ error: 'Forbidden. Admin access required.' });
+    return errors.forbidden(reply, 'Forbidden. Admin access required.');
     }
   } catch (error) {
     logger.error('Authentication hook error', { error });
-    const exportError = new ExportError('Authentication check failed', 'AUTH_ERROR', 500);
-    return reply.status(exportError.statusCode).send({
-    error: exportError["message"],
-    code: exportError.code
-    });
+    return errors.internal(reply, 'Authentication check failed');
   }
   });
 
@@ -118,11 +116,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
   try {
     const parseResult = ExportQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return reply.status(400).send({
-    error: 'Invalid query parameters',
-    code: 'VALIDATION_ERROR',
-    details: parseResult.error.issues
-    });
+    return errors.validationFailed(reply, parseResult.error.issues);
     }
 
     const { limit, offset, orgId } = parseResult.data;
@@ -140,10 +134,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
     // P0-FIX: Always verify org membership. Previously, omitting x-admin-id
     // header allowed bypassing the membership check entirely.
     if (!orgId) {
-      return reply.status(400).send({
-        error: 'orgId is required for audit exports',
-        code: 'MISSING_ORG_ID'
-      });
+      return errors.badRequest(reply, 'orgId is required for audit exports', ErrorCodes.MISSING_PARAMETER);
     }
 
     // P1-FIX: x-admin-id header is user-controlled. Validate UUID format to limit
@@ -151,24 +142,15 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
     // in a future iteration to eliminate user-controlled identity headers entirely.
     const adminId = req.headers['x-admin-id'] as string | undefined;
     if (!adminId) {
-      return reply.status(400).send({
-        error: 'x-admin-id header is required',
-        code: 'MISSING_ADMIN_ID'
-      });
+      return errors.badRequest(reply, 'x-admin-id header is required', ErrorCodes.MISSING_PARAMETER);
     }
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminId)) {
-      return reply.status(400).send({
-        error: 'Invalid x-admin-id format. Expected UUID.',
-        code: 'INVALID_ADMIN_ID'
-      });
+      return errors.badRequest(reply, 'Invalid x-admin-id format. Expected UUID.', ErrorCodes.INVALID_UUID);
     }
 
     const hasMembership = await verifyOrgMembership(adminId, orgId);
     if (!hasMembership) {
-      return reply.status(403).send({
-        error: 'Forbidden. Admin not a member of this organization.',
-        code: 'MEMBERSHIP_REQUIRED'
-      });
+      return errors.forbidden(reply, 'Forbidden. Admin not a member of this organization.');
     }
     query = query.where('org_id', orgId);
 
@@ -206,10 +188,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
   } catch (error) {
     logger.error('Audit export error', { error });
     if (error instanceof ExportError) {
-    return reply.status(error.statusCode).send({
-    error: error["message"],
-    code: error.code
-    });
+    return sendError(reply, error.statusCode, ErrorCodes.INTERNAL_ERROR, error.message);
     }
 
     // MEDIUM FIX E1: Use error codes instead of message sniffing
@@ -220,19 +199,11 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
               pgError.code === '08000' ||
               pgError.code === '08003';
     if (isTimeout || isConnectionError) {
-    return reply.status(503).send({
-    error: 'Database temporarily unavailable',
-    code: 'DB_UNAVAILABLE'
-    });
+    return errors.serviceUnavailable(reply, 'Database temporarily unavailable');
     }
     }
 
-    return reply.status(500).send({
-    error: 'Internal server error',
-    code: 'INTERNAL_ERROR',
-    // MEDIUM FIX C2: Use centralized env check
-    ...(process.env['NODE_ENV'] === 'development' && { message: (error as Error)["message"] })
-    });
+    return errors.internal(reply);
   }
   });
 }

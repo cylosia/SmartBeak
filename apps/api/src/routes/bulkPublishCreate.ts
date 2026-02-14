@@ -16,6 +16,8 @@ async function getDbInstance() {
 
 import { recordBulkPublishAudit } from '../domain/audit/bulkAudit';
 import { sanitizeError } from '../utils/sanitizedErrors';
+import { errors, sendError } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('BulkPublishCreate');
 
@@ -424,13 +426,13 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
 
       const auth = await verifyAuth(req);
       if (!auth) {
-        return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+        return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
       }
 
       const canPublish = await canPublishContent(auth.userId, auth.orgId);
       if (!canPublish) {
         logger.warn('Unauthorized publish attempt: user lacks editor/admin role', { userId: auth.userId });
-        return reply.status(403).send({ error: 'Editor or admin access required to publish' });
+        return errors.forbidden(reply, 'Editor or admin access required to publish');
       }
 
       // Validate query params
@@ -439,11 +441,7 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
 
       const parseResult = BulkPublishSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Validation failed',
-          code: 'VALIDATION_ERROR',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
 
       const { drafts, targets } = parseResult.data;
@@ -451,17 +449,13 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
       const draftAccess = await canAccessAllDrafts(auth.userId, drafts, auth.orgId);
       if (!draftAccess.allowed) {
         logger.warn('Unauthorized draft access: user tried to access drafts not in their org', { userId: auth.userId });
-        return reply.status(403).send({
-          error: 'Access denied to one or more drafts'
-        });
+        return errors.forbidden(reply, 'Access denied to one or more drafts');
       }
 
       const targetsAccess = await canAccessAllTargets(auth.userId, targets, auth.orgId);
       if (!targetsAccess) {
         logger.warn('Unauthorized target access: user tried to access targets not in their org', { userId: auth.userId });
-        return reply.status(403).send({
-          error: 'Access denied to one or more targets'
-        });
+        return errors.forbidden(reply, 'Access denied to one or more targets');
       }
 
       // Validate tier limits - fetch actual tier from database
@@ -475,19 +469,11 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
       const maxTargets = tier === 'agency' ? 20 : tier === 'pro' ? 10 : 3;
 
       if (drafts.length > maxDrafts) {
-        return reply.code(402).send({
-          error: 'Bulk publish limit exceeded for plan',
-          allowed: maxDrafts,
-          requested: drafts.length
-        });
+        return sendError(reply, 402, ErrorCodes.QUOTA_EXCEEDED, 'Bulk publish limit exceeded for plan');
       }
 
       if (targets.length > maxTargets) {
-        return reply.code(402).send({
-          error: 'Target limit exceeded for plan',
-          allowed: maxTargets,
-          requested: targets.length
-        });
+        return sendError(reply, 402, ErrorCodes.QUOTA_EXCEEDED, 'Target limit exceeded for plan');
       }
 
       // If dry run, return early without publishing
@@ -545,8 +531,7 @@ export async function bulkPublishCreateRoutes(app: FastifyInstance): Promise<voi
     } catch (error) {
       // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
       logger.error('Bulk publish error', error instanceof Error ? error : new Error(String(error)));
-      const sanitized = sanitizeError(error, 'Internal server error', 'PUBLISH_ERROR');
-      return reply.status(500).send(sanitized);
+      return errors.internal(reply);
     }
   });
 }

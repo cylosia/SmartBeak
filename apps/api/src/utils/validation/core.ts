@@ -5,26 +5,23 @@
 import type { FastifyReply } from 'fastify';
 import type { ZodError } from 'zod';
 import { z } from 'zod';
-import type { ArrayValidationOptions, ValidationErrorResponse } from './types.js';
+import type { ArrayValidationOptions } from './types.js';
+import { errors } from '@errors/responses';
 
 // Re-export zod for convenience
 export { z } from 'zod';
 
 /**
  * Standard validation function for Zod errors
- * Returns a consistent error response format with HTTP 400 status
+ * Returns the canonical error response format with HTTP 400 status
  */
 export function handleZodError(error: ZodError, reply: FastifyReply): FastifyReply {
-  const response: ValidationErrorResponse = {
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR',
-    details: error.issues.map(issue => ({
-      path: issue.path as (string | number)[],
-      message: issue.message,
-      code: issue.code as string
-    }))
-  };
-  return reply.status(400).send(response);
+  const details = error.issues.map(issue => ({
+    path: issue.path as (string | number)[],
+    message: issue.message,
+    code: issue.code as string
+  }));
+  return errors.validationFailed(reply, details);
 }
 
 /**

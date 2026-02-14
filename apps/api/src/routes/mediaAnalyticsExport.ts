@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { AuthContext } from '../types/fastify';
 import { rateLimit } from '../utils/rateLimit';
+import { errors } from '@errors/responses';
 
 // P1-10 FIX: Use structured logger instead of console.error
 const logger = getLogger('mediaAnalyticsExport');
@@ -46,21 +47,14 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
       // through validation error messages.
       const auth = req.auth;
       if (!auth) {
-        return reply.status(401).send({
-          error: 'Unauthorized',
-          code: 'UNAUTHORIZED'
-        });
+        return errors.unauthorized(reply);
       }
 
       requireRole(auth, ['owner', 'admin', 'editor']);
 
       const parseResult = ExportRequestSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid request body',
-          code: 'VALIDATION_ERROR',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
 
       await rateLimit('media:analytics:export', 10, req, reply);
@@ -94,17 +88,11 @@ export async function mediaAnalyticsExportRoutes(app: FastifyInstance): Promise<
         (errWithCode.code === 'PERMISSION_DENIED' ||
          errWithCode.code === 'FORBIDDEN');
       if (hasPermissionError) {
-        return reply.status(403).send({
-          error: 'Permission denied',
-          code: 'FORBIDDEN'
-        });
+        return errors.forbidden(reply, 'Permission denied');
       }
 
       // P1-1 FIX: Do not leak internal error details to clients
-      return reply.status(500).send({
-        error: 'Export failed',
-        code: 'EXPORT_ERROR'
-      });
+      return errors.internal(reply, 'Export failed');
     }
   });
 }

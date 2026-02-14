@@ -42,7 +42,7 @@ export class GscAdapter implements KeywordIngestionAdapter {
   this.auth = new google.auth.OAuth2(
     clientId,
     clientSecret,
-    credentials?.redirectUri || process.env['GSC_REDIRECT_URI'] || 'https://localhost:3000/api/auth/gsc/callback'
+    credentials?.redirectUri || process.env['GSC_REDIRECT_URI'] || ''
   );
 
   if (credentials?.refreshToken) {

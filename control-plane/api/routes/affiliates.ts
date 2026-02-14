@@ -4,10 +4,16 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { generateETag, setCacheHeaders } from '../middleware/cache';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
+
+const logger = getLogger('affiliate-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -24,10 +30,7 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
 
   const queryResult = QuerySchema.safeParse(req.query);
   if (!queryResult.success) {
-    return res.status(400).send({
-    error: 'Invalid pagination parameters',
-    code: 'VALIDATION_ERROR',
-    });
+    return errors.badRequest(res, 'Invalid pagination parameters');
   }
 
   const { page, limit } = queryResult.data;
@@ -78,10 +81,8 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
   } catch (error) {
     console["error"]('[affiliates/offers] Error:', error);
     // FIX: Added return before reply.send()
-    return res.status(500).send({
-    error: 'Failed to fetch affiliate offers',
-    code: 'INTERNAL_ERROR',
-    });
+    return errors.internal(res, 'Failed to fetch affiliate offers');
+    return handleError(res, error, 'fetch affiliate offers');
   }
   });
 }

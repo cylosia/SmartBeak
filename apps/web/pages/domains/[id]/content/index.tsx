@@ -6,6 +6,7 @@ import { ContentAdvancedFilters } from '../../../../components/ContentAdvancedFi
 import { ContentBulkReviewBar } from '../../../../components/ContentBulkReviewBar';
 import { DomainTabs } from '../../../../components/DomainTabs';
 import { authFetch, apiUrl } from '../../../../lib/api-client';
+import { useTranslation } from '../../../../lib/i18n';
 
 // H5-FIX: Aligned interface fields to match API response shape
 interface ContentItem {
@@ -26,6 +27,7 @@ interface ContentIndexProps {
 
 export default function ContentIndex({ domainId, content }: ContentIndexProps) {
   const [selected, setSelected] = useState<string[]>([]);
+  const { t, formatDate } = useTranslation();
 
   const toggle = (id: string) => {
     setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
@@ -36,26 +38,30 @@ export default function ContentIndex({ domainId, content }: ContentIndexProps) {
       <DomainTabs domainId={domainId} active='content' />
 
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Content</h2>
-        <a href={`/domains/${domainId}/content/new`}>+ Create Content</a>
+        <h2>{t('contentIndex.title')}</h2>
+        <a href={`/domains/${domainId}/content/new`}>{t('common.createContent')}</a>
       </header>
 
       <ContentAdvancedFilters onFilter={() => {}} />
       <ContentBulkReviewBar selected={selected} />
 
+      <div aria-live="polite" className="sr-only">
+        {t('a11y.filterResultsCount', { count: content.length })}
+      </div>
+
       <table style={{ width: '100%' }}>
         <thead>
           <tr>
             <th></th>
-            <th>Title</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Updated</th>
+            <th>{t('contentIndex.colTitle')}</th>
+            <th>{t('contentIndex.colType')}</th>
+            <th>{t('contentIndex.colStatus')}</th>
+            <th>{t('contentIndex.colUpdated')}</th>
           </tr>
         </thead>
         <tbody>
           {content.length === 0 && (
-            <tr><td colSpan={5}>No content yet. Create your first piece of content.</td></tr>
+            <tr><td colSpan={5}>{t('contentIndex.noContent')}</td></tr>
           )}
           {content.map((c) => (
             <tr key={c.id}>
@@ -71,7 +77,7 @@ export default function ContentIndex({ domainId, content }: ContentIndexProps) {
               </td>
               <td>{c.contentType}</td>
               <td>{c.status}</td>
-              <td>{c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}</td>
+              <td>{c.updatedAt ? formatDate(c.updatedAt) : ''}</td>
             </tr>
           ))}
         </tbody>

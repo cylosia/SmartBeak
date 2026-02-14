@@ -9,6 +9,7 @@ import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
 import { getBillingConfig } from '@config';
 import { getDb } from '../db';
+import { errors } from '@errors/responses';
 
 const billingInvoiceExportLogger = getLogger('billingInvoiceExport');
 
@@ -97,12 +98,12 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
   app.addHook('onRequest', async (req, reply) => {
   const token = extractBearerToken(req);
   if (!token) {
-    return reply.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(reply);
   }
   try {
     const result = extractAndVerifyToken(token);
     if (!result.valid || !result.claims) {
-      return reply.status(401).send({ error: 'Invalid token' });
+      return errors.unauthorized(reply, 'Invalid token');
     }
     const claims = result.claims as { stripeCustomerId?: string; sub?: string; orgId?: string };
 
@@ -112,7 +113,7 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
       stripeCustomerId: claims.stripeCustomerId
     };
   } catch {
-    return reply.status(401).send({ error: 'Invalid token' });
+    return errors.unauthorized(reply, 'Invalid token');
   }
   });
 
@@ -130,10 +131,7 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
-      return reply.status(403).send({ 
-        error: 'Forbidden',
-        code: 'ORG_MEMBERSHIP_REQUIRED'
-      });
+      return errors.forbidden(reply, 'Organization membership required');
     }
   });
 
@@ -149,15 +147,12 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     // Validate query parameters
     const parseResult = ExportQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-    return reply.status(400).send({
-    error: 'Validation failed',
-    code: 'VALIDATION_ERROR'
-    });
+    return errors.validationFailed(reply, parseResult.error.issues);
     }
 
     const customerId = authReq.user?.stripeCustomerId;
     if (!customerId) {
-      return reply.status(401).send({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+      return errors.unauthorized(reply);
     }
 
     const { format } = parseResult.data;
@@ -192,14 +187,7 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     .send(headerRow + body);
   } catch (error) {
     billingInvoiceExportLogger.error('Error exporting invoices', error instanceof Error ? error : new Error(String(error)));
-    const errorResponse: ErrorResponse = {
-    error: 'Internal server error',
-    };
-    // P1-FIX: Standardize dev error exposure with double-guard pattern
-    if (process.env['NODE_ENV'] === 'development' && process.env['ENABLE_ERROR_DETAILS'] === 'true' && error instanceof Error) {
-    errorResponse["message"] = error["message"];
-    }
-    return reply.status(500).send(errorResponse);
+    return errors.internal(reply);
   }
   });
 }

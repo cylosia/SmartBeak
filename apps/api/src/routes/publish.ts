@@ -4,6 +4,8 @@ import { requireAuthFastify } from '@security/auth';
 import crypto from 'crypto';
 import { Pool } from 'pg';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
 
 
 const logger = getLogger('PublishService');
@@ -91,7 +93,7 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
   app.post('/publish/intents', async (req, res) => {
     // SECURITY FIX: Verify request is authenticated (added preHandler hook above)
     if (!req.authContext) {
-      return res.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(res, 'Unauthorized. Bearer token required.');
     }
 
     try {
@@ -102,10 +104,7 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
       }
       catch (error) {
         const zodError = error as z.ZodError;
-        return res.status(400).send({
-          error: 'Validation failed',
-          details: zodError.issues,
-        });
+        return errors.validationFailed(res, zodError.issues);
       }
       // Generate idempotency key if not provided
       const idempotencyKey = validated.idempotencyKey || crypto.randomUUID();
@@ -143,17 +142,14 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
     }
     catch (error) {
       logger.error('Error creating publish intent', error as Error);
-      return res.status(500).send({
-        error: 'Failed to create publish intent',
-        code: 'PUBLISH_FAILED',
-      });
+      return errors.internal(res, 'Failed to create publish intent');
     }
   });
   // Get publish intent status
   app.get('/publish/intents/:id', async (req, res) => {
     // SECURITY FIX: Verify request is authenticated
     if (!req.authContext) {
-      return res.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(res, 'Unauthorized. Bearer token required.');
     }
 
     try {
@@ -163,7 +159,7 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
     FROM idempotency_keys
     WHERE key = $1`, [id]);
       if (rows.length === 0) {
-        return res.status(404).send({ error: 'Intent not found' });
+        return errors.notFound(res, 'Intent', ErrorCodes.INTENT_NOT_FOUND);
       }
       const row = rows[0];
       return res.send({
@@ -177,7 +173,7 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
     }
     catch (error) {
       logger.error('Error retrieving publish intent', error as Error);
-      return res.status(500).send({ error: 'Failed to retrieve intent' });
+      return errors.internal(res, 'Failed to retrieve intent');
     }
   });
 }

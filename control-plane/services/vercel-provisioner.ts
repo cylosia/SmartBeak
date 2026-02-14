@@ -1,10 +1,11 @@
 import fetch, { type Response } from 'node-fetch';
 import { z } from 'zod';
 import { getLogger } from '../../packages/kernel/logger';
+import { API_BASE_URLS } from '@config';
 
 const logger = getLogger('VercelProvisioner');
 
-const VERCEL_API = 'https://api.vercel.com';
+const VERCEL_API = API_BASE_URLS.vercel;
 
 // P1-7 FIX: Timeout for external HTTP requests (30 seconds)
 const FETCH_TIMEOUT_MS = 30000;

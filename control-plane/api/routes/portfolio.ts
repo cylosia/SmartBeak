@@ -1,9 +1,15 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { generateETag, setCacheHeaders } from '../middleware/cache';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type Role } from '../../services/auth';
+import { errors } from '@errors/responses';
+
+const logger = getLogger('portfolio-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 
 
@@ -26,7 +32,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     await rateLimit('analytics', 50);
@@ -58,11 +64,12 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     return metrics;
   } catch (error) {
     if (error instanceof RoleAccessError) {
-    return res.status(403).send({ error: 'Forbidden' });
+    return errors.forbidden(res);
     }
     console["error"]('[portfolio/revenue-confidence] Error:', error);
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch revenue confidence' });
+    return errors.internal(res, 'Failed to fetch revenue confidence');
+    return handleError(res, error, 'fetch revenue confidence');
   }
   });
 
@@ -71,7 +78,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
   try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
-    return res.status(401).send({ error: 'Unauthorized' });
+    return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     await rateLimit('analytics', 50);
@@ -96,11 +103,12 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     return analysis;
   } catch (error) {
     if (error instanceof RoleAccessError) {
-    return res.status(403).send({ error: 'Forbidden' });
+    return errors.forbidden(res);
     }
     console["error"]('[portfolio/dependency-risk] Error:', error);
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch dependency risk' });
+    return errors.internal(res, 'Failed to fetch dependency risk');
+    return handleError(res, error, 'fetch dependency risk');
   }
   });
 }

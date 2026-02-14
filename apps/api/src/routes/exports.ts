@@ -7,6 +7,7 @@ import { csrfProtection } from '../middleware/csrf';
 import { optionalAuthFastify } from '@security/auth';
 import { sanitizeError } from '../utils/sanitizedErrors';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 // P1-SECURITY FIX: domain_id is required to prevent unscoped exports
 const ExportBodySchema = z.object({
@@ -94,25 +95,21 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     await optionalAuthFastify(req, reply);
     const auth = req.authContext;
     if (!auth) {
-      return reply.status(401).send({ error: 'Unauthorized. Bearer token required.' });
+      return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
 
     try {
       // P1-SECURITY FIX: Always validate and require domain_id to prevent unscoped exports
       const parseResult = ExportBodySchema.safeParse(req.body);
       if (!parseResult.success) {
-        return reply.status(400).send({
-          error: 'Invalid input',
-          code: 'VALIDATION_ERROR',
-          details: parseResult.error.issues
-        });
+        return errors.validationFailed(reply, parseResult.error.issues);
       }
       const { domain_id: domainId } = parseResult.data;
 
       const hasAccess = await canAccessDomain(auth.userId, domainId, auth.orgId);
       if (!hasAccess) {
         logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to export data for domain ${domainId}`);
-        return reply.status(403).send({ error: 'Access denied to domain' });
+        return errors.forbidden(reply, 'Access denied to domain');
       }
 
       await recordAuditEvent({
@@ -132,8 +129,7 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
       logger.error('Error processing export request', error as Error);
-      const sanitized = sanitizeError(error, 'Failed to process export request', 'EXPORT_ERROR');
-      return reply.status(500).send(sanitized);
+      return errors.internal(reply, 'Failed to process export request');
     }
   });
 }

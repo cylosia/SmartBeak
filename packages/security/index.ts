@@ -42,6 +42,7 @@ export {
   getAuthContext,
   requireAuthContext,
   validateTokenFormat,
+  rejectDisallowedAlgorithm,
   validateAuthHeaderConstantTime,
   constantTimeCompare,
   logAuthEvent,

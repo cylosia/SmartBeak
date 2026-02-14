@@ -3,9 +3,15 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
+import { getLogger } from '@kernel/logger';
+import { createRouteErrorHandler } from '@errors';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
+import { errors } from '@errors/responses';
+
+const logger = getLogger('attribution-routes');
+const handleError = createRouteErrorHandler({ logger });
 
 export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   // GET /attribution/llm - LLM attribution report
@@ -47,7 +53,8 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   } catch (error) {
     console["error"]('[attribution/llm] Error:', error);
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch LLM attribution' });
+    return errors.internal(res, 'Failed to fetch LLM attribution');
+    return handleError(res, error, 'fetch LLM attribution');
   }
   });
 
@@ -72,7 +79,8 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   } catch (error) {
     console["error"]('[attribution/buyer-safe] Error:', error);
     // FIX: Added return before reply.send()
-    return res.status(500).send({ error: 'Failed to fetch attribution summary' });
+    return errors.internal(res, 'Failed to fetch attribution summary');
+    return handleError(res, error, 'fetch buyer-safe attribution');
   }
   });
 }
