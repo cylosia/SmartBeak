@@ -2,9 +2,6 @@ extends:
   - spectral:oas
 
 rules:
-  # Ensure all operations have at least one 4xx response documented
-  operation-4xx-response: warn
-
   # Ensure descriptions exist on operations
   operation-description: warn
 

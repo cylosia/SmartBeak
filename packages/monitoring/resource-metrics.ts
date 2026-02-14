@@ -177,7 +177,7 @@ export function recordRetryAttempt(operation: string, attempt: number, delayMs: 
 export function recordRetryExhaustion(operation: string, totalAttempts: number): void {
   try {
     const collector = getMetricsCollector();
-    collector.counter('resource.retry.exhausted_total', 1, { operation, total_attempts: totalAttempts });
+    collector.counter('resource.retry.exhausted_total', 1, { operation, total_attempts: String(totalAttempts) });
   } catch {
     // Metrics not initialized yet — silently drop
   }

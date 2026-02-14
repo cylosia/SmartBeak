@@ -107,7 +107,7 @@ export class AggregateValidationError extends ValidationError {
     return {
       message: this.message,
       // P2-TYPE FIX: Access inherited `code` property directly instead of unsafe double cast
-      code: this.code,
+      code: this.code as ErrorCode,
       errors: this.errors,
     };
   }
@@ -144,7 +144,7 @@ export class ValidationErrorBuilder {
     this.errors.push({
       field: error.field || 'unknown',
       message: error.message,
-      code: error.code,
+      code: error.code as ErrorCode,
     });
     return this;
   }

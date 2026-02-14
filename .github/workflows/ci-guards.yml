@@ -217,11 +217,8 @@ jobs:
 
       - name: Export OpenAPI spec
         run: |
-          node --import tsx/esm -e "
-            import { openapi } from './control-plane/api/openapi.ts';
-            import { writeFileSync } from 'node:fs';
-            writeFileSync('openapi-current.json', JSON.stringify(openapi, null, 2));
-          "
+          npm run openapi:generate
+          cp docs/openapi.json openapi-current.json
 
       - name: Validate OpenAPI spec
         run: npx --yes @redocly/cli lint openapi-current.json --skip-rule no-empty-servers

@@ -25,7 +25,27 @@ WORKDIR /app
 # ---------------------------------------------------------------------------
 FROM base AS deps
 COPY package.json package-lock.json ./
-COPY --parents apps/*/package.json packages/*/package.json ./
+RUN mkdir -p apps/api apps/web \
+    packages/adapters packages/analytics packages/cache packages/config \
+    packages/database packages/errors packages/kernel packages/middleware \
+    packages/ml packages/monitoring packages/security packages/shutdown \
+    packages/types packages/utils
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/adapters/package.json ./packages/adapters/
+COPY packages/analytics/package.json ./packages/analytics/
+COPY packages/cache/package.json ./packages/cache/
+COPY packages/config/package.json ./packages/config/
+COPY packages/database/package.json ./packages/database/
+COPY packages/errors/package.json ./packages/errors/
+COPY packages/kernel/package.json ./packages/kernel/
+COPY packages/middleware/package.json ./packages/middleware/
+COPY packages/ml/package.json ./packages/ml/
+COPY packages/monitoring/package.json ./packages/monitoring/
+COPY packages/security/package.json ./packages/security/
+COPY packages/shutdown/package.json ./packages/shutdown/
+COPY packages/types/package.json ./packages/types/
+COPY packages/utils/package.json ./packages/utils/
 RUN npm ci
 
 # ---------------------------------------------------------------------------
@@ -41,7 +61,27 @@ RUN npm run build:web
 # ---------------------------------------------------------------------------
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
-COPY --parents apps/*/package.json packages/*/package.json ./
+RUN mkdir -p apps/api apps/web \
+    packages/adapters packages/analytics packages/cache packages/config \
+    packages/database packages/errors packages/kernel packages/middleware \
+    packages/ml packages/monitoring packages/security packages/shutdown \
+    packages/types packages/utils
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/adapters/package.json ./packages/adapters/
+COPY packages/analytics/package.json ./packages/analytics/
+COPY packages/cache/package.json ./packages/cache/
+COPY packages/config/package.json ./packages/config/
+COPY packages/database/package.json ./packages/database/
+COPY packages/errors/package.json ./packages/errors/
+COPY packages/kernel/package.json ./packages/kernel/
+COPY packages/middleware/package.json ./packages/middleware/
+COPY packages/ml/package.json ./packages/ml/
+COPY packages/monitoring/package.json ./packages/monitoring/
+COPY packages/security/package.json ./packages/security/
+COPY packages/shutdown/package.json ./packages/shutdown/
+COPY packages/types/package.json ./packages/types/
+COPY packages/utils/package.json ./packages/utils/
 RUN npm ci --omit=dev
 
 # =============================================================================
