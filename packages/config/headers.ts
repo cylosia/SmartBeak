@@ -8,9 +8,9 @@
  * Surfaces that consume these values:
  * - control-plane/api/http.ts          (imports directly)
  * - apps/web/middleware.ts             (imports directly)
- * - apps/web/next.config.js            (inline copy — CJS, cannot import TS)
- * - vercel.json                        (inline copy — JSON)
- * - themes/*/next.config.js            (inline copy — CJS, outside workspace)
+ * - apps/web/next.config.js            (inline copy --CJS, cannot import TS)
+ * - vercel.json                        (inline copy --JSON)
+ * - themes/{name}/next.config.js       (inline copy --CJS, outside workspace)
  *
  * When updating values here, also update the inline copies listed above.
  *
@@ -43,19 +43,19 @@ export const BASE_SECURITY_HEADERS: Record<string, string> = {
 // Permissions-Policy variants
 // ---------------------------------------------------------------------------
 
-/** Permissions-Policy for the web application — allows payment on self. */
+/** Permissions-Policy for the web application --allows payment on self. */
 export const PERMISSIONS_POLICY_WEB_APP =
   'camera=(), microphone=(), geolocation=(), payment=(self), usb=(), magnetometer=(), gyroscope=(), accelerometer=()';
 
-/** Permissions-Policy for the API — fully restrictive (no payment needed). */
+/** Permissions-Policy for the API --fully restrictive (no payment needed). */
 export const PERMISSIONS_POLICY_API =
   'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()';
 
-/** Permissions-Policy for themes — no payment needed. */
+/** Permissions-Policy for themes --no payment needed. */
 export const PERMISSIONS_POLICY_THEMES = PERMISSIONS_POLICY_API;
 
 // ---------------------------------------------------------------------------
-// Content-Security-Policy — API (JSON-only, no HTML/JS/CSS)
+// Content-Security-Policy --API (JSON-only, no HTML/JS/CSS)
 // ---------------------------------------------------------------------------
 
 /**
@@ -77,7 +77,7 @@ export const CSP_API = [
 ].join('; ');
 
 // ---------------------------------------------------------------------------
-// Content-Security-Policy — Web App (Next.js with per-request nonce)
+// Content-Security-Policy --Web App (Next.js with per-request nonce)
 // ---------------------------------------------------------------------------
 
 /**
@@ -102,11 +102,11 @@ export function buildWebAppCsp(nonce: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Content-Security-Policy — Themes (static, no nonce)
+// Content-Security-Policy --Themes (static, no nonce)
 // ---------------------------------------------------------------------------
 
 /**
- * Static CSP for theme sites. No nonce needed — themes do not use inline
+ * Static CSP for theme sites. No nonce needed --themes do not use inline
  * scripts or styles.
  */
 export const CSP_THEMES = [

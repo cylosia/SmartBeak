@@ -261,9 +261,7 @@ function calculateDelay(attempt: number, options: RetryOptions): number {
 * @param signal - Optional AbortSignal to cancel the sleep
 * @returns Promise that resolves after the delay or rejects on abort
 */
-export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(new AbortError());
   if (!signal) return new Promise(resolve => setTimeout(resolve, ms));
 

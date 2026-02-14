@@ -12,31 +12,8 @@ import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('rateLimit');
 
-export interface RateLimitRecord {
-  count: number;
-  reset: number;
-}
-
-/** Default rate limit window in milliseconds (1 minute) */
-const DEFAULT_RATE_WINDOW_MS = 60000;
-
-/** Maximum entries in rate limit cache */
-const MAX_CACHE_ENTRIES = 10000;
-
-// In-memory cache for rate limiting
-const memoryCounters = new LRUCache<string, RateLimitRecord>({
-  max: MAX_CACHE_ENTRIES,
-  ttl: DEFAULT_RATE_WINDOW_MS,
-});
-
 // IP extraction — canonical implementation in @kernel/ip-utils
 import { getClientIp as kernelGetClientIp } from '@kernel/ip-utils';
-/**
-* Extract client IP from request
-* P1-FIX: IP Spoofing - Only trust X-Forwarded-For from trusted proxies
-*/
-function getClientIp(req: FastifyRequest): string {
-  const trustedProxies = process.env['TRUSTED_PROXIES']?.split(',').map(p => p.trim()) || [];
 
 function getClientIp(req: FastifyRequest): string {
   return kernelGetClientIp(req as unknown as { headers: Record<string, string | string[] | undefined>; ip?: string });
