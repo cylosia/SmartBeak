@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # =============================================================================
 # SmartBeak Multi-Stage Dockerfile
 #
@@ -24,6 +25,7 @@ WORKDIR /app
 # ---------------------------------------------------------------------------
 FROM base AS deps
 COPY package.json package-lock.json ./
+COPY --parents apps/*/package.json packages/*/package.json ./
 RUN npm ci
 
 # ---------------------------------------------------------------------------
@@ -39,6 +41,7 @@ RUN npm run build:web
 # ---------------------------------------------------------------------------
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
+COPY --parents apps/*/package.json packages/*/package.json ./
 RUN npm ci --omit=dev
 
 # =============================================================================
