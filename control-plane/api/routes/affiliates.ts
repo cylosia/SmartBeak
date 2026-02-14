@@ -77,7 +77,7 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
 
     return result;
   } catch (error) {
-    console["error"]('[affiliates/offers] Error:', error);
+    logger.error('[affiliates/offers] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch affiliate offers');
   }

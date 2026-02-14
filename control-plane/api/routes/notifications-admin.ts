@@ -2,7 +2,7 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { PostgresNotificationDLQRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationDLQRepository';
 import { requireRole, type Role } from '../../services/auth';
 import { NotificationAdminService } from '../../services/notification-admin';

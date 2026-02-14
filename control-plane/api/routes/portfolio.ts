@@ -64,7 +64,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     if (error instanceof RoleAccessError) {
     return errors.forbidden(res);
     }
-    console["error"]('[portfolio/revenue-confidence] Error:', error);
+    logger.error('[portfolio/revenue-confidence] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch revenue confidence');
   }
@@ -102,7 +102,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     if (error instanceof RoleAccessError) {
     return errors.forbidden(res);
     }
-    console["error"]('[portfolio/dependency-risk] Error:', error);
+    logger.error('[portfolio/dependency-risk] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch dependency risk');
   }

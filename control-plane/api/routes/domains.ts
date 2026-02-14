@@ -124,7 +124,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
     return domains;
   } catch (error) {
-    logger["error"]('[domains] Error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[domains] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to fetch domains');
   }
   });
@@ -230,7 +230,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     return { id: domainId, name, status: 'active' };
   } catch (error) {
     await client.query('ROLLBACK');
-    logger["error"]('[domains POST] Error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[domains POST] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to create domain');
   } finally {
     client.release();
@@ -292,7 +292,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     updatedAt: row.updated_at,
     };
   } catch (error) {
-    logger["error"]('[domains/:domainId] Error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[domains/:domainId] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to fetch domain');
   }
   });

@@ -60,7 +60,7 @@ export async function contentListRoutes(app: FastifyInstance) {
     }
     };
   } catch (error: unknown) {
-    console["error"]('[content/list] Error:', error);
+    logger.error('[content/list] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to list content');
   }
   });

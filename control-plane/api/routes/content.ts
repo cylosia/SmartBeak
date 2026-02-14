@@ -7,7 +7,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 
 import { getLogger } from '@kernel/logger';
-import { errors, sendError } from '@errors/responses';
+import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 const logger = getLogger('content');
@@ -58,35 +58,6 @@ const ContentQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().max(200).optional(),
 });
-
-export interface ErrorWithCode extends Error {
-  code?: string;
-}
-
-export interface ZodError extends Error {
-  issues?: Array<{ path: (string | number)[]; message: string; code: string }>;
-}
-
-function sanitizeErrorForClient(error: unknown): { error: string; code?: string } {
-  // Log full error server-side
-  const errorToLog = error instanceof Error ? error : new Error(String(error));
-  logger.error('[content] Internal error:', errorToLog);
-
-  // Return safe message to client
-  const errWithCode = error as { code?: string; name?: string };
-  if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
-  return { error: 'Domain not owned by organization', code: 'DOMAIN_NOT_OWNED' };
-  }
-  if (errWithCode.code === 'CONTENT_NOT_FOUND') {
-  return { error: 'Content not found', code: 'CONTENT_NOT_FOUND' };
-  }
-  if (errWithCode.name === 'ZodError') {
-  return { error: 'Invalid input data', code: 'VALIDATION_ERROR' };
-  }
-
-  // Generic message for all other errors (prevents info leakage)
-  return { error: 'An error occurred processing your request', code: 'INTERNAL_ERROR' };
-}
 
 export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const ownership = new DomainOwnershipService(pool);
@@ -208,7 +179,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     }
     };
   } catch (error: unknown) {
-    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
   }
   });
@@ -257,7 +228,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     );
     return { success: true, item };
   } catch (error: unknown) {
-    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };
     if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
@@ -301,7 +272,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     return { success: true, item };
   } catch (error: unknown) {
-    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };
     if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
@@ -366,7 +337,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     return { success: true, item: updated };
   } catch (error: unknown) {
-    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };
     if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
@@ -413,7 +384,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     return { success: true, event };
   } catch (error: unknown) {
-    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };
     if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
@@ -464,7 +435,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     return { success: true, id: params.id, deleted: true };
   } catch (error: unknown) {
-    logger["error"]('[content] Internal error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };
     if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);

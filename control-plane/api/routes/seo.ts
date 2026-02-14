@@ -72,7 +72,7 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const event = await handler.execute(id, title, description);
     return { ok: true, event };
   } catch (error) {
-    logger["error"]('Route error:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[seo] Route error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
   }
   });

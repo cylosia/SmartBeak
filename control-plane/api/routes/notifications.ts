@@ -4,11 +4,10 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { checkRateLimitAsync } from '../../services/rate-limit';
 import { NotificationPreferenceService } from '../../../domains/notifications/application/NotificationPreferenceService';
 import { PostgresNotificationPreferenceRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationPreferenceRepository';
-import { PostgresNotificationRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationRepository';
 import { requireRole, AuthContext } from '../../services/auth';
 import { errors } from '@errors/responses';
 
@@ -36,7 +35,6 @@ export type AuthenticatedRequest = FastifyRequest & {
 * Notification routes
 */
 export async function notificationRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
-  const _repo = new PostgresNotificationRepository(pool);
   const prefRepo = new PostgresNotificationPreferenceRepository(pool);
   const prefs = new NotificationPreferenceService(prefRepo);
 

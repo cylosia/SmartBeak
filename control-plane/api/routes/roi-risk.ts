@@ -3,7 +3,7 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type AuthContext } from '../../services/auth';
 import { errors } from '@errors/responses';
