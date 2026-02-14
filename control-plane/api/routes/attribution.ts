@@ -49,7 +49,7 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
 
     return report;
   } catch (error) {
-    console["error"]('[attribution/llm] Error:', error);
+    logger.error('[attribution/llm] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch LLM attribution');
   }
@@ -74,7 +74,7 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
 
     return summary;
   } catch (error) {
-    console["error"]('[attribution/buyer-safe] Error:', error);
+    logger.error('[attribution/buyer-safe] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch attribution summary');
   }

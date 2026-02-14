@@ -80,7 +80,7 @@ export async function registerAppsApiRoutes(app: FastifyInstance, _pool: Pool): 
     await routeModule.register(app);
     logger.debug(`Registered route module: ${routeModule.name}`);
   } catch (error) {
-    logger["error"](`Failed to register route module: ${routeModule.name}`, error as Error);
+    logger.error(`Failed to register route module: ${routeModule.name}`, error as Error);
     throw error;
   }
   }

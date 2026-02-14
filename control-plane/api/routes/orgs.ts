@@ -4,7 +4,7 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '../../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { InviteService } from '../../services/invite-service';
 import { MembershipService } from '../../services/membership-service';
 import { OrgService } from '../../services/org-service';

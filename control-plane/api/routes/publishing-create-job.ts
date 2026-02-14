@@ -60,7 +60,7 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
     if (error instanceof RoleAccessError) {
     return errors.forbidden(res);
     }
-    console["error"]('Route error:', error);
+    logger.error('[publishing/jobs] Route error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
   }
   });
