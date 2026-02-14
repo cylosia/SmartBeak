@@ -70,7 +70,7 @@ export class CostEnforcedOpenAIImageAdapter {
         n: options.n || 1,
       },
       timestamp: new Date(),
-    }).catch(err => {
+    }).catch((err: unknown) => {
       logger.error('Failed to track image generation cost', err instanceof Error ? err : new Error(String(err)));
     });
 
@@ -99,7 +99,7 @@ export class CostEnforcedOpenAIImageAdapter {
       currency: 'USD',
       metadata: { size: options.size || '1024x1024', n: options.n || 1 },
       timestamp: new Date(),
-    }).catch(err => {
+    }).catch((err: unknown) => {
       logger.error('Failed to track image edit cost', err instanceof Error ? err : new Error(String(err)));
     });
 
@@ -128,7 +128,7 @@ export class CostEnforcedOpenAIImageAdapter {
       currency: 'USD',
       metadata: { size: options.size || '1024x1024', n: options.n || 1 },
       timestamp: new Date(),
-    }).catch(err => {
+    }).catch((err: unknown) => {
       logger.error('Failed to track image variation cost', err instanceof Error ? err : new Error(String(err)));
     });
 

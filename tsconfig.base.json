@@ -57,10 +57,13 @@
       "@domain/*": ["domains/*"],
       "@adapters/*": ["packages/adapters/*"],
       "@packages/*": ["packages/*"],
-      "@shutdown": ["packages/shutdown/index.ts"]
-    }
+      "@shutdown": ["packages/shutdown/index.ts"],
+      "@monitoring": ["packages/monitoring/index.ts"],
+      "@monitoring/*": ["packages/monitoring/*"]
+    },
+    "resolveJsonModule": true
   },
-  "include": ["apps/**/*.ts", "apps/**/*.tsx", "control-plane/**/*.ts", "domains/**/*.ts", "packages/**/*.ts", "plugins/**/*.ts", "types/**/*.d.ts"],
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "control-plane/**/*.ts", "domains/**/*.ts", "packages/**/*.ts", "plugins/**/*.ts", "types/**/*.d.ts", "apps/web/public/locales/**/*.json"],
   "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/__mocks__/**", "**/node_modules/**", "**/dist/**"],
   "references": [
     { "path": "./packages/types" },

@@ -143,11 +143,11 @@ if (LEGACY_PATH_MODE !== 'off') {
 
     if (LEGACY_PATH_MODE === 'rewrite') {
       // Silent rewrite: route to /v1 without client roundtrip
-      req.url = `/v1${req.url}`;
+      req.raw.url = `/v1${req.url}`;
     } else {
       // 308 Permanent Redirect: preserves HTTP method (unlike 301 which changes POST to GET)
-      const query = req.url?.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
-      return reply.redirect(308, `/v1${pathname}${query}`);
+      const query = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+      return reply.redirect(`/v1${pathname}${query}`, 308);
     }
   });
 }

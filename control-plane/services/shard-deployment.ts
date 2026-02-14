@@ -11,7 +11,6 @@
  * - P1 #16: Cleanup error logging
  */
 
-// @ts-expect-error -- @aws-sdk/client-s3 not yet installed; tracked as tech debt
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 // @ts-expect-error -- @aws-sdk/s3-request-presigner not yet installed; tracked as tech debt
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -60,7 +59,7 @@ if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
 // Storage client (R2 is S3-compatible)
 const storage = new S3Client({
   region: 'auto',
-  endpoint: R2_ENDPOINT,
+  ...(R2_ENDPOINT ? { endpoint: R2_ENDPOINT } : {}),
   credentials: {
     accessKeyId: R2_ACCESS_KEY_ID || '',
     secretAccessKey: R2_SECRET_ACCESS_KEY || '',

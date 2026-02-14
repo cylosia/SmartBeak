@@ -19,6 +19,7 @@ import { PostgresPublishAttemptRepository } from '../../domains/publishing/infra
 import { PostgresPublishingJobRepository } from '../../domains/publishing/infra/persistence/PostgresPublishingJobRepository';
 import { PostgresSearchDocumentRepository } from '../../domains/search/infra/persistence/PostgresSearchDocumentRepository';
 import { PostgresContentRepository } from '../../domains/content/infra/persistence/PostgresContentRepository';
+import { PublishAdapter } from '../../domains/publishing/application/ports/PublishAdapter';
 import { PublishingWorker } from '../../domains/publishing/application/PublishingWorker';
 import { SearchIndexingWorker } from '../../domains/search/application/SearchIndexingWorker';
 import { UsageService } from './usage';
@@ -36,14 +37,6 @@ const logger = getLogger('ContainerService');
 export interface ContainerConfig {
   dbPool: Pool;
   redisUrl?: string;
-}
-
-export interface PublishResult {
-  id: string;
-}
-
-export interface PublishAdapter {
-  publish: (input: { domainId: string; contentId: string; targetConfig: unknown }) => Promise<PublishResult>;
 }
 
 export interface EmailMessage {
@@ -253,16 +246,15 @@ export class Container {
     return {
     publish: async () => {
     logger.info('FacebookAdapter stub: publish called but no token configured');
-    return { id: 'stub-id' };
     }
     };
   }
 
   const adapter = new FacebookAdapter(token);
-  if (typeof adapter.publish !== 'function') {
+  if (typeof (adapter as unknown as PublishAdapter).publish !== 'function') {
     throw new Error('FacebookAdapter does not implement PublishAdapter interface');
   }
-  return adapter as PublishAdapter;
+  return adapter as unknown as PublishAdapter;
   }
 
   /**
@@ -310,10 +302,10 @@ export class Container {
     throw new Error('Facebook adapter requires pageAccessToken');
     }
     const fbAdapter = new FacebookAdapter(fbConfig.pageAccessToken);
-    if (typeof fbAdapter.publish !== 'function') {
+    if (typeof (fbAdapter as unknown as PublishAdapter).publish !== 'function') {
     throw new Error('FacebookAdapter does not implement PublishAdapter interface');
     }
-    return fbAdapter as PublishAdapter;
+    return fbAdapter as unknown as PublishAdapter;
     }
     case 'linkedin': {
     const liConfig = config as { accessToken?: string };
@@ -321,10 +313,10 @@ export class Container {
     throw new Error('LinkedIn adapter requires accessToken');
     }
     const liAdapter = new LinkedInAdapter(liConfig.accessToken);
-    if (typeof liAdapter.publish !== 'function') {
+    if (typeof (liAdapter as unknown as PublishAdapter).publish !== 'function') {
     throw new Error('LinkedInAdapter does not implement PublishAdapter interface');
     }
-    return liAdapter as PublishAdapter;
+    return liAdapter as unknown as PublishAdapter;
     }
     default:
     throw new Error(`Unknown adapter type: ${targetType}`);

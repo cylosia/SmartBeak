@@ -373,7 +373,7 @@ export function rateLimitMiddleware<T>(
     } catch (error) {
       // SECURITY FIX: Fail closed — deny request when rate limiter errors unexpectedly.
       // Previously called next() (fail-open), which allowed unlimited traffic on failure.
-      logger.error('[rateLimiter] Unexpected error in rate limit middleware - failing closed (denying request)', {
+      logger.error('[rateLimiter] Unexpected error in rate limit middleware - failing closed (denying request)', undefined, {
         error: error instanceof Error ? error.message : String(error),
       });
       emitCounter('rate_limiter_middleware_error', 1);

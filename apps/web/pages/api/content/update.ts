@@ -174,7 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       client.release();
     }
   } catch (error: unknown) {
-    logger.error('Error updating content', { error });
+    logger.error('Error updating content', error instanceof Error ? error : undefined, { error: String(error) });
 
     if (error instanceof Error && error.message?.includes('DATABASE_NOT_CONFIGURED')) {
       return sendError(res, 503, 'Service unavailable. Database not configured.');

@@ -117,7 +117,7 @@ function validateInput(input: SaleReadinessInput): { valid: boolean; errors: str
 export function computeSaleReadiness(input: SaleReadinessInput): SaleReadinessOutput {
   const validation = validateInput(input);
   if (!validation.valid) {
-  logger.error('Invalid input', { errors: validation.errors });
+  logger.error('Invalid input', undefined, { errors: validation.errors });
   return {
     score: 0,
     breakdown: { seo: 0, content: 0, audience: 0, revenue: 0, risk: 0 },
@@ -170,7 +170,7 @@ export function computeSaleReadiness(input: SaleReadinessInput): SaleReadinessOu
     valid: true,
   };
   } catch (error) {
-    logger.error('Error computing sale readiness', { error });
+    logger.error('Error computing sale readiness', error instanceof Error ? error : undefined, { error: String(error) });
   return {
     score: 0,
     breakdown: { seo: 0, content: 0, audience: 0, revenue: 0, risk: 0 },

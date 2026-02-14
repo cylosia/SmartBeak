@@ -6,8 +6,8 @@
  * instead of only checking 1-2 properties while asserting the full interface type.
  */
 
-import type { NotificationPayload } from '@types/notifications';
-import type { PublishTargetConfig } from '@types/publishing';
+import type { NotificationPayload } from '@packages/types/notifications';
+import type { PublishTargetConfig } from '@packages/types/publishing';
 
 /**
  * Validate notification payload

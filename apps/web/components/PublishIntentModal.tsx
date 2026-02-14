@@ -19,7 +19,9 @@ export function PublishIntentModal({ onSubmit, onClose }: PublishIntentModalProp
   const [targets, setTargets] = useState<Target[]>([]);
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, { onEscape: onClose });
+  useFocusTrap(dialogRef, {
+    ...(onClose ? { onEscape: onClose } : {}),
+  });
 
   function toggleTarget(target: Target) {
   setTargets(prev =>

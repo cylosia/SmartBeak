@@ -269,8 +269,9 @@ export class JobScheduler extends EventEmitter {
   }
 
   private createQueue(name: string): Queue {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queue = new Queue(name, {
-    connection: this.redis,
+    connection: this.redis as any,
     defaultJobOptions: {
     removeOnComplete: jobConfig.keepCompletedJobs,
     removeOnFail: jobConfig.keepFailedJobs,
@@ -431,7 +432,7 @@ export class JobScheduler extends EventEmitter {
           // Extract OTel trace context from job data for distributed tracing
           let parentContext = ROOT_CONTEXT;
           try {
-            const traceHeaders = (job.data as Record<string, unknown>)?._traceContext;
+            const traceHeaders = (job.data as Record<string, unknown>)?.['_traceContext'];
             if (traceHeaders && typeof traceHeaders === 'object') {
               parentContext = propagation.extract(
                 ROOT_CONTEXT,
@@ -517,7 +518,8 @@ export class JobScheduler extends EventEmitter {
           });
         },
         {
-          connection: this.redis,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          connection: this.redis as any,
           concurrency,
           stalledInterval: 300000,     // P0-FIX: 5 minutes (not 30s)
           maxStalledCount: 3,          // P0-FIX: Allow 3 stalls before failing

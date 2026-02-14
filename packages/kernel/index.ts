@@ -46,11 +46,9 @@ export { registerHealthCheck, checkAllHealth, getLastHealthCheck, createDatabase
 export {
   withRetry, makeRetryable, Retryable, CircuitBreaker, CircuitState,
   sleep, jitteredBackoff, isRetryableStatus, parseRetryAfter,
-  CircuitOpenError, withTimeout, withCircuitBreaker,
+  CircuitOpenError, withTimeout, withCircuitBreaker, AbortError,
   type RetryOptions, type CircuitBreakerOptions, type JitteredBackoffOptions,
 } from './retry';
-// Retry utilities (M8)
-export { withRetry, makeRetryable, Retryable, CircuitBreaker, AbortError, } from './retry';
 // Backpressure utilities
 export { Semaphore, PoolExhaustionError, QueueBackpressureError, } from './semaphore';
 // DLQ (M15)

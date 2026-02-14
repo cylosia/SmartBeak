@@ -228,7 +228,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages before logging and returning
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error["message"] : 'Failed to fetch billing data');
-      logger.error('Error fetching billing data', { error: sanitizedError });
+      logger.error('Error fetching billing data', undefined, { error: sanitizedError });
 
       return errors.internal(reply, 'Failed to fetch billing data');
     }
@@ -270,7 +270,7 @@ export async function adminBillingRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error["message"] : 'Failed to fetch organization');
-      logger.error('Error fetching organization', { error: sanitizedError });
+      logger.error('Error fetching organization', undefined, { error: sanitizedError });
 
       return errors.internal(reply, 'Failed to fetch organization');
     }

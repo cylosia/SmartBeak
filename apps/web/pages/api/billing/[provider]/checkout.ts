@@ -126,7 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       provider: 'stripe',
       });
     } catch (stripeError: unknown) {
-      logger.error('Stripe error', { error: stripeError });
+      logger.error('Stripe error', stripeError instanceof Error ? stripeError : undefined, { error: String(stripeError) });
 
       if (stripeError instanceof Error && 'type' in stripeError && (stripeError as Record<string, unknown>)['type'] === 'StripeInvalidRequestError') {
       // P1-13 FIX: Do not leak Stripe error details (may contain API key prefixes, config info)
@@ -175,7 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       provider: 'paddle',
       });
     } catch (paddleError: unknown) {
-      logger.error('Paddle error', { error: paddleError });
+      logger.error('Paddle error', paddleError instanceof Error ? paddleError : undefined, { error: String(paddleError) });
       throw paddleError;
     }
     }
@@ -187,7 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
 
-  logger.error('Checkout error', { error });
+  logger.error('Checkout error', error instanceof Error ? error : undefined, { error: String(error) });
 
   const errorMessage = process.env['NODE_ENV'] === 'development' && error instanceof Error
     ? error.message

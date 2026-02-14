@@ -44,7 +44,7 @@ const ALLOWED_MEDIA_TYPES = [
 const UploadIntentBodySchema = z.object({
   id: z.string().uuid(),
   mimeType: z.enum(ALLOWED_MEDIA_TYPES, {
-    errorMap: () => ({ message: `MIME type must be one of: ${ALLOWED_MEDIA_TYPES.join(', ')}` }),
+    message: `MIME type must be one of: ${ALLOWED_MEDIA_TYPES.join(', ')}`,
   }),
 });
 

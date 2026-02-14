@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { FastifyReply } from 'fastify';
 import { randomBytes } from 'crypto';
 import { getLogger } from '@kernel/logger';
+import { ErrorCodes } from '@errors';
 
 const logger = getLogger('ErrorHandler');
 
@@ -85,7 +86,7 @@ export function sanitizeError(
   const sanitizedForLog = error instanceof Error 
     ? { ...error, message: sanitizeErrorMessage(error["message"]) }
     : error;
-  logger.error('Sanitized error', { requestId, error: sanitizedForLog });
+  logger.error('Sanitized error', undefined, { requestId, error: sanitizedForLog });
 
   const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -217,7 +218,7 @@ export function sanitizeExternalAPIError(
   const sanitizedError = error instanceof Error 
     ? sanitizeErrorMessage(error["message"])
     : sanitizeErrorMessage(String(error));
-  logger.error('External API error', { provider, requestId: reqId, error: sanitizedError });
+  logger.error('External API error', undefined, { provider, requestId: reqId, error: sanitizedError });
 
   // Always return generic message for external API errors
   return {

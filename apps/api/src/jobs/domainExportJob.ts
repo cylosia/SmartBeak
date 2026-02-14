@@ -86,7 +86,7 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
   
   // P1-6 FIX: Use BullMQ Job type for cancel event listener
   if (job && 'on' in job && typeof job.on === 'function') {
-    (job as Job).on('cancel', abortListener);
+    (job as any).on('cancel', abortListener);
   }
 
   try {
@@ -145,7 +145,7 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
     // P2-FIX: Clean up abort listener
     // P1-6 FIX: Use BullMQ Job type for cancel event listener cleanup
     if (job && 'off' in job && typeof job.off === 'function') {
-      (job as Job).off('cancel', abortListener);
+      (job as any).off('cancel', abortListener);
     }
   }
 }

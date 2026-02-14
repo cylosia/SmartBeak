@@ -102,7 +102,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
     return errors.forbidden(reply, 'Forbidden. Admin access required.');
     }
   } catch (error) {
-    logger.error('Authentication hook error', { error });
+    logger.error('Authentication hook error', error instanceof Error ? error : undefined, { error: String(error) });
     return errors.internal(reply, 'Authentication check failed');
   }
   });
@@ -186,7 +186,7 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
     .header('X-Content-Type-Options', 'nosniff')
     .send(header + body);
   } catch (error) {
-    logger.error('Audit export error', { error });
+    logger.error('Audit export error', error instanceof Error ? error : undefined, { error: String(error) });
     if (error instanceof ExportError) {
     return sendError(reply, error.statusCode, ErrorCodes.INTERNAL_ERROR, error.message);
     }

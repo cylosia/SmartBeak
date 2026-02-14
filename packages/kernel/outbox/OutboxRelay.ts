@@ -145,7 +145,7 @@ export class OutboxRelay {
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             failedUpdates.push({ id: row.id, error: errorMsg });
-            logger.error('Failed to publish outbox event', {
+            logger.error('Failed to publish outbox event', undefined, {
               id: row.id,
               eventName: row.event_name,
               error: errorMsg,
