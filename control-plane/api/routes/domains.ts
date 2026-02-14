@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { errors, sendError } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-import { createRouteErrorHandler } from '@errors';
 
 import { BillingService } from '../../services/billing';
 import { getAuthContext } from '../types';
@@ -18,7 +17,6 @@ import { requireRole } from '../../services/auth';
 import { UsageService } from '../../services/usage';
 
 const logger = getLogger('domains-routes');
-const handleError = createRouteErrorHandler({ logger });
 
 const DomainNameSchema = z.string()
   .min(1, 'Domain name is required')
@@ -128,7 +126,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   } catch (error) {
     logger["error"]('[domains] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to fetch domains');
-    return handleError(res, error, 'list domains');
   }
   });
 
@@ -235,7 +232,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('ROLLBACK');
     logger["error"]('[domains POST] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to create domain');
-    return handleError(res, error, 'create domain');
   } finally {
     client.release();
   }
@@ -298,7 +294,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
   } catch (error) {
     logger["error"]('[domains/:domainId] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to fetch domain');
-    return handleError(res, error, 'fetch domain');
   }
   });
 
@@ -383,7 +378,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     });
     logger.error('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to update domain');
-    return handleError(res, error, 'update domain');
   } finally {
     client.release();
   }
@@ -444,7 +438,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     });
     logger.error('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to delete domain');
-    return handleError(res, error, 'delete domain');
   } finally {
     client.release();
   }

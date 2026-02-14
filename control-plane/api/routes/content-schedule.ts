@@ -4,7 +4,6 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
-import { createRouteErrorHandler } from '@errors';
 import { getAuthContext } from '../types';
 import { getContentRepository } from '../../services/repository-factory';
 import { DomainOwnershipService } from '../../services/domain-ownership';
@@ -15,7 +14,6 @@ import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 const logger = getLogger('content-schedule');
-const handleError = createRouteErrorHandler({ logger });
 
 const ParamsSchema = z.object({
   id: z.string().uuid(),
@@ -77,7 +75,6 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
   } catch (error: unknown) {
     console["error"]('[content/schedule] Error:', error);
     return errors.internal(res, 'Failed to schedule content');
-    return handleError(res, error, 'schedule content');
   }
   });
 }
