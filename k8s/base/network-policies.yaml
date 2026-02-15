@@ -33,6 +33,9 @@ spec:
           protocol: TCP
   egress:
     # To PostgreSQL (RDS)
+    # TODO: Replace 0.0.0.0/0 with VPC CIDR (e.g. 10.0.0.0/16) or specific
+    # RDS endpoint CIDRs via Kustomize overlay per environment. Using 0.0.0.0/0
+    # allows egress to any external PostgreSQL server, weakening network isolation.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -40,6 +43,7 @@ spec:
         - port: 5432
           protocol: TCP
     # To Redis (ElastiCache)
+    # TODO: Same as above — restrict to VPC CIDR or ElastiCache endpoint CIDRs.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -131,6 +135,7 @@ spec:
   ingress: []
   egress:
     # To PostgreSQL (RDS)
+    # TODO: Replace 0.0.0.0/0 with VPC CIDR or specific RDS endpoint CIDRs.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -138,6 +143,7 @@ spec:
         - port: 5432
           protocol: TCP
     # To Redis (ElastiCache)
+    # TODO: Replace 0.0.0.0/0 with VPC CIDR or specific ElastiCache endpoint CIDRs.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

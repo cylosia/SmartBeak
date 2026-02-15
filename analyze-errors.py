@@ -1,8 +1,15 @@
 import re
+import sys
 from collections import defaultdict
 
-with open('ts-errors.txt', 'r') as f:
-    errors = f.read()
+INPUT_FILE = 'ts-errors.txt'
+
+try:
+    with open(INPUT_FILE, 'r') as f:
+        errors = f.read()
+except FileNotFoundError:
+    print(f"Error: '{INPUT_FILE}' not found. Run 'npx tsc --noEmit 2> {INPUT_FILE}' first.", file=sys.stderr)
+    sys.exit(1)
 
 # Group by error type
 error_types = defaultdict(list)

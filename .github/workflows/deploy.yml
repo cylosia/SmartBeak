@@ -101,9 +101,9 @@ jobs:
         run: |
           API_URL=$(kubectl get ingress -n smartbeak-staging -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
           if [ -n "$API_URL" ]; then
-            curl -sf --max-time 10 "https://${API_URL}/health" || echo "Warning: smoke test could not reach /health"
+            curl -sf --max-time 10 "https://${API_URL}/health" || { echo "::error::Smoke test failed: /health endpoint unreachable"; exit 1; }
           else
-            echo "Warning: no ingress hostname found, skipping smoke test"
+            echo "::warning::No ingress hostname found, skipping smoke test"
           fi
 
   deploy-production:
@@ -175,7 +175,7 @@ jobs:
         run: |
           API_URL=$(kubectl get ingress -n smartbeak-production -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
           if [ -n "$API_URL" ]; then
-            curl -sf --max-time 10 "https://${API_URL}/health" || echo "Warning: smoke test could not reach /health"
+            curl -sf --max-time 10 "https://${API_URL}/health" || { echo "::error::Smoke test failed: /health endpoint unreachable"; exit 1; }
           else
-            echo "Warning: no ingress hostname found, skipping smoke test"
+            echo "::warning::No ingress hostname found, skipping smoke test"
           fi

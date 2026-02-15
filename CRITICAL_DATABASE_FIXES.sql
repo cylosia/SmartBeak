@@ -1,11 +1,20 @@
 -- =====================================================
 -- CRITICAL DATABASE FIXES - HOSTILE AUDIT 2026-02-10
--- 
+--
 -- WARNING: Test in staging before running in production
--- Some migrations require downtime or CONCURRENTLY option
+--
+-- IMPORTANT: This file is split into two parts:
+--   PART 1 (transactional): FK fixes, constraints, settings — runs in BEGIN/COMMIT
+--   PART 2 (non-transactional): CONCURRENTLY indexes — MUST run outside a transaction
+--
+-- CREATE INDEX CONCURRENTLY cannot run inside a transaction block.
+-- Run PART 2 separately after PART 1 commits successfully.
 -- =====================================================
 
--- Start transaction
+-- =====================================================
+-- PART 1: TRANSACTIONAL DDL
+-- Run this block first.
+-- =====================================================
 BEGIN;
 
 -- =====================================================
@@ -14,23 +23,23 @@ BEGIN;
 -- =====================================================
 
 -- Fix subscriptions foreign keys
-ALTER TABLE subscriptions 
+ALTER TABLE subscriptions
   DROP CONSTRAINT IF EXISTS subscriptions_org_id_fkey,
-  ADD CONSTRAINT subscriptions_org_id_fkey 
+  ADD CONSTRAINT subscriptions_org_id_fkey
     FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE;
 
-ALTER TABLE subscriptions 
+ALTER TABLE subscriptions
   DROP CONSTRAINT IF EXISTS subscriptions_plan_id_fkey,
-  ADD CONSTRAINT subscriptions_plan_id_fkey 
+  ADD CONSTRAINT subscriptions_plan_id_fkey
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL;
 
 -- Fix usage_alerts foreign key
-ALTER TABLE usage_alerts 
+ALTER TABLE usage_alerts
   DROP CONSTRAINT IF EXISTS usage_alerts_org_id_fkey,
-  ADD CONSTRAINT usage_alerts_org_id_fkey 
+  ADD CONSTRAINT usage_alerts_org_id_fkey
     FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE;
 
--- Fix org_integrations foreign key  
+-- Fix org_integrations foreign key
 ALTER TABLE org_integrations
   DROP CONSTRAINT IF EXISTS org_integrations_org_id_fkey,
   ADD CONSTRAINT org_integrations_org_id_fkey
@@ -48,66 +57,15 @@ ALTER TABLE domain_transfer_log
     FOREIGN KEY (transferred_by) REFERENCES users(id) ON DELETE SET NULL;
 
 -- =====================================================
--- SECTION 2: GIN INDEXES FOR JSONB COLUMNS
--- Using CONCURRENTLY to avoid locking (run manually)
--- =====================================================
-
--- Activity log metadata
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activity_log_metadata_gin 
-  ON activity_log USING GIN (metadata);
-
--- Domain registry custom config
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_domain_registry_config_gin 
-  ON domain_registry USING GIN (custom_config);
-
--- Notifications payload  
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_payload_gin
-  ON notifications USING GIN (payload);
-
--- Publishing targets config
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_publish_targets_config_gin
-  ON publish_targets USING GIN (config);
-
--- Search documents fields (if not already indexed by FTS)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_search_documents_fields_gin
-  ON search_documents USING GIN (fields);
-
--- =====================================================
--- SECTION 3: COMPOSITE INDEXES FOR COMMON PATTERNS
--- =====================================================
-
--- Content items: domain + status + publish_at for scheduling queries
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_content_items_domain_status_publish 
-  ON content_items (domain_id, status, publish_at) 
-  WHERE status = 'scheduled';
-
--- Content items: domain + updated_at for listing
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_content_items_domain_updated 
-  ON content_items (domain_id, updated_at DESC NULLS LAST);
-
--- Notifications: org + user + status for pending list
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_org_user_status
-  ON notifications (org_id, user_id, status, created_at)
-  WHERE status IN ('pending', 'failed');
-
--- Publishing jobs: domain + status
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_publishing_jobs_domain_status
-  ON publishing_jobs (domain_id, status, created_at DESC);
-
--- Content revisions: content_id + created_at
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_content_revisions_content_created
-  ON content_revisions (content_id, created_at DESC);
-
--- =====================================================
 -- SECTION 4: UNIQUE CONSTRAINTS
 -- =====================================================
 
 -- Authors: prevent duplicate names per domain
-ALTER TABLE authors 
-  ADD CONSTRAINT IF NOT EXISTS uq_authors_domain_name 
+ALTER TABLE authors
+  ADD CONSTRAINT IF NOT EXISTS uq_authors_domain_name
   UNIQUE (domain_id, name);
 
--- Customer profiles: prevent duplicate names per domain  
+-- Customer profiles: prevent duplicate names per domain
 ALTER TABLE customer_profiles
   ADD CONSTRAINT IF NOT EXISTS uq_customer_profiles_domain_name
   UNIQUE (domain_id, name);
@@ -122,12 +80,12 @@ ALTER TABLE domain_registry
 -- =====================================================
 
 -- Content items: content_type should not be null
-ALTER TABLE content_items 
+ALTER TABLE content_items
   ALTER COLUMN content_type SET NOT NULL,
   ALTER COLUMN created_at SET NOT NULL,
   ALTER COLUMN updated_at SET NOT NULL;
 
--- Organizations: name should not be null  
+-- Organizations: name should not be null
 ALTER TABLE organizations
   ALTER COLUMN name SET NOT NULL;
 
@@ -152,8 +110,64 @@ COMMENT ON TABLE content_items IS 'Content items with timezone-aware timestamps 
 COMMENT ON TABLE notifications IS 'Notifications with JSONB payload indexed for queries';
 COMMENT ON TABLE activity_log IS 'Activity log with GIN index on metadata for filtering';
 
--- Commit all changes
 COMMIT;
+
+-- =====================================================
+-- PART 2: NON-TRANSACTIONAL — CONCURRENTLY INDEXES
+-- Run these AFTER Part 1 commits successfully.
+-- Each statement runs in its own implicit transaction.
+-- CREATE INDEX CONCURRENTLY cannot run inside BEGIN/COMMIT.
+-- =====================================================
+
+-- =====================================================
+-- SECTION 2: GIN INDEXES FOR JSONB COLUMNS
+-- =====================================================
+
+-- Activity log metadata
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activity_log_metadata_gin
+  ON activity_log USING GIN (metadata);
+
+-- Domain registry custom config
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_domain_registry_config_gin
+  ON domain_registry USING GIN (custom_config);
+
+-- Notifications payload
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_payload_gin
+  ON notifications USING GIN (payload);
+
+-- Publishing targets config
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_publish_targets_config_gin
+  ON publish_targets USING GIN (config);
+
+-- Search documents fields (if not already indexed by FTS)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_search_documents_fields_gin
+  ON search_documents USING GIN (fields);
+
+-- =====================================================
+-- SECTION 3: COMPOSITE INDEXES FOR COMMON PATTERNS
+-- =====================================================
+
+-- Content items: domain + status + publish_at for scheduling queries
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_content_items_domain_status_publish
+  ON content_items (domain_id, status, publish_at)
+  WHERE status = 'scheduled';
+
+-- Content items: domain + updated_at for listing
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_content_items_domain_updated
+  ON content_items (domain_id, updated_at DESC NULLS LAST);
+
+-- Notifications: org + user + status for pending list
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_org_user_status
+  ON notifications (org_id, user_id, status, created_at)
+  WHERE status IN ('pending', 'failed');
+
+-- Publishing jobs: domain + status
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_publishing_jobs_domain_status
+  ON publishing_jobs (domain_id, status, created_at DESC);
+
+-- Content revisions: content_id + created_at
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_content_revisions_content_created
+  ON content_revisions (content_id, created_at DESC);
 
 -- =====================================================
 -- SECTION 8: POST-MIGRATION VERIFICATION
