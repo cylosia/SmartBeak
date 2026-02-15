@@ -98,6 +98,7 @@ describe('Transaction - Failure Scenarios', () => {
 
   describe('COMMIT Failure', () => {
     it('should attempt rollback when COMMIT fails', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       mockClient.query.mockImplementation((sql: string) => {
         if (sql === 'COMMIT') {
           return Promise.reject(new Error('COMMIT failed: disk full'));
@@ -128,6 +129,7 @@ describe('Transaction - Failure Scenarios', () => {
       const originalError = new Error('Query failed: constraint violation');
       const rollbackError = new Error('ROLLBACK failed: connection lost');
 
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       mockClient.query.mockImplementation((sql: string) => {
         if (sql.startsWith('BEGIN') || sql.startsWith('SET')) {
           return Promise.resolve({});
@@ -158,6 +160,7 @@ describe('Transaction - Failure Scenarios', () => {
     });
 
     it('should release client with error flag when rollback fails', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       mockClient.query.mockImplementation((sql: string) => {
         if (sql.startsWith('BEGIN') || sql.startsWith('SET')) {
           return Promise.resolve({});
@@ -184,6 +187,7 @@ describe('Transaction - Failure Scenarios', () => {
 
   describe('Connection Lost Mid-Transaction', () => {
     it('should release client even when connection is lost during query', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       mockClient.query.mockImplementation((sql: string) => {
         if (sql.startsWith('BEGIN') || sql.startsWith('SET')) {
           return Promise.resolve({});

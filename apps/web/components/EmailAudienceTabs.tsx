@@ -36,9 +36,10 @@ export function EmailAudienceTabs({ domainId, active }: { domainId: string; acti
   );
 
   return (
-  <nav
+  <div
     role="tablist"
     aria-label="Email audience sections"
+    tabIndex={0}
     style={{ marginBottom: 24 }}
     onKeyDown={handleKeyDown}
   >
@@ -63,6 +64,6 @@ export function EmailAudienceTabs({ domainId, active }: { domainId: string; acti
       </a>
       );
     })}
-  </nav>
+  </div>
   );
 }

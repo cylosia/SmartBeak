@@ -44,9 +44,10 @@ export function DomainTabs({ domainId, active }: { domainId: string; active: str
   );
 
   return (
-  <nav
+  <div
     role="tablist"
     aria-label="Domain sections"
+    tabIndex={0}
     style={{ marginBottom: 24 }}
     onKeyDown={handleKeyDown}
   >
@@ -71,6 +72,6 @@ export function DomainTabs({ domainId, active }: { domainId: string; active: str
       </a>
       );
     })}
-  </nav>
+  </div>
   );
 }
