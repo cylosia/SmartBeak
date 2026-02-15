@@ -7,10 +7,12 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  id-token: write
   contents: read
-  security-events: write
 
 env:
   AWS_REGION: us-east-1
@@ -21,11 +23,17 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
     strategy:
       matrix:
         target: [web, api, worker]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials
         if: github.event_name != 'pull_request'
@@ -63,6 +71,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          provenance: true
+          sbom: true
 
       - name: Scan image with Trivy
         if: github.event_name != 'pull_request'

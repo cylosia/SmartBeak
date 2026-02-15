@@ -35,6 +35,8 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -47,29 +49,34 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Configure kubectl
-        run: aws eks update-kubeconfig --name smartbeak-staging --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name smartbeak-staging --region "$AWS_REGION"
 
       - name: Determine image tag
         id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.image_tag }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          FALLBACK_SHA: ${{ github.sha }}
         run: |
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ github.event.workflow_run.head_sha }}" ]; then
-            echo "tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          if [ -n "$INPUT_TAG" ]; then
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          elif [ -n "$WORKFLOW_RUN_SHA" ]; then
+            echo "tag=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "tag=$FALLBACK_SHA" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run database migrations
         env:
           IMAGE: ${{ steps.ecr-login.outputs.registry }}/smartbeak/api:${{ steps.tag.outputs.tag }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          kubectl run migration-${{ steps.tag.outputs.tag }} \
+          kubectl run "migration-${TAG}" \
             --rm -i --restart=Never \
             --namespace=smartbeak-staging \
             --image="$IMAGE" \
             --override-type=strategic \
-            --overrides='{"spec":{"containers":[{"name":"migration-${{ steps.tag.outputs.tag }}","image":"'"$IMAGE"'","command":["node","--import","tsx/esm","scripts/migrate.ts","up"],"envFrom":[{"secretRef":{"name":"staging-smartbeak-secrets"}},{"configMapRef":{"name":"staging-smartbeak-config"}}]}]}}' \
+            --overrides='{"spec":{"containers":[{"name":"migration","image":"'"$IMAGE"'","command":["node","--import","tsx/esm","scripts/migrate.ts","up"],"envFrom":[{"secretRef":{"name":"staging-smartbeak-secrets"}},{"configMapRef":{"name":"staging-smartbeak-config"}}]}]}}' \
             --timeout=120s
 
       - name: Deploy to staging
@@ -105,6 +112,8 @@ jobs:
     environment: production  # Requires manual approval via GitHub Environment protection rules
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -117,27 +126,31 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Configure kubectl
-        run: aws eks update-kubeconfig --name smartbeak-production --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name smartbeak-production --region "$AWS_REGION"
 
       - name: Determine image tag
         id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.image_tag }}
+          FALLBACK_SHA: ${{ github.sha }}
         run: |
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          if [ -n "$INPUT_TAG" ]; then
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "tag=$FALLBACK_SHA" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run database migrations
         env:
           IMAGE: ${{ steps.ecr-login.outputs.registry }}/smartbeak/api:${{ steps.tag.outputs.tag }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          kubectl run migration-${{ steps.tag.outputs.tag }} \
+          kubectl run "migration-${TAG}" \
             --rm -i --restart=Never \
             --namespace=smartbeak-production \
             --image="$IMAGE" \
             --override-type=strategic \
-            --overrides='{"spec":{"containers":[{"name":"migration-${{ steps.tag.outputs.tag }}","image":"'"$IMAGE"'","command":["node","--import","tsx/esm","scripts/migrate.ts","up"],"envFrom":[{"secretRef":{"name":"prod-smartbeak-secrets"}},{"configMapRef":{"name":"prod-smartbeak-config"}}]}]}}' \
+            --overrides='{"spec":{"containers":[{"name":"migration","image":"'"$IMAGE"'","command":["node","--import","tsx/esm","scripts/migrate.ts","up"],"envFrom":[{"secretRef":{"name":"prod-smartbeak-secrets"}},{"configMapRef":{"name":"prod-smartbeak-config"}}]}]}}' \
             --timeout=120s
 
       - name: Deploy to production

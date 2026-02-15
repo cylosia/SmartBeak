@@ -9,12 +9,24 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,11 +59,11 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             // Read bundle analysis results
             const statsPath = 'apps/web/.next/analyze/__bundle_analysis.json';
             let stats = { totalSize: 0, gzipSize: 0, changes: [] };
-            
+
             try {
               stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
             } catch (e) {
@@ -68,23 +80,23 @@ jobs:
             };
 
             // Build comment body
-            const body = `## 📦 Bundle Analysis
+            const body = `## Bundle Analysis
 
-### Size Summary
-| Metric | Size |
-|--------|------|
-| Total | ${formatBytes(stats.totalSize)} |
-| Gzipped | ${formatBytes(stats.gzipSize)} |
+            ### Size Summary
+            | Metric | Size |
+            |--------|------|
+            | Total | ${formatBytes(stats.totalSize)} |
+            | Gzipped | ${formatBytes(stats.gzipSize)} |
 
-${stats.changes?.length > 0 ? `
-### Changes
-| Module | Before | After | Diff |
-|--------|--------|-------|------|
-${stats.changes.map(c => `| ${c.name} | ${formatBytes(c.before)} | ${formatBytes(c.after)} | ${c.diff > 0 ? '🔴 +' : '🟢 '}${formatBytes(Math.abs(c.diff))} |`).join('\n')}
-` : '> No significant size changes detected'}
+            ${stats.changes?.length > 0 ? `
+            ### Changes
+            | Module | Before | After | Diff |
+            |--------|--------|-------|------|
+            ${stats.changes.map(c => `| ${c.name} | ${formatBytes(c.before)} | ${formatBytes(c.after)} | ${c.diff > 0 ? '+' : ''}${formatBytes(Math.abs(c.diff))} |`).join('\n')}
+            ` : '> No significant size changes detected'}
 
-${stats.totalSize > 500 * 1024 ? '⚠️ **Warning:** Bundle size exceeds 500KB recommendation' : '✅ Bundle size within recommended limits'}
-`;
+            ${stats.totalSize > 500 * 1024 ? '**Warning:** Bundle size exceeds 500KB recommendation' : 'Bundle size within recommended limits'}
+            `;
 
             // Create or update comment
             const { data: comments } = await github.rest.issues.listComments({
@@ -93,9 +105,9 @@ ${stats.totalSize > 500 * 1024 ? '⚠️ **Warning:** Bundle size exceeds 500KB 
               issue_number: context.issue.number,
             });
 
-            const botComment = comments.find(comment => 
-              comment.user.type === 'Bot' && 
-              comment.body.includes('## 📦 Bundle Analysis')
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('## Bundle Analysis')
             );
 
             if (botComment) {
@@ -119,7 +131,7 @@ ${stats.totalSize > 500 * 1024 ? '⚠️ **Warning:** Bundle size exceeds 500KB 
           # Check if bundle exceeds limits
           MAX_SIZE=500000  # 500KB in bytes
           STATS_FILE="apps/web/.next/analyze/__bundle_analysis.json"
-          
+
           if [ -f "$STATS_FILE" ]; then
             SIZE=$(cat "$STATS_FILE" | grep -o '"totalSize":[0-9]*' | cut -d':' -f2)
             if [ "$SIZE" -gt "$MAX_SIZE" ]; then
