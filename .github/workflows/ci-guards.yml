@@ -52,10 +52,6 @@ jobs:
       - run: npm ci
       - name: Prepare report directory
         run: mkdir -p ci-reports
-      - name: Run npm audit (JSON capture)
-        run: npm audit --audit-level=high --json > ci-reports/npm-audit.json 2>&1 || true
-      - name: Run npm audit
-        run: npm audit --audit-level=high
       - name: Run audit-ci
         run: |
           set -o pipefail

@@ -78,7 +78,6 @@
     { "path": "./packages/utils" },
     { "path": "./packages/shutdown" },
     { "path": "./packages/ml" },
-    { "path": "./packages/db" },
     { "path": "./packages/adapters" }
   ]
 }

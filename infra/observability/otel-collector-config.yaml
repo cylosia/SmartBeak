@@ -27,6 +27,8 @@ exporters:
   otlp/jaeger:
     endpoint: jaeger:4317
     tls:
+      # DEV ONLY: Disable TLS for local observability stack.
+      # Enable TLS when deploying to shared or production environments.
       insecure: true
   # Prometheus for metrics derived from traces
   prometheus:

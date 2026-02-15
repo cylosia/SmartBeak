@@ -1,3 +1,7 @@
+# =============================================================================
+# LOCAL DEVELOPMENT ONLY — Do not use in staging or production.
+# Credentials below are intentionally simple for local dev convenience.
+# =============================================================================
 services:
   postgres:
     image: postgres:15-alpine
@@ -71,6 +75,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
+      # NOTE: pgrep-based check is fragile — update pattern if entrypoint changes.
+      # Consider adding a dedicated /health endpoint for more robust checks.
       test: ["CMD-SHELL", "pgrep -f 'worker.ts' || exit 1"]
       interval: 30s
       timeout: 5s
