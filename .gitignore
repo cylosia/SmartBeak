@@ -49,7 +49,9 @@ ci-reports/
 *.temp
 .cache/
 
-# Compiled JavaScript (TypeScript source is canonical)
+# Compiled JavaScript — TypeScript is the canonical source so all emitted .js
+# files are ignored. Only *.config.js (Next.js, ESLint, etc.) are tracked.
+# If you add a non-config .js file, whitelist it explicitly (e.g. !scripts/foo.js).
 *.js
 !*.config.js
 !*.d.ts

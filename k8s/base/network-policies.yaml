@@ -33,20 +33,20 @@ spec:
           protocol: TCP
   egress:
     # To PostgreSQL (RDS)
-    # TODO: Replace 0.0.0.0/0 with VPC CIDR (e.g. 10.0.0.0/16) or specific
-    # RDS endpoint CIDRs via Kustomize overlay per environment. Using 0.0.0.0/0
-    # allows egress to any external PostgreSQL server, weakening network isolation.
+    # SECURITY: Restrict to RFC 1918 private ranges as a safe default.
+    # Override with specific RDS endpoint CIDRs via Kustomize overlay per environment.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 10.0.0.0/8
       ports:
         - port: 5432
           protocol: TCP
     # To Redis (ElastiCache)
-    # TODO: Same as above — restrict to VPC CIDR or ElastiCache endpoint CIDRs.
+    # SECURITY: Restrict to RFC 1918 private ranges as a safe default.
+    # Override with specific ElastiCache endpoint CIDRs via Kustomize overlay per environment.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 10.0.0.0/8
       ports:
         - port: 6379
           protocol: TCP
@@ -135,18 +135,20 @@ spec:
   ingress: []
   egress:
     # To PostgreSQL (RDS)
-    # TODO: Replace 0.0.0.0/0 with VPC CIDR or specific RDS endpoint CIDRs.
+    # SECURITY: Restrict to RFC 1918 private ranges as a safe default.
+    # Override with specific RDS endpoint CIDRs via Kustomize overlay per environment.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 10.0.0.0/8
       ports:
         - port: 5432
           protocol: TCP
     # To Redis (ElastiCache)
-    # TODO: Replace 0.0.0.0/0 with VPC CIDR or specific ElastiCache endpoint CIDRs.
+    # SECURITY: Restrict to RFC 1918 private ranges as a safe default.
+    # Override with specific ElastiCache endpoint CIDRs via Kustomize overlay per environment.
     - to:
         - ipBlock:
-            cidr: 0.0.0.0/0
+            cidr: 10.0.0.0/8
       ports:
         - port: 6379
           protocol: TCP

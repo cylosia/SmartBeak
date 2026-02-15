@@ -33,7 +33,7 @@ exporters:
     endpoint: 0.0.0.0:8889
   # Logging exporter for debugging
   logging:
-    loglevel: warn
+    verbosity: normal
 
 extensions:
   health_check:

@@ -3,14 +3,19 @@ set -euo pipefail
 
 UV_VERSION="0.6.2"
 
-install_uv() {
+TMPDIR="${TMPDIR:-/tmp}"
+INSTALLER="${TMPDIR}/uv-install-${UV_VERSION}.sh"
+
+download_installer() {
+  local url="https://astral.sh/uv/${UV_VERSION}/install.sh"
+
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+    curl -fsSL "$url" -o "$INSTALLER"
     return
   fi
 
   if command -v wget >/dev/null 2>&1; then
-    wget -qO- "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+    wget -qO "$INSTALLER" "$url"
     return
   fi
 
@@ -18,12 +23,17 @@ install_uv() {
   exit 1
 }
 
-if command -v uv >/dev/null 2>&1; then
-  UV_BIN="uv"
-else
+install_uv() {
+  download_installer
+  sh "$INSTALLER"
+  rm -f "$INSTALLER"
+}
+
+if ! command -v uv >/dev/null 2>&1; then
   install_uv
-  UV_BIN="uv"
 fi
+
+UV_BIN="uv"
 
 if ! command -v "$UV_BIN" >/dev/null 2>&1; then
   echo "Error: uv not found after installation." >&2
