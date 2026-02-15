@@ -88,22 +88,12 @@ const nextConfig = {
     ];
   },
 
-  // SECURITY FIX: P1-HIGH Issue 5 - CORS Configuration
-  async rewrites() {
-    return [];
-  },
-
   // Environment variables exposed to browser
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_ACP_API: process.env.NEXT_PUBLIC_ACP_API,
   },
 
-  // Webpack configuration if needed
-  webpack: (config, { isServer }) => {
-    // Custom webpack config
-    return config;
-  },
 };
 
 module.exports = nextConfig;

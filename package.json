@@ -35,7 +35,7 @@
     "logger:migrate:dry-run": "tsx scripts/migrate-console-logs.ts --dry-run",
     "logger:find": "grep -r 'console\\.\\(log\\|warn\\|info\\|debug\\)' --include='*.ts' --include='*.js' . 2>/dev/null | grep -v node_modules | grep -v dist || echo 'No console.log statements found'",
     "logger:count": "npm run logger:find | wc -l",
-    "logger:check": "npm run logger:find && echo '❌ Found console.log statements. Please migrate to structured logger.' && exit 1 || echo '✅ No console.log statements found.'",
+    "logger:check": "npm run logger:find | grep -q 'console\\.' && { echo '❌ Found console.log statements. Please migrate to structured logger.'; exit 1; } || echo '✅ No console.log statements found.'",
     "migrate": "tsx scripts/migrate.ts up",
     "migrate:rollback": "tsx scripts/migrate.ts rollback",
     "migrate:status": "tsx scripts/migrate.ts status",
