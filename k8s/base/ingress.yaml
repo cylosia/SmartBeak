@@ -5,7 +5,6 @@ metadata:
   labels:
     app.kubernetes.io/part-of: smartbeak
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
@@ -20,6 +19,7 @@ metadata:
   # (staging, production) MUST patch these via Kustomize to use the correct
   # hostnames (e.g. staging-app.smartbeak.com, api-staging.smartbeak.com).
 spec:
+  ingressClassName: alb
   rules:
     - host: app.smartbeak.com
       http:

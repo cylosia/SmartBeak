@@ -1,5 +1,5 @@
 {
-  "name": "acp",
+  "name": "smartbeak",
   "private": true,
   "workspaces": [
     "packages/*",

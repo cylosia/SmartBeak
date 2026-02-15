@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Installs the `uv` Python package manager and then installs `kimi-cli`,
+# a developer tool used for content generation workflows.
 set -euo pipefail
 
 UV_VERSION="0.6.2"

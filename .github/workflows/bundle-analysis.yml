@@ -37,11 +37,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web app
-        run: npm run build:web
-        env:
-          CI: true
-
       - name: Analyze bundle size
         run: npm run analyze:bundle
         env:

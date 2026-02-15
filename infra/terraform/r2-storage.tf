@@ -25,6 +25,12 @@ variable "environment" {
   default     = "production"
 }
 
+variable "cors_allowed_origins" {
+  description = "Allowed origins for CORS (restrict to known domains in production)"
+  type        = list(string)
+  default     = ["https://app.smartbeak.com", "https://staging-app.smartbeak.com"]
+}
+
 # Locals
 locals {
   bucket_name = "smartbeak-shards-${var.environment}"
@@ -72,7 +78,7 @@ resource "aws_s3_bucket_cors_configuration" "shards_cors" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "HEAD"]
-    allowed_origins = ["*"]
+    allowed_origins = var.cors_allowed_origins
     expose_headers  = ["ETag", "Content-Length"]
     max_age_seconds = 3600
   }

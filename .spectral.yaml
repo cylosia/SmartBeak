@@ -15,4 +15,7 @@ rules:
   info-contact: off
 
   # Allow info.license to be optional
-  oas3-schema: warn
+  info-license: off
+
+  # Enforce valid OpenAPI schema
+  oas3-schema: error
