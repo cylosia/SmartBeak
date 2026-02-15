@@ -9,6 +9,15 @@ const nextConfig = {
   // Enable standalone output for Docker containerization
   output: 'standalone',
 
+  // Transpile internal monorepo packages so Next.js can compile their TypeScript source
+  transpilePackages: [
+    '@smartbeak/config',
+    '@smartbeak/kernel',
+    '@smartbeak/security',
+    '@smartbeak/database',
+    '@smartbeak/errors',
+  ],
+
   // Security: Do not expose source maps to browsers in production.
   // Upload source maps to error-tracking services (e.g. Sentry) privately instead.
   productionBrowserSourceMaps: false,
