@@ -30,6 +30,10 @@ test
 *.patch
 *.csv
 *.sql
+# Whitelist SQL migration files needed at runtime for database migrations
+!migrations/sql/*.sql
+!domains/*/db/migrations/*.sql
+!infra/migrations/*.sql
 *.md
 *.txt
 !README.md

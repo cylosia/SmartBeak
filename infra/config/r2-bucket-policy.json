@@ -2,7 +2,7 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AllowPublicReadForStaticAssets",
+      "Sid": "AllowPublicReadForStaticAssets-INTENTIONAL-CDN-served-theme-assets-only-static-prefix",
       "Effect": "Allow",
       "Principal": "*",
       "Action": [
