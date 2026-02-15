@@ -52,7 +52,7 @@ export async function v1Routes(app: FastifyInstance, opts: { pool: Pool }): Prom
 
   // Add API version header to all v1 responses
   app.addHook('onSend', async (_request, reply, payload) => {
-    reply.header('X-API-Version', '1');
+    void reply.header('X-API-Version', '1');
     return payload;
   });
 

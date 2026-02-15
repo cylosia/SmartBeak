@@ -123,7 +123,7 @@ export default function FeatureFlags() {
                       {flag.value ? 'ON' : 'OFF'}
                     </span>
                   ) : (
-                    <label style={{ cursor: saving === flag.key ? 'wait' : 'pointer' }}>
+                    <label aria-label={`Toggle ${flag.key}`} style={{ cursor: saving === flag.key ? 'wait' : 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={flag.value}

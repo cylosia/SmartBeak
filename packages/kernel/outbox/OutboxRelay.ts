@@ -76,7 +76,7 @@ export class OutboxRelay {
       pollIntervalMs: this.pollIntervalMs,
       batchSize: this.batchSize,
     });
-    this.poll();
+    void this.poll();
   }
 
   /**
@@ -196,7 +196,7 @@ export class OutboxRelay {
 
   private scheduleNext(): void {
     if (this.running) {
-      this.pollTimer = setTimeout(() => this.poll(), this.pollIntervalMs);
+      this.pollTimer = setTimeout(() => { void this.poll(); }, this.pollIntervalMs);
     }
   }
 }
