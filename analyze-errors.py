@@ -2,7 +2,7 @@ import re
 import sys
 from collections import defaultdict
 
-INPUT_FILE = 'ts-errors.txt'
+INPUT_FILE = sys.argv[1] if len(sys.argv) > 1 else 'ts-errors.txt'
 
 try:
     with open(INPUT_FILE, 'r') as f:

@@ -1,11 +1,6 @@
+# Deprecated: This file is superseded by circuit_breaker_escalation.yml which
+# provides both warning (5min) and critical (15min) alert tiers.
+# Kept as an empty group to avoid breaking any existing Prometheus config references.
 groups:
 - name: circuit_breakers
-  rules:
-  - alert: CircuitBreakerOpenTooLong
-    expr: increase(circuit_open[5m]) > 0 and increase(circuit_closed[5m]) == 0
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "Circuit breaker open for more than 5 minutes"
-      description: "Adapter {{ $labels.name }} circuit breaker has remained open for over 5 minutes."
+  rules: []
