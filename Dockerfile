@@ -117,7 +117,7 @@ COPY --link themes/ ./themes/
 COPY --link apps/api/ ./apps/api/
 
 # Install tsx for TypeScript execution with path alias support
-RUN npm install -g tsx
+RUN npm install -g tsx@4.19.0
 
 USER smartbeak
 
@@ -156,7 +156,7 @@ COPY --link themes/ ./themes/
 COPY --link apps/api/ ./apps/api/
 
 # Install tsx for TypeScript execution with path alias support
-RUN npm install -g tsx
+RUN npm install -g tsx@4.19.0
 
 USER smartbeak
 

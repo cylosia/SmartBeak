@@ -133,7 +133,7 @@ jobs:
           STATS_FILE="apps/web/.next/analyze/__bundle_analysis.json"
 
           if [ -f "$STATS_FILE" ]; then
-            SIZE=$(cat "$STATS_FILE" | grep -o '"totalSize":[0-9]*' | cut -d':' -f2)
+            SIZE=$(jq -r '.totalSize' "$STATS_FILE")
             if [ "$SIZE" -gt "$MAX_SIZE" ]; then
               echo "::error::Bundle size ($SIZE bytes) exceeds limit ($MAX_SIZE bytes)"
               exit 1

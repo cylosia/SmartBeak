@@ -35,9 +35,9 @@ module.exports = {
     'no-control-regex': 'warn',
     'no-unexpected-multiline': 'warn',
     'no-empty': 'warn',
-    'no-useless-catch': 'warn',
+    'no-useless-catch': 'error',
     'no-extra-semi': 'warn',
-    'prefer-const': 'warn',
+    'prefer-const': 'error',
 
     '@typescript-eslint/no-unused-vars': ['warn', {
       argsIgnorePattern: '^_',

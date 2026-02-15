@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+UV_VERSION="0.6.2"
+
 install_uv() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://astral.sh/uv/install.sh | sh
+    curl -fsSL "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
     return
   fi
 
   if command -v wget >/dev/null 2>&1; then
-    wget -qO- https://astral.sh/uv/install.sh | sh
+    wget -qO- "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
     return
   fi
 

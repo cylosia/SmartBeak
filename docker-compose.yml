@@ -36,7 +36,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: "3001"
       CONTROL_PLANE_DB: postgresql://smartbeak:smartbeak@postgres:5432/smartbeak
       REDIS_URL: redis://redis:6379
@@ -60,7 +60,7 @@ services:
       context: .
       target: worker
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       CONTROL_PLANE_DB: postgresql://smartbeak:smartbeak@postgres:5432/smartbeak
       REDIS_URL: redis://redis:6379
     env_file:

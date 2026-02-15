@@ -26,8 +26,10 @@ Thumbs.db
 # Audit reports & generated artifacts
 audit-reports
 docs
+test
 *.patch
 *.csv
 *.sql
 *.md
+*.txt
 !README.md

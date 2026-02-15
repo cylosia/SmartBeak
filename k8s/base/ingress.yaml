@@ -16,6 +16,9 @@ metadata:
     alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
     # Set per environment via overlay:
     # alb.ingress.kubernetes.io/certificate-arn: <ACM_CERT_ARN>
+  # NOTE: Hostnames below are production defaults. Each environment overlay
+  # (staging, production) MUST patch these via Kustomize to use the correct
+  # hostnames (e.g. staging-app.smartbeak.com, api-staging.smartbeak.com).
 spec:
   rules:
     - host: app.smartbeak.com
