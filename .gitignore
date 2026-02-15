@@ -41,6 +41,9 @@ coverage/
 test-results/
 playwright-report/
 
+# CI failure reports (generated in GitHub Actions)
+ci-reports/
+
 # Temporary files
 *.tmp
 *.temp

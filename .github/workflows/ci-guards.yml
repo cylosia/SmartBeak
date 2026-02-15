@@ -25,7 +25,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run type-check  # TypeScript compilation
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
+      - name: Run type-check
+        run: |
+          set -o pipefail
+          npm run type-check 2>&1 | tee ci-reports/type-check-output.txt
+      - name: Upload type-check failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: type-check-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   security-audit:
     runs-on: ubuntu-latest
@@ -38,8 +50,23 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm audit --audit-level=high
-      - run: npx audit-ci --moderate
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
+      - name: Run npm audit (JSON capture)
+        run: npm audit --audit-level=high --json > ci-reports/npm-audit.json 2>&1 || true
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+      - name: Run audit-ci
+        run: |
+          set -o pipefail
+          npx audit-ci --moderate 2>&1 | tee ci-reports/audit-ci-output.txt
+      - name: Upload security-audit failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-audit-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -54,6 +81,20 @@ jobs:
           base: ${{ github.event.pull_request.base.sha || github.event.before }}
           head: ${{ github.event.pull_request.head.sha || github.sha }}
           extra_args: --debug --only-verified
+      - name: Save scan summary on failure
+        if: failure()
+        run: |
+          mkdir -p ci-reports
+          echo "TruffleHog secret scan failed at $(date -u)" > ci-reports/trufflehog-summary.txt
+          echo "Review the Actions log for full TruffleHog output." >> ci-reports/trufflehog-summary.txt
+      - name: Upload secret-scan failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: secret-scan-failure-report
+          path: ci-reports/
+          retention-days: 7
+          if-no-files-found: ignore
 
   lint:
     runs-on: ubuntu-latest
@@ -66,8 +107,34 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
-      - run: npm run lint:security  # Custom security linting
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
+      - name: Run ESLint (JSON capture)
+        run: |
+          npx eslint . --ext .ts,.tsx \
+            --ignore-pattern 'node_modules/**' \
+            --ignore-pattern 'dist/**' \
+            --ignore-pattern 'build/**' \
+            -f json -o ci-reports/eslint-report.json || true
+      - name: Run ESLint
+        run: npm run lint
+      - name: Run security lint (JSON capture)
+        run: |
+          npx eslint . --ext .ts,.tsx \
+            --config .eslintrc.security.cjs \
+            --ignore-pattern 'node_modules/**' \
+            --ignore-pattern 'dist/**' \
+            --ignore-pattern 'build/**' \
+            -f json -o ci-reports/eslint-security-report.json || true
+      - name: Run security lint
+        run: npm run lint:security
+      - name: Upload lint failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lint-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   test:
     runs-on: ubuntu-latest
@@ -98,10 +165,43 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
       - name: Apply migrations
         run: npm run migrate
-      - run: npm run test:unit
-      - run: npm run test:integration
+      - name: Run unit tests
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ci-reports
+          JEST_JUNIT_OUTPUT_NAME: junit-unit.xml
+        run: |
+          npx jest --config jest.config.ts \
+            --testPathPattern=unit \
+            --passWithNoTests \
+            --ci \
+            --reporters=default \
+            --reporters=jest-junit
+      - name: Run integration tests
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ci-reports
+          JEST_JUNIT_OUTPUT_NAME: junit-integration.xml
+        run: |
+          npx jest --config jest.config.ts \
+            --testPathPattern=integration \
+            --runInBand \
+            --passWithNoTests \
+            --ci \
+            --reporters=default \
+            --reporters=jest-junit
+      - name: Upload test failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-failure-report
+          path: |
+            ci-reports/
+            coverage/
+          retention-days: 7
+          if-no-files-found: ignore
 
   openapi-lint:
     runs-on: ubuntu-latest
@@ -114,7 +214,20 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run openapi:lint
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
+      - name: Run OpenAPI lint
+        run: |
+          set -o pipefail
+          npx spectral lint docs/openapi.json --fail-severity warn \
+            2>&1 | tee ci-reports/spectral-output.txt
+      - name: Upload OpenAPI lint failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openapi-lint-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   test-a11y:
     runs-on: ubuntu-latest
@@ -127,7 +240,26 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run test:a11y
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
+      - name: Run accessibility tests
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ci-reports
+          JEST_JUNIT_OUTPUT_NAME: junit-a11y.xml
+        run: |
+          npx jest --config jest.config.ts \
+            --selectProjects a11y \
+            --passWithNoTests \
+            --ci \
+            --reporters=default \
+            --reporters=jest-junit
+      - name: Upload a11y test failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-a11y-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   test-extended:
     runs-on: ubuntu-latest
@@ -158,9 +290,36 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run test:load
-      - run: npm run test:bench
-      - run: npm run test:chaos
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
+      - name: Run load tests
+        run: |
+          npx vitest run --config vitest.config.ts test/load \
+            --testTimeout=60000 \
+            --reporter=default \
+            --reporter=junit \
+            --outputFile.junit=ci-reports/junit-load.xml
+      - name: Run benchmark tests
+        run: |
+          npx vitest run --config vitest.config.ts test/benchmarks \
+            --testTimeout=30000 \
+            --reporter=default \
+            --reporter=junit \
+            --outputFile.junit=ci-reports/junit-bench.xml
+      - name: Run chaos tests
+        run: |
+          npx vitest run --config vitest.config.ts test/chaos \
+            --testTimeout=30000 \
+            --reporter=default \
+            --reporter=junit \
+            --outputFile.junit=ci-reports/junit-chaos.xml
+      - name: Upload extended test failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-extended-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   migration-check:
     runs-on: ubuntu-latest
@@ -187,14 +346,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
 
       - name: Apply all migrations
-        run: npm run migrate
+        run: |
+          set -o pipefail
+          npm run migrate 2>&1 | tee ci-reports/migration-apply.txt
 
       - name: Verify no pending migrations
         run: |
           OUTPUT=$(npx tsx scripts/migrate.ts status 2>&1)
           echo "$OUTPUT"
+          echo "$OUTPUT" > ci-reports/migration-status.txt
           if echo "$OUTPUT" | grep -q "Pending migrations (0)"; then
             echo "All migrations applied successfully."
           else
@@ -203,13 +367,26 @@ jobs:
           fi
 
       - name: Rollback all migrations
-        run: npm run migrate:rollback -- --all
+        run: |
+          set -o pipefail
+          npm run migrate:rollback -- --all 2>&1 | tee ci-reports/migration-rollback.txt
 
       - name: Re-apply all migrations (roundtrip verification)
-        run: npm run migrate
+        run: |
+          set -o pipefail
+          npm run migrate 2>&1 | tee ci-reports/migration-reapply.txt
 
       - name: Final migration status
-        run: npx tsx scripts/migrate.ts status
+        run: |
+          npx tsx scripts/migrate.ts status 2>&1 | tee ci-reports/migration-final-status.txt
+
+      - name: Upload migration failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: migration-check-failure-report
+          path: ci-reports/
+          retention-days: 7
 
   test-visual:
     runs-on: ubuntu-latest
@@ -224,7 +401,22 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build:web
-      - run: npm run test:visual
+      - name: Run visual tests
+        run: |
+          npx playwright test --config test/visual/playwright.config.ts \
+            --reporter=github --reporter=html
+        env:
+          PLAYWRIGHT_HTML_REPORT: ci-reports/playwright-report
+      - name: Upload visual test failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-visual-failure-report
+          path: |
+            ci-reports/playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   openapi-check:
     runs-on: ubuntu-latest
@@ -238,6 +430,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - name: Prepare report directory
+        run: mkdir -p ci-reports
 
       - name: Export OpenAPI spec
         run: |
@@ -245,7 +439,10 @@ jobs:
           cp docs/openapi.json openapi-current.json
 
       - name: Validate OpenAPI spec
-        run: npx --yes @redocly/cli lint openapi-current.json --skip-rule no-empty-servers
+        run: |
+          set -o pipefail
+          npx --yes @redocly/cli lint openapi-current.json \
+            --skip-rule no-empty-servers 2>&1 | tee ci-reports/redocly-lint-output.txt
 
       - name: Check for breaking changes
         if: github.event_name == 'pull_request'
@@ -256,4 +453,15 @@ jobs:
           curl -sSL https://github.com/Tufin/oasdiff/releases/latest/download/oasdiff_linux_amd64.tar.gz | tar xz
           sudo mv oasdiff /usr/local/bin/
 
-          oasdiff breaking /tmp/openapi-base.json openapi-current.json --fail-on ERR
+          set -o pipefail
+          oasdiff breaking /tmp/openapi-base.json openapi-current.json \
+            --fail-on ERR 2>&1 | tee ci-reports/oasdiff-breaking-output.txt
+
+      - name: Upload OpenAPI check failure report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openapi-check-failure-report
+          path: ci-reports/
+          retention-days: 7
+          if-no-files-found: ignore
