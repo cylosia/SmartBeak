@@ -124,23 +124,28 @@ export class AlertService {
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
+    // P1-FIX: Use SKIP LOCKED instead of NOWAIT to gracefully skip contended rows
+    // instead of raising errors under concurrent access
     const { rows } = await client.query<Alert>(
     `SELECT * FROM usage_alerts
     WHERE org_id = $1 AND metric = $2 AND triggered = false AND threshold <= $3
-    FOR UPDATE NOWAIT`,
+    FOR UPDATE SKIP LOCKED`,
     [orgId, metric, value]
     );
 
-    let alertCount = 0;
+    const alertCount = rows.length;
 
-    for (const alert of rows) {
+    // P1-FIX: Batch UPDATE instead of loop-based individual updates
+    if (rows.length > 0) {
+    const ids = rows.map(alert => alert.id);
     await client.query(
-    'UPDATE usage_alerts SET triggered = true, updated_at = NOW() WHERE id = $1',
-    [alert["id"]]
+    'UPDATE usage_alerts SET triggered = true, updated_at = NOW() WHERE id = ANY($1)',
+    [ids]
     );
 
+    for (const alert of rows) {
     logger.warn(`[ALERT TRIGGERED] org=${orgId}, metric=${metric}, threshold=${alert.threshold}, value=${value}`);
-    alertCount++;
+    }
     }
 
     await client.query('COMMIT');
@@ -189,15 +194,19 @@ export class AlertService {
   * @returns Promise that resolves when alert is deleted
   * @throws Error if validation fails or database operation fails
   */
-  async delete(alertId: string): Promise<void> {
+  async delete(alertId: string, orgId: string): Promise<void> {
   if (!alertId || typeof alertId !== 'string') {
     throw new Error('Valid alertId (string) is required');
+  }
+  // P1-FIX: Require orgId to prevent cross-tenant deletion
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('Valid orgId (string) is required');
   }
 
   try {
     const result = await this.pool.query(
-    'DELETE FROM usage_alerts WHERE id = $1',
-    [alertId]
+    'DELETE FROM usage_alerts WHERE id = $1 AND org_id = $2',
+    [alertId, orgId]
     );
 
     if (result.rowCount === 0) {

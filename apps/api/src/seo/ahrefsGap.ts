@@ -214,7 +214,7 @@ async function fetchFromAhrefsAPI(domain: string, competitors: string[], apiKey:
         case 504:
           throw new Error('Ahrefs API is experiencing issues. Please try again later.');
         default:
-          throw new Error(parsedError?.error || parsedError?.["message"] ||
+          throw new Error(parsedError?.error || parsedError?.message ||
             `Ahrefs API error (${response.status}): ${errorBody || 'Unknown error'}`);
       }
     }
@@ -257,7 +257,7 @@ export async function ingestAhrefsGap(domain_id: string, domain: string, competi
     keywordData = await fetchFromAhrefsAPI(domain, competitors, apiKey);
   }
   catch (error) {
-    const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to fetch from Ahrefs API', error instanceof Error ? error : new Error(errorMessage));
     throw new Error(`Failed to fetch keyword gap data: ${errorMessage}`);
   }
@@ -359,7 +359,7 @@ export async function ingestAhrefsGapParallel(domain_id: string, domain: string,
     keywordData = await fetchFromAhrefsAPI(domain, competitors, apiKey);
   }
   catch (error) {
-    const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to fetch from Ahrefs API', error instanceof Error ? error : new Error(errorMessage));
     throw new Error(`Failed to fetch keyword gap data: ${errorMessage}`);
   }

@@ -161,8 +161,6 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
   validateNonEmptyString(seedKeyword, 'seedKeyword');
   validateNonEmptyString(country, 'country');
 
-  const _startTime = Date.now();
-
   try {
     const url = new URL(`${this.baseUrl}/keywords-explorer/ideas`);
     url.searchParams.append('keyword', seedKeyword);

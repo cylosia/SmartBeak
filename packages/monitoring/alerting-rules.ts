@@ -501,7 +501,11 @@ export class AlertRulesEngine extends EventEmitter {
     if (!this.notificationHandlers.has(channel)) {
       this.notificationHandlers.set(channel, []);
     }
-    this.notificationHandlers.get(channel)!.push(handler);
+    // P2-FIX: Safe access after guaranteed set above
+    const handlers = this.notificationHandlers.get(channel);
+    if (handlers) {
+      handlers.push(handler);
+    }
   }
 
   // ==========================================================================
@@ -974,10 +978,12 @@ export function createSlackHandler(
       ],
     };
 
+    // P1-FIX: Add timeout to prevent hanging on unresponsive webhook endpoints
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(slackPayload),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {

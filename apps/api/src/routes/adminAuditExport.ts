@@ -137,9 +137,10 @@ export async function adminAuditExportRoutes(app: FastifyInstance): Promise<void
       return errors.badRequest(reply, 'orgId is required for audit exports', ErrorCodes.MISSING_PARAMETER);
     }
 
-    // P1-FIX: x-admin-id header is user-controlled. Validate UUID format to limit
-    // abuse surface. NOTE: This should be replaced with JWT-derived admin identity
-    // in a future iteration to eliminate user-controlled identity headers entirely.
+    // SECURITY: x-admin-id header is user-controlled and can be spoofed by anyone
+    // who possesses the shared ADMIN_API_KEY. This must be replaced with a per-admin
+    // JWT so that identity is cryptographically verified, not self-asserted.
+    // Until then, UUID validation + org membership check limit the abuse surface.
     const adminId = req.headers['x-admin-id'] as string | undefined;
     if (!adminId) {
       return errors.badRequest(reply, 'x-admin-id header is required', ErrorCodes.MISSING_PARAMETER);
