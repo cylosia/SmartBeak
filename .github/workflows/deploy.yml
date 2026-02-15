@@ -177,5 +177,7 @@ jobs:
           if [ -n "$API_URL" ]; then
             curl -sf --max-time 10 "https://${API_URL}/health" || { echo "::error::Smoke test failed: /health endpoint unreachable"; exit 1; }
           else
-            echo "::warning::No ingress hostname found, skipping smoke test"
+            # Production must have a reachable ingress — fail the deploy if missing.
+            echo "::error::No ingress hostname found — cannot verify production deployment"
+            exit 1
           fi

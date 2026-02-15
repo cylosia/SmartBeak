@@ -14,6 +14,7 @@
 # =============================================================================
 
 ARG NODE_VERSION=20
+ARG TSX_VERSION=4.19.0
 
 # ---------------------------------------------------------------------------
 # Stage: base
@@ -117,7 +118,8 @@ COPY --link themes/ ./themes/
 COPY --link apps/api/ ./apps/api/
 
 # Install tsx for TypeScript execution with path alias support
-RUN npm install -g --ignore-scripts tsx@4.19.0
+ARG TSX_VERSION
+RUN npm install -g --ignore-scripts tsx@${TSX_VERSION}
 
 USER smartbeak
 
@@ -156,7 +158,8 @@ COPY --link themes/ ./themes/
 COPY --link apps/api/ ./apps/api/
 
 # Install tsx for TypeScript execution with path alias support
-RUN npm install -g --ignore-scripts tsx@4.19.0
+ARG TSX_VERSION
+RUN npm install -g --ignore-scripts tsx@${TSX_VERSION}
 
 USER smartbeak
 

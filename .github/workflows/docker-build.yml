@@ -67,25 +67,27 @@ jobs:
           context: .
           target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
+          # Load image into local daemon on PRs so Trivy can scan it
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
-          provenance: true
-          sbom: true
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
 
       - name: Scan image with Trivy
-        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # master
         with:
-          image-ref: ${{ steps.ecr-login.outputs.registry }}/smartbeak/${{ matrix.target }}:${{ github.sha }}
+          # On push: scan the pushed ECR image. On PRs: scan the locally loaded image.
+          image-ref: ${{ steps.ecr-login.outputs.registry && format('{0}/smartbeak/{1}:{2}', steps.ecr-login.outputs.registry, matrix.target, github.sha) || format('smartbeak/smartbeak/{0}:{1}', matrix.target, github.sha) }}
           format: 'sarif'
           output: 'trivy-results-${{ matrix.target }}.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
       - name: Upload Trivy scan results to GitHub Security
-        if: github.event_name != 'pull_request'
+        if: always() && hashFiles(format('trivy-results-{0}.sarif', matrix.target)) != ''
         uses: github/codeql-action/upload-sarif@f5c2471be782132e47a6e6f9c725e56730d6e9a3 # v3.32.3
         with:
           sarif_file: 'trivy-results-${{ matrix.target }}.sarif'

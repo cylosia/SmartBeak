@@ -75,9 +75,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # NOTE: pgrep-based check is fragile — update pattern if entrypoint changes.
-      # Consider adding a dedicated /health endpoint for more robust checks.
-      test: ["CMD-SHELL", "pgrep -f 'worker.ts' || exit 1"]
+      # Verify the main node process is running. Matches the CMD from the Dockerfile
+      # worker target: node --import tsx/esm apps/api/src/jobs/worker.ts
+      # TODO: Replace with a dedicated health endpoint or file-based heartbeat for
+      # production-grade liveness checking.
+      test: ["CMD-SHELL", "pgrep -f 'node.*worker' || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 15s

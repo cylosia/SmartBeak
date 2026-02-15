@@ -44,7 +44,7 @@ module.exports = {
       varsIgnorePattern: '^_',
     }],
     '@typescript-eslint/no-var-requires': 'warn',
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-empty-function': 'off',
     '@typescript-eslint/ban-ts-comment': 'warn',
     '@typescript-eslint/ban-types': 'warn',
