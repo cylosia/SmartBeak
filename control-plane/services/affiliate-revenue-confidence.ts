@@ -24,7 +24,8 @@ export interface AffiliateRevenueConfidence {
 */
 export async function getAffiliateRevenueConfidence(
   pool: Pool,
-  affiliateOfferId: string
+  affiliateOfferId: string,
+  orgId: string
 ): Promise<AffiliateRevenueConfidence | null> {
   // Input validation
   if (!pool) {
@@ -33,11 +34,15 @@ export async function getAffiliateRevenueConfidence(
   if (!affiliateOfferId || typeof affiliateOfferId !== 'string') {
   throw new Error('Valid affiliateOfferId (string) is required');
   }
+  // P1-FIX: Require orgId to prevent cross-tenant data access
+  if (!orgId || typeof orgId !== 'string') {
+  throw new Error('Valid orgId (string) is required');
+  }
 
   try {
   const result = await pool.query<AffiliateRevenueConfidence>(
-    'SELECT * FROM affiliate_revenue_confidence WHERE affiliate_offer_id = $1',
-    [affiliateOfferId]
+    'SELECT * FROM affiliate_revenue_confidence WHERE affiliate_offer_id = $1 AND org_id = $2',
+    [affiliateOfferId, orgId]
   );
 
   if (result.rows.length === 0) {

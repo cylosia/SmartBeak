@@ -48,26 +48,19 @@ function validateDateRange(startDate?: string, endDate?: string): { valid: boole
 function sanitizeCsvCell(value: string): string {
   if (!value) return '';
 
-  // Remove characters that could be interpreted as formulas
-  const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
-  let sanitized = value;
+  // Escape double quotes first (before wrapping)
+  let sanitized = value.replace(/"/g, '""');
 
-  for (const char of dangerousChars) {
-  if (sanitized.startsWith(char)) {
-    sanitized = '\'' + sanitized;
-    break;
-  }
-  }
-
-  // Escape double quotes
-  sanitized = sanitized.replace(/"/g, '""');
-
-  // P2-FIX: Wrap in double quotes per RFC 4180 (was using single quotes)
-  if (sanitized.includes(',') || sanitized.includes('\n') || sanitized.includes('"')) {
-  sanitized = `"${sanitized}"`;
+  // P1-FIX: Sanitize formula injection characters anywhere in the cell, not just
+  // at the start. A tab or quote prefix can position a dangerous char mid-cell
+  // where spreadsheet parsers still evaluate it as a formula.
+  const dangerousChars = /[=+\-@\t\r]/;
+  if (dangerousChars.test(sanitized)) {
+  sanitized = '\'' + sanitized;
   }
 
-  return sanitized;
+  // Always wrap in double quotes per RFC 4180
+  return `"${sanitized}"`;
 }
 
 const logger = getLogger('ActivityCsvExport');
@@ -85,10 +78,10 @@ async function recordExportAudit(params: {
     `INSERT INTO audit_events (org_id, actor_type, actor_id, action, entity_type, metadata, ip_address, created_at)
     VALUES ($1, 'user', $2, 'activity_export_csv', 'export', $3, $4, NOW())`,
     [
-    params["orgId"],
+    params.orgId,
     params.userId,
     JSON.stringify({
-      domain_id: params["domainId"],
+      domain_id: params.domainId,
       record_count: params.recordCount,
       filters: params.filters,
       format: 'csv',
@@ -147,10 +140,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE org_id = $1
         AND deleted_at IS NULL`;
   // P2-FIX: Require orgId — previously fell back to userId which queried wrong tenant
-  if (!auth["orgId"]) {
+  if (!auth.orgId) {
     return sendError(res, 400, 'Organization context is required for exports');
   }
-  const params: (string | number)[] = [auth["orgId"]];
+  const params: (string | number)[] = [auth.orgId];
   let paramIndex = 2;
 
   if (domainId) {
@@ -211,7 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   await recordExportAudit({
     userId: auth.userId,
-    orgId: auth["orgId"],
+    orgId: auth.orgId,
     recordCount: allRows.length,
     filters: { startDate, endDate },
     ip: ip || 'unknown',
@@ -235,7 +228,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Set headers for download
   const filename = `activity-export-${new Date().toISOString().split('T')[0]}.csv`;
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename='${filename}'`);
+  // P2-FIX: Use double quotes per RFC 6266 (single quotes are non-standard)
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');

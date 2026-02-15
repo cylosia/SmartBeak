@@ -167,7 +167,7 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
   throw new MissingClaimsError('sub (user ID)');
   }
 
-  if (!claims["orgId"]) {
+  if (!claims.orgId) {
   throw new MissingClaimsError('orgId');
   }
 
@@ -175,9 +175,16 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
   throw new MissingClaimsError('role');
   }
 
+  // P0-FIX: Runtime validation of role value instead of unchecked `as Role` cast.
+  // A malformed JWT could contain an arbitrary string in the role claim.
+  const VALID_ROLES: readonly Role[] = ['admin', 'editor', 'viewer', 'owner'];
+  if (!VALID_ROLES.includes(claims.role as Role)) {
+  throw new InvalidTokenError(`Invalid role in token: ${claims.role}`);
+  }
+
   return {
   userId: claims.sub,
-  orgId: claims["orgId"],
+  orgId: claims.orgId,
   roles: [claims.role as Role],
   };
 }
@@ -199,7 +206,7 @@ export function requireRole(ctx: AuthContext, allowed: Role[]): void {
 * @throws OrganizationAccessError if organization doesn't match
 */
 export function requireOrgAccess(ctx: AuthContext, targetOrgId: string): void {
-  if (ctx["orgId"] !== targetOrgId) {
+  if (ctx.orgId !== targetOrgId) {
   throw new OrganizationAccessError('Forbidden: Organization mismatch');
   }
 }
@@ -230,5 +237,5 @@ export function hasRole(ctx: AuthContext, allowed: Role[]): boolean {
 * Returns boolean instead of throwing
 */
 export function hasOrgAccess(ctx: AuthContext, targetOrgId: string): boolean {
-  return ctx["orgId"] === targetOrgId;
+  return ctx.orgId === targetOrgId;
 }

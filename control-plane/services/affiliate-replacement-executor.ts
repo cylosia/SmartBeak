@@ -110,15 +110,13 @@ export async function executeAffiliateReplacement(
   const foundIds = input.contentVersionIds.filter(id => existingIds.has(id));
 
   // P1-FIX: Batch INSERT for all found content versions
-  let _affectedCount = 0;
   if (foundIds.length > 0) {
-    const insertResult = await client.query(
+    await client.query(
     `INSERT INTO content_versions (previous_version_id, updated_at)
     SELECT unnest($1::text[]), NOW()
     RETURNING id`,
     [foundIds]
     );
-    _affectedCount = insertResult.rowCount ?? 0;
   }
 
   const affected = foundIds.length;

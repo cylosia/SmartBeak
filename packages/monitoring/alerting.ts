@@ -175,7 +175,7 @@ export class AlertingSystem extends EventEmitter {
     await this.triggerAlert(rule, metric);
     }
     } catch (error) {
-    logger["error"](`[Alerting] Check failed for ${rule.id}:`, error instanceof Error ? error : new Error(String(error)));
+    logger.error(`[Alerting] Check failed for ${rule.id}:`, error instanceof Error ? error : new Error(String(error)));
     }
   }
   }
@@ -271,8 +271,8 @@ export class AlertingSystem extends EventEmitter {
     alert.severity,
     alert.category,
     alert.title,
-    alert["message"],
-    JSON.stringify(alert["metadata"]),
+    alert.message,
+    JSON.stringify(alert.metadata),
     alert.acknowledged,
     alert.createdAt,
     ]
@@ -325,7 +325,7 @@ export class AlertingSystem extends EventEmitter {
     {
     color: colors[alert.severity],
     title: `[${alert.severity.toUpperCase()}] ${alert.title}`,
-    text: alert["message"],
+    text: alert.message,
     footer: 'SmartBeak Monitoring',
     ts: Math.floor(alert.createdAt.getTime() / 1000),
     },
@@ -333,13 +333,15 @@ export class AlertingSystem extends EventEmitter {
   };
 
   try {
+    // P1-FIX: Add timeout to prevent hanging on unresponsive webhook endpoints
     await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
-    logger["error"]('[Alert:Slack] Failed to send:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[Alert:Slack] Failed to send:', error instanceof Error ? error : new Error(String(error)));
   }
   }
 
@@ -351,13 +353,15 @@ export class AlertingSystem extends EventEmitter {
   if (!webhookUrl) return;
 
   try {
+    // P1-FIX: Add timeout to prevent hanging on unresponsive webhook endpoints
     await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(alert),
+    signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
-    logger["error"]('[Alert:Webhook] Failed to send:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[Alert:Webhook] Failed to send:', error instanceof Error ? error : new Error(String(error)));
   }
   }
 
@@ -418,7 +422,7 @@ export class AlertingSystem extends EventEmitter {
     WHERE created_at >= NOW() - INTERVAL '10 minutes'`
   );
 
-  const errors = parseInt(rows[0]?.["errors"] || 0);
+  const errors = parseInt(rows[0]?.errors || 0);
   const total = parseInt(rows[0]?.total || 0);
 
   return total > 0 ? errors / total : 0;
@@ -540,8 +544,8 @@ export class AlertingSystem extends EventEmitter {
     severity: r.severity,
     category: r.category,
     title: r.title,
-    message: r["message"],
-    metadata: r["metadata"],
+    message: r.message,
+    metadata: r.metadata,
     acknowledged: r.acknowledged,
     acknowledgedBy: r.acknowledged_by,
     createdAt: r.created_at,

@@ -196,7 +196,7 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('searchProducts', latency, false);
     this.metrics.recordError('searchProducts', error instanceof Error ? error.name : 'Unknown');
-    this.logger["error"]('Failed to search Amazon products', context, error as Error);
+    this.logger.error('Failed to search Amazon products', context, error as Error);
     throw error;
   } finally {
     clearTimeout(timeoutId);
