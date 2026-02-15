@@ -4,9 +4,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: smartbeak
-      POSTGRES_PASSWORD: smartbeak
-      POSTGRES_DB: smartbeak
+      POSTGRES_USER: ${POSTGRES_USER:-smartbeak}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartbeak}
+      POSTGRES_DB: ${POSTGRES_DB:-smartbeak}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,7 +36,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: "3001"
       CONTROL_PLANE_DB: postgresql://smartbeak:smartbeak@postgres:5432/smartbeak
       REDIS_URL: redis://redis:6379
@@ -60,7 +60,7 @@ services:
       context: .
       target: worker
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       CONTROL_PLANE_DB: postgresql://smartbeak:smartbeak@postgres:5432/smartbeak
       REDIS_URL: redis://redis:6379
     env_file:
@@ -85,7 +85,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       NEXT_PUBLIC_API_URL: http://api:3001/v1
     env_file:
       - .env
