@@ -35,14 +35,19 @@ verify_installer() {
     local actual_sha
     actual_sha=$(sha256sum "$INSTALLER" | awk '{print $1}')
     if [ "$expected_sha" = "VERIFY_AND_SET_HASH_WHEN_BUMPING_UV_VERSION" ]; then
-      echo "Warning: installer checksum not pinned — set expected_sha in install.sh" >&2
+      echo "Error: installer checksum not pinned — set expected_sha in install.sh" >&2
+      echo "Generate it with: curl -fsSL \"https://astral.sh/uv/${UV_VERSION}/install.sh\" | sha256sum" >&2
+      rm -f "$INSTALLER"
+      exit 1
     elif [ "$actual_sha" != "$expected_sha" ]; then
       echo "Error: installer checksum mismatch (expected ${expected_sha}, got ${actual_sha})" >&2
       rm -f "$INSTALLER"
       exit 1
     fi
   else
-    echo "Warning: sha256sum not available — skipping integrity check" >&2
+    echo "Error: sha256sum is required for installer integrity verification." >&2
+    rm -f "$INSTALLER"
+    exit 1
   fi
 }
 

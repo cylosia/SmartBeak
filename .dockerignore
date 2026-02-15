@@ -23,6 +23,13 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Test files — not needed in production images
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+test
+
 # Audit reports & generated artifacts
 audit-reports
 docs

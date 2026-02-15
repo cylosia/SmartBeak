@@ -124,7 +124,7 @@ jobs:
       - name: Check bundle size limits
         run: |
           # Check if bundle exceeds limits
-          MAX_SIZE=500000  # 500KB in bytes
+          MAX_SIZE=512000  # 500 KiB (500 * 1024) — matches the JS threshold above
           STATS_FILE="apps/web/.next/analyze/__bundle_analysis.json"
 
           if [ -f "$STATS_FILE" ]; then

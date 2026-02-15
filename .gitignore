@@ -51,7 +51,9 @@ ci-reports/
 
 # Compiled JavaScript — TypeScript is the canonical source so all emitted .js
 # files are ignored. Only *.config.js (Next.js, ESLint, etc.) are tracked.
-# If you add a non-config .js file, whitelist it explicitly (e.g. !scripts/foo.js).
+# WARNING: This blanket ignore means any new non-config .js file will be
+# silently excluded from version control. If you add a legitimate .js file,
+# whitelist it explicitly below (e.g. !scripts/foo.js).
 *.js
 !*.config.js
 !*.d.ts

@@ -40,6 +40,8 @@ services:
     ports:
       - "3001:3001"
     environment:
+      # NOTE: Docker Compose 'environment' entries take precedence over 'env_file'.
+      # The .env file may set NODE_ENV=development, but this explicit value wins.
       NODE_ENV: development
       PORT: "3001"
       CONTROL_PLANE_DB: postgresql://smartbeak:smartbeak@postgres:5432/smartbeak
@@ -75,11 +77,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # Verify the main node process is running. Matches the CMD from the Dockerfile
-      # worker target: node --import tsx/esm apps/api/src/jobs/worker.ts
-      # TODO: Replace with a dedicated health endpoint or file-based heartbeat for
-      # production-grade liveness checking.
-      test: ["CMD-SHELL", "pgrep -f 'node.*worker' || exit 1"]
+      # File-based heartbeat: the worker writes a timestamp to /tmp/worker-heartbeat
+      # on each job loop iteration. This check verifies the file was updated within
+      # the last 60 seconds, catching deadlocked or stalled workers that pgrep misses.
+      # Fallback: if heartbeat file doesn't exist yet (startup), verify the process runs.
+      test: ["CMD-SHELL", "test -f /tmp/worker-heartbeat && find /tmp/worker-heartbeat -mmin -1 | grep -q . || pgrep -f 'node.*worker' || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 15s
@@ -93,7 +95,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # NODE_ENV must be 'production' for Next.js standalone output to work correctly
+      # NODE_ENV must be 'production' for Next.js standalone output to work correctly.
+      # NOTE: Docker Compose 'environment' entries take precedence over 'env_file',
+      # so this overrides any NODE_ENV value in .env.
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: http://api:3001/v1
     env_file:

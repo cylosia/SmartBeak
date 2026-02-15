@@ -2,10 +2,14 @@
 <CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
   <CORSRule>
     <ID>AllowSmartBeakAccess</ID>
-    <AllowedOrigin>*</AllowedOrigin>
+    <!-- SECURITY: Restrict to SmartBeak domains. Add additional origins as needed. -->
+    <AllowedOrigin>https://app.smartbeak.com</AllowedOrigin>
+    <AllowedOrigin>https://api.smartbeak.com</AllowedOrigin>
+    <AllowedOrigin>https://*.smartbeak.com</AllowedOrigin>
     <AllowedMethod>GET</AllowedMethod>
     <AllowedMethod>HEAD</AllowedMethod>
-    <AllowedHeader>*</AllowedHeader>
+    <AllowedHeader>Range</AllowedHeader>
+    <AllowedHeader>If-None-Match</AllowedHeader>
     <MaxAgeSeconds>3600</MaxAgeSeconds>
     <ExposeHeader>ETag</ExposeHeader>
     <ExposeHeader>Content-Length</ExposeHeader>
