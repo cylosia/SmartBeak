@@ -9,6 +9,8 @@ module.exports = {
     ecmaFeatures: {
       jsx: true,
     },
+    project: './tsconfig.eslint.json',
+    tsconfigRootDir: __dirname,
   },
 
   env: {
