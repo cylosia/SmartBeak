@@ -13,23 +13,21 @@
 #   docker build --target worker -t smartbeak-worker .
 # =============================================================================
 
+ARG NODE_VERSION=20
+
 # ---------------------------------------------------------------------------
 # Stage: base
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS base
-RUN apk add --no-cache libc6-compat wget
+FROM node:${NODE_VERSION}-alpine AS base
+RUN apk add --no-cache libc6-compat wget && \
+    rm -rf /var/cache/apk/*
 WORKDIR /app
 
 # ---------------------------------------------------------------------------
-# Stage: deps — install all dependencies (including devDependencies for build)
+# Stage: workspace-manifests — collect all workspace package.json files
 # ---------------------------------------------------------------------------
-FROM base AS deps
+FROM base AS workspace-manifests
 COPY package.json package-lock.json ./
-RUN mkdir -p apps/api apps/web \
-    packages/adapters packages/analytics packages/cache packages/config \
-    packages/database packages/errors packages/kernel packages/middleware \
-    packages/ml packages/monitoring packages/security packages/shutdown \
-    packages/types packages/utils
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/adapters/package.json ./packages/adapters/
@@ -46,6 +44,11 @@ COPY packages/security/package.json ./packages/security/
 COPY packages/shutdown/package.json ./packages/shutdown/
 COPY packages/types/package.json ./packages/types/
 COPY packages/utils/package.json ./packages/utils/
+
+# ---------------------------------------------------------------------------
+# Stage: deps — install all dependencies (including devDependencies for build)
+# ---------------------------------------------------------------------------
+FROM workspace-manifests AS deps
 RUN npm ci
 
 # ---------------------------------------------------------------------------
@@ -53,35 +56,12 @@ RUN npm ci
 # ---------------------------------------------------------------------------
 FROM deps AS builder
 COPY . .
-RUN npm run build
-RUN npm run build:web
+RUN npm run build && npm run build:web
 
 # ---------------------------------------------------------------------------
 # Stage: prod-deps — production-only node_modules
 # ---------------------------------------------------------------------------
-FROM base AS prod-deps
-COPY package.json package-lock.json ./
-RUN mkdir -p apps/api apps/web \
-    packages/adapters packages/analytics packages/cache packages/config \
-    packages/database packages/errors packages/kernel packages/middleware \
-    packages/ml packages/monitoring packages/security packages/shutdown \
-    packages/types packages/utils
-COPY apps/api/package.json ./apps/api/
-COPY apps/web/package.json ./apps/web/
-COPY packages/adapters/package.json ./packages/adapters/
-COPY packages/analytics/package.json ./packages/analytics/
-COPY packages/cache/package.json ./packages/cache/
-COPY packages/config/package.json ./packages/config/
-COPY packages/database/package.json ./packages/database/
-COPY packages/errors/package.json ./packages/errors/
-COPY packages/kernel/package.json ./packages/kernel/
-COPY packages/middleware/package.json ./packages/middleware/
-COPY packages/ml/package.json ./packages/ml/
-COPY packages/monitoring/package.json ./packages/monitoring/
-COPY packages/security/package.json ./packages/security/
-COPY packages/shutdown/package.json ./packages/shutdown/
-COPY packages/types/package.json ./packages/types/
-COPY packages/utils/package.json ./packages/utils/
+FROM workspace-manifests AS prod-deps
 RUN npm ci --omit=dev
 
 # =============================================================================
@@ -89,12 +69,15 @@ RUN npm ci --omit=dev
 # =============================================================================
 FROM base AS web
 
+LABEL org.opencontainers.image.source="https://github.com/cylosia/SmartBeak"
+LABEL org.opencontainers.image.description="SmartBeak Next.js frontend"
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --link /app/apps/web/public ./apps/web/public
+COPY --from=builder --link --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=builder --link --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 
 USER nextjs
 
@@ -114,21 +97,24 @@ CMD ["node", "apps/web/server.js"]
 # =============================================================================
 FROM base AS api
 
+LABEL org.opencontainers.image.source="https://github.com/cylosia/SmartBeak"
+LABEL org.opencontainers.image.description="SmartBeak Fastify API"
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 smartbeak
 
 # Production node_modules
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY package.json ./
+COPY --from=prod-deps --link /app/node_modules ./node_modules
+COPY --link package.json ./
 
 # Source files needed by tsx at runtime (path alias resolution)
-COPY tsconfig.json tsconfig.base.json ./
-COPY packages/ ./packages/
-COPY control-plane/ ./control-plane/
-COPY domains/ ./domains/
-COPY plugins/ ./plugins/
-COPY themes/ ./themes/
-COPY apps/api/ ./apps/api/
+COPY --link tsconfig.json tsconfig.base.json ./
+COPY --link packages/ ./packages/
+COPY --link control-plane/ ./control-plane/
+COPY --link domains/ ./domains/
+COPY --link plugins/ ./plugins/
+COPY --link themes/ ./themes/
+COPY --link apps/api/ ./apps/api/
 
 # Install tsx for TypeScript execution with path alias support
 RUN npm install -g tsx
@@ -150,21 +136,24 @@ CMD ["node", "--import", "tsx/esm", "control-plane/api/http.ts"]
 # =============================================================================
 FROM base AS worker
 
+LABEL org.opencontainers.image.source="https://github.com/cylosia/SmartBeak"
+LABEL org.opencontainers.image.description="SmartBeak BullMQ worker"
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 smartbeak
 
 # Production node_modules
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY package.json ./
+COPY --from=prod-deps --link /app/node_modules ./node_modules
+COPY --link package.json ./
 
 # Source files needed by tsx at runtime (path alias resolution)
-COPY tsconfig.json tsconfig.base.json ./
-COPY packages/ ./packages/
-COPY control-plane/ ./control-plane/
-COPY domains/ ./domains/
-COPY plugins/ ./plugins/
-COPY themes/ ./themes/
-COPY apps/api/ ./apps/api/
+COPY --link tsconfig.json tsconfig.base.json ./
+COPY --link packages/ ./packages/
+COPY --link control-plane/ ./control-plane/
+COPY --link domains/ ./domains/
+COPY --link plugins/ ./plugins/
+COPY --link themes/ ./themes/
+COPY --link apps/api/ ./apps/api/
 
 # Install tsx for TypeScript execution with path alias support
 RUN npm install -g tsx
