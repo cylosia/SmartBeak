@@ -3,7 +3,14 @@
   "info": {
     "title": "SmartBeak Control Plane API",
     "version": "1.0.0",
-    "description": "API for managing content, domains, billing, publishing, and more."
+    "description": "API for managing content, domains, billing, publishing, and more.",
+    "contact": {
+      "name": "SmartBeak Engineering",
+      "url": "https://github.com/cylosia/SmartBeak"
+    },
+    "license": {
+      "name": "UNLICENSED"
+    }
   },
   "servers": [
     {

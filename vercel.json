@@ -2,13 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["iad1", "fra1", "sin1"],
   "functions": {
-    "apps/web/pages/api/webhooks/**/*.ts": {
+    "apps/web/app/api/webhooks/**/*.ts": {
       "maxDuration": 60
     },
-    "apps/web/pages/api/exports/**/*.ts": {
+    "apps/web/app/api/exports/**/*.ts": {
       "maxDuration": 60
     },
-    "apps/web/pages/api/**/*.ts": {
+    "apps/web/app/api/**/*.ts": {
       "maxDuration": 30
     }
   },

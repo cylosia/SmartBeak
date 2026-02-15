@@ -11,11 +11,9 @@ rules:
   # Ensure operation IDs are unique
   operation-operationId-unique: error
 
-  # Allow info.contact to be optional
-  info-contact: off
-
-  # Allow info.license to be optional
-  info-license: off
+  # Enforce contact and license info for production API documentation
+  info-contact: warn
+  info-license: warn
 
   # Enforce valid OpenAPI schema
   oas3-schema: error

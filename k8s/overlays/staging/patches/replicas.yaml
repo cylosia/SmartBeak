@@ -35,3 +35,11 @@ metadata:
 spec:
   minReplicas: 1
   maxReplicas: 3
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker
+spec:
+  minReplicas: 1
+  maxReplicas: 3
