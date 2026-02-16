@@ -153,7 +153,7 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
 
     // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes
     const db = await getDb();
-    const session = await db.transaction(async (trx: import('knex').Knex.Transaction) => {
+    const session = await db.transaction(async (_trx: import('knex').Knex.Transaction) => {
       return createPaddleCheckout(orgId, planId);
     });
     return reply.status(200).send(session);

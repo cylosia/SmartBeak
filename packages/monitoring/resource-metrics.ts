@@ -115,7 +115,7 @@ export function initResourceMetrics(config?: ResourceMetricsConfig): ResourceMet
 
   // Wire hooks into kernel code
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const retry = require('@kernel/retry');
     if (retry.setRetryMetricsHook) {
       retry.setRetryMetricsHook({
@@ -135,7 +135,7 @@ export function initResourceMetrics(config?: ResourceMetricsConfig): ResourceMet
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const rateLimiter = require('@kernel/rateLimiterRedis');
     if (rateLimiter.setRateLimitMetricsHook) {
       rateLimiter.setRateLimitMetricsHook(recordRateLimitCheck);

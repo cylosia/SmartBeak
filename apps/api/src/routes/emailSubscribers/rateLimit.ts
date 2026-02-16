@@ -41,7 +41,6 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: num
   // using the kernel's in-memory fallback path synchronously.
   //
   // For callers that can go async, use checkRateLimitRedis() directly.
-  const now = Date.now();
   const windowMs = securityConfig.rateLimitWindowMs;
   const maxRequests = securityConfig.rateLimitMaxRequests;
 

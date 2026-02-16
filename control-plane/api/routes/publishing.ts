@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { PublishingUIService } from '../../services/publishing-ui';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, type AuthContext } from '../../services/auth';
-import { errors, sendError } from '@errors/responses';
+import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 const TargetBodySchema = z.object({

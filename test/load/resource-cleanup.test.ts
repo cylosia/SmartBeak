@@ -51,7 +51,7 @@ describe('Resource Cleanup - Load/Stress Tests', () => {
 
   describe('Shutdown Handler Lifecycle', () => {
     it('should register and track multiple shutdown handlers', () => {
-      const handlers = Array.from({ length: 10 }, (_, i) => {
+      const handlers = Array.from({ length: 10 }, (_val, _i) => {
         return registerShutdownHandler(async () => {
           // Simulate cleanup work
           await new Promise(resolve => setTimeout(resolve, 5));

@@ -130,7 +130,7 @@ function shouldLog(level: LogLevel): boolean {
 // ============================================================================
 
 // Re-export the comprehensive isSensitiveField for external use
-const isSensitiveField = _isSensitiveField;
+const _isSensitiveFieldAlias = _isSensitiveField;
 
 /**
 * Redact sensitive data from an object using the consolidated redaction engine.

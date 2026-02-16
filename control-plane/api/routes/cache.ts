@@ -25,7 +25,7 @@ const CacheClearBodySchema = z.object({
 
 export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<void> {
   // GET /admin/cache/stats - Cache statistics and memory usage
-  app.get('/admin/cache/stats', async (req, res) => {
+  app.get('/admin/cache/stats', async (req, _res) => {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
 
@@ -140,7 +140,7 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
   });
 
   // POST /admin/cache/stats/reset - Reset cache statistics
-  app.post('/admin/cache/stats/reset', async (req, res) => {
+  app.post('/admin/cache/stats/reset', async (req, _res) => {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner']);
 

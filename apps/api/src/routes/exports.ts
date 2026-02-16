@@ -5,7 +5,6 @@ import { getDb } from '../db';
 import { apiRateLimit } from '../middleware/rateLimiter';
 import { csrfProtection } from '../middleware/csrf';
 import { optionalAuthFastify } from '@security/auth';
-import { sanitizeError } from '../utils/sanitizedErrors';
 import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
 
