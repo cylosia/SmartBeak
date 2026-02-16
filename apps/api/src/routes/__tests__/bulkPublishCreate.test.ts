@@ -5,7 +5,7 @@
  * tier limit enforcement, dry run, and batch publishing.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
 // Inline the schemas for unit testing (same as in the route file)

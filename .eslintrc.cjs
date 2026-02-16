@@ -19,7 +19,7 @@ module.exports = {
     node: true,
   },
 
-  plugins: ['@typescript-eslint', 'jsx-a11y'],
+  plugins: ['@typescript-eslint', 'jsx-a11y', 'security'],
 
   extends: [
     'eslint:recommended',

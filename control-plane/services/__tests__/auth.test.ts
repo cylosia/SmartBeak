@@ -23,7 +23,7 @@ import {
   OrganizationAccessError,
   RoleAccessError,
 } from '../auth';
-import type { AuthContext, Role } from '../auth';
+import type { AuthContext } from '../auth';
 
 // Mock JWT verification
 vi.mock('../jwt', () => ({

@@ -15,7 +15,6 @@ async function getDbInstance() {
 }
 
 import { recordBulkPublishAudit } from '../domain/audit/bulkAudit';
-import { sanitizeError } from '../utils/sanitizedErrors';
 import { errors, sendError } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 

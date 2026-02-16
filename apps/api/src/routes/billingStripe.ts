@@ -10,8 +10,7 @@ import { z } from 'zod';
 import { createStripeCheckoutSession } from '../billing/stripe';
 import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
-import { errors, sendError } from '@errors/responses';
-import { ErrorCodes } from '@errors';
+import { errors } from '@errors/responses';
 
 const billingStripeLogger = getLogger('billingStripe');
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
@@ -235,7 +234,7 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
 
     // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes
     const db = await getDb();
-    const session = await db.transaction(async (trx: import('knex').Knex.Transaction) => {
+    const session = await db.transaction(async (_trx: import('knex').Knex.Transaction) => {
       return createStripeCheckoutSession(orgId, priceId);
     });
     if (!session["url"]) {
