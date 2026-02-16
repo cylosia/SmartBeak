@@ -1,3 +1,4 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210000800_dom_publishing_init cannot be rolled back'; END $$;
+-- Rollback: Drop publish_targets, publishing_jobs, and publish_attempts tables
+DROP TABLE IF EXISTS publish_attempts CASCADE;
+DROP TABLE IF EXISTS publishing_jobs CASCADE;
+DROP TABLE IF EXISTS publish_targets CASCADE;

@@ -1,3 +1,3 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210003100_dom_search_fts cannot be rolled back'; END $$;
+-- Rollback: Remove tsvector column and GIN index from search_documents
+DROP INDEX IF EXISTS idx_search_documents_tsv;
+ALTER TABLE search_documents DROP COLUMN IF EXISTS tsv;

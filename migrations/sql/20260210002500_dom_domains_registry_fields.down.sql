@@ -1,3 +1,9 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210002500_dom_domains_registry_fields cannot be rolled back'; END $$;
+-- Rollback: Remove fields added to domain_registry
+DROP INDEX IF EXISTS idx_domain_registry_theme;
+DROP INDEX IF EXISTS idx_domain_registry_buyer_token;
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS buyer_token;
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS replaceability;
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS revenue_confidence;
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS domain_type;
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS custom_config;
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS theme_id;

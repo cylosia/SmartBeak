@@ -1,3 +1,12 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260610000000_pkg_keywords cannot be rolled back'; END $$;
+-- Rollback: drop keyword tables
+DROP INDEX IF EXISTS keyword_suggestions_job_idx;
+DROP INDEX IF EXISTS keyword_suggestions_domain_idx;
+DROP TABLE IF EXISTS keyword_suggestions;
+DROP TABLE IF EXISTS cluster_keywords;
+DROP INDEX IF EXISTS keyword_clusters_domain_idx;
+DROP TABLE IF EXISTS keyword_clusters;
+DROP INDEX IF EXISTS content_keywords_keyword_idx;
+DROP TABLE IF EXISTS content_keywords;
+DROP INDEX IF EXISTS keywords_domain_norm_idx;
+DROP INDEX IF EXISTS keywords_domain_idx;
+DROP TABLE IF EXISTS keywords;

@@ -1,3 +1,3 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210003500_cp_cost_optimization cannot be rolled back'; END $$;
+-- Rollback: Drop cost optimization objects (unique index, domain_activity table)
+DROP INDEX IF EXISTS uniq_publishing_job_dedup;
+DROP TABLE IF EXISTS domain_activity CASCADE;

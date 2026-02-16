@@ -1,3 +1,2 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210001400_cp_domains_org cannot be rolled back'; END $$;
+-- Rollback: Remove org_id column added to domain_registry
+ALTER TABLE domain_registry DROP COLUMN IF EXISTS org_id;

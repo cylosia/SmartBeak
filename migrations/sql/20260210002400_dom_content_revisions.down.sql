@@ -1,3 +1,3 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210002400_dom_content_revisions cannot be rolled back'; END $$;
+-- Rollback: Drop content_revisions table and its index
+DROP INDEX IF EXISTS idx_revisions_content;
+DROP TABLE IF EXISTS content_revisions CASCADE;

@@ -1,3 +1,23 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210004100_cp_fix_timestamptz cannot be rolled back'; END $$;
+-- Rollback: Revert TIMESTAMPTZ columns back to TIMESTAMP and drop helper objects
+
+-- Drop the helper function
+DROP FUNCTION IF EXISTS convert_timestamp_to_timestamptz(TEXT, TEXT);
+
+-- Revert columns back to TIMESTAMP (reverse of the up migration)
+ALTER TABLE users
+  ALTER COLUMN created_at TYPE TIMESTAMP USING created_at AT TIME ZONE 'UTC';
+
+ALTER TABLE organizations
+  ALTER COLUMN created_at TYPE TIMESTAMP USING created_at AT TIME ZONE 'UTC';
+
+ALTER TABLE memberships
+  ALTER COLUMN created_at TYPE TIMESTAMP USING created_at AT TIME ZONE 'UTC';
+
+ALTER TABLE invites
+  ALTER COLUMN created_at TYPE TIMESTAMP USING created_at AT TIME ZONE 'UTC';
+
+ALTER TABLE invites
+  ALTER COLUMN accepted_at TYPE TIMESTAMP USING accepted_at AT TIME ZONE 'UTC';
+
+-- Drop migration tracking table
+DROP TABLE IF EXISTS _migration_timestamptz_fix CASCADE;
