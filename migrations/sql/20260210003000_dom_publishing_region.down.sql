@@ -1,3 +1,3 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210003000_dom_publishing_region cannot be rolled back'; END $$;
+-- Rollback: Remove region column from publish_targets and publishing_jobs
+ALTER TABLE publishing_jobs DROP COLUMN IF EXISTS region;
+ALTER TABLE publish_targets DROP COLUMN IF EXISTS region;

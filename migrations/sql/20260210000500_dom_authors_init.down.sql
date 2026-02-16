@@ -1,3 +1,3 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210000500_dom_authors_init cannot be rolled back'; END $$;
+-- Rollback: Drop authors table and unique index
+DROP INDEX IF EXISTS uk_authors_email;
+DROP TABLE IF EXISTS authors CASCADE;

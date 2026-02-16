@@ -1,3 +1,2 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210002900_dom_notifications_dlq cannot be rolled back'; END $$;
+-- Rollback: Drop notification_dlq table
+DROP TABLE IF EXISTS notification_dlq CASCADE;

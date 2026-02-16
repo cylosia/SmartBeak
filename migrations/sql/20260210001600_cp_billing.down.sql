@@ -1,3 +1,3 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210001600_cp_billing cannot be rolled back'; END $$;
+-- Rollback: Drop plans and subscriptions tables
+DROP TABLE IF EXISTS subscriptions CASCADE;
+DROP TABLE IF EXISTS plans CASCADE;

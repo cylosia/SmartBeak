@@ -81,15 +81,15 @@ END $$;
 DO $$ BEGIN
   COMMENT ON INDEX idx_audit_events_created_at_brin IS
     'BRIN index for efficient time-range scans on high-volume audit data';
-EXCEPTION WHEN undefined_object THEN NULL;
+EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 DO $$ BEGIN
   COMMENT ON INDEX idx_analytics_events_created_at_brin IS
     'BRIN index for efficient time-range scans on analytics data';
-EXCEPTION WHEN undefined_object THEN NULL;
+EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 DO $$ BEGIN
   COMMENT ON INDEX idx_usage_metrics_recorded_at_brin IS
     'BRIN index for efficient time-range queries on usage metrics';
-EXCEPTION WHEN undefined_object THEN NULL;
+EXCEPTION WHEN undefined_table THEN NULL;
 END $$;

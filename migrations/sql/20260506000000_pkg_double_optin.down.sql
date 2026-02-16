@@ -1,3 +1,9 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260506000000_pkg_double_optin cannot be rolled back'; END $$;
+-- Rollback: Drop email_optin_confirmations table and remove optin_policy column
+
+DROP TABLE IF EXISTS email_optin_confirmations CASCADE;
+
+-- Remove optin_policy column from email_optin_forms (skip if table absent)
+DO $$ BEGIN
+  ALTER TABLE email_optin_forms DROP COLUMN IF EXISTS optin_policy;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;

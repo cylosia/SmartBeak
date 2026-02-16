@@ -1,3 +1,12 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210000200_dom_domains_init cannot be rolled back'; END $$;
+-- Rollback: Drop domains, domain_transfers, and domain_registry tables
+DROP INDEX IF EXISTS idx_domain_registry_lookup;
+DROP INDEX IF EXISTS idx_domain_registry_org;
+DROP TABLE IF EXISTS domain_registry CASCADE;
+
+DROP INDEX IF EXISTS idx_domain_transfers_receipt;
+DROP INDEX IF EXISTS idx_domain_transfers_domain;
+DROP TABLE IF EXISTS domain_transfers CASCADE;
+
+DROP INDEX IF EXISTS idx_domains_status;
+DROP INDEX IF EXISTS idx_domains_org;
+DROP TABLE IF EXISTS domains CASCADE;

@@ -1,3 +1,2 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210001500_cp_analytics cannot be rolled back'; END $$;
+-- Rollback: Drop analytics_content table
+DROP TABLE IF EXISTS analytics_content CASCADE;

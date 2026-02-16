@@ -44,59 +44,48 @@ CREATE INDEX IF NOT EXISTS idx_sequence_alerts_level
 COMMENT ON TABLE sequence_monitoring_alerts IS 
   'Alerts for sequence utilization approaching maximum values (threshold: 80%)';
 
+-- Drop objects from earlier migration (20260210003900) that conflict
+-- check_sequence_utilization() has a different signature than the one we create below
+DROP FUNCTION IF EXISTS check_sequence_utilization();
+DROP VIEW IF EXISTS sequence_health_monitor;
+
 -- =====================================================
 -- 2. SEQUENCE HEALTH MONITORING VIEW
 -- =====================================================
 
 CREATE OR REPLACE VIEW v_sequence_health AS
-SELECT 
+SELECT
   sequencename as sequence_name,
-  data_type,
+  data_type::text as data_type,
   start_value::bigint as start_value,
-  minimum_value::bigint as minimum_value,
-  maximum_value::bigint as max_value,
-  COALESCE(
-    (SELECT last_value FROM pg_sequences ps 
-     WHERE ps.sequencename = pg_sequences.sequencename 
-     AND ps.schemaname = pg_sequences.schemaname),
-    0
-  ) as current_value,
-  maximum_value::bigint - COALESCE(
-    (SELECT last_value FROM pg_sequences ps 
-     WHERE ps.sequencename = pg_sequences.sequencename 
-     AND ps.schemaname = pg_sequences.schemaname),
-    0
-  )::bigint as remaining_values,
-  CASE 
-    WHEN maximum_value > 0 THEN 
+  min_value::bigint as minimum_value,
+  max_value::bigint as max_value,
+  COALESCE(last_value, 0) as current_value,
+  max_value::bigint - COALESCE(last_value, 0)::bigint as remaining_values,
+  CASE
+    WHEN max_value > 0 THEN
       ROUND(
-        COALESCE(
-          (SELECT last_value FROM pg_sequences ps 
-           WHERE ps.sequencename = pg_sequences.sequencename 
-           AND ps.schemaname = pg_sequences.schemaname),
-          0
-        )::numeric / maximum_value::numeric * 100, 
+        COALESCE(last_value, 0)::numeric / max_value::numeric * 100,
         6
       )
-    ELSE 0 
+    ELSE 0
   END as utilization_percent,
   CASE
-    WHEN data_type = 'bigint' THEN 9223372036854775807
-    WHEN data_type = 'integer' THEN 2147483647
-    WHEN data_type = 'smallint' THEN 32767
-    ELSE maximum_value::bigint
+    WHEN data_type::text = 'bigint' THEN 9223372036854775807
+    WHEN data_type::text = 'integer' THEN 2147483647
+    WHEN data_type::text = 'smallint' THEN 32767
+    ELSE max_value::bigint
   END as effective_max_value,
-  cycle_option,
+  cycle as cycle_option,
   pg_sequences.schemaname
 FROM pg_sequences
 WHERE pg_sequences.schemaname = 'public'
-ORDER BY 
-  CASE 
-    WHEN data_type = 'integer' THEN 1  -- Check integers first (more likely to exhaust)
-    WHEN data_type = 'bigint' THEN 2
+ORDER BY
+  CASE
+    WHEN data_type::text = 'integer' THEN 1  -- Check integers first (more likely to exhaust)
+    WHEN data_type::text = 'bigint' THEN 2
     ELSE 3
-  END,
-  utilization_percent DESC;
+  END;
 
 COMMENT ON VIEW v_sequence_health IS 
   'Real-time sequence utilization and health status';

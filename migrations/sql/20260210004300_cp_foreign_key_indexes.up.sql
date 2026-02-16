@@ -13,15 +13,15 @@
 -- 1. INVITES TABLE - Add missing FK indexes
 -- =====================================================
 -- Index for org_id (FK to organizations)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_invites_org_id
+CREATE INDEX IF NOT EXISTS idx_invites_org_id
   ON invites(org_id);
 
 -- Index for email lookups (common query pattern)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_invites_email
+CREATE INDEX IF NOT EXISTS idx_invites_email
   ON invites(email);
 
 -- Partial index for pending invites (excludes accepted)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_invites_pending
+CREATE INDEX IF NOT EXISTS idx_invites_pending
   ON invites(org_id, created_at)
   WHERE accepted_at IS NULL;
 

@@ -1,3 +1,2 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210002300_dom_content_scheduling cannot be rolled back'; END $$;
+-- Rollback: Remove publish_at column from content_items
+ALTER TABLE content_items DROP COLUMN IF EXISTS publish_at;

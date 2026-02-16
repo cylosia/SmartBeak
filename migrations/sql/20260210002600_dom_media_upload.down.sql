@@ -1,3 +1,4 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210002600_dom_media_upload cannot be rolled back'; END $$;
+-- Rollback: Remove upload-related columns from media_assets
+ALTER TABLE media_assets DROP COLUMN IF EXISTS status;
+ALTER TABLE media_assets DROP COLUMN IF EXISTS mime_type;
+ALTER TABLE media_assets DROP COLUMN IF EXISTS storage_key;

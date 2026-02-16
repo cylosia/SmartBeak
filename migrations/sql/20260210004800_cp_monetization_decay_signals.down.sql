@@ -1,3 +1,5 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210004800_cp_monetization_decay_signals cannot be rolled back'; END $$;
+-- Rollback: Drop monetization_decay_signals table and its indexes
+DROP INDEX IF EXISTS idx_mds_period_start_brin;
+DROP INDEX IF EXISTS idx_mds_decay_flag_true;
+DROP INDEX IF EXISTS idx_mds_content_version_id;
+DROP TABLE IF EXISTS monetization_decay_signals CASCADE;

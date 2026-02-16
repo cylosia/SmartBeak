@@ -1,3 +1,6 @@
--- Baseline migration — irreversible.
--- To undo changes from this migration, write a new forward migration.
-DO $$ BEGIN RAISE EXCEPTION 'Baseline migration 20260210000400_dom_activity_init cannot be rolled back'; END $$;
+-- Rollback: Drop activity_log table and its indexes
+DROP INDEX IF EXISTS idx_activity_entity;
+DROP INDEX IF EXISTS idx_activity_created;
+DROP INDEX IF EXISTS idx_activity_domain;
+DROP INDEX IF EXISTS idx_activity_org;
+DROP TABLE IF EXISTS activity_log CASCADE;

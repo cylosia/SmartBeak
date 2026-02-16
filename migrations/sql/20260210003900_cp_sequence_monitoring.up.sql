@@ -32,23 +32,20 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- View for monitoring sequence health
 CREATE OR REPLACE VIEW sequence_health_monitor AS
-SELECT 
-    sequence_name,
+SELECT
+    sequencename AS sequence_name,
     data_type,
     start_value,
-    minimum_value,
-    maximum_value,
-    increment,
-    cycle_option,
-    COALESCE(
-        (SELECT last_value FROM pg_sequences ps WHERE ps.sequencename = pg_sequences.sequencename),
-        0
-    ) as current_value,
-    CASE 
-        WHEN data_type = 'bigint' THEN 9223372036854775807
-        WHEN data_type = 'integer' THEN 2147483647
-        WHEN data_type = 'smallint' THEN 32767
-        ELSE maximum_value
+    min_value AS minimum_value,
+    max_value AS maximum_value,
+    increment_by AS increment,
+    cycle AS cycle_option,
+    COALESCE(last_value, 0) AS current_value,
+    CASE
+        WHEN data_type::text = 'bigint' THEN 9223372036854775807
+        WHEN data_type::text = 'integer' THEN 2147483647
+        WHEN data_type::text = 'smallint' THEN 32767
+        ELSE max_value
     END as effective_max_value
 FROM pg_sequences
 WHERE schemaname = 'public';
@@ -82,7 +79,7 @@ DECLARE
     v_utilization NUMERIC;
 BEGIN
     -- Get sequence info
-    SELECT maximum_value, COALESCE(last_value, 0)
+    SELECT max_value, COALESCE(last_value, 0)
     INTO v_max_value, v_current_value
     FROM pg_sequences
     WHERE sequencename = TG_TABLE_NAME || '_id_seq'
