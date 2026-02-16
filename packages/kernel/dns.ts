@@ -6,8 +6,16 @@ import crypto from 'crypto';
 * Cross-platform DNS verification for domain ownership
 */
 
-// FIX: Domain validation regex - RFC 1035 compliant
-const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$/;
+// FIX: Domain validation — validate labels separately to avoid ReDoS
+function isValidDomainLabel(l: string): boolean {
+  return l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+}
+function isValidDomainFormat(domain: string): boolean {
+  const labels = domain.split('.');
+  return labels.length >= 1 && labels.every(isValidDomainLabel);
+}
 const MAX_DOMAIN_LENGTH = 253;
 
 // DNS error codes that indicate the domain/record doesn't exist or is unreachable,
@@ -52,7 +60,7 @@ function isValidDomain(domain: string): boolean {
   }
 
   // Check format
-  if (!DOMAIN_REGEX.test(domain)) {
+  if (!isValidDomainFormat(domain)) {
   return false;
   }
 

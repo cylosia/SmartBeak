@@ -17,8 +17,16 @@ const logger = getLogger('DomainCreate');
 
 
 
-// Domain name validation regex (alphanumeric, hyphens, max 63 chars per label)
-const DOMAIN_NAME_REGEX = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+// Domain name validation — validate labels separately to avoid ReDoS
+function isValidDomainLabel(l: string): boolean {
+  return l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+}
+function isValidDomainName(domain: string): boolean {
+  const labels = domain.split('.');
+  return labels.length >= 2 && labels.every(isValidDomainLabel);
+}
 const MAX_DOMAIN_LENGTH = 253;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -52,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return sendError(res, 400, `Domain name must be less than ${MAX_DOMAIN_LENGTH} characters`);
     }
 
-    if (!DOMAIN_NAME_REGEX.test(name)) {
+    if (!isValidDomainName(name)) {
     return sendError(res, 400, 'Invalid domain name format');
     }
 

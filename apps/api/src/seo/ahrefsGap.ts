@@ -138,9 +138,18 @@ export function getActiveDelayCount(): number {
 function validateAhrefsGapInput(domain: unknown, competitors: unknown, apiKey: unknown): void {
   // Validate domain
   validateNonEmptyString(domain, 'domain');
-  // Domain should be a valid domain format (no protocol)
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
-  if (!domainRegex.test(domain as string)) {
+  // Domain should be a valid domain format (no protocol) — validate labels separately to avoid ReDoS
+  const domainStr = domain as string;
+  const labels = domainStr.split('.');
+  const tldRegex = /^[a-zA-Z]{2,}$/;
+  const isValidLabel = (l: string) =>
+    l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+  const isValidDomain = labels.length >= 2
+    && labels.slice(0, -1).every(isValidLabel)
+    && tldRegex.test(labels[labels.length - 1]!);
+  if (!isValidDomain) {
     throw new ValidationError('Domain must be a valid domain name (e.g., example.com)', 'INVALID_DOMAIN');
   }
   // Validate competitors array

@@ -47,6 +47,7 @@ module.exports = {
     '*.js',
     '*.mjs',
     '*.cjs',
+    '*.d.ts',
     '!.eslintrc.cjs',
     '!.eslintrc.security.cjs',
   ],

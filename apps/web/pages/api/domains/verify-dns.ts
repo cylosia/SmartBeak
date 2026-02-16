@@ -12,9 +12,18 @@ import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('domains/verify-dns');
 
-// P2-10 FIX: RFC-compliant domain regex that accepts short domains (x.com),
-// subdomains (blog.example.com), and multi-level TLDs (example.co.uk)
-const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+// P2-10 FIX: RFC-compliant domain validation — validates labels separately to avoid ReDoS
+function isValidDomainLabel(l: string): boolean {
+  return l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+}
+function isValidDomain(domain: string): boolean {
+  const labels = domain.split('.');
+  if (labels.length < 2) return false;
+  const tld = labels[labels.length - 1]!;
+  return /^[a-zA-Z]{2,}$/.test(tld) && labels.every(isValidDomainLabel);
+}
 const MAX_DOMAIN_LENGTH = 253;
 
 async function verifyDomainOwnership(
@@ -52,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // P2-10 FIX: Use RFC-compliant domain validation
-  if (domain.length > MAX_DOMAIN_LENGTH || !DOMAIN_REGEX.test(domain)) {
+  if (domain.length > MAX_DOMAIN_LENGTH || !isValidDomain(domain)) {
     return sendError(res, 400, 'Invalid domain format');
   }
 

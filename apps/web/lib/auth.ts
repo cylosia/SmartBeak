@@ -39,11 +39,22 @@ function isValidIP(ip: string): boolean {
   if (!ip || ip === 'unknown') {
     return false;
   }
-  // IPv4 regex — P1-FIX: fixed unescaped '.' after [01]? that matched any character
-  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-  // IPv6 regex (simplified)
-  const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$/;
-  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+  // Validate IPv4 by splitting octets — avoids nested quantifiers (ReDoS)
+  const ipv4Parts = ip.split('.');
+  if (ipv4Parts.length === 4) {
+    return ipv4Parts.every(part => {
+      if (!/^\d{1,3}$/.test(part)) return false;
+      const num = parseInt(part, 10);
+      return num >= 0 && num <= 255;
+    });
+  }
+  // Validate IPv6 (simplified) — split on colons to avoid nested quantifiers
+  if (ip === '::1' || ip === '::') return true;
+  const ipv6Parts = ip.split(':');
+  if (ipv6Parts.length === 8) {
+    return ipv6Parts.every(part => /^[0-9a-fA-F]{1,4}$/.test(part));
+  }
+  return false;
 }
 // Role hierarchy for authorization checks
 // P0-FIX: Added owner:4 — was missing, causing owners to be denied access

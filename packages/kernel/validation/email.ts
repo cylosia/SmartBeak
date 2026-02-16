@@ -4,8 +4,33 @@
 
 import { z } from 'zod';
 
-/** Email validation regex - MEDIUM FIX I6: Add format validation */
-const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+/** Validate the local part of an email (before @) — no nested quantifiers */
+const EMAIL_LOCAL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
+
+/** Validate a single domain label (1-63 chars, alphanumeric + hyphens, no leading/trailing hyphen) */
+function isValidDomainLabel(label: string): boolean {
+  if (label.length < 1 || label.length > 63) return false;
+  if (!/^[a-zA-Z0-9]/.test(label)) return false;
+  if (!/[a-zA-Z0-9]$/.test(label)) return false;
+  return /^[a-zA-Z0-9-]+$/.test(label);
+}
+
+/** Check email format by validating parts separately to avoid ReDoS */
+function isValidEmailFormat(email: string): boolean {
+  const atIndex = email.indexOf('@');
+  if (atIndex < 1 || atIndex === email.length - 1) return false;
+  if (email.indexOf('@', atIndex + 1) !== -1) return false;
+
+  const local = email.substring(0, atIndex);
+  const domain = email.substring(atIndex + 1);
+
+  if (!EMAIL_LOCAL_REGEX.test(local)) return false;
+
+  const labels = domain.split('.');
+  if (labels.length < 2) return false;
+
+  return labels.every(label => isValidDomainLabel(label));
+}
 
 /**
  * Email validation schema with format validation
@@ -16,7 +41,7 @@ export const EmailSchema = z.string()
   .max(255)
   .toLowerCase()
   .trim()
-  .refine((email) => EMAIL_REGEX.test(email), {
+  .refine((email) => isValidEmailFormat(email), {
     message: 'Invalid email format'
   });
 
@@ -27,7 +52,7 @@ export const EmailSchema = z.string()
  */
 export function isValidEmail(email: string): boolean {
   if (typeof email !== 'string') return false;
-  return EMAIL_REGEX.test(email) && email.length <= 255;
+  return isValidEmailFormat(email) && email.length <= 255;
 }
 
 /**

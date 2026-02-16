@@ -285,10 +285,15 @@ export class CursorPaginator<T extends Record<string, unknown>> {
       : sortOrder;
 
     // P0-8 FIX: Validate ORDER BY entries to prevent SQL injection
+    // Split column from direction to avoid nested quantifiers (ReDoS)
     if (orderBy && orderBy.length > 0) {
-      const VALID_ORDER_BY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_.]*(\s+(ASC|DESC))?$/i;
+      const VALID_COLUMN_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_.]*$/;
+      const VALID_DIRECTION = /^(?:ASC|DESC)$/i;
       for (const entry of orderBy) {
-        if (!VALID_ORDER_BY_PATTERN.test(entry.trim())) {
+        const parts = entry.trim().split(/\s+/);
+        const column = parts[0];
+        if (!column || !VALID_COLUMN_PATTERN.test(column) || parts.length > 2
+            || (parts.length === 2 && !VALID_DIRECTION.test(parts[1]!))) {
           throw new Error(`Invalid ORDER BY entry: "${entry}". Must be a column name optionally followed by ASC/DESC.`);
         }
       }

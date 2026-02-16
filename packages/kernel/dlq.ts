@@ -239,7 +239,7 @@ function sanitizeError(error: Error): { message: string; stack?: string | undefi
   /bearer\s+\S+/gi,
   /api[_-]?key[=:]?\s*\S+/gi,
   /[a-zA-Z0-9_]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // email addresses
-  /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, // IP addresses
+  /\b[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b/g, // IP addresses (unrolled to avoid ReDoS)
   ];
 
   let sanitizedMessage = error["message"];

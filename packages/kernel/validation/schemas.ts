@@ -5,8 +5,34 @@
 import { z } from 'zod';
 import {} from './types-base';
 
-/** URL validation regex - MEDIUM FIX I3: Add URL encoding validation */
-const URL_REGEX = /^https?:\/\/(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?::\d{1,5})?(?:\/[^\s]*)?$/;
+/** URL validation — validate host labels separately to avoid ReDoS */
+function isValidDomainLabel(l: string): boolean {
+  return l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+}
+
+function isValidUrl(url: string): boolean {
+  if (!/^https?:\/\//.test(url)) return false;
+  const withoutProtocol = url.replace(/^https?:\/\//, '');
+  // Split host from port+path
+  const hostEnd = withoutProtocol.search(/[:/]/);
+  const host = hostEnd === -1 ? withoutProtocol : withoutProtocol.substring(0, hostEnd);
+  const rest = hostEnd === -1 ? '' : withoutProtocol.substring(hostEnd);
+  if (!host) return false;
+  const labels = host.split('.');
+  if (!labels.every(isValidDomainLabel)) return false;
+  // Validate optional port and path
+  if (rest === '') return true;
+  if (rest.startsWith(':')) {
+    const pathStart = rest.indexOf('/');
+    const port = pathStart === -1 ? rest.substring(1) : rest.substring(1, pathStart);
+    if (!/^\d{1,5}$/.test(port)) return false;
+    if (pathStart === -1) return true;
+    return !/\s/.test(rest.substring(pathStart));
+  }
+  return rest.startsWith('/') && !/\s/.test(rest);
+}
 
 // ============================================================================
 // Query Schemas - MEDIUM FIX I1: Add validation on query parameters
@@ -205,7 +231,7 @@ export function centsToDollars(cents: number): number {
 export const UrlSchema = z.string()
   .url()
   .max(2000)
-  .refine((url) => URL_REGEX.test(url), {
+  .refine((url) => isValidUrl(url), {
     message: 'Invalid URL format'
   })
   .refine((url) => {
