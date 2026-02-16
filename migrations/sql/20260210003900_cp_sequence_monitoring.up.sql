@@ -110,9 +110,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Grant necessary permissions
-GRANT EXECUTE ON FUNCTION check_sequence_utilization() TO monitoring_role;
-GRANT SELECT ON sequence_health_monitor TO monitoring_role;
+-- Grant necessary permissions (skip if role does not exist)
+DO $$ BEGIN
+  GRANT EXECUTE ON FUNCTION check_sequence_utilization() TO monitoring_role;
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  GRANT SELECT ON sequence_health_monitor TO monitoring_role;
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
 COMMENT ON FUNCTION check_sequence_utilization() IS 
     'Returns sequence utilization percentages for monitoring exhaustion risk';

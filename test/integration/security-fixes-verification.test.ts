@@ -15,7 +15,8 @@
  * @module test/integration/security-fixes-verification
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// Use global test functions (available in both Jest and Vitest)
+// For mock functions, use the globally available jest.fn() when running under Jest.
 import crypto from 'crypto';
 import { URL } from 'url';
 
@@ -626,7 +627,7 @@ describe('SECURITY FIXES VERIFICATION', () => {
 
     it('should fail closed when Redis is unavailable', async () => {
       // Simulate Redis failure by making it throw
-      mockRedis.incr = vi.fn().mockRejectedValue(new Error('Connection refused'));
+      mockRedis.incr = jest.fn().mockRejectedValue(new Error('Connection refused'));
       
       const result = await rateLimiter.checkLimit('user-789', 10, 60000);
       

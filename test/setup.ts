@@ -8,7 +8,10 @@
  * - Console error tracking
  */
 
-import { beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+// Use global lifecycle hooks compatible with both Jest and Vitest.
+// When loaded by Jest (via setupFilesAfterEnv), these are already globals.
+// When loaded by Vitest, they are also available as globals (vitest.config globals: true).
+// No explicit import needed — both runners expose them in the global scope.
 import { getLogger } from '../packages/kernel/logger';
 
 const logger = getLogger('TestSetup');

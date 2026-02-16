@@ -62,10 +62,10 @@ export default defineConfig({
 
   /* Start the dev server if not already running */
   webServer: {
-    command: 'npm run build:web && npx next start -p 3000',
+    command: 'npx next start -p 3000',
     port: 3000,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
-    cwd: '../../', // Run from project root
+    cwd: '../../apps/web', // Run from apps/web where .next/ build output lives
   },
 });
