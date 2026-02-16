@@ -4,8 +4,8 @@
 
 | Field | Value |
 |-------|-------|
-| **Version** | 1.0 |
-| **Date** | 2026-02-13 |
+| **Version** | 1.1 |
+| **Date** | 2026-02-16 |
 | **Status** | Draft |
 | **Repository** | cylosia/SmartBeak |
 
@@ -17,11 +17,25 @@
 2. [Overall Description](#2-overall-description)
 3. [System Architecture](#3-system-architecture)
 4. [Functional Requirements](#4-functional-requirements)
+   - 4.1–4.16: Auth, Org, Content, Publishing, Media, Domains, SEO, Billing, Analytics, Affiliates, Email, AI, Notifications, Search, Admin, Feature Flags
+   - 4.17: [Themes & Templates](#417-themes--templates)
+   - 4.18: [Diligence (Buyer Review)](#418-diligence-buyer-review)
+   - 4.19: [Planning](#419-planning)
+   - 4.20: [Onboarding](#420-onboarding)
+   - 4.21: [Cache Management](#421-cache-management)
 5. [Non-Functional Requirements](#5-non-functional-requirements)
+   - 5.1–5.5: Performance, Reliability, Scalability, Observability, Maintainability
+   - 5.6: [Accessibility](#56-accessibility)
+   - 5.7: [Data Retention](#57-data-retention)
+   - 5.8: [Internationalization](#58-internationalization)
 6. [External Interfaces](#6-external-interfaces)
+   - 6.1–6.10: Payment, Auth, SEO, Social, Email, Affiliates, AI, Analytics, CMS, Infrastructure
+   - 6.11: [WordPress Plugin](#611-wordpress-plugin)
 7. [Data Requirements](#7-data-requirements)
 8. [Security Requirements](#8-security-requirements)
 9. [Deployment & Infrastructure](#9-deployment--infrastructure)
+   - 9.1–9.3: Platform, CI/CD, Environment
+   - 9.4: [Kubernetes Requirements](#94-kubernetes-requirements)
 10. [Testing Requirements](#10-testing-requirements)
 11. [Glossary](#11-glossary)
 
@@ -58,20 +72,21 @@ SmartBeak enables organizations to create, manage, schedule, and publish content
 
 ### 2.1 Product Perspective
 
-SmartBeak is a standalone SaaS platform deployed on the Vercel Edge Network. It operates as a monorepo (`acp`) containing:
+SmartBeak is a standalone SaaS platform deployed on the Vercel Edge Network and Kubernetes. It operates as a monorepo containing:
 
 - A **Next.js 15** web application (frontend)
 - A **Fastify 5** API server (backend)
+- A **BullMQ** background job worker
 - A **control plane** that orchestrates 13 domain-driven bounded contexts
 - **15 shared packages** for cross-cutting concerns
-- **5 theme packages** for multi-site rendering
+- **6 theme packages** (5 themes + shared library) for multi-site rendering
 - A **WordPress plugin** for CMS integration
 
 ### 2.2 Product Features (High-Level)
 
 | Feature Area | Description |
 |---|---|
-| Content Management | CRUD lifecycle for articles with draft, scheduled, published, and archived states |
+| Content Management | CRUD lifecycle for 8 content types (article, page, product, review, guide, post, image, video) with draft, scheduled, published, and archived states |
 | Multi-Channel Publishing | Orchestrated publishing to WordPress, LinkedIn, Facebook, TikTok, Instagram, Pinterest, YouTube, Vimeo, SoundCloud, podcast feeds, and email |
 | Domain Portfolio | Register, verify ownership, monitor SEO health, and assess sale-readiness of web domains |
 | SEO & Keyword Research | Integration with Ahrefs, Google Search Console, and SERP APIs for keyword clustering and ranking data |
@@ -82,6 +97,11 @@ SmartBeak is a standalone SaaS platform deployed on the Vercel Edge Network. It 
 | Email Marketing | Campaign composition, subscriber management, deliverability monitoring, A/B experiments |
 | AI-Powered Features | LLM-assisted content generation, AI image generation (DALL-E, Stability AI), next-actions advisor |
 | Notifications | Multi-channel notification delivery with retry, dead-letter queue, and admin controls |
+| Themes & Templates | 5 customizable themes (affiliate-comparison, authority-site, landing-leadgen, local-business, media-newsletter) with 10+ template types, per-domain selection, and XSS sanitization |
+| Diligence (Buyer Review) | Token-based buyer access for domain sale-readiness review: domain overview, content stats, affiliate revenue breakdown |
+| Planning Dashboard | Aggregated planning metrics: active authors, customers, keywords, ideas, published content |
+| Onboarding | 3-step user onboarding (profile, billing, team) with completion tracking |
+| Cache Management | Two-tier caching (L1 in-memory, L2 Redis) with admin controls for stats, invalidation, and clearing |
 | Activity & Audit | Full activity timeline, admin audit logs with export capability |
 
 ### 2.3 User Classes
@@ -238,6 +258,9 @@ domains/<name>/
 | FR-CNT-006 | The system SHALL support content filtering by status, date, author, and domain. |
 | FR-CNT-007 | The system SHALL support bulk operations on content items (bulk review, bulk publish). |
 | FR-CNT-008 | Content items SHALL support soft deletion (`deleted_at` timestamp). |
+| FR-CNT-009 | The system SHALL support the following content types: `article`, `page`, `product`, `review`, `guide`, `post`, `image`, `video`. Default: `article`. |
+| FR-CNT-010 | Content titles SHALL NOT exceed 500 characters; content bodies SHALL NOT exceed 100,000 characters. |
+| FR-CNT-011 | Content items SHALL support tags (max 20 tags, max 50 chars each), excerpts (max 500 chars), and arbitrary metadata (JSONB). |
 
 ### 4.4 Publishing
 
@@ -362,6 +385,8 @@ domains/<name>/
 | FR-ADM-002 | Audit logs SHALL be exportable. |
 | FR-ADM-003 | The system SHALL provide a system admin dashboard. |
 | FR-ADM-004 | The system SHALL provide queue metrics and job queue management views. |
+| FR-ADM-005 | The system SHALL provide canary health checks for all external integration adapters (publishing platforms, analytics, storage). |
+| FR-ADM-006 | Canary health checks SHALL report healthy/unhealthy status, latency, and error details per adapter. |
 
 ### 4.16 Feature Flags
 
@@ -370,6 +395,52 @@ domains/<name>/
 | FR-FLG-001 | The system SHALL support feature flags for progressive feature rollout. |
 | FR-FLG-002 | The following feature flags SHALL be supported (all default to `false`): `ENABLE_AI`, `ENABLE_SOCIAL_PUBLISHING`, `ENABLE_EMAIL_MARKETING`, `ENABLE_ANALYTICS`, `ENABLE_AFFILIATE`, `ENABLE_EXPERIMENTAL`. |
 | FR-FLG-003 | Safety-related flags SHALL default to enabled: `ENABLE_CIRCUIT_BREAKER`, `ENABLE_RATE_LIMITING`. |
+| FR-FLG-004 | Feature flags SHALL support database-backed overrides in addition to environment variables. |
+| FR-FLG-005 | The system SHALL support creating metric alerts with threshold validation via guardrail endpoints. |
+
+### 4.17 Themes & Templates
+
+| ID | Requirement |
+|---|---|
+| FR-THM-001 | The system SHALL provide pre-built themes: `affiliate-comparison`, `authority-site`, `landing-leadgen`, `local-business`, `media-newsletter`. |
+| FR-THM-002 | Each theme SHALL support template types including: article, page, product, review, guide, landing, archive, location, service, comparison. |
+| FR-THM-003 | Each theme SHALL be configurable with: color scheme (light/dark), newsletter signup toggle, and comparisons toggle. |
+| FR-THM-004 | Theme selection SHALL be persisted per domain in the database with sensible defaults. |
+| FR-THM-005 | All theme HTML output SHALL be sanitized via DOMPurify to prevent XSS. |
+| FR-THM-006 | The system SHALL provide admin API endpoints for listing, selecting, and configuring themes. |
+
+### 4.18 Diligence (Buyer Review)
+
+| ID | Requirement |
+|---|---|
+| FR-DIL-001 | The system SHALL support time-limited diligence tokens for buyer review access. |
+| FR-DIL-002 | Diligence tokens SHALL be validated (10–100 chars, alphanumeric + underscore/hyphen) and checked for expiry before use. |
+| FR-DIL-003 | The diligence overview endpoint SHALL return domain metadata, content statistics (total articles, average content length, last published date), and revenue confidence. |
+| FR-DIL-004 | The diligence affiliate-revenue endpoint SHALL return revenue breakdown by provider with percentage and estimated monthly values. |
+| FR-DIL-005 | Diligence endpoints SHALL be rate-limited (30 req/window) and SHALL validate tokens before consuming rate-limit budget. |
+
+### 4.19 Planning
+
+| ID | Requirement |
+|---|---|
+| FR-PLN-001 | The system SHALL provide a planning overview dashboard aggregating: active authors, active customers, keywords, ideas, and published content count per domain. |
+| FR-PLN-002 | Planning queries SHALL execute in parallel with a 5-second timeout per query and graceful fallback (return 0) on failure. |
+
+### 4.20 Onboarding
+
+| ID | Requirement |
+|---|---|
+| FR-ONB-001 | The system SHALL support a 3-step onboarding flow: `profile`, `billing`, `team`. |
+| FR-ONB-002 | The system SHALL track onboarding completion status per organization. |
+| FR-ONB-003 | The onboarding step parameter SHALL be validated against the allowed enum at the route boundary. |
+
+### 4.21 Cache Management
+
+| ID | Requirement |
+|---|---|
+| FR-CAC-001 | The system SHALL implement a two-tier cache: L1 (in-memory, pod-local) and L2 (Redis, distributed). |
+| FR-CAC-002 | Admin endpoints SHALL expose cache stats (memory usage, hit/miss rates), key listing with pattern filtering, manual invalidation, and cache clearing by tier. |
+| FR-CAC-003 | Cache key listing SHALL support pagination (max 500 per page) and regex-based pattern matching. |
 
 ---
 
@@ -423,6 +494,30 @@ domains/<name>/
 | NFR-MNT-002 | All packages SHALL support independent type-checking via `tsc --noEmit`. |
 | NFR-MNT-003 | The project SHALL use a composite TypeScript build with project references. |
 | NFR-MNT-004 | ESLint with security plugins SHALL pass with zero errors before merge. |
+
+### 5.6 Accessibility
+
+| ID | Requirement |
+|---|---|
+| NFR-A11Y-001 | UI components SHALL pass automated WCAG accessibility checks (jest-axe). |
+| NFR-A11Y-002 | Dynamic content updates SHALL use `aria-live` regions for screen reader announcements. |
+| NFR-A11Y-003 | Modal dialogs SHALL implement focus trapping. |
+| NFR-A11Y-004 | Error states SHALL use the `role="alert"` attribute for immediate screen reader notification. |
+
+### 5.7 Data Retention
+
+| ID | Requirement |
+|---|---|
+| NFR-RET-001 | Content retention: drafts SHALL auto-archive after 90 days of inactivity; archived content SHALL move to cold storage after 1 year; soft-deleted content SHALL be purged after 30 days. |
+| NFR-RET-002 | Analytics retention: raw events 30 days, hourly aggregates 90 days, daily aggregates 1 year, monthly aggregates indefinite. |
+| NFR-RET-003 | Audit log retention: authentication logs 1 year, admin actions 2 years, data access logs 90 days, security events 3 years. |
+
+### 5.8 Internationalization
+
+| ID | Requirement |
+|---|---|
+| NFR-I18N-001 | The system SHALL support JSON-based translation files with dot-separated key paths and simple interpolation. |
+| NFR-I18N-002 | The system SHALL provide locale-aware currency and date formatting (initial locale: en-US). |
 
 ---
 
@@ -507,6 +602,12 @@ domains/<name>/
 | Cloudflare R2 | S3-compatible API | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` |
 | AWS S3 | AWS SDK | Standard AWS credentials |
 | Slack | Webhooks | `SLACK_WEBHOOK_URL` |
+
+### 6.11 WordPress Plugin
+
+| Provider | Integration Type | Key Details |
+|---|---|---|
+| WordPress Plugin (`acp-companion`) | PHP Plugin | Canonical URL override (`_acp_canonical` post meta), health check endpoint (`/acp/v1/health`), REST API authentication for write access |
 
 ---
 
@@ -646,6 +747,9 @@ Based on the threat model:
 | Database | PostgreSQL 15+ (AWS RDS or equivalent) | Per-domain isolation |
 | Cache / Queues | Redis 7 (ElastiCache or equivalent) | Cluster-mode capable |
 | Object Storage | Cloudflare R2 or AWS S3 | CDN delivery |
+| Container Runtime | Docker (multi-stage) | Three build targets: web, api, worker; Node 20 base |
+| Orchestration | Kubernetes (Kustomize) | HPA, PDB, network policies, staging/production overlays |
+| Local Development | Docker Compose | PostgreSQL 15, Redis 7, API (port 3001), Web (port 3000), Worker |
 
 ### 9.2 CI/CD Pipeline
 
@@ -672,6 +776,18 @@ The system SHALL be configurable via environment variables (787+ variables defin
 - Feature flags
 - Operational thresholds (queue concurrency, rate limits, circuit breaker settings, cache TTLs, pagination limits, retry strategies)
 
+### 9.4 Kubernetes Requirements
+
+| ID | Requirement |
+|---|---|
+| NFR-DEP-001 | All containers SHALL run as non-root (UID 1001) with read-only root filesystem. |
+| NFR-DEP-002 | API deployments SHALL use Horizontal Pod Autoscaling (2–10 replicas, triggers at CPU 70% / memory 80%). |
+| NFR-DEP-003 | Network policies SHALL restrict ingress: API and Web accept traffic from ALB only; Worker denies all ingress. |
+| NFR-DEP-004 | All deployments SHALL expose health probes: readiness (`/readyz`, 15s initial delay), liveness (`/livez`, 30s initial delay), startup (`/health`, up to 60s). |
+| NFR-DEP-005 | Pod Disruption Budgets SHALL enforce minimum availability during voluntary disruptions and rollouts. |
+| NFR-DEP-006 | Resource requests SHALL be set at 250m CPU / 256Mi memory; limits at 1 CPU / 512Mi memory. |
+| NFR-DEP-007 | HPA scale-up policy SHALL allow +2 pods per 60s; scale-down policy SHALL allow -1 pod per 300s. |
+
 ---
 
 ## 10. Testing Requirements
@@ -695,6 +811,11 @@ The system SHALL be configurable via environment variables (787+ variables defin
 | Integration tests | Cross-service flows with real DB/Redis | `test/integration/` |
 | Performance tests | Response time, throughput | `test/performance/` |
 | Type safety tests | TypeScript type correctness | `test/types/` |
+| Accessibility tests | WCAG compliance via jest-axe | `test/a11y/` |
+| Chaos tests | Circuit breaker cascading, DLQ overflow, retry exhaustion, graceful shutdown | `test/chaos/` |
+| Load tests | DB pool saturation, advisory lock contention, Redis concurrency, worker throughput | `test/load/` |
+| Visual regression | Screenshot-based UI comparison via Playwright | `test/visual/` |
+| Benchmark tests | Performance baselines and regression detection | `test/benchmarks/` |
 
 ### 10.3 Coverage Requirements
 
@@ -731,8 +852,14 @@ The system SHALL be configurable via environment variables (787+ variables defin
 | **SLO** | Service Level Objective — a target reliability metric for a service |
 | **Shard Deployment** | Deploying domain-specific site instances via the Vercel API |
 | **Publishing Adapter** | An integration module that publishes content to a specific external platform |
+| **Canary** | A lightweight health check that periodically probes an external integration to detect failures early |
 | **Circuit Breaker** | A resilience pattern that stops calling a failing service after repeated failures |
+| **Diligence Token** | A time-limited access token granting prospective buyers read-only access to domain metrics for sale evaluation |
+| **HPA** | Horizontal Pod Autoscaler — Kubernetes resource that automatically scales pod count based on CPU/memory metrics |
+| **L1/L2 Cache** | A two-tier caching strategy: L1 is in-memory (pod-local), L2 is distributed (Redis) |
+| **PDB** | Pod Disruption Budget — Kubernetes resource ensuring minimum availability during voluntary disruptions |
+| **Theme** | A pre-built Next.js sub-application providing templates and styling for domain-specific websites |
 
 ---
 
-*Generated from codebase analysis on 2026-02-13.*
+*Generated from codebase analysis on 2026-02-13. Updated 2026-02-16 with themes, diligence, planning, onboarding, cache management, accessibility, data retention, internationalization, Kubernetes deployment, and expanded testing requirements.*
