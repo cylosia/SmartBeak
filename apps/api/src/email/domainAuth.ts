@@ -15,9 +15,17 @@ export async function checkDomainAuth(domain: string): Promise<DomainAuthStatus>
   throw new DomainAuthError('Valid domain string is required');
   }
 
-  // Validate domain format (basic check)
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
-  if (!domainRegex.test(domain)) {
+  // Validate domain format (basic check) — validate labels separately to avoid ReDoS
+  const domainLabels = domain.split('.');
+  const tldRegex = /^[a-zA-Z]{2,}$/;
+  const isValidLabel = (l: string) =>
+    l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+  const isValidDomain = domainLabels.length >= 2
+    && domainLabels.slice(0, -1).every(isValidLabel)
+    && tldRegex.test(domainLabels[domainLabels.length - 1]!);
+  if (!isValidDomain) {
   throw new DomainAuthError(`Invalid domain format: ${domain}`);
   }
 

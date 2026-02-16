@@ -9,8 +9,27 @@ const logger = getLogger('membership-service');
 const VALID_ROLES = ['owner', 'admin', 'editor', 'viewer'] as const;
 export type Role = typeof VALID_ROLES[number];
 
-// Email validation regex (RFC 5322 compliant)
-const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+// Email validation — split into parts to avoid ReDoS from nested quantifiers
+const EMAIL_LOCAL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
+
+function isValidDomainLabel(label: string): boolean {
+  if (label.length < 1 || label.length > 63) return false;
+  if (!/^[a-zA-Z0-9]/.test(label)) return false;
+  if (!/[a-zA-Z0-9]$/.test(label)) return false;
+  return /^[a-zA-Z0-9-]+$/.test(label);
+}
+
+function isValidEmailFormat(email: string): boolean {
+  const atIndex = email.indexOf('@');
+  if (atIndex < 1 || atIndex === email.length - 1) return false;
+  if (email.indexOf('@', atIndex + 1) !== -1) return false;
+  const local = email.substring(0, atIndex);
+  const domain = email.substring(atIndex + 1);
+  if (!EMAIL_LOCAL_REGEX.test(local)) return false;
+  const labels = domain.split('.');
+  if (labels.length < 2) return false;
+  return labels.every(label => isValidDomainLabel(label));
+}
 
 export class MembershipService {
   constructor(private pool: Pool) {}
@@ -31,7 +50,7 @@ export class MembershipService {
   if (!email || typeof email !== 'string') {
     throw new Error('Email is required');
   }
-  if (!EMAIL_REGEX.test(email)) {
+  if (!isValidEmailFormat(email)) {
     throw new Error('Invalid email format');
   }
   }

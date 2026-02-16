@@ -63,7 +63,8 @@ const SENSITIVE_VALUE_PATTERNS: readonly RegExp[] = [
   /^ghu_[a-zA-Z0-9]{36}$/i,      // GitHub user token
   /^ghs_[a-zA-Z0-9]{36}$/i,      // GitHub server-to-server token
   /^ghr_[a-zA-Z0-9]{36}$/i,      // GitHub refresh token
-  /^xox[baprs]-[0-9]{10,13}-[0-9]{10,13}(-[a-zA-Z0-9]{24})?$/, // Slack token
+  /^xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24}$/, // Slack token (with suffix)
+  /^xox[baprs]-[0-9]{10,13}-[0-9]{10,13}$/, // Slack token (without suffix)
   /^[A-Za-z0-9_]{21}--[A-Za-z0-9_]{10}$/, // AWS Access Key ID pattern
   /^AKIA[0-9A-Z]{16}$/,           // AWS Access Key ID
   /^[A-Za-z0-9/+=]{40}$/,         // AWS Secret Access Key (base64)

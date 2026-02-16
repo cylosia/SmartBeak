@@ -49,10 +49,23 @@ export function hashEmail(email: string): string {
 * @returns True if valid email format
 */
 export function validateEmailFormat(email: string): boolean {
-  // Use a stricter inline regex matching the canonical EmailSchema pattern.
+  // Validate parts separately to avoid ReDoS from nested quantifiers.
   // The canonical implementation is in packages/kernel/validation/email.ts.
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  return emailRegex.test(email) && email.length <= 255;
+  if (email.length > 255) return false;
+  const atIndex = email.indexOf('@');
+  if (atIndex < 1 || atIndex === email.length - 1) return false;
+  if (email.indexOf('@', atIndex + 1) !== -1) return false;
+  const local = email.substring(0, atIndex);
+  const domain = email.substring(atIndex + 1);
+  if (!/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local)) return false;
+  const labels = domain.split('.');
+  if (labels.length < 2) return false;
+  return labels.every(label => {
+    if (label.length < 1 || label.length > 63) return false;
+    if (!/^[a-zA-Z0-9]/.test(label)) return false;
+    if (!/[a-zA-Z0-9]$/.test(label)) return false;
+    return /^[a-zA-Z0-9-]+$/.test(label);
+  });
 }
 
 /**

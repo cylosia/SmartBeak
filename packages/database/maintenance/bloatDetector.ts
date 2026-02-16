@@ -271,10 +271,12 @@ export function getBloatRecommendations(
   }
   
   // Check index bloat (estimated from index size)
-  const indexSizeMatch = bloat.indexes_size.match(/^(\d+(?:\.\d+)?)\s*(\w+)$/);
-  if (indexSizeMatch) {
-    const size = parseFloat(indexSizeMatch[1]!);
-    const unit = indexSizeMatch[2]!;
+  // Split on whitespace to avoid nested quantifiers in regex (ReDoS)
+  const sizeParts = bloat.indexes_size.trim().split(/\s+/);
+  const sizeStr = sizeParts[0];
+  const unit = sizeParts[1];
+  if (sizeStr && unit && /^\d+\.?\d*$/.test(sizeStr)) {
+    const size = parseFloat(sizeStr);
     const sizeInMB = unit === 'GB' ? size * 1024 : unit === 'KB' ? size / 1024 : size;
     
     if (sizeInMB > 1000) { // Over 1GB in indexes

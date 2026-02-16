@@ -212,7 +212,9 @@ function parseMs(timeStr: string): number {
  * If an RSA/EC public key is used as an HS256 secret, an attacker who
  * knows the public key can forge tokens.
  */
-const PEM_PATTERN = /-----BEGIN\s+(RSA\s+)?(PUBLIC|PRIVATE|CERTIFICATE|EC)\s+KEY-----/i;
+// Use literal spaces instead of \s+ to avoid nested quantifiers (ReDoS).
+// PEM headers use single spaces per RFC 7468.
+const PEM_PATTERN = /-----BEGIN (?:RSA )?(?:PUBLIC|PRIVATE|CERTIFICATE|EC) KEY-----/i;
 
 function isPemKey(key: string): boolean {
   return PEM_PATTERN.test(key.trim());

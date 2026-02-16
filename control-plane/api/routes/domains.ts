@@ -18,12 +18,19 @@ import { UsageService } from '../../services/usage';
 
 const logger = getLogger('domains-routes');
 
+// Validate domain labels separately to avoid ReDoS from nested quantifiers
+function isValidDomainLabel(l: string): boolean {
+  return l.length >= 1 && l.length <= 63
+    && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
+    && /^[a-zA-Z0-9-]+$/.test(l);
+}
+
 const DomainNameSchema = z.string()
   .min(1, 'Domain name is required')
   .max(253, 'Domain name must be 253 characters or less')
-  .regex(
-  /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/,
-  'Invalid domain name format'
+  .refine(
+    (domain) => domain.split('.').every(isValidDomainLabel),
+    { message: 'Invalid domain name format' }
   )
   .toLowerCase()
   .trim();
