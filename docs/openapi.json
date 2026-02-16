@@ -3,7 +3,13 @@
   "info": {
     "title": "SmartBeak Control Plane API",
     "version": "1.0.0",
-    "description": "API for managing content, domains, billing, publishing, and more."
+    "description": "API for managing content, domains, billing, publishing, and more.",
+    "contact": {
+      "name": "SmartBeak Engineering"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
   },
   "components": {
     "securitySchemes": {
@@ -18,54 +24,348 @@
   "paths": {
     "/health": {
       "get": {
+        "operationId": "getHealth",
+        "summary": "Basic health check",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns overall service health status. Public endpoint used by load balancers.",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/readyz": {
       "get": {
+        "operationId": "getReadiness",
+        "summary": "Kubernetes readiness probe",
+        "tags": [
+          "Health"
+        ],
+        "description": "Checks if the pod should receive traffic. Returns 503 during graceful shutdown or when critical dependencies are unreachable.",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/livez": {
       "get": {
+        "operationId": "getLiveness",
+        "summary": "Kubernetes liveness probe",
+        "tags": [
+          "Health"
+        ],
+        "description": "Checks if the process is stuck or deadlocked by measuring event loop responsiveness.",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alive": {
+                      "type": "boolean"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alive": {
+                      "type": "boolean"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/health/detailed": {
       "get": {
+        "operationId": "getHealthDetailed",
+        "summary": "Detailed health check (admin)",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns detailed infrastructure health including service states. Requires admin or owner role.",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "services": {
+                      "type": "object"
+                    },
+                    "details": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/health/repositories": {
       "get": {
+        "operationId": "getHealthRepositories",
+        "summary": "Repository health check (admin)",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns repository-specific health information. Requires admin or owner role.",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "healthy": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/health/sequences": {
       "get": {
+        "operationId": "getHealthSequences",
+        "summary": "Sequence health check (admin)",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns database sequence health data. Requires admin or owner role.",
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "healthy": {
+                      "type": "boolean"
+                    },
+                    "sequences": {
+                      "type": "object"
+                    },
+                    "checkedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "healthy": {
+                      "type": "boolean"
+                    },
+                    "sequences": {
+                      "type": "object"
+                    },
+                    "checkedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -80,6 +380,12 @@
   "security": [
     {
       "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Service health and readiness endpoints"
     }
   ]
 }
