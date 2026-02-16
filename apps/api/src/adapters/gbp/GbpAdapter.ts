@@ -821,6 +821,7 @@ export class GbpAdapter {
     );
     const requestBody: Record<string, unknown> = {};
     for (const key of definedKeys) {
+      // eslint-disable-next-line security/detect-object-injection -- iterating typed object keys
       requestBody[key] = updates[key as keyof typeof updates];
     }
     const response = await mybusiness.accounts.locations.localPosts.patch({

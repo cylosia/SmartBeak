@@ -1,7 +1,3 @@
-import Redis from 'ioredis';
-import { LRUCache } from 'lru-cache';
-
-import { redisConfig } from '@config';
 import { emitMetric } from '../ops/metrics';
 import { getLogger } from '@kernel/logger';
 import { detectBot as _kernelDetectBot } from '@kernel/bot-detection';
