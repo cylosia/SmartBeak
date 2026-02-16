@@ -48,10 +48,10 @@ DO $$
 DECLARE
     r RECORD;
 BEGIN
-    FOR r IN 
-        SELECT tc.constraint_name, tc.table_name, kcu.column_name, 
+    FOR r IN
+        SELECT tc.constraint_name, tc.table_name, kcu.column_name,
                ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name
-        FROM information_schema.table_constraints AS tc 
+        FROM information_schema.table_constraints AS tc
         JOIN information_schema.key_column_usage AS kcu
             ON tc.constraint_name = kcu.constraint_name
             AND tc.table_schema = kcu.table_schema
@@ -61,15 +61,17 @@ BEGIN
         WHERE tc.constraint_type = 'FOREIGN KEY'
           AND tc.table_schema = 'public'
     LOOP
-        -- Generate new name: fk_<table>_<column>_<ref_table>
-        EXECUTE format('ALTER TABLE %I RENAME CONSTRAINT %I TO %I',
-            r.table_name,
-            r.constraint_name,
-            'fk_' || r.table_name || '_' || r.column_name || '_' || r.foreign_table_name
-        );
-    EXCEPTION WHEN OTHERS THEN
-        -- Constraint might already be renamed or have different format
-        NULL;
+        BEGIN
+            -- Generate new name: fk_<table>_<column>_<ref_table>
+            EXECUTE format('ALTER TABLE %I RENAME CONSTRAINT %I TO %I',
+                r.table_name,
+                r.constraint_name,
+                'fk_' || r.table_name || '_' || r.column_name || '_' || r.foreign_table_name
+            );
+        EXCEPTION WHEN OTHERS THEN
+            -- Constraint might already be renamed or have different format
+            NULL;
+        END;
     END LOOP;
 END $$;
 
@@ -82,24 +84,26 @@ DECLARE
     r RECORD;
 BEGIN
     -- Rename indexes that don't follow idx_<table>_<column> convention
-    FOR r IN 
-        SELECT indexname, tablename 
-        FROM pg_indexes 
+    FOR r IN
+        SELECT indexname, tablename
+        FROM pg_indexes
         WHERE schemaname = 'public'
           AND indexname NOT LIKE 'idx_%'
           AND indexname NOT LIKE 'pk_%'
           AND indexname NOT LIKE 'uq_%'
           AND indexname NOT LIKE '%_pkey'
     LOOP
-        -- Skip if already standard or is a primary key
-        IF r.indexname NOT LIKE 'idx_%' THEN
-            EXECUTE format('ALTER INDEX %I RENAME TO %I',
-                r.indexname,
-                'idx_' || r.tablename || '_' || regexp_replace(r.indexname, '.*_(.+)$', '\1')
-            );
-        END IF;
-    EXCEPTION WHEN OTHERS THEN
-        NULL;
+        BEGIN
+            -- Skip if already standard or is a primary key
+            IF r.indexname NOT LIKE 'idx_%' THEN
+                EXECUTE format('ALTER INDEX %I RENAME TO %I',
+                    r.indexname,
+                    'idx_' || r.tablename || '_' || regexp_replace(r.indexname, '.*_(.+)$', '\1')
+                );
+            END IF;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END;
     END LOOP;
 END $$;
 
@@ -166,7 +170,10 @@ WHERE schemaname = 'public';
 -- Grant permissions on compliance view
 -- ============================================================================
 
-GRANT SELECT ON naming_convention_compliance TO monitoring_role;
+DO $$ BEGIN
+  GRANT SELECT ON naming_convention_compliance TO monitoring_role;
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
 COMMENT ON VIEW naming_convention_compliance IS 
     'View to check database object naming convention compliance';

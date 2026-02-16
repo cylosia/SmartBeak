@@ -255,17 +255,23 @@ CREATE INDEX IF NOT EXISTS idx_activity_log_org_created
 CREATE INDEX IF NOT EXISTS idx_memberships_org_role
   ON memberships (org_id, role);
 
--- 10. media_assets: domain + type
-CREATE INDEX IF NOT EXISTS idx_media_assets_domain_type
-  ON media_assets (domain_id, type, created_at DESC);
+-- 10. media_assets: domain + type (skip if column absent)
+DO $$ BEGIN
+  CREATE INDEX IF NOT EXISTS idx_media_assets_domain_type
+    ON media_assets (domain_id, type, created_at DESC);
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
 -- 11. search_documents: index_id + updated_at
 CREATE INDEX IF NOT EXISTS idx_search_documents_index_updated
   ON search_documents (index_id, updated_at DESC);
 
--- 12. diligence_tokens: org + expires_at
-CREATE INDEX IF NOT EXISTS idx_diligence_tokens_org_expires
-  ON diligence_tokens (org_id, expires_at);
+-- 12. diligence_tokens: org + expires_at (skip if column absent)
+DO $$ BEGIN
+  CREATE INDEX IF NOT EXISTS idx_diligence_tokens_org_expires
+    ON diligence_tokens (org_id, expires_at);
+EXCEPTION WHEN undefined_column THEN NULL;
+END $$;
 
 -- Commit all changes
 

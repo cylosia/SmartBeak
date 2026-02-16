@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS site_shards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     
     -- Relations
-    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    site_id UUID NOT NULL, -- sites table managed externally
     parent_version_id UUID REFERENCES site_shards(id) ON DELETE SET NULL,
     
     -- Versioning
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS site_shards (
     total_size_bytes INTEGER DEFAULT 0, -- Sum of all file sizes
     
     -- Audit
-    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deployed_at TIMESTAMPTZ,

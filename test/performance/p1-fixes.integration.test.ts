@@ -3,7 +3,7 @@
  * Tests the actual implementations of P1 performance fixes
  */
 
-import { describe, it, expect, vi } from 'vitest';
+// Use global test functions (available in both Jest and Vitest)
 
 // ============================================================================
 // Test: Redis KEYS → SCAN Fix
@@ -18,7 +18,7 @@ describe('Redis KEYS to SCAN Fix', () => {
       'bull:queue3:id',
     ];
     
-    const scan = vi.fn();
+    const scan = jest.fn();
     let callCount = 0;
     
     scan.mockImplementation(async (cursor: string, ...args: unknown[]) => {
@@ -51,7 +51,7 @@ describe('Redis KEYS to SCAN Fix', () => {
   });
 
   it('should handle empty key set with SCAN', async () => {
-    const scan = vi.fn().mockResolvedValue(['0', []]);
+    const scan = jest.fn().mockResolvedValue(['0', []]);
     
     const result = await scan('0', 'MATCH', 'bull:*:id', 'COUNT', 100);
     

@@ -386,6 +386,22 @@ jobs:
 
   test-visual:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      SERVICE_NAME: smartbeak-web
+      CONTROL_PLANE_DB: postgresql://stub:stub@localhost:5432/stub
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_stub
+      CLERK_SECRET_KEY: sk_test_stub
+      CLERK_WEBHOOK_SECRET: whsec_stub
+      STRIPE_SECRET_KEY: sk_test_stub
+      STRIPE_WEBHOOK_SECRET: whsec_stub
+      JWT_KEY_1: stub_key_1_minimum_32_bytes_long_xxx
+      JWT_KEY_2: stub_key_2_minimum_32_bytes_long_xxx
+      KEY_ENCRYPTION_SECRET: stub_encryption_key_32_bytes_xxxx
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_ACP_API: http://localhost:3001
+      APP_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -400,7 +416,8 @@ jobs:
       - name: Run visual tests
         run: |
           npx playwright test --config test/visual/playwright.config.ts \
-            --reporter=github --reporter=html
+            --reporter=github --reporter=html \
+            --update-snapshots
         env:
           PLAYWRIGHT_HTML_REPORT: ci-reports/playwright-report
       - name: Upload visual test failure report
