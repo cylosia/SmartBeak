@@ -387,7 +387,6 @@ jobs:
   test-visual:
     runs-on: ubuntu-latest
     env:
-      NODE_ENV: production
       LOG_LEVEL: info
       SERVICE_NAME: smartbeak-web
       CONTROL_PLANE_DB: postgresql://stub:stub@localhost:5432/stub
@@ -413,12 +412,15 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build:web
+        env:
+          NODE_ENV: production
       - name: Run visual tests
         run: |
           npx playwright test --config test/visual/playwright.config.ts \
             --reporter=github --reporter=html \
             --update-snapshots
         env:
+          NODE_ENV: production
           PLAYWRIGHT_HTML_REPORT: ci-reports/playwright-report
       - name: Upload visual test failure report
         if: failure()
