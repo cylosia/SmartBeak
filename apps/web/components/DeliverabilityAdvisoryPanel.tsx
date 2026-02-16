@@ -15,7 +15,7 @@ export function DeliverabilityAdvisoryPanel({ advisories }: DeliverabilityAdviso
   return (
   <aside>
     <h4>Deliverability Checks</h4>
-    {advisories.map((a: Advisory, i: number) => (
+    {advisories.map((a: Advisory) => (
     <div key={`${a.level}-${a.message}`} style={{ marginBottom: 8 }}>
       <strong>{a.level === 'warning' ? '⚠' : 'ℹ'} {a.message}</strong>
       {a.recommendation && <div>{a.recommendation}</div>}

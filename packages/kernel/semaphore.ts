@@ -1,6 +1,6 @@
 import { getLogger } from './logger';
 
-const logger = getLogger('semaphore');
+const _logger = getLogger('semaphore');
 
 /**
  * Async semaphore for backpressure and concurrency control.

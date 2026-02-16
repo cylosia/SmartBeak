@@ -118,7 +118,7 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
 
   // Collect database-backed flags
   const dbFlags = await flags.getAll();
-  const dbKeys = new Set(dbFlags.map(f => f.key));
+  const _dbKeys = new Set(dbFlags.map(f => f.key));
 
   // Merge: env flags first, then DB flags override or add
   const merged = new Map<string, { key: string; value: boolean; source: 'env' | 'database'; updatedAt: string | null }>();

@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-import { FacebookAdapter, FacebookPostResponse } from './facebook/FacebookAdapter';
-import { GaAdapter, GACredentials, GARequest, GAResponse } from './ga/GaAdapter';
-import { GscAdapter, GSCAuth, SearchAnalyticsRequest, SearchAnalyticsResponse } from './gsc/GscAdapter';
+import { FacebookAdapter } from './facebook/FacebookAdapter';
+import { GaAdapter, GACredentials } from './ga/GaAdapter';
+import { GscAdapter, GSCAuth } from './gsc/GscAdapter';
 import { timeoutConfig } from '@config';
 import { VaultClient } from '../services/vault/VaultClient';
-import { VercelAdapter, VercelDeployPayload, VercelDeployResponse } from './vercel/VercelAdapter';
+import { VercelAdapter } from './vercel/VercelAdapter';
 import { withTimeout, withCircuitBreaker } from '../utils/resilience';
 import {
   validateGACreds,

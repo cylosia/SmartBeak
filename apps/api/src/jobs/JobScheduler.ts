@@ -269,8 +269,8 @@ export class JobScheduler extends EventEmitter {
   }
 
   private createQueue(name: string): Queue {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queue = new Queue(name, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     connection: this.redis as any,
     defaultJobOptions: {
     removeOnComplete: jobConfig.keepCompletedJobs,

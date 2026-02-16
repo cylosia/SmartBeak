@@ -86,7 +86,8 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
   
   // P1-6 FIX: Use BullMQ Job type for cancel event listener
   if (job && 'on' in job && typeof job.on === 'function') {
-    (job as any).on('cancel', abortListener);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (job as unknown as { on: (event: string, listener: () => void) => void }).on('cancel', abortListener);
   }
 
   try {
@@ -145,7 +146,7 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
     // P2-FIX: Clean up abort listener
     // P1-6 FIX: Use BullMQ Job type for cancel event listener cleanup
     if (job && 'off' in job && typeof job.off === 'function') {
-      (job as any).off('cancel', abortListener);
+      (job as unknown as { off: (event: string, listener: () => void) => void }).off('cancel', abortListener);
     }
   }
 }

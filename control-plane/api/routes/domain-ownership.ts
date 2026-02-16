@@ -8,7 +8,7 @@ import { DomainOwnershipService } from '../../services/domain-ownership';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
-import { errors, sendError } from '@errors/responses';
+import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 export async function domainOwnershipRoutes(app: FastifyInstance, pool: Pool) {

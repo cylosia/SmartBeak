@@ -47,14 +47,14 @@ describe('SECRET_MANIFEST', () => {
   });
 
   it('should provide rotation guidance for each category', () => {
-    for (const [name, category] of Object.entries(SECRET_MANIFEST)) {
+    for (const [_name, category] of Object.entries(SECRET_MANIFEST)) {
       expect(category.rotation).toBeTruthy();
       expect(category.rotation.length).toBeGreaterThan(10);
     }
   });
 
   it('should provide generation guidance for each category', () => {
-    for (const [name, category] of Object.entries(SECRET_MANIFEST)) {
+    for (const [_name, category] of Object.entries(SECRET_MANIFEST)) {
       expect(category.generation).toBeTruthy();
       expect(category.generation.length).toBeGreaterThan(5);
     }

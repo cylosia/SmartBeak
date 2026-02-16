@@ -11,11 +11,20 @@ const nextConfig = {
 
   // Transpile internal monorepo packages so Next.js can compile their TypeScript source
   transpilePackages: [
+    '@smartbeak/adapters',
+    '@smartbeak/analytics',
+    '@smartbeak/cache',
     '@smartbeak/config',
-    '@smartbeak/kernel',
-    '@smartbeak/security',
     '@smartbeak/database',
     '@smartbeak/errors',
+    '@smartbeak/kernel',
+    '@smartbeak/middleware',
+    '@smartbeak/ml',
+    '@smartbeak/monitoring',
+    '@smartbeak/security',
+    '@smartbeak/types',
+    '@smartbeak/utils',
+    '@packages/shutdown',
   ],
 
   // Security: Do not expose source maps to browsers in production.

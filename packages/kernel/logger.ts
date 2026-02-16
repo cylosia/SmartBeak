@@ -1,5 +1,5 @@
 import { getRequestContext } from './request-context';
-import { sanitizeForLogging as redact, isSensitiveField as _isSensitiveField } from './redaction';
+import { sanitizeForLogging as redact } from './redaction';
 
 /**
 * Structured Logger
@@ -129,8 +129,6 @@ function shouldLog(level: LogLevel): boolean {
 // Sensitive Data Redaction — delegated to @kernel/redaction
 // ============================================================================
 
-// Re-export the comprehensive isSensitiveField for external use
-const isSensitiveField = _isSensitiveField;
 
 /**
 * Redact sensitive data from an object using the consolidated redaction engine.

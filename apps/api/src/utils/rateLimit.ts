@@ -10,7 +10,7 @@ import { getLogger } from '@kernel/logger';
 * @module utils/rateLimit
 */
 
-const logger = getLogger('rateLimit');
+const _logger = getLogger('rateLimit');
 
 // IP extraction — canonical implementation in @kernel/ip-utils
 import { getClientIp as kernelGetClientIp } from '@kernel/ip-utils';
