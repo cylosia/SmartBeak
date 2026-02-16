@@ -10,6 +10,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+.next/
 *.tsbuildinfo
 
 # Environment files
@@ -57,3 +58,6 @@ ci-reports/
 *.js
 !*.config.js
 !*.d.ts
+
+# Next.js auto-generated type declarations
+next-env.d.ts
