@@ -3,21 +3,8 @@
   "info": {
     "title": "SmartBeak Control Plane API",
     "version": "1.0.0",
-    "description": "API for managing content, domains, billing, publishing, and more.",
-    "contact": {
-      "name": "SmartBeak Engineering",
-      "url": "https://github.com/cylosia/SmartBeak"
-    },
-    "license": {
-      "name": "UNLICENSED"
-    }
+    "description": "API for managing content, domains, billing, publishing, and more."
   },
-  "servers": [
-    {
-      "url": "/v1",
-      "description": "API v1"
-    }
-  ],
   "components": {
     "securitySchemes": {
       "bearerAuth": {
@@ -26,38 +13,73 @@
         "bearerFormat": "JWT"
       }
     },
-    "schemas": {
-      "ErrorResponse": {
-        "type": "object",
-        "required": ["error", "code", "requestId"],
-        "properties": {
-          "error": {
-            "type": "string",
-            "description": "Human-readable error message"
-          },
-          "code": {
-            "type": "string",
-            "description": "Machine-readable error code"
-          },
-          "requestId": {
-            "type": "string",
-            "description": "Request ID for tracing"
-          },
-          "details": {
-            "description": "Additional details (development only)"
-          },
-          "retryAfter": {
-            "type": "integer",
-            "description": "Seconds until retry is allowed (429 only)"
+    "schemas": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/livez": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/health/detailed": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/health/repositories": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/health/sequences": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
     }
   },
+  "servers": [
+    {
+      "url": "/v1",
+      "description": "API v1"
+    }
+  ],
   "security": [
     {
       "bearerAuth": []
     }
-  ],
-  "paths": {}
+  ]
 }

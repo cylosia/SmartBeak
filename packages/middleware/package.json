@@ -2,6 +2,7 @@
   "name": "@smartbeak/middleware",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "validation.ts",
   "types": "validation.ts",
   "scripts": {

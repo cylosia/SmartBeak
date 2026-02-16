@@ -2,9 +2,6 @@ import { randomUUID } from 'crypto';
 
 import { AsyncLocalStorage } from 'async_hooks';
 import { context as otelContext, trace } from '@opentelemetry/api';
-import { getLogger } from '@kernel/logger';
-
-const logger = getLogger('RequestContext');
 
 /**
 * Request Context Module
@@ -38,11 +35,7 @@ export const requestContextStorage = asyncLocalStorage;
 * @returns Current request context or undefined if not in a context
 */
 export function getRequestContext(): RequestContext | undefined {
-  const context = asyncLocalStorage.getStore();
-  if (!context && process.env.NODE_ENV === 'development') {
-    logger.warn('getRequestContext called outside of runWithContext');
-  }
-  return context;
+  return asyncLocalStorage.getStore();
 }
 
 /**
