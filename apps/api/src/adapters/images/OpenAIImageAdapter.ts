@@ -507,6 +507,7 @@ export class OpenAIImageAdapter {
     const size = options.size || '1024x1024';
     const n = options.n || 1;
 
+    // eslint-disable-next-line security/detect-object-injection -- static lookup table with validated inputs
     const costPerImage = costs[model]?.[quality]?.[size] || 0.040;
     return costPerImage * n;
   }
