@@ -19,9 +19,11 @@ vi.mock('@kernel/logger', () => ({
   }),
 }));
 
-const mockRedisStore = new Map<string, string>();
-let shouldFailRelease = false;
-let shouldFailEval = false;
+// Use vi.hoisted so mock variables are available when vi.mock factories execute
+const { mockRedisStore, flags } = vi.hoisted(() => ({
+  mockRedisStore: new Map<string, string>(),
+  flags: { shouldFailRelease: false, shouldFailEval: false },
+}));
 
 vi.mock('@kernel/redis', () => ({
   getRedis: vi.fn().mockResolvedValue({
@@ -35,18 +37,37 @@ vi.mock('@kernel/redis', () => ({
       return mockRedisStore.delete(key) ? 1 : 0;
     }),
     exists: vi.fn().mockImplementation(async (key: string) => mockRedisStore.has(key) ? 1 : 0),
-    eval: vi.fn().mockImplementation(async (_script: string, _numKeys: number, key: string, value: string) => {
-      if (shouldFailEval) throw new Error('ECONNRESET: Redis connection lost');
-      if (shouldFailRelease) throw new Error('Redis EVAL failed');
-      if (mockRedisStore.get(key) === value) {
-        mockRedisStore.delete(key);
+    eval: vi.fn().mockImplementation(async (_script: string, numKeys: number, ...args: string[]) => {
+      if (flags.shouldFailEval) throw new Error('ECONNRESET: Redis connection lost');
+      if (numKeys === 2) {
+        // Acquire lock: KEYS=[lockKey, fencingKey], ARGV=[lockValue, ttl]
+        const lockKey = args[0]!;
+        const fencingKey = args[1]!;
+        const lockValue = args[2]!;
+        if (mockRedisStore.has(lockKey)) return -1;
+        mockRedisStore.set(lockKey, lockValue);
+        const fenceVal = parseInt(mockRedisStore.get(fencingKey) || '0', 10) + 1;
+        mockRedisStore.set(fencingKey, String(fenceVal));
+        return fenceVal;
+      }
+      // numKeys=1: Release or Extend lock
+      if (flags.shouldFailRelease) throw new Error('Redis EVAL failed');
+      const lockKey = args[0]!;
+      const lockValue = args[1]!;
+      if (mockRedisStore.get(lockKey) === lockValue) {
+        if (args.length > 2) {
+          // Extend: keep key, just acknowledge (pexpire mock)
+          return 1;
+        }
+        // Release: delete key
+        mockRedisStore.delete(lockKey);
         return 1;
       }
       return 0;
     }),
     pttl: vi.fn().mockResolvedValue(5000),
     pexpire: vi.fn().mockImplementation(async () => {
-      if (shouldFailEval) throw new Error('Redis PEXPIRE failed');
+      if (flags.shouldFailEval) throw new Error('Redis PEXPIRE failed');
       return 1;
     }),
   }),
@@ -58,15 +79,15 @@ describe('Redlock - Failure Scenarios', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRedisStore.clear();
-    shouldFailRelease = false;
-    shouldFailEval = false;
+    flags.shouldFailRelease = false;
+    flags.shouldFailEval = false;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     mockRedisStore.clear();
-    shouldFailRelease = false;
-    shouldFailEval = false;
+    flags.shouldFailRelease = false;
+    flags.shouldFailEval = false;
   });
 
   describe('Redis Disconnect While Lock is Held', () => {
@@ -76,7 +97,7 @@ describe('Redlock - Failure Scenarios', () => {
       expect(lock).not.toBeNull();
 
       // Simulate Redis disconnect on release
-      shouldFailEval = true;
+      flags.shouldFailEval = true;
 
       // Release should throw (Redis is unavailable)
       if (lock) {
@@ -103,7 +124,7 @@ describe('Redlock - Failure Scenarios', () => {
 
   describe('releaseLock() Failure Handling', () => {
     it('should handle Redis EVAL failure during release gracefully in withLock', async () => {
-      shouldFailRelease = true;
+      flags.shouldFailRelease = true;
 
       // withLock should not throw even when release fails — it catches and logs
       const result = await withLock(

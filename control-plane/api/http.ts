@@ -102,6 +102,12 @@ await app.register(swagger, {
       title: 'SmartBeak Control Plane API',
       version: '1.0.0',
       description: 'API for managing content, domains, billing, publishing, and more.',
+      contact: {
+        name: 'SmartBeak Engineering',
+      },
+      license: {
+        name: 'Proprietary',
+      },
     },
     servers: [{ url: '/v1', description: 'API v1' }],
     components: {
@@ -114,6 +120,9 @@ await app.register(swagger, {
       },
     },
     security: [{ bearerAuth: [] }],
+    tags: [
+      { name: 'Health', description: 'Service health and readiness endpoints' },
+    ],
   },
 });
 
@@ -421,7 +430,18 @@ async function registerRoutes(): Promise<void> {
 }
 
 // P1-CRITICAL FIX: Deep health check with comprehensive dependency verification
-app.get('/health', async (request, reply) => {
+app.get('/health', {
+  schema: {
+    operationId: 'getHealth',
+    summary: 'Basic health check',
+    description: 'Returns overall service health status. Public endpoint used by load balancers.',
+    tags: ['Health'],
+    response: {
+      200: { type: 'object', properties: { status: { type: 'string' }, timestamp: { type: 'string' } } },
+      503: { type: 'object', properties: { status: { type: 'string' }, timestamp: { type: 'string' } } },
+    },
+  },
+}, async (request, reply) => {
   const startTime = Date.now();
 
   // Run all health checks in parallel for faster response
@@ -472,7 +492,18 @@ app.get('/health', async (request, reply) => {
 // Kubernetes readiness probe - checks if pod should receive traffic.
 // Returns 503 during graceful shutdown or if critical dependencies
 // (database, Redis) are unreachable.
-app.get('/readyz', async (_request, reply) => {
+app.get('/readyz', {
+  schema: {
+    operationId: 'getReadiness',
+    summary: 'Kubernetes readiness probe',
+    description: 'Checks if the pod should receive traffic. Returns 503 during graceful shutdown or when critical dependencies are unreachable.',
+    tags: ['Health'],
+    response: {
+      200: { type: 'object', properties: { ready: { type: 'boolean' }, timestamp: { type: 'string' } } },
+      503: { type: 'object', properties: { ready: { type: 'boolean' }, timestamp: { type: 'string' } } },
+    },
+  },
+}, async (_request, reply) => {
   // During graceful shutdown, tell K8s to stop routing traffic to this pod.
   // This allows in-flight requests to drain before the process exits.
   if (getIsShuttingDown()) {
@@ -502,7 +533,18 @@ app.get('/readyz', async (_request, reply) => {
 // the process is stuck and needs a restart.
 const EVENT_LOOP_LAG_THRESHOLD_MS = 5000;
 
-app.get('/livez', async (_request, reply) => {
+app.get('/livez', {
+  schema: {
+    operationId: 'getLiveness',
+    summary: 'Kubernetes liveness probe',
+    description: 'Checks if the process is stuck or deadlocked by measuring event loop responsiveness.',
+    tags: ['Health'],
+    response: {
+      200: { type: 'object', properties: { alive: { type: 'boolean' }, timestamp: { type: 'string' } } },
+      503: { type: 'object', properties: { alive: { type: 'boolean' }, timestamp: { type: 'string' } } },
+    },
+  },
+}, async (_request, reply) => {
   // Measure event loop lag: schedule a timer for 0ms and measure actual delay.
   // If the event loop is blocked (e.g., infinite loop, CPU-bound work),
   // the callback fires late, and lagMs will exceed the threshold.
@@ -639,7 +681,19 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
 // /health is public (for load balancer checks), but /health/detailed,
 // /health/repositories, /health/sequences expose internal infrastructure state
 // (DB latency, Redis mode, stalled jobs, sequence health) useful for reconnaissance.
-app.get('/health/detailed', async (request, reply) => {
+app.get('/health/detailed', {
+  schema: {
+    operationId: 'getHealthDetailed',
+    summary: 'Detailed health check (admin)',
+    description: 'Returns detailed infrastructure health including service states. Requires admin or owner role.',
+    tags: ['Health'],
+    response: {
+      200: { type: 'object', properties: { status: { type: 'string' }, services: { type: 'object' }, details: { type: 'object' } } },
+      401: { type: 'object', properties: { error: { type: 'string' } } },
+      403: { type: 'object', properties: { error: { type: 'string' } } },
+    },
+  },
+}, async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
     return errHelpers.unauthorized(reply, 'Authentication required for detailed health checks');
@@ -656,7 +710,19 @@ app.get('/health/detailed', async (request, reply) => {
 });
 
 // F33-FIX: Require auth for repository health check
-app.get('/health/repositories', async (request, reply) => {
+app.get('/health/repositories', {
+  schema: {
+    operationId: 'getHealthRepositories',
+    summary: 'Repository health check (admin)',
+    description: 'Returns repository-specific health information. Requires admin or owner role.',
+    tags: ['Health'],
+    response: {
+      200: { type: 'object', properties: { healthy: { type: 'boolean' } } },
+      401: { type: 'object', properties: { error: { type: 'string' } } },
+      403: { type: 'object', properties: { error: { type: 'string' } } },
+    },
+  },
+}, async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
     return errHelpers.unauthorized(reply);
@@ -667,7 +733,20 @@ app.get('/health/repositories', async (request, reply) => {
 });
 
 // F33-FIX: Require auth for sequence health monitoring
-app.get('/health/sequences', async (request, reply) => {
+app.get('/health/sequences', {
+  schema: {
+    operationId: 'getHealthSequences',
+    summary: 'Sequence health check (admin)',
+    description: 'Returns database sequence health data. Requires admin or owner role.',
+    tags: ['Health'],
+    response: {
+      200: { type: 'object', properties: { healthy: { type: 'boolean' }, sequences: { type: 'object' }, checkedAt: { type: 'string' } } },
+      401: { type: 'object', properties: { error: { type: 'string' } } },
+      403: { type: 'object', properties: { error: { type: 'string' } } },
+      503: { type: 'object', properties: { healthy: { type: 'boolean' }, sequences: { type: 'object' }, checkedAt: { type: 'string' } } },
+    },
+  },
+}, async (request, reply) => {
   const auth = (request as { auth?: AuthContext | null }).auth;
   if (!auth) {
     return errHelpers.unauthorized(reply);

@@ -32,10 +32,14 @@ const mockPipeline = {
   zcard: vi.fn().mockReturnThis(),
   exec: vi.fn().mockImplementation(async () => {
     if (shouldFailRedis) throw new Error('ECONNREFUSED');
+    // Return current count BEFORE incrementing to match real Redis behavior:
+    // pipeline runs zcard (returns current count), then checkRateLimit does
+    // zadd separately if allowed, which increments the sorted set count.
+    const count = rateLimitCounter;
     rateLimitCounter++;
     return [
       [null, 0], // zremrangebyscore result
-      [null, rateLimitCounter], // zcard result — incremented per call
+      [null, count], // zcard result — count before this request's zadd
     ];
   }),
 };

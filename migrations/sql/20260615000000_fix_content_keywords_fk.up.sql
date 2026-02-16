@@ -4,6 +4,11 @@
 ALTER TABLE content_keywords
   DROP CONSTRAINT IF EXISTS content_keywords_content_id_fkey;
 
+-- content_keywords.content_id was created as UUID but content_items.id is TEXT.
+-- Align the column type before adding the FK constraint.
+ALTER TABLE content_keywords
+  ALTER COLUMN content_id TYPE TEXT;
+
 ALTER TABLE content_keywords
   ADD CONSTRAINT content_keywords_content_id_fkey
   FOREIGN KEY (content_id) REFERENCES content_items(id) ON DELETE CASCADE;

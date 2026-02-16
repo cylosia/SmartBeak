@@ -120,6 +120,9 @@ describe('DLQ - Overflow & Failure Scenarios', () => {
     });
 
     it('should propagate errors from custom storage implementations', async () => {
+      // Save original storage so we can restore it after test
+      const originalStorage = getDLQStorage();
+
       const failingStorage: DLQStorage = {
         enqueue: vi.fn().mockRejectedValue(new Error('Database write failed')),
         dequeue: vi.fn().mockRejectedValue(new Error('Database read failed')),
@@ -135,8 +138,8 @@ describe('DLQ - Overflow & Failure Scenarios', () => {
         sendToDLQ('fail-queue', { data: 'test' }, new Error('original'), 3, 3)
       ).rejects.toThrow('Database write failed');
 
-      // Restore default storage
-      // Need to reimport to get fresh default storage
+      // Restore default storage so subsequent tests work
+      setDLQStorage(originalStorage);
     });
   });
 

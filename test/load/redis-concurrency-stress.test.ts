@@ -19,46 +19,71 @@ vi.mock('@kernel/logger', () => ({
   }),
 }));
 
-// Mock Redis module
-const mockRedisStore = new Map<string, string>();
-const mockRedisInstance = {
-  set: vi.fn().mockImplementation(async (key: string, value: string, ...args: unknown[]) => {
-    const nxIndex = args.indexOf('NX');
-    if (nxIndex !== -1) {
-      // SET with NX — only set if not exists
-      if (mockRedisStore.has(key)) return null;
-    }
-    mockRedisStore.set(key, value);
-    return 'OK';
-  }),
-  get: vi.fn().mockImplementation(async (key: string) => {
-    return mockRedisStore.get(key) ?? null;
-  }),
-  del: vi.fn().mockImplementation(async (key: string) => {
-    return mockRedisStore.delete(key) ? 1 : 0;
-  }),
-  exists: vi.fn().mockImplementation(async (key: string) => {
-    return mockRedisStore.has(key) ? 1 : 0;
-  }),
-  eval: vi.fn().mockImplementation(async (_script: string, _numKeys: number, key: string, value: string) => {
-    if (mockRedisStore.get(key) === value) {
-      mockRedisStore.delete(key);
-      return 1;
-    }
-    return 0;
-  }),
-  pttl: vi.fn().mockResolvedValue(5000),
-  pipeline: vi.fn().mockReturnValue({
-    set: vi.fn().mockReturnThis(),
-    get: vi.fn().mockReturnThis(),
-    exec: vi.fn().mockImplementation(async () => {
-      return Array.from({ length: 200 }, () => [null, 'OK']);
+// Use vi.hoisted so mock variables are available when vi.mock factories execute
+// (vi.mock calls are hoisted to the top of the file by Vitest)
+const { mockRedisStore, mockRedisInstance } = vi.hoisted(() => {
+  const store = new Map<string, string>();
+  const instance = {
+    set: vi.fn().mockImplementation(async (key: string, value: string, ...args: unknown[]) => {
+      const nxIndex = args.indexOf('NX');
+      if (nxIndex !== -1) {
+        // SET with NX — only set if not exists
+        if (store.has(key)) return null;
+      }
+      store.set(key, value);
+      return 'OK';
     }),
-  }),
-  quit: vi.fn().mockResolvedValue('OK'),
-  on: vi.fn(),
-  status: 'ready',
-};
+    get: vi.fn().mockImplementation(async (key: string) => {
+      return store.get(key) ?? null;
+    }),
+    del: vi.fn().mockImplementation(async (key: string) => {
+      return store.delete(key) ? 1 : 0;
+    }),
+    exists: vi.fn().mockImplementation(async (key: string) => {
+      return store.has(key) ? 1 : 0;
+    }),
+    eval: vi.fn().mockImplementation(async (_script: string, numKeys: number, ...args: string[]) => {
+      // Redlock uses two Lua scripts:
+      // 1. Acquire: eval(script, 2, lockKey, fencingKey, lockValue, ttl)
+      //    SET lockKey lockValue PX ttl NX; if ok INCR fencingKey, else return -1
+      // 2. Release: eval(script, 1, lockKey, lockValue)
+      //    if GET lockKey == lockValue then DEL lockKey return 1 else return 0
+      if (numKeys === 2) {
+        // Acquire lock script
+        const lockKey = args[0]!;
+        const fencingKey = args[1]!;
+        const lockValue = args[2]!;
+        if (store.has(lockKey)) {
+          return -1; // Lock already held
+        }
+        store.set(lockKey, lockValue);
+        const fenceVal = parseInt(store.get(fencingKey) || '0', 10) + 1;
+        store.set(fencingKey, String(fenceVal));
+        return fenceVal;
+      }
+      // Release lock script
+      const lockKey = args[0]!;
+      const lockValue = args[1]!;
+      if (store.get(lockKey) === lockValue) {
+        store.delete(lockKey);
+        return 1;
+      }
+      return 0;
+    }),
+    pttl: vi.fn().mockResolvedValue(5000),
+    pipeline: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnThis(),
+      get: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockImplementation(async () => {
+        return Array.from({ length: 200 }, () => [null, 'OK']);
+      }),
+    }),
+    quit: vi.fn().mockResolvedValue('OK'),
+    on: vi.fn(),
+    status: 'ready',
+  };
+  return { mockRedisStore: store, mockRedisInstance: instance };
+});
 
 vi.mock('@kernel/redis', () => ({
   getRedis: vi.fn().mockResolvedValue(mockRedisInstance),
