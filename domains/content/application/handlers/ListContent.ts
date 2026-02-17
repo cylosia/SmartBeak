@@ -1,10 +1,10 @@
 
 import { ContentRepository } from '../ports/ContentRepository';
 import { ContentStatus } from '../../domain/entities/ContentItem';
+import { DB } from '@kernel/constants';
 
 // P2-FIX: Clamp limit and offset to prevent resource exhaustion
 const MAX_LIMIT = 100;
-const MAX_OFFSET = 10000;
 
 export class ListContent {
   constructor(private repo: ContentRepository) {}
@@ -21,7 +21,7 @@ export class ListContent {
   return this.repo.listByStatus(
     status,
     Math.min(Math.max(1, limit), MAX_LIMIT),
-    Math.min(Math.max(0, offset), MAX_OFFSET),
+    Math.min(Math.max(0, offset), DB.MAX_OFFSET),
     domainId,
     orgId
   );
@@ -35,7 +35,7 @@ export class ListContent {
   return this.repo.listByDomain(
     domainId,
     Math.min(Math.max(1, limit), MAX_LIMIT),
-    Math.min(Math.max(0, offset), MAX_OFFSET)
+    Math.min(Math.max(0, offset), DB.MAX_OFFSET)
   );
   }
 }
