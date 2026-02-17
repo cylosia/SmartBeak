@@ -3,6 +3,7 @@
 
 import { Pool, PoolClient } from 'pg';
 import { validateNotificationPayload } from '@domain/shared/infra/validation/DatabaseSchemas';
+import { ValidationError, ErrorCodes } from '@errors';
 
 import { getLogger } from '@kernel/logger';
 
@@ -60,7 +61,7 @@ export class PostgresNotificationRepository implements NotificationRepository {
   async getById(id: string, client?: PoolClient): Promise<Notification | null> {
   // Validate input
   if (!id || typeof id !== 'string') {
-    throw new Error('id must be a non-empty string');
+    throw new ValidationError('id must be a non-empty string');
   }
   try {
     const queryable = this.getQueryable(client);
@@ -107,7 +108,7 @@ export class PostgresNotificationRepository implements NotificationRepository {
   async save(notification: Notification, client?: PoolClient): Promise<void> {
   // Validate input
   if (!notification || typeof notification["id"] !== 'string') {
-    throw new Error('notification must have a valid id');
+    throw new ValidationError('notification must have a valid id');
   }
   // Validate JSONB payload before saving
   validateNotificationPayload(notification.payload);
@@ -161,10 +162,10 @@ export class PostgresNotificationRepository implements NotificationRepository {
   ): Promise<Notification[]> {
   // Validate input parameters
   if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1) {
-    throw new Error('limit must be a positive integer');
+    throw new ValidationError('limit must be a positive integer');
   }
   if (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0) {
-    throw new Error('offset must be a non-negative integer');
+    throw new ValidationError('offset must be a non-negative integer');
   }
 
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
@@ -223,13 +224,13 @@ export class PostgresNotificationRepository implements NotificationRepository {
   ): Promise<Notification[]> {
   // Validate input parameters
   if (!userId || typeof userId !== 'string') {
-    throw new Error('userId must be a non-empty string');
+    throw new ValidationError('userId must be a non-empty string');
   }
   if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1) {
-    throw new Error('limit must be a positive integer');
+    throw new ValidationError('limit must be a positive integer');
   }
   if (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0) {
-    throw new Error('offset must be a non-negative integer');
+    throw new ValidationError('offset must be a non-negative integer');
   }
 
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
@@ -283,9 +284,8 @@ export class PostgresNotificationRepository implements NotificationRepository {
 
   const MAX_BATCH_SIZE = 1000;
   if (notifications.length > MAX_BATCH_SIZE) {
-    throw new Error(
-    `Batch size ${notifications.length} exceeds maximum allowed ${MAX_BATCH_SIZE}. ` +
-    `Split into smaller batches.`
+    throw new ValidationError(
+    `Batch size ${notifications.length} exceeds maximum allowed ${MAX_BATCH_SIZE}. Split into smaller batches.`
     );
   }
 
@@ -376,10 +376,10 @@ export class PostgresNotificationRepository implements NotificationRepository {
   ): Promise<number> {
   // Validate inputs
   if (!(olderThan instanceof Date) || isNaN(olderThan.getTime())) {
-    throw new Error('olderThan must be a valid Date');
+    throw new ValidationError('olderThan must be a valid Date');
   }
   if (!Number.isInteger(limit) || limit < 1) {
-    throw new Error('limit must be a positive integer');
+    throw new ValidationError('limit must be a positive integer');
   }
   // Performance: Clamp limit to prevent unbounded deletions
   const safeLimit = Math.min(Math.max(1, limit), 10000);

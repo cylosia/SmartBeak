@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { monitoringConfig } from '@config';
 
 import { LRUCache } from '../utils/lruCache';
 
@@ -311,7 +312,7 @@ export class AlertingSystem extends EventEmitter {
   * Send Slack alert
   */
   private async sendSlackAlert(alert: Alert): Promise<void> {
-  const webhookUrl = process.env['SLACK_WEBHOOK_URL'];
+  const webhookUrl = monitoringConfig.slackWebhookUrl;
   if (!webhookUrl) return;
 
   const colors: Record<AlertSeverity, string> = {
@@ -349,7 +350,7 @@ export class AlertingSystem extends EventEmitter {
   * Send webhook alert
   */
   private async sendWebhookAlert(alert: Alert): Promise<void> {
-  const webhookUrl = process.env['ALERT_WEBHOOK_URL'];
+  const webhookUrl = monitoringConfig.alertWebhookUrl;
   if (!webhookUrl) return;
 
   try {

@@ -142,7 +142,7 @@ export class OutboxRelay {
             }
 
             publishedIds.push(row.id);
-          } catch (err) {
+          } catch (err: unknown) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             failedUpdates.push({ id: row.id, error: errorMsg });
             logger.error('Failed to publish outbox event', undefined, {
@@ -179,12 +179,12 @@ export class OutboxRelay {
           published: publishedIds.length,
           failed: failedUpdates.length,
         });
-      } catch (err) {
+      } catch (err: unknown) {
         await client.query('ROLLBACK').catch(() => {});
         client.release(true);
         throw err;
       }
-    } catch (err) {
+    } catch (err: unknown) {
       logger.error(
         'Outbox relay poll error',
         err instanceof Error ? err : new Error(String(err))

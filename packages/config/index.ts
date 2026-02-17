@@ -172,6 +172,16 @@ export {
 export { resourceLimits } from './limits';
 
 // ============================================================================
+// Storage Configuration
+// ============================================================================
+export { storageConfig } from './storage';
+
+// ============================================================================
+// Monitoring Configuration
+// ============================================================================
+export { monitoringConfig } from './monitoring';
+
+// ============================================================================
 // Composite Config (convenience export)
 // ============================================================================
 import { apiConfig, cdnConfig } from './api';
@@ -187,6 +197,8 @@ import { featureFlags } from './features';
 import { envConfig } from './environment';
 import { billingConfig } from './billing';
 import { resourceLimits } from './limits';
+import { storageConfig } from './storage';
+import { monitoringConfig } from './monitoring';
 
 /**
  * Composite configuration object containing all config sections.
@@ -212,6 +224,8 @@ export const config = {
   publishing: publishingConfig,
   export: exportConfig,
   abuseGuard: abuseGuardConfig,
+  storage: storageConfig,
+  monitoring: monitoringConfig,
 } as const;
 
 export default config;

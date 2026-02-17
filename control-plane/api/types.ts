@@ -1,6 +1,7 @@
 
 import { FastifyRequest } from 'fastify';
 import type { AuthContext } from '../services/auth';
+import { AuthError, ErrorCodes } from '@errors';
 
 // Re-export AuthContext and Role from auth service to ensure consistency
 export type { AuthContext, Role } from '../services/auth';
@@ -27,11 +28,11 @@ export function hasAuthContext(req: FastifyRequest): req is AuthenticatedRequest
 *
 * @param req - Fastify request object
 * @returns Auth context
-* @throws Error if auth is not present
+* @throws AuthError if auth is not present
 */
 export function getAuthContext(req: FastifyRequest): AuthContext {
   if (!hasAuthContext(req)) {
-    throw new Error('Unauthorized: Auth context not found');
+    throw new AuthError('Auth context not found', ErrorCodes.UNAUTHORIZED);
   }
   return req.auth as AuthContext;
 }

@@ -107,7 +107,7 @@ function emitAuthAudit(event: AuthAuditEvent): void {
     try {
       callback(event);
     }
-    catch (err) {
+    catch (err: unknown) {
       logger.error('Auth audit callback error', err instanceof Error ? err : new Error(String(err)));
     }
   }

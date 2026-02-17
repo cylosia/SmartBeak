@@ -2,6 +2,7 @@
 import { randomUUID, createHmac, createHash } from 'crypto';
 
 import { ValidationError, ServiceUnavailableError } from '@errors';
+import { storageConfig } from '@config';
 
 export interface SignedUrlConfig {
   bucket: string;
@@ -17,17 +18,13 @@ export interface SignedUrlResult {
 }
 
 function getStorageConfig(): SignedUrlConfig {
-  const bucket = process.env['STORAGE_BUCKET'];
-  const region = process.env['STORAGE_REGION'] || 'us-east-1';
-  const accessKeyId = process.env['STORAGE_ACCESS_KEY_ID'];
-  const secretAccessKey = process.env['STORAGE_SECRET_ACCESS_KEY'];
-  const endpoint = process.env['STORAGE_ENDPOINT'];
-
-  if (!bucket || !accessKeyId || !secretAccessKey) {
-  throw new ServiceUnavailableError('Storage configuration incomplete');
-  }
-
-  return { bucket, region, accessKeyId, secretAccessKey, endpoint };
+  return {
+    bucket: storageConfig.bucket,
+    region: storageConfig.region,
+    accessKeyId: storageConfig.accessKeyId,
+    secretAccessKey: storageConfig.secretAccessKey,
+    endpoint: storageConfig.endpoint,
+  };
 }
 
 /**

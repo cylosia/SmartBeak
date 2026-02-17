@@ -9,7 +9,8 @@ import { getLogger } from '@kernel/logger';
 
 import { PostgresSeoRepository } from '../../../domains/seo/infra/persistence/PostgresSeoRepository';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, type AuthContext } from '../../services/auth';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { UpdateSeo } from '../../../domains/seo/application/handlers/UpdateSeo';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
@@ -39,10 +40,7 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
   app.post('/seo/:id', async (req, res) => {
   try {
-    const ctx = req.auth as AuthContext;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
+    const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
     await rateLimit('content', 50);
 

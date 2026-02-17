@@ -93,9 +93,9 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
       ]);
     }
     logger.info(`Shutdown handler ${handlerName} completed successfully`);
-    } catch (err) {
+    } catch (err: unknown) {
     // P1-FIX: Log error but don't stop other handlers
-    logger["error"](`Shutdown handler ${handlerName} failed:`, err as Error);
+    logger["error"](`Shutdown handler ${handlerName} failed:`, err instanceof Error ? err : new Error(String(err)));
     // Continue with other handlers - don't let one failure stop shutdown
     }
   });

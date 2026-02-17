@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { API_BASE_URLS } from '@config';
+import { API_BASE_URLS, billingConfig } from '@config';
 
 /**
 * Paddle Billing Integration
@@ -180,10 +180,7 @@ export async function createPaddleCheckout(orgId: string, planId: string): Promi
   const idempotencyKey = crypto.randomUUID();
   
   // P0-FIX: Actually call Paddle API with idempotency key
-  const paddleApiKey = process.env['PADDLE_API_KEY'];
-  if (!paddleApiKey) {
-    throw new Error('PADDLE_API_KEY not configured');
-  }
+  const paddleApiKey = billingConfig.paddleApiKey;
   
   const response = await fetch(`${API_BASE_URLS.paddle}/transactions`, {
     method: 'POST',
