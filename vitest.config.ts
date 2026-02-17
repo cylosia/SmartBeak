@@ -21,6 +21,13 @@ export default defineConfig({
       '@database': path.resolve(__dirname, 'packages/database'),
       '@config': path.resolve(__dirname, 'packages/config'),
       '@errors': path.resolve(__dirname, 'packages/errors'),
+      '@utils': path.resolve(__dirname, 'packages/utils'),
+      '@types': path.resolve(__dirname, 'packages/types'),
+      '@domain': path.resolve(__dirname, 'domains'),
+      '@adapters': path.resolve(__dirname, 'packages/adapters'),
+      '@packages': path.resolve(__dirname, 'packages'),
+      '@shutdown': path.resolve(__dirname, 'packages/shutdown'),
+      '@monitoring': path.resolve(__dirname, 'packages/monitoring'),
     },
   },
 });

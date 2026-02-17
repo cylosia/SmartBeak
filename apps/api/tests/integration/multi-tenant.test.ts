@@ -6,18 +6,18 @@
  */
 
 
-import { withTransaction, query as _query } from '../../../packages/database/transactions';
-import { getRedis } from '../../../packages/kernel/redis';
-import { checkRateLimit } from '../../../packages/kernel/rateLimiterRedis';
-import { getAuthContext } from '../../../packages/security/jwt';
+import { withTransaction, query as _query } from '@database/transactions';
+import { getRedis } from '@kernel/redis';
+import { checkRateLimit } from '@kernel/rateLimiterRedis';
+import { getAuthContext } from '@security/jwt';
 import jwt from 'jsonwebtoken';
 
 // Mock dependencies
-jest.mock('../../../packages/database/pool', () => ({
+jest.mock('@database/pool', () => ({
   getPool: jest.fn(),
 }));
 
-jest.mock('../../../packages/kernel/redis', () => ({
+jest.mock('@kernel/redis', () => ({
   getRedis: jest.fn(),
 }));
 
@@ -52,7 +52,7 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
       on: jest.fn(),
     };
 
-    const { getPool } = require('../../../packages/database/pool');
+    const { getPool } = require('@database/pool');
     (getPool as any).mockResolvedValue(mockPool);
 
     // Setup mock Redis with tenant isolation
