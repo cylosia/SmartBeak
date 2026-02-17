@@ -132,7 +132,7 @@ export function validateSecretStrength(
     return { valid: false, warning: `${name} contains a repeated character pattern` };
   }
 
-  if (/^(123|abc|password|secret|admin|test)/i.test(value)) {
+  if (/(123|abc|password|secret|admin|test)/i.test(value)) {
     return { valid: false, warning: `${name} appears to use a common weak pattern` };
   }
 

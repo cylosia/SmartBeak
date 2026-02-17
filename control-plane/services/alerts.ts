@@ -3,6 +3,7 @@
 import { Pool } from 'pg';
 
 import { getLogger } from '../../packages/kernel/logger';
+import { getErrorMessage } from '@errors';
 
 const logger = getLogger('AlertsService');
 
@@ -90,9 +91,9 @@ export class AlertService {
     );
 
     logger.info(`Created alert for org ${orgId}: ${metric} > ${threshold}`);
-  } catch (error) {
-    logger.error('Error creating alert', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to create alert: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (error: unknown) {
+    logger.error('Error creating alert', new Error(getErrorMessage(error)));
+    throw new Error(`Failed to create alert: ${getErrorMessage(error)}`);
   }
   }
 
@@ -151,10 +152,10 @@ export class AlertService {
     await client.query('COMMIT');
 
     return { triggered: alertCount > 0, alertCount };
-  } catch (error) {
+  } catch (error: unknown) {
     await client.query('ROLLBACK');
-    logger.error('Error checking alerts', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to check alerts: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error('Error checking alerts', new Error(getErrorMessage(error)));
+    throw new Error(`Failed to check alerts: ${getErrorMessage(error)}`);
   } finally {
     client.release();
   }
@@ -181,9 +182,9 @@ export class AlertService {
     );
 
     return rows;
-  } catch (error) {
-    logger.error('Error fetching active alerts', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to fetch active alerts: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (error: unknown) {
+    logger.error('Error fetching active alerts', new Error(getErrorMessage(error)));
+    throw new Error(`Failed to fetch active alerts: ${getErrorMessage(error)}`);
   }
   }
 
@@ -214,9 +215,9 @@ export class AlertService {
     }
 
     logger.info(`Deleted alert: ${alertId}`);
-  } catch (error) {
-    logger.error('Error deleting alert', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to delete alert: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (error: unknown) {
+    logger.error('Error deleting alert', new Error(getErrorMessage(error)));
+    throw new Error(`Failed to delete alert: ${getErrorMessage(error)}`);
   }
   }
 }

@@ -7,8 +7,10 @@ import { z } from 'zod';
 import crypto from 'crypto';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+import { withTransaction } from '@database';
 
 const logger = getLogger('content');
 
@@ -93,9 +95,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     const offset = (page - 1) * limit;
 
     // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
-    const MAX_SAFE_OFFSET = 10000;
-    if (offset > MAX_SAFE_OFFSET) {
-    return errors.badRequest(res, `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`);
+    if (offset > DB.MAX_OFFSET) {
+    return errors.badRequest(res, `Page depth exceeds maximum safe offset (${DB.MAX_OFFSET}). Use cursor-based pagination for deeper access.`);
     }
 
     // If domainId provided, verify ownership
@@ -149,19 +150,24 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     paramIndex++;
     }
 
-    // Get total count
-    const countResult = await pool.query(
-    `SELECT COUNT(*) FROM (${query}) as count_query`,
-    params  // P0-FIX: Pass params to count query to ensure tenant isolation
-    );
-    const countRow = countResult.rows[0] as { count: string } | undefined;
-    const total = countRow ? parseInt(countRow.count, 10) : 0;
+    // Snapshot paramIndex before the transaction so both queries use consistent indices
+    const paginationStartIndex = paramIndex;
+    const paginatedQuery =
+      query + ` ORDER BY c.updated_at DESC LIMIT $${paginationStartIndex} OFFSET $${paginationStartIndex + 1}`;
+    const paginatedParams = [...params, limit, offset];
 
-    // Add pagination
-    query += ` ORDER BY c.updated_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-    params.push(limit, offset);
+    // Wrap COUNT and data fetch in one transaction for a consistent read
+    const { rows, total } = await withTransaction(async (client) => {
+      const countResult = await client.query(
+        `SELECT COUNT(*) FROM (${query}) as count_query`,
+        params  // P0-FIX: Pass params to count query to ensure tenant isolation
+      );
+      const countRow = countResult.rows[0] as { count: string } | undefined;
+      const innerTotal = countRow ? parseInt(countRow.count, 10) : 0;
 
-    const { rows } = await pool.query(query, params);
+      const { rows: dataRows } = await client.query(paginatedQuery, paginatedParams);
+      return { rows: dataRows, total: innerTotal };
+    });
 
     return {
     data: rows.map(row => ({

@@ -4,6 +4,7 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 
 import { MediaAsset } from '../../domain/entities/MediaAsset';
 import { MediaRepository } from '../../application/ports/MediaRepository';
@@ -101,9 +102,8 @@ export class PostgresMediaRepository implements MediaRepository {
     throw new Error('offset must be a non-negative integer');
   }
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
-  const MAX_SAFE_OFFSET = 10000;
   const safeLimit = Math.min(Math.max(1, limit), 100);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
     const queryable = client || this.pool;

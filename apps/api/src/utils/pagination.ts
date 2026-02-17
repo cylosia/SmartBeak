@@ -1,4 +1,5 @@
 import { paginationConfig } from '@config';
+import { DB } from '@kernel/constants';
 
 /**
 * Pagination utilities
@@ -35,7 +36,6 @@ const MAX_LIMIT = paginationConfig.maxLimit;
 const DEFAULT_LIMIT = paginationConfig.defaultLimit;
 
 /** Maximum allowed cursor offset for offset-based pagination */
-const MAX_SAFE_OFFSET = 10000;
 
 // ============================================================================
 // Offset-Based Pagination Functions (Legacy - use with caution)
@@ -63,9 +63,9 @@ export function calculateOffset(page?: number, limit?: number): number {
   const validLimit = clampLimit(limit);
   const offset = (validPage - 1) * validLimit;
 
-  if (offset > MAX_SAFE_OFFSET) {
+  if (offset > DB.MAX_OFFSET) {
   throw new Error(
-    `Offset ${offset} exceeds maximum safe offset ${MAX_SAFE_OFFSET}. ` +
+    `Offset ${offset} exceeds maximum safe offset ${DB.MAX_OFFSET}. ` +
     `Use cursor-based pagination for large result sets.`
   );
   }

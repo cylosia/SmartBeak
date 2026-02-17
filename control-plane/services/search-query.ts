@@ -5,6 +5,7 @@ import { LRUCache } from 'lru-cache';
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 import { withContext } from '@errors';
 
 import { PostgresSearchDocumentRepository } from '../../domains/search/infra/persistence/PostgresSearchDocumentRepository';
@@ -61,9 +62,8 @@ export class SearchQueryService {
   }
 
   // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
-  const MAX_SAFE_OFFSET = 10000;
-  if (offset > MAX_SAFE_OFFSET) {
-    throw new Error(`Offset exceeds maximum safe value (${MAX_SAFE_OFFSET})`);
+  if (offset > DB.MAX_OFFSET) {
+    throw new Error(`Offset exceeds maximum safe value (${DB.MAX_OFFSET})`);
   }
 
   // SECURITY FIX P0 #8: Require orgId for tenant isolation

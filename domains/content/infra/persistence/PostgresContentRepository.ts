@@ -4,6 +4,7 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 import { ValidationError, DatabaseError, ConflictError, NotFoundError } from '@errors';
 
 import { ContentItem, ContentStatus, ContentType } from '../../domain/entities/ContentItem';
@@ -234,9 +235,8 @@ export class PostgresContentRepository implements ContentRepository {
 
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
   const MAX_LIMIT = 1000;
-  const MAX_SAFE_OFFSET = 10000;
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
     const queryable = this.getQueryable(client);
@@ -327,9 +327,8 @@ export class PostgresContentRepository implements ContentRepository {
   ): Promise<ContentItem[]> {
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
   const MAX_LIMIT = 1000;
-  const MAX_SAFE_OFFSET = 10000;
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
     const queryable = this.getQueryable(client);

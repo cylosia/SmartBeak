@@ -4,6 +4,7 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 
 import { ContentRevision } from '../../domain/entities/ContentRevision';
 import { ContentRevisionRepository } from '../../application/ports/ContentRevisionRepository';
@@ -82,9 +83,8 @@ export class PostgresContentRevisionRepository implements ContentRevisionReposit
   }
   // P1-FIX: Clamp limit and offset to prevent unbounded pagination
   const MAX_LIMIT = 100;
-  const MAX_SAFE_OFFSET = 10000;
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   const queryable = this.getQueryable(client);
 

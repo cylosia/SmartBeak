@@ -4,6 +4,7 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 
 import { SearchIndex } from '../../domain/entities/SearchIndex';
 import { SearchIndexRepository } from '../../application/ports/SearchIndexRepository';
@@ -149,9 +150,8 @@ export class PostgresSearchIndexRepository implements SearchIndexRepository {
   }
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
   const MAX_LIMIT = 1000;
-  const MAX_SAFE_OFFSET = 10000;
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
     // Note: No FOR UPDATE needed here - this is a read-only list query

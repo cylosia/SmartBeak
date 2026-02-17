@@ -5,6 +5,7 @@ import { Pool, PoolClient } from 'pg';
 import { validateNotificationPayload } from '@domain/shared/infra/validation/DatabaseSchemas';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 
 import { Notification } from '../../domain/entities/Notification';
 import { NotificationPayload } from '../../domain/entities/Notification';
@@ -168,9 +169,9 @@ export class PostgresNotificationRepository implements NotificationRepository {
   }
 
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
-  const MAX_SAFE_OFFSET = 10000;
+
   const safeLimit = Math.min(Math.max(1, limit), 500);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
     const queryable = this.getQueryable(client);
@@ -233,9 +234,9 @@ export class PostgresNotificationRepository implements NotificationRepository {
   }
 
   // P0-CRITICAL FIX: Clamp limit and offset to prevent unbounded pagination
-  const MAX_SAFE_OFFSET = 10000;
+
   const safeLimit = Math.min(Math.max(1, limit), 100);
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
     const queryable = this.getQueryable(client);

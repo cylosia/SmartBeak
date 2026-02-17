@@ -83,6 +83,24 @@ export async function releaseAdvisoryLock(client: PoolClient, lockId: string): P
 }
 
 /**
+ * RAII wrapper for advisory locks.
+ * Acquires the lock, runs fn, then releases regardless of outcome.
+ * Prevents connection pool exhaustion from forgotten releaseAdvisoryLock() calls.
+ */
+export async function withAdvisoryLock<T>(
+  lockId: string,
+  fn: () => Promise<T>,
+  timeoutMs = 5000
+): Promise<T> {
+  const client = await acquireAdvisoryLock(lockId, timeoutMs);
+  try {
+    return await fn();
+  } finally {
+    await releaseAdvisoryLock(client, lockId);
+  }
+}
+
+/**
  * Release all tracked advisory locks
  * P1-FIX: Cleanup function for shutdown
  */

@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from '@kernel/constants';
 import { checkRateLimitAsync } from '../../services/rate-limit';
 import { NotificationPreferenceService } from '../../../domains/notifications/application/NotificationPreferenceService';
 import { PostgresNotificationPreferenceRepository } from '../../../domains/notifications/infra/persistence/PostgresNotificationPreferenceRepository';
@@ -59,9 +60,8 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     const offset = (page - 1) * limit;
 
     // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
-    const MAX_SAFE_OFFSET = 10000;
-    if (offset > MAX_SAFE_OFFSET) {
-    return errors.badRequest(res, `Page depth exceeds maximum safe offset (${MAX_SAFE_OFFSET}). Use cursor-based pagination for deeper access.`);
+    if (offset > DB.MAX_OFFSET) {
+    return errors.badRequest(res, `Page depth exceeds maximum safe offset (${DB.MAX_OFFSET}). Use cursor-based pagination for deeper access.`);
     }
 
     let rows: Notification[];
