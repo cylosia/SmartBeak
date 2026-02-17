@@ -2,6 +2,7 @@
 import { Pool } from 'pg';
 
 import { ValidationError, NotFoundError } from '@errors';
+import { DB } from '@kernel/constants';
 
 /**
  * Notification Admin Service
@@ -62,8 +63,7 @@ export class NotificationAdminService {
 
     const safeLimit = Math.min(Math.max(1, limit), 1000);
     // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
-    const MAX_SAFE_OFFSET = 10000;
-    const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+    const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
     
     const { rows } = await this.pool.query(
       `SELECT id, org_id, user_id, channel, template, status, created_at

@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { DB } from './constants';
 import { emitCounter } from '@kernel/metrics';
 
 import { randomUUID } from 'crypto';
@@ -127,8 +128,7 @@ export class DLQService {
     throw new Error('orgId is required for tenant isolation');
   }
   // P0-CRITICAL FIX: Cap offset to prevent unbounded pagination
-  const MAX_SAFE_OFFSET = 10000;
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
   logger.debug('Listing DLQ entries', { orgId, region, limit, offset: safeOffset });
 
   const query = region
@@ -198,8 +198,7 @@ export class DLQService {
     throw new Error('orgId is required for tenant isolation');
   }
   // P0-CRITICAL FIX: Cap offset to prevent unbounded pagination
-  const MAX_SAFE_OFFSET = 10000;
-  const safeOffset = Math.min(Math.max(0, offset), MAX_SAFE_OFFSET);
+  const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
   logger.debug('Listing DLQ entries by category', { orgId, category, limit, offset: safeOffset });
 
   // P0-2 FIX: Changed single-quoted aliases to double-quoted (PostgreSQL identifier syntax)

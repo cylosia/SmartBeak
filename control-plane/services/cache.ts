@@ -1,5 +1,5 @@
 import { getLogger } from '@kernel/logger';
-import { ValidationError } from '@errors';
+import { ValidationError, getErrorMessage } from '@errors';
 
 /**
 * TTL Cache Service with LRU Eviction
@@ -102,8 +102,8 @@ export class TTLCache<T> {
 
     this.hits++;
     return entry.value;
-  } catch (error) {
-    logger["error"]('Error retrieving from cache', error instanceof Error ? error : new Error(String(error)), { key });
+  } catch (error: unknown) {
+    logger["error"]('Error retrieving from cache', new Error(getErrorMessage(error)), { key });
     this.misses++;
     return undefined;
   }
@@ -132,8 +132,8 @@ export class TTLCache<T> {
     lastAccessed: now,
     accessCount: 0,
     });
-  } catch (error) {
-    logger["error"]('Error setting cache value', error instanceof Error ? error : new Error(String(error)), { key });
+  } catch (error: unknown) {
+    logger["error"]('Error setting cache value', new Error(getErrorMessage(error)), { key });
   }
   }
 
@@ -167,8 +167,8 @@ export class TTLCache<T> {
     }
 
     this.store.delete(key);
-  } catch (error) {
-    logger["error"]('Error invalidating cache key', error instanceof Error ? error : new Error(String(error)), { key });
+  } catch (error: unknown) {
+    logger["error"]('Error invalidating cache key', new Error(getErrorMessage(error)), { key });
   }
   }
 
@@ -181,9 +181,8 @@ export class TTLCache<T> {
     this.hits = 0;
     this.misses = 0;
     this.evictions = 0;
-  } catch (error) {
-    const errorToLog = error instanceof Error ? error : new Error(String(error));
-    logger["error"]('Error clearing cache', errorToLog);
+  } catch (error: unknown) {
+    logger["error"]('Error clearing cache', new Error(getErrorMessage(error)));
   }
   }
 

@@ -4,6 +4,7 @@
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { getErrorMessage } from '@errors';
 
 import { TTLCache } from './cache';
 
@@ -97,9 +98,9 @@ export class AnalyticsReadModel {
 
     cache.set(key, result);
     return this.normalizeResult(contentId, result);
-  } catch (error) {
-    logger["error"]('Error fetching content stats', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to fetch content stats: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (error: unknown) {
+    logger["error"]('Error fetching content stats', new Error(getErrorMessage(error)));
+    throw new Error(`Failed to fetch content stats: ${getErrorMessage(error)}`);
   }
   }
 
@@ -167,9 +168,9 @@ export class AnalyticsReadModel {
     revenue: 0
     });
     });
-  } catch (error) {
-    logger["error"]('Error fetching batch content stats', error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to fetch batch content stats: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (error: unknown) {
+    logger["error"]('Error fetching batch content stats', new Error(getErrorMessage(error)));
+    throw new Error(`Failed to fetch batch content stats: ${getErrorMessage(error)}`);
   }
   }
 
@@ -208,9 +209,9 @@ export class AnalyticsReadModel {
     );
     // Invalidate cache after update
     this.invalidate(contentId);
-  } catch (error) {
-    logger["error"]("Error incrementing publish count", error instanceof Error ? error : new Error(String(error)));
-    throw new Error(`Failed to increment publish count: ${error instanceof Error ? error.message : String(error)}`);
+  } catch (error: unknown) {
+    logger["error"]("Error incrementing publish count", new Error(getErrorMessage(error)));
+    throw new Error(`Failed to increment publish count: ${getErrorMessage(error)}`);
   }
   }
 }

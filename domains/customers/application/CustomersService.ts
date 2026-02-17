@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { DB } from '@kernel/constants';
 
 
 // ============================================================================
@@ -124,8 +125,7 @@ export class CustomersService {
     CustomersService.MAX_PAGE_SIZE
   );
   // P1-FIX: Add MAX_SAFE_OFFSET to prevent unbounded offset pagination issues
-  const MAX_SAFE_OFFSET = 10000;
-  const offset = Math.min((validatedPage - 1) * validatedPageSize, MAX_SAFE_OFFSET);
+  const offset = Math.min((validatedPage - 1) * validatedPageSize, DB.MAX_OFFSET);
 
   try {
     // Use pagination to limit results
