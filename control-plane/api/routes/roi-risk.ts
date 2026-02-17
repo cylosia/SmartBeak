@@ -36,14 +36,14 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     // Fetch ROI and risk data for the asset from database
     const { rows: [assetData] } = await pool.query(
-    `SELECT a["id"], a.type, a.name,
+    `SELECT a.id, a.type, a.name,
         COALESCE(ar.monthly_revenue, 0) as monthly_revenue,
         COALESCE(ar.yearly_revenue, 0) as yearly_revenue,
         COALESCE(ar.roi_percentage, 0) as roi_percentage,
         COALESCE(ar.trend, 'stable') as trend
     FROM assets a
-    LEFT JOIN asset_roi ar ON a["id"] = ar.asset_id
-    WHERE a["id"] = $1 AND a.org_id = $2`,
+    LEFT JOIN asset_roi ar ON a.id = ar.asset_id
+    WHERE a.id = $1 AND a.org_id = $2`,
     [assetId, ctx["orgId"]]
     );
 

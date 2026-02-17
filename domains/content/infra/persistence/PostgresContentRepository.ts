@@ -168,9 +168,9 @@ export class PostgresContentRepository implements ContentRepository {
     ON CONFLICT (id)
     DO UPDATE SET
     domain_id = EXCLUDED.domain_id,
-    title = EXCLUDED["title"],
-    body = EXCLUDED["body"],
-    status = EXCLUDED["status"],
+    title = EXCLUDED.title,
+    body = EXCLUDED.body,
+    status = EXCLUDED.status,
     content_type = EXCLUDED.content_type,
     publish_at = EXCLUDED.publish_at,
     archived_at = EXCLUDED.archived_at,
@@ -470,9 +470,9 @@ export class PostgresContentRepository implements ContentRepository {
     ON CONFLICT (id)
     DO UPDATE SET
     domain_id = EXCLUDED.domain_id,
-    title = EXCLUDED["title"],
-    body = EXCLUDED["body"],
-    status = EXCLUDED["status"],
+    title = EXCLUDED.title,
+    body = EXCLUDED.body,
+    status = EXCLUDED.status,
     content_type = EXCLUDED.content_type,
     publish_at = EXCLUDED.publish_at,
     archived_at = EXCLUDED.archived_at,

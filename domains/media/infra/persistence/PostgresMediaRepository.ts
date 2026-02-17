@@ -242,7 +242,7 @@ export class PostgresMediaRepository implements MediaRepository {
     DO UPDATE SET
     storage_key = EXCLUDED.storage_key,
     mime_type = EXCLUDED.mime_type,
-    status = EXCLUDED["status"],
+    status = EXCLUDED.status,
     updated_at = now()`,
     [
     assets.map(a => a["id"]),

@@ -133,8 +133,8 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
 async function verifyJobOwnership(pool: Pool, jobId: string, orgId: string): Promise<boolean> {
   const { rows } = await pool.query(
   `SELECT 1 FROM publishing_jobs pj
-  JOIN domains d ON pj.domain_id = d["id"]
-  WHERE pj["id"] = $1 AND d.org_id = $2`,
+  JOIN domains d ON pj.domain_id = d.id
+  WHERE pj.id = $1 AND d.org_id = $2`,
   [jobId, orgId]
   );
   return rows.length > 0;
@@ -165,8 +165,8 @@ async function getJobWithOwnership(
   // Verify ownership within same transaction
   const { rows } = await client.query(
     `SELECT 1 FROM publishing_jobs pj
-    JOIN domains d ON pj.domain_id = d["id"]
-    WHERE pj["id"] = $1 AND d.org_id = $2`,
+    JOIN domains d ON pj.domain_id = d.id
+    WHERE pj.id = $1 AND d.org_id = $2`,
     [jobId, orgId]
   );
 

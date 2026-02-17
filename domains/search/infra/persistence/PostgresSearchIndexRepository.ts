@@ -108,10 +108,10 @@ export class PostgresSearchIndexRepository implements SearchIndexRepository {
     `INSERT INTO search_indexes (id, domain_id, name, version, status)
     VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (id) DO UPDATE SET
-    status = EXCLUDED["status"],
+    status = EXCLUDED.status,
     version = EXCLUDED.version,
     domain_id = EXCLUDED.domain_id,
-    name = EXCLUDED["name"]`,
+    name = EXCLUDED.name`,
     [index["id"], index.domainId, index["name"], index.version, index["status"]]
     );
   } catch (error) {
@@ -244,10 +244,10 @@ export class PostgresSearchIndexRepository implements SearchIndexRepository {
     `INSERT INTO search_indexes (id, domain_id, name, version, status)
     SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::int[], $5::text[])
     ON CONFLICT (id) DO UPDATE SET
-    id = EXCLUDED["id"],
+    id = EXCLUDED.id,
     domain_id = EXCLUDED.domain_id,
-    name = EXCLUDED["name"],
-    status = EXCLUDED["status"],
+    name = EXCLUDED.name,
+    status = EXCLUDED.status,
     version = EXCLUDED.version,
     updated_at = now()`,
     [

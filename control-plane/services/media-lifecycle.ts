@@ -102,12 +102,12 @@ export class MediaLifecycleService {
   const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
   const { rows } = await this.pool.query(
-    `SELECT ma["id"] FROM media_assets ma
+    `SELECT ma.id FROM media_assets ma
     WHERE ma.status = 'uploaded'
     AND ma.created_at < NOW() - make_interval(days => $1::int)
     AND NOT EXISTS (
     SELECT 1 FROM content_media_links cml
-    WHERE cml.media_id = ma["id"]
+    WHERE cml.media_id = ma.id
     )
     LIMIT $2`,
     [days, safeLimit]
