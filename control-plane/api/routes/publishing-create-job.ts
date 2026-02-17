@@ -8,7 +8,8 @@ import { getLogger } from '@kernel/logger';
 import { PublishingCreateJobService } from '../../services/publishing-create-job';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, type Role } from '../../services/auth';
-import { errors } from '@errors/responses';
+import { NotFoundError } from '@errors';
+import { errors, sendError } from '@errors/responses';
 
 const logger = getLogger('publishing-create-job');
 
@@ -59,6 +60,9 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
   } catch (error) {
     if (error instanceof RoleAccessError) {
     return errors.forbidden(res);
+    }
+    if (error instanceof NotFoundError) {
+    return sendError(res, 404, error.code, error.message);
     }
     logger.error('[publishing/jobs] Route error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);

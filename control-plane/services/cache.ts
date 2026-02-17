@@ -1,4 +1,5 @@
 import { getLogger } from '@kernel/logger';
+import { ValidationError } from '@errors';
 
 /**
 * TTL Cache Service with LRU Eviction
@@ -54,13 +55,13 @@ export class TTLCache<T> {
 
   constructor(private options: CacheOptions) {
   if (!Number.isFinite(options.ttlMs) || options.ttlMs <= 0) {
-    throw new Error('Invalid TTL: must be a positive number');
+    throw new ValidationError('Invalid TTL: must be a positive number');
   }
 
   this.maxSize = options.maxSize ?? 10000;
 
   if (this.maxSize <= 0) {
-    throw new Error('Invalid maxSize: must be a positive number');
+    throw new ValidationError('Invalid maxSize: must be a positive number');
   }
 
   // Set up periodic cleanup if interval specified

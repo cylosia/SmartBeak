@@ -1,6 +1,8 @@
 
 import { randomUUID, createHmac, createHash } from 'crypto';
 
+import { ValidationError, ServiceUnavailableError } from '@errors';
+
 export interface SignedUrlConfig {
   bucket: string;
   region: string;
@@ -22,7 +24,7 @@ function getStorageConfig(): SignedUrlConfig {
   const endpoint = process.env['STORAGE_ENDPOINT'];
 
   if (!bucket || !accessKeyId || !secretAccessKey) {
-  throw new Error('Storage configuration missing: STORAGE_BUCKET, STORAGE_ACCESS_KEY_ID, STORAGE_SECRET_ACCESS_KEY required');
+  throw new ServiceUnavailableError('Storage configuration incomplete');
   }
 
   return { bucket, region, accessKeyId, secretAccessKey, endpoint };
@@ -140,10 +142,10 @@ function validateMimeType(mimeType: string): boolean {
 
 export function generateStorageKey(domain: string, mimeType?: string): string {
   if (!domain || typeof domain !== 'string') {
-  throw new Error('Valid domain string is required');
+  throw new ValidationError('Valid domain string is required');
   }
   if (mimeType !== undefined && !validateMimeType(mimeType)) {
-  throw new Error(`Invalid MIME type: ${mimeType}`);
+  throw new ValidationError(`Invalid MIME type: ${mimeType}`);
   }
   // Sanitize domain to prevent path traversal
   const sanitizedDomain = domain.replace(/[^a-zA-Z0-9\-_]/g, '_');
