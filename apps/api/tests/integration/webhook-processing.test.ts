@@ -5,21 +5,21 @@
  * idempotency, event handling, and error recovery.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import crypto from 'crypto';
 import { handlePaddleWebhook } from '../../src/billing/paddleWebhook';
 import handler from '../../../web/pages/api/webhooks/clerk';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 // Mock dependencies
-vi.mock('../../src/db', () => ({
-  getDb: vi.fn(),
+jest.mock('../../src/db', () => ({
+  getDb: jest.fn(),
 }));
 
-vi.mock('@kernel/redis', () => ({
-  getRedis: vi.fn().mockResolvedValue({
-    get: vi.fn().mockResolvedValue(null),
-    setex: vi.fn().mockResolvedValue('OK'),
+jest.mock('@kernel/redis', () => ({
+  getRedis: jest.fn().mockResolvedValue({
+    get: jest.fn().mockResolvedValue(null),
+    setex: jest.fn().mockResolvedValue('OK'),
   }),
 }));
 
@@ -30,20 +30,20 @@ describe('Webhook Processing Flow Integration Tests', () => {
   const originalEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
 
     // P3-2 FIX: Save env vars that tests may modify
     originalEnv['PADDLE_WEBHOOK_SECRET'] = process.env.PADDLE_WEBHOOK_SECRET;
     originalEnv['CLERK_WEBHOOK_SECRET'] = process.env.CLERK_WEBHOOK_SECRET;
 
     mockDb = {
-      where: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      first: vi.fn().mockResolvedValue(null),
-      update: vi.fn().mockResolvedValue(1),
-      insert: vi.fn().mockResolvedValue([1]),
-      from: vi.fn().mockReturnThis(),
-      count: vi.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue(1),
+      insert: jest.fn().mockResolvedValue([1]),
+      from: jest.fn().mockReturnThis(),
+      count: jest.fn().mockReturnThis(),
     };
 
     const { getDb } = require('../../src/db');
@@ -149,8 +149,8 @@ describe('Webhook Processing Flow Integration Tests', () => {
       
       const { getRedis } = await import('@kernel/redis');
       const mockRedis = {
-        get: vi.fn().mockResolvedValue('1'), // Already processed
-        setex: vi.fn().mockResolvedValue('OK'),
+        get: jest.fn().mockResolvedValue('1'), // Already processed
+        setex: jest.fn().mockResolvedValue('OK'),
       };
       (getRedis as any).mockResolvedValue(mockRedis);
 
@@ -225,7 +225,7 @@ describe('Webhook Processing Flow Integration Tests', () => {
           'svix-timestamp': headers['svix-timestamp'] || String(Math.floor(Date.now() / 1000)),
           'svix-signature': headers['svix-signature'] || 'v1,invalid',
         },
-        on: vi.fn().mockImplementation((event: string, callback: any) => {
+        on: jest.fn().mockImplementation((event: string, callback: any) => {
           if (event === 'data') {
             callback(Buffer.from(bodyString));
           }
@@ -244,11 +244,11 @@ describe('Webhook Processing Flow Integration Tests', () => {
       const statusCode: { value?: number } = {};
 
       const res: any = {
-        status: vi.fn().mockImplementation((code: number) => {
+        status: jest.fn().mockImplementation((code: number) => {
           statusCode.value = code;
           return res;
         }),
-        json: vi.fn().mockImplementation((data: any) => {
+        json: jest.fn().mockImplementation((data: any) => {
           Object.assign(jsonData, data);
           return res;
         }),
@@ -368,8 +368,8 @@ describe('Webhook Processing Flow Integration Tests', () => {
       
       const { getRedis } = await import('@kernel/redis');
       const mockRedis = {
-        get: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('1'), // First null, then found
-        setex: vi.fn().mockResolvedValue('OK'),
+        get: jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('1'), // First null, then found
+        setex: jest.fn().mockResolvedValue('OK'),
       };
       (getRedis as any).mockResolvedValue(mockRedis);
 
@@ -436,7 +436,7 @@ describe('Webhook Processing Flow Integration Tests', () => {
           'svix-timestamp': String(Math.floor(Date.now() / 1000)),
           'svix-signature': 'v1,invalid',
         },
-        on: vi.fn().mockImplementation((event: string, callback: any) => {
+        on: jest.fn().mockImplementation((event: string, callback: any) => {
           if (event === 'data') {
             callback(Buffer.from('invalid json here'));
           }

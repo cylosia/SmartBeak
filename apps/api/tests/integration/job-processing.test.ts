@@ -5,13 +5,13 @@
  * including error handling and DLQ behavior.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+
 import { JobScheduler } from '../../src/jobs/JobScheduler';
 import { getRedis } from '@kernel/redis';
 
 // Integration test setup - requires Redis
-vi.mock('@kernel/redis', () => ({
-  getRedis: vi.fn(),
+jest.mock('@kernel/redis', () => ({
+  getRedis: jest.fn(),
 }));
 
 describe('End-to-End Job Processing Integration Tests', () => {
@@ -25,22 +25,22 @@ describe('End-to-End Job Processing Integration Tests', () => {
     const jobStore = new Map<string, any>();
     
     mockRedis = {
-      eval: vi.fn().mockResolvedValue(1),
-      keys: vi.fn().mockResolvedValue([]),
-      pipeline: vi.fn().mockReturnValue({
-        exec: vi.fn().mockResolvedValue([]),
+      eval: jest.fn().mockResolvedValue(1),
+      keys: jest.fn().mockResolvedValue([]),
+      pipeline: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue([]),
       }),
-      lpush: vi.fn().mockResolvedValue(1),
-      get: vi.fn().mockImplementation((key: string) => {
+      lpush: jest.fn().mockResolvedValue(1),
+      get: jest.fn().mockImplementation((key: string) => {
         return Promise.resolve(jobStore.get(key) || null);
       }),
-      setex: vi.fn().mockImplementation((key: string, ttl: number, value: string) => {
+      setex: jest.fn().mockImplementation((key: string, ttl: number, value: string) => {
         jobStore.set(key, value);
         return Promise.resolve('OK');
       }),
-      on: vi.fn(),
-      once: vi.fn(),
-      quit: vi.fn().mockResolvedValue(undefined),
+      on: jest.fn(),
+      once: jest.fn(),
+      quit: jest.fn().mockResolvedValue(undefined),
     };
 
     (getRedis as any).mockResolvedValue(mockRedis);
@@ -73,7 +73,7 @@ describe('End-to-End Job Processing Integration Tests', () => {
 
       // Mock queue add for testing
       const mockQueue = {
-        add: vi.fn().mockResolvedValue({ id: 'job-123' }),
+        add: jest.fn().mockResolvedValue({ id: 'job-123' }),
       };
       (scheduler as any).queues.set('test-queue', mockQueue);
 
@@ -111,7 +111,7 @@ describe('End-to-End Job Processing Integration Tests', () => {
 
       // Verify priority values are set correctly
       const mockQueue = {
-        add: vi.fn().mockResolvedValue({ id: 'job-id' }),
+        add: jest.fn().mockResolvedValue({ id: 'job-id' }),
       };
       (scheduler as any).queues.set('priority-queue', mockQueue);
 
@@ -169,7 +169,7 @@ describe('End-to-End Job Processing Integration Tests', () => {
 
       // Simulate DLQ recording
       const mockDLQ = {
-        record: vi.fn().mockImplementation((job: any) => {
+        record: jest.fn().mockImplementation((job: any) => {
           dlqRecords.push(job);
           return Promise.resolve();
         }),
@@ -231,7 +231,7 @@ describe('End-to-End Job Processing Integration Tests', () => {
 
       // Try to schedule multiple jobs
       const mockQueue = {
-        add: vi.fn().mockResolvedValue({ id: 'job-id' }),
+        add: jest.fn().mockResolvedValue({ id: 'job-id' }),
       };
       (scheduler as any).queues.set('strict-queue', mockQueue);
 
@@ -251,7 +251,7 @@ describe('End-to-End Job Processing Integration Tests', () => {
       }, async () => ({ executed: true }));
 
       const mockQueue = {
-        add: vi.fn().mockResolvedValue({ id: 'delayed-123' }),
+        add: jest.fn().mockResolvedValue({ id: 'delayed-123' }),
       };
       (scheduler as any).queues.set('delayed-queue', mockQueue);
 
