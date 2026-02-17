@@ -5,7 +5,7 @@
  * job processing, and webhook handling.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+
 import { withTransaction, query as _query } from '../../../packages/database/transactions';
 import { getRedis } from '../../../packages/kernel/redis';
 import { checkRateLimit } from '../../../packages/kernel/rateLimiterRedis';
@@ -13,12 +13,12 @@ import { getAuthContext } from '../../../packages/security/jwt';
 import jwt from 'jsonwebtoken';
 
 // Mock dependencies
-vi.mock('../../../packages/database/pool', () => ({
-  getPool: vi.fn(),
+jest.mock('../../../packages/database/pool', () => ({
+  getPool: jest.fn(),
 }));
 
-vi.mock('../../../packages/kernel/redis', () => ({
-  getRedis: vi.fn(),
+jest.mock('../../../packages/kernel/redis', () => ({
+  getRedis: jest.fn(),
 }));
 
 describe('Multi-Tenant Isolation Integration Tests', () => {
@@ -28,12 +28,12 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
   let tenantData: Map<string, Map<string, any>>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     tenantData = new Map();
 
     // Setup mock database client
     mockClient = {
-      query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+      query: jest.fn().mockImplementation((sql: string, params: any[]) => {
         // Simulate tenant isolation in queries
         if (params && params[0]?.startsWith?.('tenant-')) {
           const tenantId = params[0];
@@ -43,13 +43,13 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
         }
         return Promise.resolve({ rows: [] });
       }),
-      release: vi.fn(),
+      release: jest.fn(),
     };
 
     mockPool = {
-      connect: vi.fn().mockResolvedValue(mockClient),
-      query: vi.fn(),
-      on: vi.fn(),
+      connect: jest.fn().mockResolvedValue(mockClient),
+      query: jest.fn(),
+      on: jest.fn(),
     };
 
     const { getPool } = require('../../../packages/database/pool');
@@ -59,11 +59,11 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
     const tenantCaches = new Map<string, Map<string, string>>();
     
     mockRedis = {
-      get: vi.fn().mockImplementation((key: string) => {
+      get: jest.fn().mockImplementation((key: string) => {
         const tenantId = key.split(':')[1];
         return Promise.resolve(tenantCaches.get(tenantId)?.get(key) || null);
       }),
-      setex: vi.fn().mockImplementation((key: string, ttl: number, value: string) => {
+      setex: jest.fn().mockImplementation((key: string, ttl: number, value: string) => {
         const tenantId = key.split(':')[1];
         if (!tenantCaches.has(tenantId)) {
           tenantCaches.set(tenantId, new Map());
@@ -71,13 +71,13 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
         tenantCaches.get(tenantId)!.set(key, value);
         return Promise.resolve('OK');
       }),
-      del: vi.fn(),
-      pipeline: vi.fn().mockReturnValue({
-        zremrangebyscore: vi.fn().mockReturnThis(),
-        zcard: vi.fn().mockReturnThis(),
-        zadd: vi.fn().mockReturnThis(),
-        pexpire: vi.fn().mockReturnThis(),
-        exec: vi.fn().mockResolvedValue([
+      del: jest.fn(),
+      pipeline: jest.fn().mockReturnValue({
+        zremrangebyscore: jest.fn().mockReturnThis(),
+        zcard: jest.fn().mockReturnThis(),
+        zadd: jest.fn().mockReturnThis(),
+        pexpire: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([
           [null, 0],
           [null, 0],
           [null, 1],
@@ -121,7 +121,7 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
     });
 
     it('should enforce tenant_id in all queries', async () => {
-      const querySpy = vi.fn().mockResolvedValue({ rows: [] });
+      const querySpy = jest.fn().mockResolvedValue({ rows: [] });
       mockClient.query = querySpy;
       mockClient.query
         .mockResolvedValueOnce({}) // SET statement_timeout
