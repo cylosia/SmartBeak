@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import { DLQService, RegionWorker } from '@kernel/queue';
 import { EventBus } from '@kernel/event-bus';
 import { getLogger } from '../../packages/kernel/logger';
+import { ServiceUnavailableError } from '@errors';
 
 import { BillingService } from './billing';
 import { CostTracker } from '../../packages/monitoring/costTracker';
@@ -241,8 +242,11 @@ export class Container {
   private createPublishAdapter(): PublishAdapter {
   const token = process.env['FACEBOOK_PAGE_TOKEN'];
   if (!token) {
-    logger.warn('FACEBOOK_PAGE_TOKEN not set, using stub adapter');
-    // Return a stub adapter that logs instead of failing
+    if (process.env['NODE_ENV'] === 'production') {
+    throw new ServiceUnavailableError('FACEBOOK_PAGE_TOKEN is not configured');
+    }
+    // Non-production: use a stub that logs but does not fail
+    logger.warn('FACEBOOK_PAGE_TOKEN not set, using stub adapter (non-production only)');
     return {
     publish: async () => {
     logger.info('FacebookAdapter stub: publish called but no token configured');

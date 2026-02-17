@@ -101,10 +101,20 @@ export class LinkedInAdapter implements PublishAdapter {
     }
 
     const rawData = await response.json();
-    if (!rawData || typeof rawData !== 'object' || !(rawData as { id?: unknown })["id"]) {
+    if (!rawData || typeof rawData !== 'object') {
     throw new ApiError('Invalid response format from LinkedIn API', 500);
     }
-    return rawData as {
+    const data = rawData as { id?: unknown; firstName?: unknown; lastName?: unknown; vanityName?: unknown };
+    if (typeof data['id'] !== 'string' || !data['id']) {
+    throw new ApiError('Invalid response format from LinkedIn API: missing or non-string id', 500);
+    }
+    if (data['firstName'] !== undefined && (typeof data['firstName'] !== 'object' || data['firstName'] === null)) {
+    throw new ApiError('Invalid response format from LinkedIn API: invalid firstName shape', 500);
+    }
+    if (data['lastName'] !== undefined && (typeof data['lastName'] !== 'object' || data['lastName'] === null)) {
+    throw new ApiError('Invalid response format from LinkedIn API: invalid lastName shape', 500);
+    }
+    return data as {
     id: string;
     firstName?: { localized?: { en_US?: string } };
     lastName?: { localized?: { en_US?: string } };

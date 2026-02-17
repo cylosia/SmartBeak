@@ -13,7 +13,7 @@ const logger = getLogger('content:repository');
 
 // Valid content statuses for runtime validation
 const VALID_STATUSES: ContentStatus[] = ['draft', 'scheduled', 'published', 'archived'];
-const VALID_CONTENT_TYPES: ContentType[] = ['article', 'page', 'product', 'review', 'guide'];
+const VALID_CONTENT_TYPES: ContentType[] = ['article', 'page', 'product', 'review', 'guide', 'post', 'image', 'video'];
 
 /**
 * Validate status at runtime

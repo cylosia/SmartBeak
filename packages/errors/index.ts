@@ -271,9 +271,10 @@ export class NotFoundError extends AppError {
 export class DatabaseError extends AppError {
   constructor(
   message: string = 'Database error',
-  details?: unknown
+  details?: unknown,
+  code: ErrorCode = ErrorCodes.DATABASE_ERROR
   ) {
-  super(message, ErrorCodes.DATABASE_ERROR, 500, details);
+  super(message, code, 500, details);
   }
 
   /**
@@ -283,20 +284,20 @@ export class DatabaseError extends AppError {
   static fromDBError(error: Error): DatabaseError {
   const message = error.message.toLowerCase();
   let sanitizedMessage = 'An unexpected database error occurred';
-  let _code: string = ErrorCodes.DATABASE_ERROR;
+  let code: ErrorCode = ErrorCodes.DATABASE_ERROR;
 
   if (message.includes('connection') || message.includes('econnrefused') || message.includes('enotfound')) {
     sanitizedMessage = 'Database connection error. Please try again later.';
-    _code = ErrorCodes.CONNECTION_ERROR;
+    code = ErrorCodes.CONNECTION_ERROR;
   } else if (message.includes('timeout')) {
     sanitizedMessage = 'Database query timeout. Please try a more specific query.';
-    _code = ErrorCodes.QUERY_TIMEOUT;
+    code = ErrorCodes.QUERY_TIMEOUT;
   } else if (message.includes('unique constraint') || message.includes('duplicate key')) {
     sanitizedMessage = 'A record with this information already exists.';
-    _code = ErrorCodes.DUPLICATE_ENTRY;
+    code = ErrorCodes.DUPLICATE_ENTRY;
   }
 
-  return new DatabaseError(sanitizedMessage, { originalError: process.env['NODE_ENV'] === 'development' ? error.message : undefined });
+  return new DatabaseError(sanitizedMessage, { originalError: process.env['NODE_ENV'] === 'development' ? error.message : undefined }, code);
   }
 }
 
@@ -324,7 +325,7 @@ export class ConflictError extends AppError {
   message: string = 'Resource conflict',
   details?: unknown
   ) {
-  super(message, ErrorCodes.DUPLICATE_ENTRY, 409, details);
+  super(message, ErrorCodes.CONFLICT, 409, details);
   }
 }
 

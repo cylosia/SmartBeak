@@ -18,9 +18,10 @@ const logger = getLogger('seo-routes');
 
 async function verifyContentOwnership(userId: string, contentId: string, pool: Pool): Promise<boolean> {
   const result = await pool.query(
-  `SELECT 1 FROM contents c
-  JOIN memberships m ON m.org_id = c.org_id
-  WHERE c["id"] = $1 AND m.user_id = $2
+  `SELECT 1 FROM content_items c
+  JOIN domains d ON c.domain_id = d.id
+  JOIN memberships m ON m.org_id = d.org_id
+  WHERE c.id = $1 AND m.user_id = $2
   LIMIT 1`,
   [contentId, userId]
   );
