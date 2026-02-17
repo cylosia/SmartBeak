@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
-import { DB } from './constants';
+import { DB } from '@kernel/constants';
 import { emitCounter } from '@kernel/metrics';
 
 import { randomUUID } from 'crypto';
