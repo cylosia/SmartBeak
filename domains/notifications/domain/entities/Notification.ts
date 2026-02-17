@@ -9,6 +9,10 @@
 * @module domains/notifications/domain/entities/Notification
 */
 
+import type { NotificationChannel } from '@packages/types/notifications';
+
+export type { NotificationChannel };
+
 export type NotificationStatus = 'pending' | 'sending' | 'delivered' | 'failed';
 
 export interface NotificationPayload {
@@ -41,7 +45,7 @@ export class Notification {
   public readonly id: string,
   public readonly orgId: string,
   public readonly userId: string,
-  public readonly channel: string,
+  public readonly channel: NotificationChannel,
   public readonly template: string,
   public readonly payload: NotificationPayload,
   public readonly status: NotificationStatus
@@ -62,7 +66,7 @@ export class Notification {
   id: string,
   orgId: string,
   userId: string,
-  channel: string,
+  channel: NotificationChannel,
   template: string,
   payload: NotificationPayload,
   status: NotificationStatus = 'pending'
@@ -80,7 +84,7 @@ export class Notification {
   id: string,
   orgId: string,
   userId: string,
-  channel: string,
+  channel: NotificationChannel,
   template: string,
   payload: NotificationPayload,
   status: NotificationStatus

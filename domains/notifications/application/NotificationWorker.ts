@@ -9,6 +9,7 @@ import { getLogger } from '@kernel/logger';
 import { withSpan, addSpanAttributes, recordSpanException, getBusinessKpis, getSloTracker } from '@packages/monitoring';
 import { writeToOutbox } from '@packages/database/outbox';
 
+import type { NotificationChannel } from '@packages/types/notifications';
 import { DeliveryAdapter } from './ports/DeliveryAdapter';
 import { NotificationFailed } from '../domain/events/NotificationFailed';
 import { NotificationPayload } from '../domain/entities/Notification';
@@ -21,21 +22,19 @@ import { PostgresNotificationDLQRepository } from '../infra/persistence/Postgres
 const logger = getLogger('notification:worker');
 
 export interface DeliveryMessage {
-  channel: string;
+  channel: NotificationChannel;
   to?: string | undefined;
   template: string;
   payload: NotificationPayload;
 }
 
 /**
-* Result type for process operation
+* Result type for process operation (discriminated union)
 */
-export interface ProcessResult {
-  success: boolean;
-  delivered?: boolean | undefined;
-  skipped?: boolean | undefined;
-  error?: string | undefined;
-}
+export type ProcessResult =
+  | { success: true; delivered: true; skipped?: undefined }
+  | { success: true; skipped: true; delivered?: undefined }
+  | { success: false; error: string; delivered?: undefined; skipped?: undefined };
 
 /**
 * Worker for processing notification delivery.

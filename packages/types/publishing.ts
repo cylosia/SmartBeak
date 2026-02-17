@@ -6,6 +6,9 @@
 * cross-boundary imports between plugins and domains.
 */
 
+/** Supported publish target types */
+export type PublishTargetType = 'wordpress' | 'webhook' | 'api' | 'social';
+
 export interface PublishTargetConfig {
   url?: string;
   token?: string;

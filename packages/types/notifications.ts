@@ -6,6 +6,9 @@
 * cross-boundary imports between plugins and domains.
 */
 
+/** Supported notification delivery channels */
+export type NotificationChannel = 'email' | 'sms' | 'push' | 'webhook';
+
 /**
 * Payload data for notification delivery.
 */
@@ -27,8 +30,8 @@ export interface NotificationAttachment {
 * Input parameters for sending a notification
 */
 export interface SendNotificationInput {
-  /** The delivery channel (e.g., 'email', 'sms', 'push', 'webhook') */
-  channel: string;
+  /** The delivery channel */
+  channel: NotificationChannel;
   /** Recipient identifier (format depends on channel: email address, phone number, device token, etc.) */
   to: string;
   /** Template identifier for the notification content */
@@ -38,20 +41,11 @@ export interface SendNotificationInput {
 }
 
 /**
-* Result of a notification delivery attempt
+* Result of a notification delivery attempt (discriminated union on success)
 */
-export interface DeliveryResult {
-  /** Whether the delivery was successful */
-  success: boolean;
-  /** Unique identifier for the delivery attempt (for tracking) */
-  deliveryId?: string;
-  /** Timestamp when the delivery was attempted */
-  attemptedAt: Date;
-  /** Error message if delivery failed */
-  error?: string;
-  /** Error code for programmatic handling */
-  errorCode?: string;
-}
+export type DeliveryResult =
+  | { success: true; deliveryId?: string | undefined; attemptedAt: Date }
+  | { success: false; error: string; errorCode?: string | undefined; attemptedAt: Date };
 
 /**
 * Adapter interface for notification delivery mechanisms.
@@ -103,19 +97,22 @@ export class DeliveryAdapterError extends Error {
 }
 
 /**
-* Notification attempt entity (simplified for shared use)
+* Base fields shared across all notification attempt states
 */
-export interface NotificationAttempt {
+interface NotificationAttemptBase {
   id: string;
   notificationId: string;
-  channel: string;
-  status: 'pending' | 'sent' | 'failed' | 'delivered';
-  sentAt?: Date;
-  deliveredAt?: Date;
-  failedAt?: Date;
-  errorMessage?: string;
-  errorCode?: string;
-  providerResponse?: Record<string, unknown>;
+  channel: NotificationChannel;
   retryCount: number;
-  metadata?: Record<string, unknown>;
+  providerResponse?: Record<string, unknown> | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }
+
+/**
+* Notification attempt entity (discriminated union on status)
+*/
+export type NotificationAttempt =
+  | (NotificationAttemptBase & { status: 'pending' })
+  | (NotificationAttemptBase & { status: 'sent'; sentAt: Date })
+  | (NotificationAttemptBase & { status: 'delivered'; sentAt: Date; deliveredAt: Date })
+  | (NotificationAttemptBase & { status: 'failed'; failedAt: Date; errorMessage: string; errorCode?: string | undefined });

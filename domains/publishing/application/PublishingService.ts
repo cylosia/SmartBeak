@@ -18,16 +18,12 @@ const logger = getLogger('publishing:service');
 // ============================================================================
 
 /**
-* Result type for publishing operations
+* Result type for publishing operations (discriminated union)
 */
-export interface PublishingResult {
-  /** Whether operation succeeded */
-  success: boolean;
-  /** Publishing job (if created) */
-  job?: PublishingJob;
-  /** Error message (if failed) */
-  error?: string;
-}
+export type PublishingResult =
+  | { success: true; job: PublishingJob }
+  | { success: true }
+  | { success: false; error: string };
 
 // ============================================================================
 // Publishing Service

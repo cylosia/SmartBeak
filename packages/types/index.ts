@@ -27,6 +27,7 @@ export { CONTENT_PUBLISHED_V1, type ContentPublishedV1Payload } from './events/c
 // Publishing types (moved from domains/publishing to prevent cross-boundary imports)
 export type {
   PublishTargetConfig,
+  PublishTargetType,
   PublishTargetRetryPolicy,
   PublishTargetAuth,
   PublishTargetRateLimit,
@@ -38,7 +39,9 @@ export { validateTargetConfig } from './publishing';
 export type {
   NotificationPayload,
   NotificationAttachment,
+  NotificationChannel,
   DeliveryResult,
+  NotificationAttempt,
 } from './notifications';
 export { DeliveryAdapterError } from './notifications';
 

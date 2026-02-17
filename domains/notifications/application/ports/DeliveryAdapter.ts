@@ -1,39 +1,19 @@
-/**
-* Payload data for notification delivery.
-*
-* Using Record type instead of 'any' for type safety while maintaining flexibility
-* for different notification types and channels.
-*/
-export type NotificationPayload = Record<string, unknown>;
+import type { NotificationChannel, NotificationPayload, DeliveryResult } from '@packages/types/notifications';
+
+export type { NotificationPayload, DeliveryResult };
 
 /**
 * Input parameters for sending a notification
 */
 export interface SendNotificationInput {
-  /** The delivery channel (e.g., 'email', 'sms', 'push', 'webhook') */
-  channel: string;
+  /** The delivery channel */
+  channel: NotificationChannel;
   /** Recipient identifier (format depends on channel: email address, phone number, device token, etc.) */
   to: string;
   /** Template identifier for the notification content */
   template: string;
   /** Dynamic data to populate the template */
   payload: NotificationPayload;
-}
-
-/**
-* Result of a notification delivery attempt
-*/
-export interface DeliveryResult {
-  /** Whether the delivery was successful */
-  success: boolean;
-  /** Unique identifier for the delivery attempt (for tracking) */
-  deliveryId?: string;
-  /** Timestamp when the delivery was attempted */
-  attemptedAt: Date;
-  /** Error message if delivery failed */
-  error?: string;
-  /** Error code for programmatic handling */
-  errorCode?: string;
 }
 
 /**

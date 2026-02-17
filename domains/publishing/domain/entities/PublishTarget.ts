@@ -1,3 +1,7 @@
+import type { PublishTargetType } from '@packages/types/publishing';
+
+export type { PublishTargetType };
+
 export interface PublishTargetConfig {
   url?: string;
   token?: string;
@@ -10,7 +14,7 @@ export class PublishTarget {
   private constructor(
   public readonly id: string,
   public readonly domainId: string,
-  public readonly type: string,
+  public readonly type: PublishTargetType,
   public readonly config: PublishTargetConfig,
   public readonly enabled: boolean
   ) {}
@@ -21,7 +25,7 @@ export class PublishTarget {
   static create(
   id: string,
   domainId: string,
-  type: string,
+  type: PublishTargetType,
   config: PublishTargetConfig,
   enabled: boolean = true
   ): PublishTarget {
@@ -34,7 +38,7 @@ export class PublishTarget {
   static reconstitute(
   id: string,
   domainId: string,
-  type: string,
+  type: PublishTargetType,
   config: PublishTargetConfig,
   enabled: boolean
   ): PublishTarget {
@@ -71,9 +75,6 @@ export class PublishTarget {
   * Validate the target configuration
   */
   validate(): void {
-  if (!this.type || typeof this.type !== 'string') {
-    throw new Error('Publish target type is required');
-  }
   if (!this.config || typeof this.config !== 'object') {
     throw new Error('Publish target config is required');
   }

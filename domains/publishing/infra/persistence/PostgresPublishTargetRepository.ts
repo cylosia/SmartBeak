@@ -5,11 +5,22 @@ import { Pool } from 'pg';
 import { validatePublishTargetConfig } from '@domain/shared/infra/validation/DatabaseSchemas';
 
 import { getLogger } from '@kernel/logger';
+import { ValidationError } from '@errors';
 
 import { PublishTarget } from '../../domain/entities/PublishTarget';
+import type { PublishTargetType } from '../../domain/entities/PublishTarget';
 import { PublishTargetRepository } from '../../application/ports/PublishTargetRepository';
 
 const logger = getLogger('publishing:target:repository');
+
+const VALID_TARGET_TYPES: readonly PublishTargetType[] = ['wordpress', 'webhook', 'api', 'social'];
+
+function validateTargetType(type: string): PublishTargetType {
+  if (!VALID_TARGET_TYPES.includes(type as PublishTargetType)) {
+    throw new ValidationError(`Invalid publish target type: ${type}`);
+  }
+  return type as PublishTargetType;
+}
 
 /**
 * Repository implementation for PublishTarget using PostgreSQL
@@ -51,7 +62,7 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
 
     // Create a deep copy of config to prevent external mutation
     const configCopy = JSON.parse(JSON.stringify(r.config ?? {}));
-    return PublishTarget.reconstitute(r.id, r.domain_id, r.type, configCopy, r.enabled);
+    return PublishTarget.reconstitute(r.id, r.domain_id, validateTargetType(r.type), configCopy, r.enabled);
     });
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
@@ -124,7 +135,7 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
 
     // Create a deep copy of config to prevent external mutation
     const configCopy = JSON.parse(JSON.stringify(r.config ?? {}));
-    return PublishTarget.reconstitute(r.id, r.domain_id, r.type, configCopy, r.enabled);
+    return PublishTarget.reconstitute(r.id, r.domain_id, validateTargetType(r.type), configCopy, r.enabled);
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Failed to get publish target by ID', err, { id });
