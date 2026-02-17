@@ -16,7 +16,7 @@ const logger = getLogger('affiliate-routes');
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
-});
+}).strict();
 
 export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
   // GET /affiliates/offers - List available affiliate offers

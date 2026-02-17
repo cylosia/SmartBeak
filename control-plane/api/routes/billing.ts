@@ -21,7 +21,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
 
   const SubscribeSchema = z.object({
   planId: z.string().min(1).max(100),
-  });
+  }).strict();
 
   app.post('/billing/subscribe', async (req, res) => {
   try {

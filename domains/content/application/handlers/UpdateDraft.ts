@@ -83,9 +83,10 @@ export class UpdateDraft {
 
     return { success: true, item: updatedItem };
   } catch (error) {
+    _logger.error('Failed to update draft', error instanceof Error ? error : new Error(String(error)));
     return {
     success: false,
-    error: error instanceof Error ? error.message : 'Failed to update draft'
+    error: 'Failed to update draft'
     };
   }
   }
@@ -105,9 +106,6 @@ export class UpdateDraft {
   ): string | undefined {
   if (!id || typeof id !== 'string') {
     return 'Content ID is required and must be a string';
-  }
-  if (id.length < 1) {
-    return 'Content ID cannot be empty';
   }
   if (typeof title !== 'string') {
     return 'Title must be a string';

@@ -1,4 +1,6 @@
 
+import { PoolClient } from 'pg';
+
 import { PublishTarget } from '../../domain/entities/PublishTarget';
 
 /**
@@ -17,37 +19,37 @@ export interface PublishTargetRepository {
   * @returns Promise resolving to array of enabled publish targets
   * @throws {Error} If query execution fails
   */
-  listEnabled(domainId: string): Promise<PublishTarget[]>;
+  listEnabled(domainId: string, limit?: number, client?: PoolClient): Promise<PublishTarget[]>;
 
   /**
   * Save or update a publish target
-  * MEDIUM FIX M13: Added save method to interface
   *
   * @param target - The publish target to save
+  * @param client - Optional database client for transaction context
   * @returns Promise resolving when save is complete
   * @throws {Error} If persistence operation fails
   */
-  save(target: PublishTarget): Promise<void>;
+  save(target: PublishTarget, client?: PoolClient): Promise<void>;
 
   /**
   * Get a publish target by ID
-  * MEDIUM FIX M14: Added getById method
   *
   * @param id - The unique identifier of the publish target
+  * @param client - Optional database client for transaction context
   * @returns Promise resolving to the target, or null if not found
   * @throws {Error} If query execution fails
   */
-  getById(id: string): Promise<PublishTarget | null>;
+  getById(id: string, client?: PoolClient): Promise<PublishTarget | null>;
 
   /**
   * Delete a publish target
-  * MEDIUM FIX M15: Added delete method
   *
   * @param id - The unique identifier of the target to delete
+  * @param client - Optional database client for transaction context
   * @returns Promise resolving when deletion is complete
   * @throws {Error} If deletion fails
   */
-  delete(id: string): Promise<void>;
+  delete(id: string, client?: PoolClient): Promise<void>;
 }
 
 /**

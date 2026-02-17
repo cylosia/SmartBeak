@@ -46,6 +46,7 @@ export class ContentRevision {
   * Get content size in bytes
   */
   getSize(): number {
+  if (!this["body"]) return 0;
   return Buffer.byteLength(this["body"], 'utf8');
   }
 
@@ -53,6 +54,7 @@ export class ContentRevision {
   * Check if body is empty
   */
   hasContent(): boolean {
+  if (!this["body"]) return false;
   return this["body"].trim().length > 0;
   }
 
@@ -61,6 +63,7 @@ export class ContentRevision {
   * @param length - Number of characters to include
   */
   getExcerpt(length: number = 200): string {
+  if (!this["body"]) return '';
   if (this["body"].length <= length) {
     return this["body"];
   }

@@ -126,12 +126,14 @@ export class ContentItem {
   * Update draft content
   * Returns new instance (immutable update)
   */
-  updateDraft(_title: string, _body: string): ContentItem {
+  updateDraft(title: string, body: string): ContentItem {
   if (this._status !== 'draft' && this._status !== 'scheduled') {
     throw new Error('Cannot update content: only drafts and scheduled content can be edited');
   }
 
   const updates: Partial<ContentItemProps> = {
+    title,
+    body,
     updatedAt: new Date(),
   };
 

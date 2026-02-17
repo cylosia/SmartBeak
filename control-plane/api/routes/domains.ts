@@ -380,9 +380,9 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('COMMIT');
     return { id: domainId, updated: true };
   } catch (error) {
-    await client.query('ROLLBACK').catch((rollbackError: Error) => {
-    logger.error('Rollback failed during PATCH', rollbackError);
-    });
+    try { await client.query('ROLLBACK'); } catch (rollbackError) {
+    logger.error('Rollback failed during PATCH', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
+    }
     logger.error('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to update domain');
   } finally {
@@ -440,9 +440,9 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     await client.query('COMMIT');
     return { id: domainId, deleted: true };
   } catch (error) {
-    await client.query('ROLLBACK').catch((rollbackError: Error) => {
-    logger.error('Rollback failed during DELETE', rollbackError);
-    });
+    try { await client.query('ROLLBACK'); } catch (rollbackError) {
+    logger.error('Rollback failed during DELETE', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
+    }
     logger.error('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to delete domain');
   } finally {

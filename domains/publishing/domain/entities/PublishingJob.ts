@@ -140,7 +140,7 @@ export class PublishingJob {
     errorMessage: undefined,
     startedAt: undefined,
     completedAt: undefined,
-    attemptCount: 0,
+    // Preserve attemptCount so retry history is not lost
   });
   }
 

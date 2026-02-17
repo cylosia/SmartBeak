@@ -182,6 +182,9 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     publishedAt: row.published_at,
     })),
     pagination: {
+    page,
+    limit,
+    total,
     totalPages: Math.ceil(total / limit),
     }
     };
@@ -194,9 +197,9 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // POST /content - Create new content draft
   app.post('/content', async (req: FastifyRequest, res: FastifyReply) => {
   try {
+    await rateLimit('content', 50, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
-    await rateLimit('content', 50, req, res);
 
     // Validate orgId
     if (!ctx?.["orgId"]) {
@@ -208,17 +211,11 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return errors.badRequest(res, 'Invalid organization ID');
     }
 
-    let validated;
-    try {
-    validated = CreateContentSchema.parse(req.body);
-    } catch (validationError: unknown) {
-    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
-    return errors.validationFailed(res, zodError.issues?.map((e) => ({
-    path: e.path,
-    message: e.message,
-    code: e.code
-    })));
+    const bodyResult = CreateContentSchema.safeParse(req.body);
+    if (!bodyResult.success) {
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
+    const validated = bodyResult.data;
 
     // Verify org owns the domain
     await ownership.assertOrgOwnsDomain(ctx.orgId, validated.domainId);
@@ -250,22 +247,16 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // GET /content/:id - Get specific content
   app.get('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
+    await rateLimit('content', 50, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
-    await rateLimit('content', 50, req, res);
 
     // Validate params
-    let params;
-    try {
-    params = ContentParamsSchema.parse(req.params);
-    } catch (validationError: unknown) {
-    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
-    return errors.validationFailed(res, zodError.issues?.map((e) => ({
-    path: e.path,
-    message: e.message,
-    code: e.code
-    })));
+    const paramsResult = ContentParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return errors.validationFailed(res, paramsResult["error"].issues);
     }
+    const params = paramsResult.data;
 
     const repo = getContentRepository('content');
 
@@ -294,35 +285,23 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // PATCH /content/:id - Update content draft
   app.patch('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
+    await rateLimit('content', 50, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
-    await rateLimit('content', 50, req, res);
 
     // Validate params
-    let params;
-    try {
-    params = ContentParamsSchema.parse(req.params);
-    } catch (validationError: unknown) {
-    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
-    return errors.validationFailed(res, zodError.issues?.map((e) => ({
-    path: e.path,
-    message: e.message,
-    code: e.code
-    })));
+    const paramsResult = ContentParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return errors.validationFailed(res, paramsResult["error"].issues);
     }
+    const params = paramsResult.data;
 
     // Validate body
-    let validated;
-    try {
-    validated = UpdateContentSchema.parse(req.body);
-    } catch (validationError: unknown) {
-    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
-    return errors.validationFailed(res, zodError.issues?.map((e) => ({
-    path: e.path,
-    message: e.message,
-    code: e.code
-    })));
+    const bodyResult = UpdateContentSchema.safeParse(req.body);
+    if (!bodyResult.success) {
+    return errors.validationFailed(res, bodyResult["error"].issues);
     }
+    const validated = bodyResult.data;
 
     const repo = getContentRepository('content');
 
@@ -334,15 +313,19 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
-    // H12-FIX: Pass title and body from validated input, preserving existing values if not provided
-    const handler = new UpdateDraft(repo);
-    const updated = await handler.execute(
-    params.id,
+    // Validate content state before updating (avoids second repo.getById in UpdateDraft handler)
+    if (item['status'] !== 'draft' && item['status'] !== 'scheduled') {
+    return errors.badRequest(res, `Cannot update content with status '${item['status']}'`);
+    }
+
+    // Apply update directly to avoid the double-fetch inside UpdateDraft.execute
+    const updatedItem = item.updateDraft(
     validated.title ?? item.title ?? '',
     validated.body ?? item.body ?? ''
     );
+    await repo.save(updatedItem);
 
-    return { success: true, item: updated };
+    return { success: true, item: updatedItem };
   } catch (error: unknown) {
     logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
     const errWithCode = error as { code?: string };
@@ -359,22 +342,16 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // POST /content/:id/publish - Publish content
   app.post('/content/:id/publish', async (req: FastifyRequest, res: FastifyReply) => {
   try {
+    await rateLimit('content', 20, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
-    await rateLimit('content', 20, req, res);
 
     // Validate params
-    let params;
-    try {
-    params = ContentParamsSchema.parse(req.params);
-    } catch (validationError: unknown) {
-    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
-    return errors.validationFailed(res, zodError.issues?.map((e) => ({
-    path: e.path,
-    message: e.message,
-    code: e.code
-    })));
+    const paramsResult = ContentParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return errors.validationFailed(res, paramsResult["error"].issues);
     }
+    const params = paramsResult.data;
 
     const repo = getContentRepository('content');
 
@@ -406,22 +383,16 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // DELETE /content/:id - Delete content (soft delete)
   app.delete('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
+    await rateLimit('content', 20, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
-    await rateLimit('content', 20, req, res);
 
     // Validate params
-    let params;
-    try {
-    params = ContentParamsSchema.parse(req.params);
-    } catch (validationError: unknown) {
-    const zodError = validationError as { issues?: Array<{ path: (string | number)[]; message: string; code: string }> };
-    return errors.validationFailed(res, zodError.issues?.map((e) => ({
-    path: e.path,
-    message: e.message,
-    code: e.code
-    })));
+    const paramsResult = ContentParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return errors.validationFailed(res, paramsResult["error"].issues);
     }
+    const params = paramsResult.data;
 
     const repo = getContentRepository('content');
 
