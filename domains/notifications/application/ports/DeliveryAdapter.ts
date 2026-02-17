@@ -21,20 +21,13 @@ export interface SendNotificationInput {
 }
 
 /**
-* Result of a notification delivery attempt
+* Result of a notification delivery attempt.
+* Discriminated union prevents impossible states like
+* { ok: true, error: "..." } or { ok: false, deliveryId: "..." }.
 */
-export interface DeliveryResult {
-  /** Whether the delivery was successful */
-  success: boolean;
-  /** Unique identifier for the delivery attempt (for tracking) */
-  deliveryId?: string;
-  /** Timestamp when the delivery was attempted */
-  attemptedAt: Date;
-  /** Error message if delivery failed */
-  error?: string;
-  /** Error code for programmatic handling */
-  errorCode?: string;
-}
+export type DeliveryResult =
+  | { ok: true; deliveryId: string; attemptedAt: Date }
+  | { ok: false; error: string; errorCode?: string; attemptedAt: Date };
 
 /**
 * Adapter interface for notification delivery mechanisms.

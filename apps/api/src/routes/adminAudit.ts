@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getDb } from '../db';
 import { isValidUUID } from '@security/input-validator';
 import { getLogger } from '@kernel/logger';
+import { type Result, ok, err } from '@kernel/validation/types';
 import { adminRateLimit } from '../middleware/rateLimiter';
 import crypto from 'crypto';
 import { errors } from '@errors/responses';
@@ -51,23 +52,14 @@ function isAllowedAuditAction(action: string): action is AllowedAuditAction {
   return ALLOWED_AUDIT_ACTIONS.includes(action as AllowedAuditAction);
 }
 
-export interface ValidationResult<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
 /**
  * Prevents invalid actions and potential injection attempts
  */
-function validateAction(action: string): ValidationResult<AllowedAuditAction> {
+function validateAction(action: string): Result<AllowedAuditAction, string> {
   if (!isAllowedAuditAction(action)) {
-    return {
-      success: false,
-      error: `Invalid action: ${action}. Must be one of: ${ALLOWED_AUDIT_ACTIONS.join(', ')}`
-    };
+    return err(`Invalid action: ${action}. Must be one of: ${ALLOWED_AUDIT_ACTIONS.join(', ')}`);
   }
-  return { success: true, data: action };
+  return ok(action);
 }
 
 function isCountResult(value: unknown): value is { count: string | number } {
@@ -192,10 +184,10 @@ export async function adminAuditRoutes(app: FastifyInstance): Promise<void> {
       let validatedAction: AllowedAuditAction | undefined;
       if (action) {
         const validation = validateAction(action);
-        if (!validation.success) {
+        if (!validation.ok) {
           return errors.badRequest(reply, 'Invalid action parameter');
         }
-        validatedAction = validation.data;
+        validatedAction = validation.value;
       }
 
       // P0-FIX: IDOR Vulnerability - Require explicit org_id and verify admin has access

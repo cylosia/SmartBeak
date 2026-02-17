@@ -197,14 +197,14 @@ export class WebhookAdapter implements DeliveryAdapter {
       }
 
       return {
-        success: true,
+        ok: true,
         attemptedAt,
         // P2-7 FIX: Use crypto.randomBytes instead of Math.random(); .substring() instead of deprecated .substr()
         deliveryId: `webhook_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`
       };
     } catch (error) {
       return {
-        success: false,
+        ok: false,
         attemptedAt,
         error: error instanceof Error ? error.message : String(error),
         errorCode: error instanceof DeliveryAdapterError ? (error as DeliveryAdapterError).code : 'UNKNOWN_ERROR'
