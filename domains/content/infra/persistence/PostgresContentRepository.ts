@@ -386,7 +386,8 @@ export class PostgresContentRepository implements ContentRepository {
     'SELECT COUNT(*) as count FROM content_items WHERE domain_id = $1',
     [domainId]
     );
-    return parseInt(rows[0].count, 10);
+    const countRow = rows[0] as { count: string } | undefined;
+    return countRow ? parseInt(countRow.count, 10) : 0;
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Failed to count content by domain', err, { domainId });

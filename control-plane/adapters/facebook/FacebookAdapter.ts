@@ -4,6 +4,7 @@ import { apiConfig, timeoutConfig } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString, isFacebookPostResponse } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
+import type { PublishAdapter, PublishInput } from '@domain/publishing/application/ports/PublishAdapter';
 
 
 
@@ -19,7 +20,7 @@ export interface FacebookPostResponse {
   post_id?: string | undefined;
 }
 
-export class FacebookAdapter {
+export class FacebookAdapter implements PublishAdapter {
   private readonly baseUrl: string;
   private readonly timeoutMs = timeoutConfig.long;
   private readonly logger: StructuredLogger;
@@ -120,6 +121,22 @@ export class FacebookAdapter {
     this.logger.error('Failed to publish to Facebook', context, error as Error);
     throw error;
   }
+  }
+
+  /**
+  * Publish content via the PublishAdapter interface.
+  * Delegates to publishPagePost using the target config.
+  */
+  async publish(input: PublishInput): Promise<void> {
+  const pageId = input.targetConfig.options?.['pageId'];
+  if (typeof pageId !== 'string' || !pageId) {
+    throw new Error('Facebook publish requires targetConfig.options.pageId');
+  }
+  const message = input.targetConfig.options?.['message'];
+  if (typeof message !== 'string' || !message) {
+    throw new Error('Facebook publish requires targetConfig.options.message');
+  }
+  await this.publishPagePost(pageId, message);
   }
 
   async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }> {

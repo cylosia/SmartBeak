@@ -27,16 +27,13 @@ export interface PlanningOverview {
 }
 
 /**
-* Result type for overview operation
+* Result type for overview operation.
+* Discriminated union prevents impossible states like
+* { success: true, error: "..." } or { success: false, overview: {...} }.
 */
-export interface OverviewResult {
-  /** Whether operation succeeded */
-  success: boolean;
-  /** Planning overview data */
-  overview?: PlanningOverview;
-  /** Error message (if failed) */
-  error?: string;
-}
+export type OverviewResult =
+  | { success: true; overview: PlanningOverview }
+  | { success: false; error: string };
 
 // ============================================================================
 // Planning Overview Service

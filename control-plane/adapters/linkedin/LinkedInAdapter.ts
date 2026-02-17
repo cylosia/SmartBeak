@@ -4,6 +4,7 @@ import { apiConfig, timeoutConfig } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
+import type { PublishAdapter, PublishInput } from '@domain/publishing/application/ports/PublishAdapter';
 
 import { AbortController } from 'abort-controller';
 
@@ -49,7 +50,7 @@ export interface LinkedInPostResponse {
   permalink?: string | undefined;
 }
 
-export class LinkedInAdapter {
+export class LinkedInAdapter implements PublishAdapter {
   private readonly baseUrl: string;
   private readonly timeoutMs = timeoutConfig.long;
   private readonly logger: StructuredLogger;
@@ -223,6 +224,18 @@ export class LinkedInAdapter {
     this.logger["error"]('Failed to create LinkedIn post', context, error as Error);
     throw error;
   }
+  }
+
+  /**
+  * Publish content via the PublishAdapter interface.
+  * Delegates to createPost using the target config.
+  */
+  async publish(input: PublishInput): Promise<void> {
+  const text = input.targetConfig.options?.['text'];
+  if (typeof text !== 'string' || !text) {
+    throw new Error('LinkedIn publish requires targetConfig.options.text');
+  }
+  await this.createPost({ text });
   }
 
   async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }> {
