@@ -69,10 +69,10 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
 
     // Build query with optional filters
     let query = `
-      al["id"], al.action, al.entity_type, al.entity_id,
+      al.id, al.action, al.entity_type, al.entity_id,
       al.created_at, d.name as domain_name
       FROM activity_log al
-      LEFT JOIN domains d ON al.domain_id = d["id"]
+      LEFT JOIN domains d ON al.domain_id = d.id
       WHERE al.org_id = $1
     `;
     const params: unknown[] = [orgId];
@@ -160,7 +160,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
 
     // Build query with optional filters
     let query = `
-      al["id"], al.action, al.entity_type, al.entity_id,
+      al.id, al.action, al.entity_type, al.entity_id,
       al.metadata, al.created_at
       FROM activity_log al
       WHERE al.domain_id = $1

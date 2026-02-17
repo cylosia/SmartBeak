@@ -200,7 +200,8 @@ export class ValidationError extends AppError {
   /**
   * Create ValidationError from Zod error issues
   */
-  static fromZodIssues(issues: Array<{ path: (string | number)[]; message: string; code: string }>, _requestId?: string): ValidationError {
+  // M4-FIX: Forward requestId so distributed tracing is preserved in validation errors.
+  static fromZodIssues(issues: Array<{ path: (string | number)[]; message: string; code: string }>, requestId?: string): ValidationError {
   return new ValidationError(
     'Validation failed',
     issues.map(issue => ({
@@ -208,6 +209,7 @@ export class ValidationError extends AppError {
     message: issue.message,
     code: issue.code,
     })),
+    requestId,
   );
   }
 }
@@ -534,6 +536,8 @@ export function getStatusCodeForErrorCode(code: ErrorCode): number {
     return 413;
   case ErrorCodes.UNSUPPORTED_MEDIA_TYPE:
     return 415;
+  case ErrorCodes.QUOTA_EXCEEDED:
+    return 402; // M6-FIX: QUOTA_EXCEEDED → 402 Payment Required
   case ErrorCodes.RATE_LIMIT_EXCEEDED:
     return 429;
   case ErrorCodes.SERVICE_UNAVAILABLE:
@@ -577,7 +581,9 @@ export function formatZodError(error: unknown): { message: string; issues: Array
 * P2-MEDIUM FIX: Centralized NODE_ENV check
 */
 export function shouldExposeErrorDetails(): boolean {
-  return process.env['NODE_ENV'] === 'development' || process.env['DEBUG'] === 'true';
+  // M3-FIX: Removed DEBUG=true bypass. Detailed errors must never leak in
+  // production regardless of debug flags — gate solely on NODE_ENV.
+  return process.env['NODE_ENV'] === 'development';
 }
 
 /**

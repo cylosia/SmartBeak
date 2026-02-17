@@ -30,20 +30,6 @@ if (/placeholder|example|user:password/i.test(connectionString)) {
 // which is truthy but not boolean - would fail === true checks.
 const isServerless = !!(process.env['VERCEL'] || process.env['AWS_LAMBDA_FUNCTION_NAME']);
 
-function _getConnectionString(): string {
-  const connectionString = process.env['CONTROL_PLANE_DB'];
-  if (!connectionString) {
-    throw new Error('CONTROL_PLANE_DB environment variable is required. ' +
-      'Please set it to your PostgreSQL connection string.');
-  }
-  // Check for placeholder values
-  if (/placeholder|example|user:password/i.test(connectionString)) {
-    throw new Error('CONTROL_PLANE_DB contains placeholder values. ' +
-      'Please set your actual database connection string.');
-  }
-  return connectionString;
-}
-
 // Security: Explicit SSL configuration for production environments.
 // Defaults to rejecting unauthorized certificates (MITM protection).
 // Set DB_SSL_REJECT_UNAUTHORIZED=false only for known self-signed cert scenarios.

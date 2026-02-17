@@ -186,6 +186,29 @@ app.addHook('onSend', async (request, reply, payload) => {
   return payload;
 });
 
+// H9-FIX: Reject mutating requests that don't declare application/json.
+// Prevents content-type confusion where parsers silently receive unexpected formats.
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+app.addHook('preValidation', async (request, reply) => {
+  if (!MUTATING_METHODS.has(request.method)) return;
+
+  // Skip requests with no body (e.g. no Content-Length and no Transfer-Encoding)
+  const contentLength = request.headers['content-length'];
+  const transferEncoding = request.headers['transfer-encoding'];
+  if (!contentLength && !transferEncoding) return;
+
+  const contentType = request.headers['content-type'] ?? '';
+  if (!contentType.startsWith('application/json')) {
+    const requestId = (request.headers['x-request-id'] as string) || '';
+    return reply.status(415).send({
+      error: 'Unsupported Media Type: Content-Type must be application/json',
+      code: ErrorCodes.UNSUPPORTED_MEDIA_TYPE,
+      requestId,
+    });
+  }
+});
+
 // Backpressure hook: reject requests early when DB pool is critically loaded
 app.addHook('onRequest', async (request, reply) => {
   // Skip health check endpoints
@@ -281,7 +304,8 @@ app.addHook('onRequest', async (req, reply) => {
       // we must deny auth attempts rather than allow unlimited brute-force.
       // This matches the fail-closed policy in rateLimiter.ts middleware.
       logger.error('Redis rate limiting error - denying auth request (fail-closed)', error as Error);
-      return errHelpers.rateLimited(reply, 60, 'Rate limiting service unavailable. Please try again later.');
+      // H7-FIX: 503 Service Unavailable — the guard is offline, not a quota hit.
+      return errHelpers.serviceUnavailable(reply, 'Rate limiting service unavailable. Please try again later.');
     }
   }
 
