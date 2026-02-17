@@ -113,10 +113,8 @@ let instance: ResourceMetricsCollector | null = null;
 export function initResourceMetrics(config?: ResourceMetricsConfig): ResourceMetricsCollector {
   instance = new ResourceMetricsCollector(config);
 
-  // Wire hooks into kernel code
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-    const retry = require('@kernel/retry');
+  // Wire hooks into kernel code (async import to comply with ESM-only policy)
+  import('@kernel/retry').then((retry) => {
     if (retry.setRetryMetricsHook) {
       retry.setRetryMetricsHook({
         onAttempt: recordRetryAttempt,
@@ -130,19 +128,17 @@ export function initResourceMetrics(config?: ResourceMetricsConfig): ResourceMet
         onRejection: recordCircuitBreakerRejection,
       });
     }
-  } catch {
+  }).catch(() => {
     logger.warn('Could not wire retry/circuit breaker metrics hooks');
-  }
+  });
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-    const rateLimiter = require('@kernel/rateLimiterRedis');
+  import('@kernel/rateLimiterRedis').then((rateLimiter) => {
     if (rateLimiter.setRateLimitMetricsHook) {
       rateLimiter.setRateLimitMetricsHook(recordRateLimitCheck);
     }
-  } catch {
+  }).catch(() => {
     logger.warn('Could not wire rate limit metrics hook');
-  }
+  });
 
   return instance;
 }

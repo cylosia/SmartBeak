@@ -5,7 +5,8 @@ import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, RoleAccessError, type AuthContext } from '../../services/auth';
+import { requireRole, RoleAccessError } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
 
 const logger = getLogger('ROIRisk');
@@ -19,10 +20,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // GET /roi-risk/:assetId - Get ROI and risk analysis for an asset
   app.get('/roi-risk/:assetId', async (req, res) => {
   try {
-    const ctx = req.auth as AuthContext;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
+    const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     await rateLimit('roi-risk', 50);
 

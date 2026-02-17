@@ -22,6 +22,7 @@ import { join, resolve } from 'path';
 import { knex } from '../../packages/database';
 import { VercelAdapter } from '@adapters/vercel/VercelAdapter';
 import { getLogger } from '@kernel/logger';
+import { ValidationError, NotFoundError, ErrorCodes } from '@errors';
 
 const logger = getLogger('shard-deployment');
 
@@ -75,19 +76,19 @@ const BUCKET_NAME = process.env['R2_BUCKET_NAME'] || 'smartbeak-shards';
 function sanitizeFilePath(filePath: string): string {
   // Reject empty paths
   if (!filePath || typeof filePath !== 'string') {
-    throw new Error('File path is required');
+    throw new ValidationError('File path is required');
   }
 
   // Reject absolute paths
   if (filePath.startsWith('/') || filePath.startsWith('\\')) {
-    throw new Error('Absolute paths are not allowed');
+    throw new ValidationError('Absolute paths are not allowed');
   }
 
   // Reject path traversal segments
   const segments = filePath.split(/[/\\]/);
   const safeSegments = segments.filter(s => s !== '..' && s !== '.' && s !== '');
   if (safeSegments.length !== segments.filter(s => s !== '').length) {
-    throw new Error('Path traversal detected');
+    throw new ValidationError('Path traversal detected');
   }
 
   const safePath = safeSegments.join('/');
@@ -96,7 +97,7 @@ function sanitizeFilePath(filePath: string): string {
   const fakeRoot = '/safe-root';
   const resolved = resolve(fakeRoot, safePath);
   if (!resolved.startsWith(fakeRoot + '/')) {
-    throw new Error('Path traversal detected');
+    throw new ValidationError('Path traversal detected');
   }
 
   return safePath;
@@ -234,7 +235,7 @@ export async function deployShardToVercel(
       .first();
 
     if (!shard) {
-      throw new Error(`Shard ${shardId} not found`);
+      throw new NotFoundError('Shard');
     }
 
     // 2. Update status to building
@@ -268,7 +269,7 @@ export async function deployShardToVercel(
       const filePath = join(tempDir, safePath);
       const resolvedPath = resolve(filePath);
       if (!resolvedPath.startsWith(resolve(tempDir) + '/') && resolvedPath !== resolve(tempDir)) {
-        throw new Error('Path traversal detected in file manifest');
+        throw new ValidationError('Path traversal detected in file manifest');
       }
       await mkdir(join(filePath, '..'), { recursive: true });
       await writeFile(filePath, content);

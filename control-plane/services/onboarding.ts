@@ -1,6 +1,7 @@
 
 // Valid onboarding steps
 import { Pool } from 'pg';
+import { ValidationError, ErrorCodes } from '@errors';
 
 const VALID_STEPS = ['profile', 'billing', 'team'] as const;
 export type OnboardingStep = typeof VALID_STEPS[number];
@@ -33,13 +34,13 @@ export class OnboardingService {
   */
   private validateStep(step: string): asserts step is OnboardingStep {
   if (!VALID_STEPS.includes(step as OnboardingStep)) {
-    throw new Error('Invalid step');
+    throw new ValidationError('Invalid step', { step, validSteps: [...VALID_STEPS] });
   }
   }
 
   async ensure(orgId: string): Promise<void> {
   if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
+    throw new ValidationError('Valid orgId is required', undefined, undefined);
   }
 
   await this.pool.query(
@@ -55,7 +56,7 @@ export class OnboardingService {
   this.validateStep(step);
 
   if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
+    throw new ValidationError('Valid orgId is required');
   }
 
   // SECURITY FIX (H03): Use column map instead of direct string interpolation
@@ -75,7 +76,7 @@ export class OnboardingService {
 
   async get(orgId: string): Promise<OnboardingState | null> {
   if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
+    throw new ValidationError('Valid orgId is required');
   }
 
   await this.ensure(orgId);
@@ -136,7 +137,7 @@ export class OnboardingService {
   */
   async reset(orgId: string): Promise<void> {
   if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
+    throw new ValidationError('Valid orgId is required');
   }
 
   await this.pool.query(

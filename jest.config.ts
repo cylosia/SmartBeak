@@ -39,7 +39,7 @@ const config: Config = {
       testEnvironment: 'node',
       testMatch: [
         '**/__tests__/**/*.test.ts',
-        '**/*.spec.ts',
+        '**/*.test.ts',
       ],
       moduleNameMapper: sharedModuleNameMapper,
       setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],

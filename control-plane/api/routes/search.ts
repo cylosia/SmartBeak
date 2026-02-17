@@ -5,7 +5,8 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, type AuthContext } from '../../services/auth';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { SearchQueryService } from '../../services/search-query';
 import { errors } from '@errors/responses';
 
@@ -23,10 +24,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
   });
 
   app.get('/search', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
+  const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
   await rateLimit('search', 30);
 

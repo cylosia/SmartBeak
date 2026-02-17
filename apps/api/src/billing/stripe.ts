@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import crypto from 'crypto';
 import { getLogger } from '@kernel/logger';
+import { billingConfig, getEnvVar } from '@config';
 
 /**
 * MEDIUM FIX M1, M2, M3: Enhanced Stripe integration
@@ -15,22 +16,13 @@ const logger = getLogger('StripeBilling');
 const MAX_ORG_ID_LENGTH = 100;
 const MAX_PRICE_ID_LENGTH = 100;
 
-// Validate environment variable exists
-const stripeSecretKey = process.env['STRIPE_SECRET_KEY'];
-if (!stripeSecretKey) {
-  throw new Error(
-  'STRIPE_SECRET_KEY environment variable is required. ' +
-  'Please set it to your Stripe secret key from https://dashboard.stripe.com'
-  );
-}
-
-const stripe = new Stripe(stripeSecretKey, {
+const stripe = new Stripe(billingConfig.stripeSecretKey, {
   apiVersion: '2023-10-16'
 });
 
 // Get app URL with validation
 function getAppUrl(): string {
-  const url = process.env['APP_URL'] || process.env['NEXT_PUBLIC_APP_URL'];
+  const url = getEnvVar('APP_URL') || getEnvVar('NEXT_PUBLIC_APP_URL');
   if (!url) {
   throw new Error(
     'APP_URL or NEXT_PUBLIC_APP_URL environment variable is required. ' +
