@@ -132,6 +132,9 @@ export class FacebookAdapter implements PublishAdapter {
   if (typeof pageId !== 'string' || !pageId) {
     throw new Error('Facebook publish requires targetConfig.options.pageId');
   }
+  if (!/^\d+$/.test(pageId)) {
+    throw new Error('Facebook publish requires targetConfig.options.pageId to be a numeric string');
+  }
   const message = input.targetConfig.options?.['message'];
   if (typeof message !== 'string' || !message) {
     throw new Error('Facebook publish requires targetConfig.options.message');

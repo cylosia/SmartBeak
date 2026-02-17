@@ -100,7 +100,11 @@ export class PublishingWorker {
 
     // Handle not found case
     if (!job) {
+        try {
         await client.query('ROLLBACK');
+        } catch (rollbackError) {
+        logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
+        }
         return { success: false, error: `Publishing job '${jobId}' not found` };
     }
 

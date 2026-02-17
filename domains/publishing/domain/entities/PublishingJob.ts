@@ -117,12 +117,13 @@ export class PublishingJob {
   /**
   * Mark as failed with error context
   */
-  fail(_errorMessage: string): PublishingJob {
+  fail(errorMessage: string): PublishingJob {
   this.validateTransition('failed');
 
   return new PublishingJob({
     ...this.state,
     status: 'failed',
+    errorMessage,
     completedAt: new Date(),
   });
   }
