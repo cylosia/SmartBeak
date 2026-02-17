@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The SmartBeak codebase has a well-structured monorepo architecture with strong TypeScript conventions and good security primitives. However, the review uncovered **8 critical functional bugs** (routes/domain logic that are completely broken or produce silent data loss), **5 high-severity security issues**, and **20+ medium/low issues** covering error handling, rate limiting correctness, TypeScript violations, transaction safety, and code quality.
+The SmartBeak codebase has a well-structured monorepo architecture with strong TypeScript conventions and good security primitives. However, the review uncovered **8 critical functional bugs** (routes/domain logic that are completely broken or produce silent data loss), **6 high-severity security issues**, and **20+ medium/low issues** covering error handling, rate limiting correctness, TypeScript violations, transaction safety, and code quality.
 
 Issues are grouped by severity and tagged with affected files and line numbers.
 
@@ -91,6 +91,11 @@ After a failed attempt (`attemptCount: 1`), calling `retry()` resets the counter
 **File**: `domains/publishing/application/ports/PublishTargetRepository.ts:12–51`
 **Root cause**: All four methods (`listEnabled`, `save`, `getById`, `delete`) have no `client?: PoolClient` parameter, unlike `PublishingJobRepository` which does. This prevents multi-repository atomic operations: `PublishingService.publish()` cannot atomically read the target and write the job in one transaction.
 **Fix**: Add optional `client?: PoolClient` to all four methods and update `PostgresPublishTargetRepository` accordingly.
+
+### HIGH-SSRF: `FacebookAdapter` makes outbound HTTP without SSRF validation
+**File**: `control-plane/adapters/facebook/FacebookAdapter.ts:62–73`
+**Root cause**: The adapter calls `fetch(`${this.baseUrl}/${pageId}/feed`, ...)` without passing the URL through `validateUrlWithDns()` from `@security/ssrf`. If `baseUrl` is ever sourced from user-controlled config, this is a direct SSRF vector.
+**Fix**: Call `await validateUrlWithDns(targetUrl)` before every outbound `fetch()` in the adapter, and assert `result.allowed` before proceeding.
 
 ### HIGH-1: Unsafe `req.auth as AuthContext` cast (no type guard)
 **Files**:
@@ -231,9 +236,28 @@ Similarly for `recommendations`. This silently serves fabricated data as if it w
 - `control-plane/api/routes/content.ts:26` — `CreateContentSchema`
 - `control-plane/api/routes/content.ts:38` — `UpdateContentSchema`
 - `control-plane/api/routes/publishing.ts:15` — `TargetBodySchema`
+- `control-plane/api/routes/billing.ts:22` — `SubscribeSchema`
+- `control-plane/api/routes/analytics.ts:17` — `ParamsSchema`
+- `control-plane/api/routes/affiliates.ts:16` — `QuerySchema`
 
 **Root cause**: CLAUDE.md mandates `.strict()` on Zod object schemas to reject extra properties. Without it, extra fields in the request body are silently stripped, which can mask client bugs.
 **Fix**: Add `.strict()` to each schema.
+
+### LOW-6: `cache.ts` middleware uses `Promise<any>` return type
+**File**: `control-plane/api/middleware/cache.ts:78–79`
+**Root cause**: `handler: (req: FastifyRequest, res: FastifyReply) => Promise<any>` — uses `any` in a non-test file, violating the no-`any` ESLint rule.
+**Fix**: Change to `Promise<unknown>` or a typed union.
+
+### LOW-7: Rollback error handling uses `.catch()` instead of try-catch
+**File**: `control-plane/api/routes/domains.ts:383–384, 443–444`
+**Root cause**:
+```typescript
+await client.query('ROLLBACK').catch((rollbackError: Error) => {
+  logger.error('Rollback failed during PATCH', rollbackError);
+});
+```
+Using `.catch()` on an awaited promise is unusual and the `rollbackError` parameter is typed as `Error` without the catch convention requiring `unknown`. CLAUDE.md's pattern is an explicit try-catch in a finally block.
+**Fix**: Replace with `try { await client.query('ROLLBACK') } catch (e) { logger.error(...) }`.
 
 ### LOW-2: Inconsistent auth context access pattern
 **Root cause**: Routes use three different patterns:
@@ -318,11 +342,14 @@ Issues are ordered by priority. Each fix is self-contained and can be implemente
 
 | # | Issue | File(s) | Effort |
 |---|-------|---------|--------|
-| P4-1 | LOW-1: Add `.strict()` to 3 Zod schemas | `content.ts`, `publishing.ts` | XS |
+| P4-0 | HIGH-SSRF: Add `validateUrlWithDns()` to FacebookAdapter outbound calls | `FacebookAdapter.ts:62` | XS |
+| P4-1 | LOW-1: Add `.strict()` to 6 Zod schemas | `content.ts`, `publishing.ts`, `billing.ts`, `analytics.ts`, `affiliates.ts` | XS |
 | P4-2 | LOW-2: Standardize auth context access to `getAuthContext(req)` | All routes | S |
 | P4-3 | LOW-3: Use `parseResult.data.page` in search route | `search.ts:40` | XS |
 | P4-4 | LOW-4: Remove unreachable check in `UpdateDraft.validateInputs` | `UpdateDraft.ts:109` | XS |
 | P4-5 | LOW-5: Make orgId/domainId required in `listByStatus` | `PostgresContentRepository.ts:225` | S |
+| P4-6 | LOW-6: Fix `Promise<any>` in cache middleware | `cache.ts:79` | XS |
+| P4-7 | LOW-7: Fix `.catch()` rollback pattern in domains.ts | `domains.ts:383,443` | XS |
 
 ---
 
