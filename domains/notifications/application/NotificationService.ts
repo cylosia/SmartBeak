@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import { withSpan, addSpanAttributes } from '@packages/monitoring';
+import type { NotificationChannel } from '@packages/types/notifications';
 
 import { Notification, NotificationPayload } from '../domain/entities/Notification';
 import { NotificationRepository } from './ports/NotificationRepository';
@@ -13,16 +14,11 @@ import { NotificationRepository } from './ports/NotificationRepository';
 
 
 /**
-* Result type for create notification operation
+* Result type for create notification operation (discriminated union)
 */
-export interface CreateNotificationResult {
-  /** Whether operation succeeded */
-  success: boolean;
-  /** Created notification */
-  notification?: Notification;
-  /** Error message (if failed) */
-  error?: string;
-}
+export type CreateNotificationResult =
+  | { success: true; notification: Notification }
+  | { success: false; error: string };
 
 // ============================================================================
 // Notification Service
@@ -38,7 +34,7 @@ export class NotificationService {
   /** Maximum payload size in bytes (100KB) */
   private static readonly MAX_PAYLOAD_SIZE = 100 * 1024;
   /** Allowed channels whitelist */
-  private static readonly ALLOWED_CHANNELS = ['email', 'sms', 'push', 'webhook'];
+  private static readonly ALLOWED_CHANNELS: readonly NotificationChannel[] = ['email', 'sms', 'push', 'webhook'];
 
   /**
   * Create a new NotificationService
@@ -73,7 +69,7 @@ export class NotificationService {
   async create(
   orgId: string,
   userId: string,
-  channel: string,
+  channel: NotificationChannel,
   template: string,
   payload: NotificationPayload
   ): Promise<CreateNotificationResult> {
@@ -136,7 +132,7 @@ export class NotificationService {
   private validateInputs(
   orgId: string,
   userId: string,
-  channel: string,
+  channel: NotificationChannel,
   template: string,
   payload: NotificationPayload
   ): string | undefined {
@@ -156,11 +152,8 @@ export class NotificationService {
     return 'User ID must be between 1 and 255 characters';
   }
 
-  // Validate channel against whitelist
-  if (!channel || typeof channel !== 'string') {
-    return 'Channel is required and must be a string';
-  }
-  if (!NotificationService.ALLOWED_CHANNELS.includes(channel.toLowerCase())) {
+  // Validate channel against whitelist (defense-in-depth)
+  if (!NotificationService.ALLOWED_CHANNELS.includes(channel)) {
     return `Invalid channel '${channel}'. Allowed channels: ${NotificationService.ALLOWED_CHANNELS.join(', ')}`;
   }
 

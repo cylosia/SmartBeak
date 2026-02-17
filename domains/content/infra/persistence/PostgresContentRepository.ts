@@ -43,8 +43,8 @@ export interface ContentItemRow {
   domain_id: string;
   title: string;
   body: string;
-  status: string;
-  content_type: string;
+  status: ContentStatus;
+  content_type: ContentType;
   publish_at: Date | null;
   archived_at: Date | null;
   created_at: Date | null;

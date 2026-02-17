@@ -27,20 +27,25 @@ export interface Customer {
 }
 
 /**
-* Result type for customer operations
+* Result type for single-customer operations (getById, create, updateStatus)
 */
-export interface CustomerOperationResult {
-  /** Whether operation succeeded */
-  success: boolean;
-  /** Single customer (if applicable) */
-  customer?: Customer;
-  /** List of customers (if applicable) */
-  customers?: Customer[];
-  /** Total count for pagination */
-  totalCount?: number;
-  /** Error message (if failed) */
-  error?: string;
-}
+export type SingleCustomerResult =
+  | { success: true; customer: Customer }
+  | { success: false; error: string };
+
+/**
+* Result type for list operations (listByOrg)
+*/
+export type CustomerListResult =
+  | { success: true; customers: Customer[]; totalCount: number }
+  | { success: false; error: string };
+
+/**
+* Result type for delete operations
+*/
+export type CustomerDeleteResult =
+  | { success: true }
+  | { success: false; error: string };
 
 // ============================================================================
 // Customers Service
@@ -70,7 +75,7 @@ export class CustomersService {
   * @param id - Customer ID
   * @returns Promise resolving to the result of the operation
   */
-  async getById(id: string): Promise<CustomerOperationResult> {
+  async getById(id: string): Promise<SingleCustomerResult> {
   const validationError = this.validateId(id);
   if (validationError) {
     return { success: false, error: validationError };
@@ -110,7 +115,7 @@ export class CustomersService {
   orgId: string,
   page: number = 1,
   pageSize: number = CustomersService.DEFAULT_PAGE_SIZE
-  ): Promise<CustomerOperationResult> {
+  ): Promise<CustomerListResult> {
   // Validate orgId
   const orgError = this.validateId(orgId);
   if (orgError) {
@@ -144,11 +149,12 @@ export class CustomersService {
     'SELECT COUNT(*) FROM customers WHERE org_id = $1',
     [orgId]
     );
-    const _totalCount = parseInt(countResult.rows[0].count, 10);
+    const totalCount = parseInt(countResult.rows[0].count, 10);
 
     return {
     success: true,
     customers: rows.map(r => this.mapRowToCustomer(r)),
+    totalCount,
     };
   } catch (error) {
     return {
@@ -170,7 +176,7 @@ export class CustomersService {
   orgId: string,
   name: string,
   email: string
-  ): Promise<CustomerOperationResult> {
+  ): Promise<SingleCustomerResult> {
   // Validate inputs
   const validationError = this.validateCreateInputs(orgId, name, email);
   if (validationError) {
@@ -215,7 +221,7 @@ export class CustomersService {
   async updateStatus(
   id: string,
   status: 'active' | 'inactive' | 'suspended'
-  ): Promise<CustomerOperationResult> {
+  ): Promise<SingleCustomerResult> {
   const idError = this.validateId(id);
   if (idError) {
     return { success: false, error: idError };
@@ -254,7 +260,7 @@ export class CustomersService {
   * @param id - Customer ID
   * @returns Promise resolving to the result of the operation
   */
-  async delete(id: string): Promise<CustomerOperationResult> {
+  async delete(id: string): Promise<CustomerDeleteResult> {
   const validationError = this.validateId(id);
   if (validationError) {
     return { success: false, error: validationError };

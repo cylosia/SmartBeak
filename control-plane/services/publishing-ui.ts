@@ -1,14 +1,15 @@
 import { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 
-
+import type { PublishTargetType } from '@packages/types/publishing';
+import type { PublishingStatus } from '@domain/publishing/domain/entities/PublishingJob';
 
 /**
 * Publish target record
 */
 export interface PublishTarget {
   id: string;
-  type: string;
+  type: PublishTargetType;
   enabled: boolean;
   created_at: Date;
 }
@@ -20,7 +21,7 @@ export interface PublishingJobRecord {
   id: string;
   content_id: string;
   target_id: string;
-  status: string;
+  status: PublishingStatus;
   created_at: Date;
   published_at: Date | null;
 }
@@ -62,7 +63,7 @@ export class PublishingUIService {
   * @param config - Target configuration
   * @returns Promise resolving to create result
   */
-  async createTarget(domainId: string, type: string, config: unknown): Promise<CreateTargetResult> {
+  async createTarget(domainId: string, type: PublishTargetType, config: unknown): Promise<CreateTargetResult> {
   const id = randomUUID();
   await this.pool.query(
     `INSERT INTO publish_targets (id, domain_id, type, config)

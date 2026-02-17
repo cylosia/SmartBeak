@@ -3,9 +3,11 @@
 * Defines the contract for publishing to external platforms
 */
 
+import type { PublishTargetType } from '@packages/types/publishing';
+
 export interface PublishingTarget {
   id: string;
-  type: 'wordpress' | 'webhook' | 'api' | 'social';
+  type: PublishTargetType;
   name: string;
   config: Record<string, unknown>;
 }
@@ -20,17 +22,12 @@ export interface PublishingContent {
   meta?: Record<string, unknown>;
 }
 
-export interface PublishResult {
-  success: boolean;
-  publishedUrl?: string | undefined;
-  publishedId?: string | undefined;
-  error?: string | undefined;
-  timestamp: Date;
-  requestId?: string | undefined; // For request cancellation support
-}
+export type PublishResult =
+  | { success: true; publishedUrl?: string | undefined; publishedId?: string | undefined; timestamp: Date; requestId?: string | undefined }
+  | { success: false; error: string; timestamp: Date };
 
 export interface IPublishingAdapter {
-  readonly targetType: string;
+  readonly targetType: PublishTargetType;
 
   validateConfig(config: Record<string, unknown>): { valid: boolean; errors: string[] };
   publish(content: PublishingContent, target: PublishingTarget): Promise<PublishResult>;
@@ -43,7 +40,7 @@ export interface IPublishingAdapter {
 
 */
 export abstract class PublishingAdapter implements IPublishingAdapter {
-  abstract readonly targetType: string;
+  abstract readonly targetType: PublishTargetType;
 
   /**
   * Validate target configuration
