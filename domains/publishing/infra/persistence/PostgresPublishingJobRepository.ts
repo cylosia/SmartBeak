@@ -148,7 +148,7 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
     error_message, started_at, completed_at, attempt_count
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (id) DO UPDATE SET
-    status = EXCLUDED["status"],
+    status = EXCLUDED.status,
     error_message = EXCLUDED.error_message,
     started_at = EXCLUDED.started_at,
     completed_at = EXCLUDED.completed_at,
@@ -336,7 +336,7 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
     $6::text[], $7::timestamptz[], $8::timestamptz[], $9::int[]
     )
     ON CONFLICT (id) DO UPDATE SET
-    status = EXCLUDED["status"],
+    status = EXCLUDED.status,
     error_message = EXCLUDED.error_message,
     started_at = EXCLUDED.started_at,
     completed_at = EXCLUDED.completed_at,

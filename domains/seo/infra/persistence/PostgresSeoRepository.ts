@@ -229,7 +229,7 @@ export class PostgresSeoRepository implements SeoRepository {
     `INSERT INTO seo_documents (id, title, description, updated_at)
     SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[])
     ON CONFLICT (id) DO UPDATE SET
-    title = EXCLUDED["title"],
+    title = EXCLUDED.title,
     description = EXCLUDED.description,
     updated_at = EXCLUDED.updated_at`,
     [

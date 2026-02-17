@@ -124,7 +124,7 @@ export class PostgresNotificationRepository implements NotificationRepository {
     channel = EXCLUDED.channel,
     template = EXCLUDED.template,
     payload = EXCLUDED.payload,
-    status = EXCLUDED["status"],
+    status = EXCLUDED.status,
     updated_at = now()`,
     [
     notification["id"],
@@ -347,7 +347,7 @@ export class PostgresNotificationRepository implements NotificationRepository {
     channel = EXCLUDED.channel,
     template = EXCLUDED.template,
     payload = EXCLUDED.payload,
-    status = EXCLUDED["status"],
+    status = EXCLUDED.status,
     updated_at = now()`,
     [
     notifications.map(n => n["id"]),
