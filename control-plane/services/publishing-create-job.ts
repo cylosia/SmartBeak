@@ -1,6 +1,8 @@
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 
+import { NotFoundError } from '@errors';
+
 
 
 /**
@@ -46,7 +48,7 @@ export class PublishingCreateJobService {
     );
     if (!content.rows[0]) {
     await client.query('ROLLBACK');
-    throw new Error('Content not found');
+    throw NotFoundError.content();
     }
 
     // Validate target exists
@@ -56,7 +58,7 @@ export class PublishingCreateJobService {
     );
     if (!target.rows[0]) {
     await client.query('ROLLBACK');
-    throw new Error('Publish target not found');
+    throw new NotFoundError('Publish target');
     }
 
     const jobId = randomUUID();

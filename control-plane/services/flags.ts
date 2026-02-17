@@ -2,6 +2,8 @@
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { ValidationError } from '@errors';
+
 const FlagKeySchema = z.string()
   .min(1, 'Flag key is required')
   .max(100, 'Flag key must be 100 characters or less')
@@ -12,7 +14,7 @@ const FlagValueSchema = z.boolean();
 function validateFlagKey(key: unknown): string {
   const result = FlagKeySchema.safeParse(key);
   if (!result.success) {
-  throw new Error(`Invalid flag key: ${result["error"].message}`);
+  throw new ValidationError(`Invalid flag key: ${result["error"].message}`);
   }
   return result.data;
 }
@@ -20,7 +22,7 @@ function validateFlagKey(key: unknown): string {
 function validateFlagValue(value: unknown): boolean {
   const result = FlagValueSchema.safeParse(value);
   if (!result.success) {
-  throw new Error(`Invalid flag value: ${result["error"].message}`);
+  throw new ValidationError(`Invalid flag value: ${result["error"].message}`);
   }
   return result.data;
 }

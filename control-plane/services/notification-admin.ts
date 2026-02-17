@@ -1,6 +1,8 @@
 
 import { Pool } from 'pg';
 
+import { ValidationError, NotFoundError } from '@errors';
+
 /**
  * Notification Admin Service
  * 
@@ -55,7 +57,7 @@ export class NotificationAdminService {
   async listNotifications(orgId: string, limit = 100, offset = 0): Promise<Notification[]> {
     // SECURITY FIX: Validate orgId
     if (!orgId) {
-      throw new Error('Organization ID is required');
+      throw new ValidationError('Organization ID is required');
     }
 
     const safeLimit = Math.min(Math.max(1, limit), 1000);
@@ -85,10 +87,10 @@ export class NotificationAdminService {
   async retry(notificationId: string, orgId: string): Promise<{ ok: boolean }> {
     // SECURITY FIX: Validate inputs
     if (!notificationId) {
-      throw new Error('Notification ID is required');
+      throw new ValidationError('Notification ID is required');
     }
     if (!orgId) {
-      throw new Error('Organization ID is required');
+      throw new ValidationError('Organization ID is required');
     }
 
     // P1-FIX: Atomic ownership check + status guard in a single UPDATE.
@@ -102,7 +104,7 @@ export class NotificationAdminService {
       [notificationId, orgId]
     );
     if (!rowCount) {
-      throw new Error('Notification not found, access denied, or not in failed state');
+      throw new NotFoundError('Notification');
     }
     return { ok: true };
   }
@@ -117,7 +119,7 @@ export class NotificationAdminService {
   async metrics(orgId: string): Promise<NotificationMetrics> {
     // SECURITY FIX: Validate orgId
     if (!orgId) {
-      throw new Error('Organization ID is required');
+      throw new ValidationError('Organization ID is required');
     }
 
     const { rows } = await this.pool.query(
@@ -165,7 +167,7 @@ export class NotificationAdminService {
    */
   async cancel(notificationId: string, orgId: string): Promise<{ ok: boolean }> {
     if (!notificationId || !orgId) {
-      throw new Error('Notification ID and Organization ID are required');
+      throw new ValidationError('Notification ID and Organization ID are required');
     }
 
     // P1-FIX: Atomic ownership check + status guard in single UPDATE (eliminates TOCTOU race).
@@ -177,7 +179,7 @@ export class NotificationAdminService {
     );
 
     if (!rowCount) {
-      throw new Error('Notification not found, access denied, or not in pending state');
+      throw new NotFoundError('Notification');
     }
     return { ok: true };
   }

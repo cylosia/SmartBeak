@@ -8,6 +8,7 @@ import { requireRole, type Role } from '../../services/auth';
 import { NotificationAdminService } from '../../services/notification-admin';
 import { rateLimit } from '../../services/rate-limit';
 import { sanitizeErrorMessage } from '../../../packages/security/logger';
+import { NotFoundError, ValidationError } from '@errors';
 import { errors } from '@errors/responses';
 import { isValidUUID } from '../../../packages/security/input-validator';
 
@@ -72,14 +73,13 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       const result = await admin.retry(id, ctx["orgId"]);
       return res.send(result);
     } catch (error) {
-      // SECURITY FIX: Issue 22 - Sanitize error messages
-      const errorMessage = error instanceof Error ? error.message : 'Failed to retry notification';
-      const sanitizedError = sanitizeErrorMessage(errorMessage);
-      logger.error(`[admin/notifications/:id/retry] Error: ${sanitizedError}`);
+      logger.error('[admin/notifications/:id/retry] Error', error instanceof Error ? error : new Error(String(error)));
 
-      // Don't expose internal errors to client
-      if (errorMessage.includes('not found') || errorMessage.includes('access denied')) {
+      if (error instanceof NotFoundError) {
         return errors.notFound(res, 'Notification');
+      }
+      if (error instanceof ValidationError) {
+        return errors.badRequest(res, error.message);
       }
 
       return errors.internal(res, 'Failed to retry notification');
@@ -154,13 +154,13 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       const result = await admin.cancel(id, ctx["orgId"]);
       return res.send(result);
     } catch (error) {
-      // SECURITY FIX: Issue 22 - Sanitize error messages
-      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel notification';
-      const sanitizedError = sanitizeErrorMessage(errorMessage);
-      logger.error(`[admin/notifications/:id/cancel] Error: ${sanitizedError}`);
+      logger.error('[admin/notifications/:id/cancel] Error', error instanceof Error ? error : new Error(String(error)));
 
-      if (errorMessage.includes('not found') || errorMessage.includes('access denied')) {
+      if (error instanceof NotFoundError) {
         return errors.notFound(res, 'Notification');
+      }
+      if (error instanceof ValidationError) {
+        return errors.badRequest(res, error.message);
       }
 
       return errors.internal(res, 'Failed to cancel notification');

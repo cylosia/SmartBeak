@@ -4,6 +4,7 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { ValidationError, DatabaseError, ConflictError, NotFoundError } from '@errors';
 
 import { ContentItem, ContentStatus, ContentType } from '../../domain/entities/ContentItem';
 import { ContentRepository } from '../../application/ports/ContentRepository';
@@ -19,7 +20,7 @@ const VALID_CONTENT_TYPES: ContentType[] = ['article', 'page', 'product', 'revie
 */
 function validateStatus(status: string): ContentStatus {
   if (!VALID_STATUSES.includes(status as ContentStatus)) {
-  throw new Error(`Invalid content status: ${status}`);
+  throw new ValidationError(`Invalid content status: ${status}`);
   }
   return status as ContentStatus;
 }
@@ -29,7 +30,7 @@ function validateStatus(status: string): ContentStatus {
 */
 function validateContentType(type: string): ContentType {
   if (!VALID_CONTENT_TYPES.includes(type as ContentType)) {
-  throw new Error(`Invalid content type: ${type}`);
+  throw new ValidationError(`Invalid content type: ${type}`);
   }
   return type as ContentType;
 }
@@ -140,10 +141,10 @@ export class PostgresContentRepository implements ContentRepository {
     if (error instanceof Error) {
     const pgError = error as Error & { code?: string };
     if (pgError.code === 'ECONNREFUSED' || pgError.code === '08000' || pgError.code === '08003') {
-    throw new Error('Database connection failed. Please try again later.');
+    throw new DatabaseError('Database connection failed. Please try again later.');
     }
     if (pgError.code === '57014' || error.message.includes('timeout')) {
-    throw new Error('Database query timed out. Please try again.');
+    throw new DatabaseError('Database query timed out. Please try again.');
     }
     }
 
@@ -200,15 +201,15 @@ export class PostgresContentRepository implements ContentRepository {
     const pgError = error as Error & { code?: string };
     // 23505 = unique_violation
     if (pgError.code === '23505') {
-    throw new Error('Content item with this ID already exists.');
+    throw new ConflictError('Content item with this ID already exists.');
     }
     // 23503 = foreign_key_violation
     if (pgError.code === '23503') {
-    throw new Error('Referenced domain does not exist.');
+    throw new NotFoundError('Referenced domain');
     }
     // 23514 = check_violation
     if (pgError.code === '23514') {
-    throw new Error('Invalid data: check constraint violation.');
+    throw new ValidationError('Invalid data: check constraint violation.');
     }
     }
 
@@ -368,7 +369,7 @@ export class PostgresContentRepository implements ContentRepository {
     // Handle foreign key constraint violations using PostgreSQL error code
     const pgError = error as Error & { code?: string };
     if (error instanceof Error && pgError.code === '23503') {
-    throw new Error('Cannot delete content item: it has associated records (revisions, etc.).');
+    throw new ConflictError('Cannot delete content item: it has associated records');
     }
 
     throw error;
