@@ -37,7 +37,7 @@ export class PostgresSeoRepository implements SeoRepository {
   }
   try {
     const { rows } = await this.pool.query(
-    `SELECT id, title, description, updated_at as 'updatedAt'
+    `SELECT id, title, description, updated_at as "updatedAt"
     FROM seo_documents
     WHERE id = $1`,
     [id]
@@ -113,7 +113,7 @@ export class PostgresSeoRepository implements SeoRepository {
 
   try {
     const { rows } = await this.pool.query(
-    `SELECT id, title, description, updated_at as 'updatedAt'
+    `SELECT id, title, description, updated_at as "updatedAt"
     FROM seo_documents
     ORDER BY updated_at DESC
     LIMIT $1 OFFSET $2`,
@@ -161,7 +161,7 @@ export class PostgresSeoRepository implements SeoRepository {
     // P1-FIX: Added ESCAPE clause for proper wildcard escaping
     // The sanitizeSearchQuery method escapes % and _ with backslash
     const { rows } = await this.pool.query(
-    `SELECT id, title, description, updated_at as 'updatedAt'
+    `SELECT id, title, description, updated_at as "updatedAt"
     FROM seo_documents
     WHERE title ILIKE $1 ESCAPE '\\'
     ORDER BY updated_at DESC
