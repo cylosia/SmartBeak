@@ -250,11 +250,7 @@ export class Container {
     };
   }
 
-  const adapter = new FacebookAdapter(token);
-  if (typeof (adapter as unknown as PublishAdapter).publish !== 'function') {
-    throw new Error('FacebookAdapter does not implement PublishAdapter interface');
-  }
-  return adapter as unknown as PublishAdapter;
+  return new FacebookAdapter(token);
   }
 
   /**
@@ -301,22 +297,14 @@ export class Container {
     if (!fbConfig.pageAccessToken) {
     throw new Error('Facebook adapter requires pageAccessToken');
     }
-    const fbAdapter = new FacebookAdapter(fbConfig.pageAccessToken);
-    if (typeof (fbAdapter as unknown as PublishAdapter).publish !== 'function') {
-    throw new Error('FacebookAdapter does not implement PublishAdapter interface');
-    }
-    return fbAdapter as unknown as PublishAdapter;
+    return new FacebookAdapter(fbConfig.pageAccessToken);
     }
     case 'linkedin': {
     const liConfig = config as { accessToken?: string };
     if (!liConfig.accessToken) {
     throw new Error('LinkedIn adapter requires accessToken');
     }
-    const liAdapter = new LinkedInAdapter(liConfig.accessToken);
-    if (typeof (liAdapter as unknown as PublishAdapter).publish !== 'function') {
-    throw new Error('LinkedInAdapter does not implement PublishAdapter interface');
-    }
-    return liAdapter as unknown as PublishAdapter;
+    return new LinkedInAdapter(liConfig.accessToken);
     }
     default:
     throw new Error(`Unknown adapter type: ${targetType}`);

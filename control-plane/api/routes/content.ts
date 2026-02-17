@@ -154,7 +154,8 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     `SELECT COUNT(*) FROM (${query}) as count_query`,
     params  // P0-FIX: Pass params to count query to ensure tenant isolation
     );
-    const total = parseInt(countResult.rows[0].count, 10);
+    const countRow = countResult.rows[0] as { count: string } | undefined;
+    const total = countRow ? parseInt(countRow.count, 10) : 0;
 
     // Add pagination
     query += ` ORDER BY c.updated_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;

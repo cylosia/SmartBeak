@@ -70,9 +70,8 @@ export class MembershipService {
   }
   }
 
-  async addMember(orgId: string, userId: string, role: string): Promise<void> {
+  async addMember(orgId: string, userId: string, role: Role): Promise<void> {
   // Validate inputs
-  this.validateRole(role);
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
@@ -107,9 +106,8 @@ export class MembershipService {
   }
   }
 
-  async updateRole(orgId: string, userId: string, role: string): Promise<void> {
+  async updateRole(orgId: string, userId: string, role: Role): Promise<void> {
   // Validate inputs
-  this.validateRole(role);
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }

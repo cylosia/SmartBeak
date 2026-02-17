@@ -416,7 +416,8 @@ export class AuditLogger extends EventEmitter {
     `SELECT COUNT(*) as total FROM audit_logs WHERE ${whereClause}`,
     countParamsCopy,
   );
-  const total = parseInt(countResult.rows[0].total);
+  const totalRow = countResult.rows[0] as { total: string } | undefined;
+  const total = totalRow ? parseInt(totalRow.total, 10) : 0;
 
   // Get events
   let query_sql = `SELECT * FROM audit_logs WHERE ${whereClause} ORDER BY timestamp DESC`;

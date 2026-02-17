@@ -92,7 +92,8 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     FROM notifications WHERE user_id = $1`,
     [ctx.userId]
     );
-    total = parseInt(countResult.rows[0].total, 10);
+    const totalRow = countResult.rows[0] as { total: string } | undefined;
+    total = totalRow ? parseInt(totalRow.total, 10) : 0;
 
     await client.query('COMMIT');
     } catch (txError) {

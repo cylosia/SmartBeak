@@ -92,13 +92,12 @@ export class InviteService {
   }
   }
 
-  async invite(orgId: string, email: string, role: string) {
+  async invite(orgId: string, email: string, role: Role) {
   // Validate inputs
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
   this.validateEmail(email);
-  this.validateRole(role);
 
   const id = randomUUID();
   const normalizedEmail = email.toLowerCase().trim();

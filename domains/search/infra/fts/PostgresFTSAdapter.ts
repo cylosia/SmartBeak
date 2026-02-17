@@ -18,8 +18,13 @@ function sanitizeForTS(text: string): string {
   return sanitized.substring(0, 10000);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildWeightedTSVector(fields: Record<string, any>) {
+export interface TSVectorFields {
+  title?: string;
+  body?: string;
+  [key: string]: unknown;
+}
+
+export function buildWeightedTSVector(fields: TSVectorFields) {
   const rawTitle = typeof fields["title"] === 'string' ? fields["title"] : '';
   const rawBody = typeof fields["body"] === 'string' ? fields["body"] : '';
   return {
