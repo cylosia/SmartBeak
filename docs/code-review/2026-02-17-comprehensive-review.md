@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The SmartBeak codebase has a well-structured monorepo architecture with strong TypeScript conventions and good security primitives. However, the review uncovered **5 critical functional bugs** (routes that are completely broken or return wrong data), **5 high-severity security issues**, and **15+ medium/low issues** covering error handling, rate limiting correctness, TypeScript violations, and code quality.
+The SmartBeak codebase has a well-structured monorepo architecture with strong TypeScript conventions and good security primitives. However, the review uncovered **8 critical functional bugs** (routes/domain logic that are completely broken or produce silent data loss), **5 high-severity security issues**, and **20+ medium/low issues** covering error handling, rate limiting correctness, TypeScript violations, transaction safety, and code quality.
 
 Issues are grouped by severity and tagged with affected files and line numbers.
 
@@ -47,9 +47,50 @@ updates.title = _title;
 updates.body  = _body;
 ```
 
+### CRIT-6: `PublishingService.publish()` has non-atomic race condition
+**File**: `domains/publishing/application/PublishingService.ts:76–156`
+**Root cause**: The service opens a transaction but queries `publish_targets` via direct `client.query()` instead of using `PublishTargetRepository`. The target result parsing only extracts `id` and `domainId`, missing `type`, `config`, and `enabled`. The repository `.save()` call happens outside the transaction boundary. Two concurrent publishes for the same target can proceed simultaneously.
+**Fix**: Pass `client` to the target repository lookup and move the `.save()` call inside the `BEGIN`/`COMMIT` block.
+
+### CRIT-7: `PublishingWorker.process()` has broken transaction state machine
+**File**: `domains/publishing/application/PublishingWorker.ts:68–206`
+**Root cause**: The method opens a transaction at line ~96 (`BEGIN`), commits it at line ~121 (`COMMIT`), then opens a second transaction at line ~135 (`BEGIN`) inside a catch block. If the first `COMMIT` succeeds but external publishing fails, the second `BEGIN` starts a new transaction that may never be committed or rolled back correctly. The `ROLLBACK` in the outer finally clause fires against the already-committed first transaction.
+**Fix**: Redesign as a single atomic transaction or use explicit savepoints; do not re-open transactions inside catch blocks.
+
+### CRIT-8: `PublishingJobRepository.listByDomain()` references non-existent column
+**File**: `domains/publishing/infra/persistence/PostgresPublishingJobRepository.ts:228`
+**Root cause**: `ORDER BY created_at DESC` — there is no `created_at` column on `publishing_jobs`. This query throws a PostgreSQL column-not-found error for every call to `listByDomain()`.
+**Fix**: Use the correct timestamp column (check the migration file for the actual column name, likely `started_at` or remove the ORDER BY).
+
 ---
 
 ## High Severity — Security Issues
+
+### HIGH-1-DOM: `PublishingJob.retry()` resets `attemptCount` to 0
+**File**: `domains/publishing/domain/entities/PublishingJob.ts:134–145`
+**Root cause**:
+```typescript
+retry(): PublishingJob {
+  return new PublishingJob({ ...this.state, status: 'pending', attemptCount: 0 });
+}
+```
+After a failed attempt (`attemptCount: 1`), calling `retry()` resets the counter to 0. `start()` increments it back to 1 on next processing, making it impossible to distinguish first attempts from retries. Max-retry enforcement becomes unreliable.
+**Fix**: Preserve the current `attemptCount`: `attemptCount: this.state.attemptCount`.
+
+### HIGH-2-DOM: `ContentRevision.getSize()` and `.hasContent()` throw on null/empty body
+**File**: `domains/content/domain/entities/ContentRevision.ts:48–57`
+**Root cause**: `Buffer.byteLength(this["body"], 'utf8')` and `this["body"].trim().length` — neither guards against `null` or `undefined` body. Any revision persisted with a null body (e.g. from a migration) will throw a runtime error when these accessors are called.
+**Fix**: Add null guards: `if (!this["body"]) return 0` / `if (!this["body"]) return false`.
+
+### HIGH-3-DOM: `ContentRepository.listByStatus()` port/implementation type mismatch
+**File**: `domains/content/application/ports/ContentRepository.ts:49–56`
+**Root cause**: The interface declares `listByStatus(...): Promise<(ContentItem | null)[]>`, implying callers must handle nulls. The `PostgresContentRepository` implementation filters nulls out and returns `ContentItem[]`. Callers who trust the interface and skip null checks would be fine today, but if the implementation changes, they silently break. The interface contract should match the implementation.
+**Fix**: Update the interface to `Promise<ContentItem[]>` to match the implementation's actual guarantee.
+
+### HIGH-4-DOM: `PublishTargetRepository` port lacks transaction support
+**File**: `domains/publishing/application/ports/PublishTargetRepository.ts:12–51`
+**Root cause**: All four methods (`listEnabled`, `save`, `getById`, `delete`) have no `client?: PoolClient` parameter, unlike `PublishingJobRepository` which does. This prevents multi-repository atomic operations: `PublishingService.publish()` cannot atomically read the target and write the job in one transaction.
+**Fix**: Add optional `client?: PoolClient` to all four methods and update `PostgresPublishTargetRepository` accordingly.
 
 ### HIGH-1: Unsafe `req.auth as AuthContext` cast (no type guard)
 **Files**:
@@ -90,6 +131,38 @@ The canonical safe pattern is already defined in `control-plane/api/types.ts:32�
 ---
 
 ## Medium Severity — Bugs & Policy Violations
+
+### MED-DOM-1: `PublishingWorker` lacks idempotency key — risk of double-publish
+**File**: `domains/publishing/application/PublishingWorker.ts:68`
+**Root cause**: Two workers processing the same `jobId` concurrently can both reach the `adapter.publish()` call. The `FOR UPDATE` lock prevents duplicate DB writes but does not prevent two external API calls if both workers win the race before the lock is set. The `publishExecutionJob` function in `apps/api` uses a distributed Redis lock (`redlock`), but `PublishingWorker.process()` does not.
+**Fix**: Acquire a distributed lock on `job-lock:{jobId}` before beginning processing.
+
+### MED-DOM-2: Hardcoded empty `correlationId` in domain events
+**Files**:
+- `domains/content/domain/events/ContentScheduled.ts`
+- `domains/publishing/domain/events/PublishingStarted.ts`
+
+**Root cause**: `meta: { correlationId: '', domainId: 'content', source: 'domain' }` — `correlationId` is always an empty string. Distributed traces cannot be correlated across services.
+**Fix**: Thread the request-scoped correlation ID (from `@kernel/request-context`) through the command handlers into the event factory methods.
+
+### MED-DOM-3: `PublishingWorker` transactions missing `statement_timeout`
+**File**: `domains/publishing/application/PublishingWorker.ts:96`
+**Root cause**: Opens `BEGIN ISOLATION LEVEL READ COMMITTED` without `SET LOCAL statement_timeout`. The canonical `withTransaction` helper in `packages/database/transactions/index.ts:95` always sets a 30 s timeout after `BEGIN`. Inconsistent usage can lead to long-running queries blocking connection pool slots.
+**Fix**: Add `await client.query('SET LOCAL statement_timeout = $1', [30000])` after every `BEGIN`.
+
+### MED-DOM-4: Duplicate validation block in `PublishingWorker.validateInputs()`
+**File**: `domains/publishing/application/PublishingWorker.ts:211–220`
+**Root cause**: The `jobId` null/type check is written twice in sequence. The second copy is dead code.
+**Fix**: Remove the duplicate block.
+
+### MED-DOM-5: Unused `_logger` variables in domain handlers
+**Files**:
+- `domains/content/application/handlers/PublishContent.ts:7`
+- `domains/content/application/handlers/ScheduleContent.ts:7`
+- `domains/content/application/handlers/UpdateDraft.ts:6`
+
+**Root cause**: `const _logger = getLogger('...')` — declared but never referenced. The logger import adds a module dependency for no benefit.
+**Fix**: Remove the declarations or use them for operation logging.
 
 ### MED-1: `POST /content` runs auth before rate limit (reversed order)
 **File**: `control-plane/api/routes/content.ts:196–199`
@@ -205,29 +278,41 @@ Issues are ordered by priority. Each fix is self-contained and can be implemente
 | P1-3 | CRIT-3: Fix table name `content` → `content_items` in analytics | `analytics.ts:37` | XS |
 | P1-4 | CRIT-4: Return `results` in search response | `search.ts:49–58` | XS |
 | P1-5 | CRIT-5: Apply title/body in `updateDraft()` | `ContentItem.ts:134–145` | XS |
+| P1-6 | CRIT-6: Fix non-atomic race in `PublishingService.publish()` | `PublishingService.ts:76–156` | M |
+| P1-7 | CRIT-7: Fix broken transaction state machine in `PublishingWorker.process()` | `PublishingWorker.ts:68–206` | M |
+| P1-8 | CRIT-8: Fix invalid SQL column `created_at` in `listByDomain()` | `PostgresPublishingJobRepository.ts:228` | XS |
 
-### Phase 2 — High Security Fixes
+### Phase 2 — High Severity Fixes (security + domain correctness)
 
 | # | Issue | File(s) | Effort |
 |---|-------|---------|--------|
-| P2-1 | HIGH-1: Replace bare `req.auth as AuthContext` with `getAuthContext(req)` | `seo.ts`, `search.ts`, `roi-risk.ts` | XS |
-| P2-2 | HIGH-2: Add Zod validation for `assetId` param | `roi-risk.ts:29` | XS |
-| P2-3 | HIGH-3: Scope rate limit keys to user/IP | `publishing.ts`, `search.ts`, `seo.ts`, `roi-risk.ts`, `diligence.ts` | S |
-| P2-4 | HIGH-4: Add try/catch to three publishing routes | `publishing.ts:27–68` | XS |
-| P2-5 | HIGH-5: Add try/catch to analytics route | `analytics.ts:21–45` | XS |
+| P2-1 | HIGH-1-DOM: Fix `retry()` to preserve `attemptCount` | `PublishingJob.ts:140` | XS |
+| P2-2 | HIGH-2-DOM: Add null guards to `ContentRevision.getSize/hasContent` | `ContentRevision.ts:48–57` | XS |
+| P2-3 | HIGH-3-DOM: Align `ContentRepository` port return type to `ContentItem[]` | `ContentRepository.ts:49` | XS |
+| P2-4 | HIGH-4-DOM: Add `client?` param to all `PublishTargetRepository` methods | `PublishTargetRepository.ts`, infra impl | S |
+| P2-5 | HIGH-1: Replace bare `req.auth as AuthContext` with `getAuthContext(req)` | `seo.ts`, `search.ts`, `roi-risk.ts` | XS |
+| P2-6 | HIGH-2: Add Zod validation for `assetId` param | `roi-risk.ts:29` | XS |
+| P2-7 | HIGH-3: Scope rate limit keys to user/IP | `publishing.ts`, `search.ts`, `seo.ts`, `roi-risk.ts`, `diligence.ts` | S |
+| P2-8 | HIGH-4: Add try/catch to three publishing routes | `publishing.ts:27–68` | XS |
+| P2-9 | HIGH-5: Add try/catch to analytics route | `analytics.ts:21–45` | XS |
 
 ### Phase 3 — Medium Fixes
 
 | # | Issue | File(s) | Effort |
 |---|-------|---------|--------|
-| P3-1 | MED-1: Move rate limit before auth on write content routes | `content.ts:196–411` | XS |
-| P3-2 | MED-2: Replace `.parse()` + cast with `.safeParse()` in content.ts | `content.ts:212–325` | S |
-| P3-3 | MED-3: Add `total` to pagination responses | `content.ts:184`, `notifications.ts:112` | XS |
-| P3-4 | MED-4: Sanitize handler error messages | `CreateDraft.ts:71`, `UpdateDraft.ts:88` | XS |
-| P3-5 | MED-5: Replace `console.log` with structured logger | 7 files | S |
-| P3-6 | MED-6: Fix SEO rate limit namespace | `seo.ts:48` | XS |
-| P3-7 | MED-7: Remove hardcoded fallback data in roi-risk | `roi-risk.ts:100–108` | XS |
-| P3-8 | MED-8: Eliminate double-fetch in PATCH /content/:id | `content.ts:330–343` | M |
+| P3-1 | MED-DOM-1: Add distributed lock to `PublishingWorker` | `PublishingWorker.ts:68` | S |
+| P3-2 | MED-DOM-2: Thread `correlationId` into domain events | `ContentScheduled.ts`, `PublishingStarted.ts` | S |
+| P3-3 | MED-DOM-3: Add `statement_timeout` after every `BEGIN` in worker | `PublishingWorker.ts:96` | XS |
+| P3-4 | MED-DOM-4: Remove duplicate validation block | `PublishingWorker.ts:211` | XS |
+| P3-5 | MED-DOM-5: Remove or use `_logger` in domain handlers | 3 handler files | XS |
+| P3-6 | MED-1: Move rate limit before auth on write content routes | `content.ts:196–411` | XS |
+| P3-7 | MED-2: Replace `.parse()` + cast with `.safeParse()` in content.ts | `content.ts:212–325` | S |
+| P3-8 | MED-3: Add `total` to pagination responses | `content.ts:184`, `notifications.ts:112` | XS |
+| P3-9 | MED-4: Sanitize handler error messages | `CreateDraft.ts:71`, `UpdateDraft.ts:88` | XS |
+| P3-10 | MED-5: Replace `console.log` with structured logger | 7 files | S |
+| P3-11 | MED-6: Fix SEO rate limit namespace | `seo.ts:48` | XS |
+| P3-12 | MED-7: Remove hardcoded fallback data in roi-risk | `roi-risk.ts:100–108` | XS |
+| P3-13 | MED-8: Eliminate double-fetch in PATCH /content/:id | `content.ts:330–343` | M |
 
 ### Phase 4 — Low Priority Cleanup
 
@@ -248,11 +333,13 @@ Issues are ordered by priority. Each fix is self-contained and can be implemente
 
 ## Files Requiring the Most Attention
 
-1. `control-plane/api/routes/content.ts` — P1-5, MED-1, MED-2, MED-3
-2. `control-plane/api/routes/publishing.ts` — CRIT-1, HIGH-3, HIGH-4
-3. `control-plane/api/routes/search.ts` — CRIT-4, HIGH-1, HIGH-3
-4. `domains/content/domain/entities/ContentItem.ts` — CRIT-5
-5. `control-plane/api/routes/analytics.ts` — CRIT-3, HIGH-5
+1. `domains/publishing/application/PublishingWorker.ts` — CRIT-7, MED-DOM-1, MED-DOM-3, MED-DOM-4
+2. `domains/publishing/application/PublishingService.ts` — CRIT-6
+3. `control-plane/api/routes/content.ts` — CRIT-5, MED-1, MED-2, MED-3
+4. `control-plane/api/routes/publishing.ts` — CRIT-1, HIGH-3, HIGH-4
+5. `control-plane/api/routes/search.ts` — CRIT-4, HIGH-1, HIGH-3
+6. `domains/publishing/application/ports/PublishTargetRepository.ts` — HIGH-4-DOM
+7. `control-plane/api/routes/analytics.ts` — CRIT-3, HIGH-5
 
 ---
 
