@@ -34,7 +34,7 @@ export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
 
   // SECURITY FIX: Verify content ownership before returning stats
   const { rows } = await pool.query(
-    'SELECT 1 FROM content c JOIN domains d ON c.domain_id = d["id"] WHERE c["id"] = $1 AND d.org_id = $2',
+    'SELECT 1 FROM content c JOIN domains d ON c.domain_id = d.id WHERE c.id = $1 AND d.org_id = $2',
     [id, ctx["orgId"]]
   );
   if (rows.length === 0) {

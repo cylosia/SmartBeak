@@ -6,6 +6,7 @@ import { getLogger } from '../../packages/kernel/logger';
 import { ServiceUnavailableError } from '@errors';
 
 import { BillingService } from './billing';
+import { createPaymentGateway } from './stripe';
 import { CostTracker } from '../../packages/monitoring/costTracker';
 import { DeliveryAdapter } from '../../domains/notifications/application/ports/DeliveryAdapter';
 import { DomainOwnershipService } from './domain-ownership';
@@ -127,7 +128,7 @@ export class Container {
   * Core Services
   */
   get billingService(): BillingService {
-  return this.get('billingService', () => new BillingService(this.db));
+  return this.get('billingService', () => new BillingService(this.db, createPaymentGateway()));
   }
 
   get costTracker(): CostTracker {

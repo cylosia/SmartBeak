@@ -18,12 +18,15 @@ const TokenParamSchema = z.object({
 export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /diligence/:token/overview - Get diligence overview for buyer
   app.get('/diligence/:token/overview', async (req, res) => {
-  // P1-4 FIX: Validate token BEFORE rate limiting to prevent attackers from
-  // burning the global rate limit budget with invalid tokens
-  const { token } = TokenParamSchema.parse(req.params);
-  await rateLimit('diligence', 30);
-
   try {
+    // C1-FIX: parse and rateLimit moved inside try so Zod/Redis errors
+    // return a structured 400 instead of crashing the process.
+    const tokenResult = TokenParamSchema.safeParse(req.params);
+    if (!tokenResult.success) {
+      return errors.badRequest(res, 'Invalid token format');
+    }
+    const { token } = tokenResult.data;
+    await rateLimit('diligence', 30);
     // Validate token and get domain info
     const { rows } = await pool.query(
     'SELECT domain_id, expires_at FROM diligence_tokens WHERE token = $1 AND expires_at > NOW()',
@@ -89,11 +92,14 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
 
   // GET /diligence/:token/affiliate-revenue - Get affiliate revenue breakdown
   app.get('/diligence/:token/affiliate-revenue', async (req, res) => {
-  // P1-4 FIX: Validate before rate limiting
-  const { token } = TokenParamSchema.parse(req.params);
-  await rateLimit('diligence', 30);
-
   try {
+    // C1-FIX: parse and rateLimit moved inside try so Zod/Redis errors return 400.
+    const tokenResult = TokenParamSchema.safeParse(req.params);
+    if (!tokenResult.success) {
+      return errors.badRequest(res, 'Invalid token format');
+    }
+    const { token } = tokenResult.data;
+    await rateLimit('diligence', 30);
     // Validate token
     const { rows } = await pool.query(
     'SELECT domain_id FROM diligence_tokens WHERE token = $1 AND expires_at > NOW()',

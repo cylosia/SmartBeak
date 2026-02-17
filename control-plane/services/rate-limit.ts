@@ -1,7 +1,7 @@
 import { LRUCache } from 'lru-cache';
 
 import { getLogger } from '@kernel/logger';
-import { getClientIp as kernelGetClientIp, isValidIp as _kernelIsValidIp } from '@kernel/ip-utils';
+import { getClientIp as kernelGetClientIp } from '@kernel/ip-utils';
 
 import { RedisRateLimiter, getRateLimitConfig } from './rate-limiter-redis';
 
@@ -123,7 +123,7 @@ export function rateLimit(identifier: string, limit = DEFAULT_RATE_LIMIT, namesp
   const namespace = typeof namespaceOrReq === 'string' ? namespaceOrReq : 'global';
   const now = Date.now();
   // SECURITY FIX: Issue 3 - Add namespace prefix to prevent key collision attacks
-  const key = buildRateLimitKey(identifier, namespace!);
+  const key = buildRateLimitKey(identifier, namespace);
   const entry = memoryCounters.get(key) ?? { count: 0, reset: now + DEFAULT_WINDOW_MS };
 
   if (now > entry.reset) {

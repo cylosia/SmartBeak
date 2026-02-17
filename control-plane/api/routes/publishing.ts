@@ -7,7 +7,8 @@ import { z } from 'zod';
 
 import { PublishingUIService } from '../../services/publishing-ui';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, type AuthContext } from '../../services/auth';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
@@ -24,10 +25,8 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   const svc = new PublishingUIService(pool);
 
   app.get('/publishing/targets', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
+  // M7-FIX: Use getAuthContext() instead of unsafe req.auth cast.
+  const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor']);
   await rateLimit('publishing', 50);
 
@@ -39,10 +38,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   });
 
   app.post('/publishing/targets', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
+  const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin']);
   await rateLimit('publishing', 30);
 
@@ -60,10 +56,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   });
 
   app.get('/publishing/jobs', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
+  const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor']);
   await rateLimit('publishing', 50);
 
@@ -75,10 +68,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   });
 
   app.get('/publishing/jobs/:id', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
+  const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor']);
   await rateLimit('publishing', 50);
 
@@ -104,10 +94,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   });
 
   app.post('/publishing/jobs/:id/retry', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
+  const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin']);
   await rateLimit('publishing', 30);
 

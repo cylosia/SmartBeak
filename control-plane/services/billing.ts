@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { getLogger } from '@kernel/logger';
 import { getRedis } from '@kernel/redis';
 
-import { StripeAdapter } from './stripe';
+import { PaymentGateway, StubPaymentGateway } from './stripe';
 
 const logger = getLogger('billing');
 
@@ -71,7 +71,7 @@ export interface IdempotencyEntry {
 export class BillingService {
   constructor(
     private pool: Pool,
-    private stripe = new StripeAdapter()
+    private stripe: PaymentGateway = new StubPaymentGateway()
   ) {
     if (!pool) {
     throw new Error('Database pool is required');

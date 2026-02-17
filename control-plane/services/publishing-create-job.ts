@@ -2,6 +2,9 @@ import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 
 import { NotFoundError } from '@errors';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('publishing-create-job');
 
 
 
@@ -86,8 +89,9 @@ export class PublishingCreateJobService {
 
     try {
     await client.query('ROLLBACK');
-    } catch (rollbackError) {
-    // Rollback error - already in error handling, cannot recover
+    } catch (rollbackError: unknown) {
+    // H6-FIX: Log rollback failure so operators can detect connection issues.
+    logger.error('Transaction rollback failed', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
     }
     throw error;
   } finally {

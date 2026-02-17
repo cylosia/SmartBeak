@@ -25,9 +25,11 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
 
   app.post('/billing/subscribe', async (req, res) => {
   try {
+    // H5-FIX: Rate limit BEFORE auth — throttles unauthenticated DoS attempts
+    // before any auth infrastructure is touched.
+    await rateLimit('billing', 20, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner']);
-    await rateLimit('billing', 20, req, res);
 
     // Validate input
     const parseResult = SubscribeSchema.safeParse(req.body);
@@ -47,9 +49,10 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
 
   app.get('/billing/plan', async (req, res) => {
   try {
+    // H5-FIX: Rate limit before auth.
+    await rateLimit('billing', 50, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner','admin']);
-    await rateLimit('billing', 50, req, res);
     const plan = await billing.getActivePlan(ctx["orgId"]);
     return res.send(plan);
   } catch (error: unknown) {
