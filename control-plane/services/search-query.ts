@@ -6,7 +6,7 @@ import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 import { DB } from '@kernel/constants';
-import { withContext } from '@errors';
+import { withContext, ValidationError } from '@errors';
 
 import { PostgresSearchDocumentRepository } from '../../domains/search/infra/persistence/PostgresSearchDocumentRepository';
 
@@ -50,25 +50,25 @@ export class SearchQueryService {
   async search(query: string, limit = 20, offset = 0, ctx: { orgId: string; userId: string }): Promise<SearchResult[]> {
   // Validate inputs
   if (!query || typeof query !== 'string') {
-    throw new Error('Query must be a non-empty string');
+    throw new ValidationError('Query must be a non-empty string');
   }
 
   if (limit < 1 || limit > 100) {
-    throw new Error('Limit must be between 1 and 100');
+    throw new ValidationError('Limit must be between 1 and 100');
   }
 
   if (offset < 0) {
-    throw new Error('Offset must be non-negative');
+    throw new ValidationError('Offset must be non-negative');
   }
 
   // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
   if (offset > DB.MAX_OFFSET) {
-    throw new Error(`Offset exceeds maximum safe value (${DB.MAX_OFFSET})`);
+    throw new ValidationError(`Offset exceeds maximum safe value (${DB.MAX_OFFSET}). Use cursor-based pagination for large result sets.`);
   }
 
   // SECURITY FIX P0 #8: Require orgId for tenant isolation
   if (!ctx.orgId) {
-    throw new Error('orgId is required for search');
+    throw new ValidationError('orgId is required for search');
   }
 
   const key = `${ctx.orgId}:${ctx.userId}:${query}:${limit}:${offset}`;
@@ -122,11 +122,11 @@ export class SearchQueryService {
   */
   async searchCount(query: string, orgId: string): Promise<number> {
   if (!query || typeof query !== 'string') {
-    throw new Error('Query must be a non-empty string');
+    throw new ValidationError('Query must be a non-empty string');
   }
 
   if (!orgId) {
-    throw new Error('orgId is required for search');
+    throw new ValidationError('orgId is required for search');
   }
 
   const { rows } = await this.pool.query<{ count: string }>(

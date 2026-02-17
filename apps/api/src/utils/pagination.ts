@@ -1,5 +1,6 @@
 import { paginationConfig } from '@config';
 import { DB } from '@kernel/constants';
+import { ValidationError } from '@errors';
 
 /**
 * Pagination utilities
@@ -25,7 +26,7 @@ export type ValidCursorColumn = typeof ALLOWED_CURSOR_COLUMNS[number];
 */
 function validateCursorColumn(cursorColumn: string): asserts cursorColumn is ValidCursorColumn {
   if (!ALLOWED_CURSOR_COLUMNS.includes(cursorColumn as ValidCursorColumn)) {
-    throw new Error(`Invalid cursor column: ${cursorColumn}. Allowed columns: ${ALLOWED_CURSOR_COLUMNS.join(', ')}`);
+    throw new ValidationError(`Invalid cursor column: ${cursorColumn}. Allowed columns: ${ALLOWED_CURSOR_COLUMNS.join(', ')}`);
   }
 }
 
@@ -64,7 +65,7 @@ export function calculateOffset(page?: number, limit?: number): number {
   const offset = (validPage - 1) * validLimit;
 
   if (offset > DB.MAX_OFFSET) {
-  throw new Error(
+  throw new ValidationError(
     `Offset ${offset} exceeds maximum safe offset ${DB.MAX_OFFSET}. ` +
     `Use cursor-based pagination for large result sets.`
   );
@@ -164,7 +165,7 @@ export function decodeCursor(cursor: string): string {
   try {
   return Buffer.from(cursor, 'base64url').toString('utf8');
   } catch {
-  throw new Error('Invalid cursor format');
+  throw new ValidationError('Invalid cursor format');
   }
 }
 
