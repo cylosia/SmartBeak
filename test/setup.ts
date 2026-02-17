@@ -16,6 +16,36 @@ import { getLogger } from '../packages/kernel/logger';
 
 const logger = getLogger('TestSetup');
 
+// Set environment variables at top level so they are available during module loading.
+// packages/config/security.ts validates env vars at module load time (before beforeAll runs),
+// so these must be set before any test file imports trigger the config module.
+process.env['NODE_ENV'] = 'test';
+process.env['JWT_SECRET'] = 'test-secret-minimum-32-characters-long';
+process.env['JWT_KEY_1'] = 'test-secret-key-minimum-32-characters-long';
+process.env['JWT_KEY_2'] = 'secondary-key-also-32-chars-minimum';
+process.env['CONTROL_PLANE_DB'] = 'postgresql://test:test@localhost:5432/test';
+process.env['REDIS_URL'] = 'redis://localhost:6379/1';
+process.env['PADDLE_WEBHOOK_SECRET'] = 'test-paddle-secret';
+process.env['CLERK_WEBHOOK_SECRET'] = 'whsec_test_clerk_secret';
+
+// Security config env vars (required by packages/config/security.ts validateSecurityEnv)
+process.env['BCRYPT_ROUNDS'] = '12';
+process.env['JWT_EXPIRY_SECONDS'] = '3600';
+process.env['JWT_CLOCK_TOLERANCE_SECONDS'] = '30';
+process.env['JWT_MAX_AGE_SECONDS'] = '604800';
+process.env['MAX_FAILED_LOGINS'] = '5';
+process.env['LOCKOUT_DURATION_MINUTES'] = '30';
+process.env['RATE_LIMIT_MAX_REQUESTS'] = '100';
+process.env['RATE_LIMIT_WINDOW_MS'] = '60000';
+process.env['MAX_RATE_LIMIT_STORE_SIZE'] = '100000';
+process.env['RATE_LIMIT_CLEANUP_INTERVAL_MS'] = '300000';
+
+// Abuse guard env vars (required by packages/config/security.ts validateAbuseGuardEnv)
+process.env['ABUSE_MAX_REQUESTS_PER_MINUTE'] = '100';
+process.env['ABUSE_BLOCK_DURATION_MINUTES'] = '60';
+process.env['ABUSE_SUSPICIOUS_THRESHOLD'] = '80';
+process.env['ABUSE_GUARD_ENABLED'] = 'true';
+
 // P1-FIX: Track console errors during tests
 const consoleErrors: string[] = [];
 const originalError = console.error;
@@ -25,17 +55,16 @@ console.error = (...args: unknown[]) => {
   originalError.apply(console, args);
 };
 
-// Environment setup
+// Environment setup (kept for backward compatibility with Jest setupFilesAfterEnv)
 beforeAll(() => {
-  // Set test environment variables
-  process.env.NODE_ENV = 'test';
-  process.env.JWT_SECRET = 'test-secret-minimum-32-characters-long';
-  process.env.JWT_KEY_1 = 'test-secret-key-minimum-32-characters-long';
-  process.env.JWT_KEY_2 = 'secondary-key-also-32-chars-minimum';
-  process.env.CONTROL_PLANE_DB = 'postgresql://test:test@localhost:5432/test';
-  process.env.REDIS_URL = 'redis://localhost:6379/1'; // Use DB 1 for tests
-  process.env.PADDLE_WEBHOOK_SECRET = 'test-paddle-secret';
-  process.env.CLERK_WEBHOOK_SECRET = 'whsec_test_clerk_secret';
+  process.env['NODE_ENV'] = 'test';
+  process.env['JWT_SECRET'] = 'test-secret-minimum-32-characters-long';
+  process.env['JWT_KEY_1'] = 'test-secret-key-minimum-32-characters-long';
+  process.env['JWT_KEY_2'] = 'secondary-key-also-32-chars-minimum';
+  process.env['CONTROL_PLANE_DB'] = 'postgresql://test:test@localhost:5432/test';
+  process.env['REDIS_URL'] = 'redis://localhost:6379/1';
+  process.env['PADDLE_WEBHOOK_SECRET'] = 'test-paddle-secret';
+  process.env['CLERK_WEBHOOK_SECRET'] = 'whsec_test_clerk_secret';
 });
 
 // P1-FIX: Clean up before each test
