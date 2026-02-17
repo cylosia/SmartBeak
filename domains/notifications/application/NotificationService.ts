@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 
 import { withSpan, addSpanAttributes } from '@packages/monitoring';
+import { type Result, ok, err } from '@kernel/validation/types';
 
 import { Notification, NotificationPayload } from '../domain/entities/Notification';
 import { NotificationRepository } from './ports/NotificationRepository';
@@ -10,19 +11,11 @@ import { NotificationRepository } from './ports/NotificationRepository';
 // Type Definitions
 // ============================================================================
 
-
-
 /**
-* Result type for create notification operation
+* Result type for create notification operation.
+* Uses kernel Result discriminated union to prevent impossible states.
 */
-export interface CreateNotificationResult {
-  /** Whether operation succeeded */
-  success: boolean;
-  /** Created notification */
-  notification?: Notification;
-  /** Error message (if failed) */
-  error?: string;
-}
+export type CreateNotificationResult = Result<Notification, string>;
 
 // ============================================================================
 // Notification Service
@@ -65,8 +58,8 @@ export class NotificationService {
   *   'welcome-email',
   *   { to: 'user@example.com', subject: 'Welcome!' }
   * );
-  * if (result.success) {
-  *   // Notification created successfully
+  * if (result.ok) {
+  *   console.log(result.value); // Notification
   * }
   * ```
   */
@@ -89,7 +82,7 @@ export class NotificationService {
     const validationError = this.validateInputs(orgId, userId, channel, template, payload);
     if (validationError) {
     addSpanAttributes({ 'notification.result': 'validation_failed' });
-    return { success: false, error: validationError };
+    return err(validationError);
     }
 
     // Sanitize payload
@@ -109,13 +102,10 @@ export class NotificationService {
     await this.notifications.save(notification);
 
     addSpanAttributes({ 'notification.result': 'success' });
-    return { success: true, notification };
+    return ok(notification);
     } catch (error) {
     addSpanAttributes({ 'notification.result': 'error' });
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create notification'
-    };
+    return err(error instanceof Error ? error.message : 'Failed to create notification');
     }
   });
   }

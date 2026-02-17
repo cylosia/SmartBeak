@@ -135,10 +135,10 @@ export function registerNotificationsDomain(eventBus: EventBus, pool: Pool): voi
     }
     );
 
-    if (result.success && result.notification) {
-      await worker.process(result.notification["id"]);
+    if (result.ok) {
+      await worker.process(result.value["id"]);
     } else {
-      logger["error"]('Failed to create notification: ' + (result["error"] || 'Unknown error'));
+      logger["error"]('Failed to create notification: ' + (result.error || 'Unknown error'));
     }
   } catch (error) {
     const timestamp = new Date().toISOString();

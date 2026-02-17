@@ -28,14 +28,13 @@ export interface DeliveryMessage {
 }
 
 /**
-* Result type for process operation
+* Result type for process operation.
+* Discriminated union prevents impossible states like
+* { ok: true, error: "..." } or { ok: false, delivered: true }.
 */
-export interface ProcessResult {
-  success: boolean;
-  delivered?: boolean | undefined;
-  skipped?: boolean | undefined;
-  error?: string | undefined;
-}
+export type ProcessResult =
+  | { ok: true; delivered: boolean; skipped: boolean }
+  | { ok: false; error: string };
 
 /**
 * Worker for processing notification delivery.
@@ -70,11 +69,11 @@ export class NotificationWorker {
     attributes: { 'notification.id': notificationId },
   }, async () => {
     if (!notificationId || typeof notificationId !== 'string') {
-    return { success: false, error: 'Invalid notification ID: must be a non-empty string' };
+    return { ok: false, error: 'Invalid notification ID: must be a non-empty string' };
     }
 
     if (notificationId.length > 255) {
-    return { success: false, error: 'Invalid notification ID: exceeds maximum length' };
+    return { ok: false, error: 'Invalid notification ID: exceeds maximum length' };
     }
 
     const client = await this.pool.connect();
@@ -89,7 +88,7 @@ export class NotificationWorker {
     // Handle not found case
     if (!notification) {
     await client.query('ROLLBACK');
-    return { success: false, error: `Notification '${notificationId}' not found` };
+    return { ok: false, error: `Notification '${notificationId}' not found` };
     }
 
     // P0-1 FIX: Pass transaction client to prevent phantom reads
@@ -112,7 +111,7 @@ export class NotificationWorker {
     addSpanAttributes({ 'notification.channel': notification.channel, 'notification.result': 'skipped' });
     try { getBusinessKpis().recordNotificationSkipped(notification.channel, 'user_preference_disabled'); } catch { /* not initialized */ }
 
-    return { success: true, skipped: true };
+    return { ok: true, delivered: false, skipped: true };
     }
 
     // P0-3 FIX: Generate delivery token for idempotent delivery
@@ -126,7 +125,7 @@ export class NotificationWorker {
     if (row?.delivery_committed_at) {
     // Already delivered in a previous attempt, skip external call
     await client.query('COMMIT');
-    return { success: true, delivered: true };
+    return { ok: true, delivered: true, skipped: false };
     }
 
     // Generate and persist delivery token before external call
@@ -188,7 +187,7 @@ export class NotificationWorker {
       getSloTracker().recordSuccess('slo.notification.delivery_rate');
     } catch { /* not initialized */ }
 
-    return { success: true, delivered: true };
+    return { ok: true, delivered: true, skipped: false };
 
     } catch (err: unknown) {
     // Failure
@@ -227,7 +226,7 @@ export class NotificationWorker {
       getSloTracker().recordFailure('slo.notification.delivery_rate');
     } catch { /* not initialized */ }
 
-    return { success: false, error: errorMessage };
+    return { ok: false, error: errorMessage };
     }
   } catch (error) {
     try {
@@ -236,7 +235,7 @@ export class NotificationWorker {
     logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { success: false, error: errorMessage };
+    return { ok: false, error: errorMessage };
   } finally {
     client.release();
   }

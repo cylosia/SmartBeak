@@ -261,7 +261,7 @@ export class Container {
     send: async (input: import("../../domains/notifications/application/ports/DeliveryAdapter").SendNotificationInput) => {
     // Implementation would use email service
     logger.info('EmailAdapter sending message', { to: input.to, template: input.template });
-      return { success: true, attemptedAt: new Date() };
+      return { ok: true as const, deliveryId: `email_stub_${Date.now()}`, attemptedAt: new Date() };
     }
   };
   }
@@ -274,7 +274,7 @@ export class Container {
     send: async (input: import("../../domains/notifications/application/ports/DeliveryAdapter").SendNotificationInput) => {
     // Implementation would use Slack webhook
     logger.info('SlackAdapter sending message', { channel: input.to });
-      return { success: true, attemptedAt: new Date() };
+      return { ok: true as const, deliveryId: `slack_stub_${Date.now()}`, attemptedAt: new Date() };
     }
   };
   }

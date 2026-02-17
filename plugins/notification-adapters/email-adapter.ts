@@ -270,14 +270,14 @@ export class EmailAdapter implements DeliveryAdapter {
       }
 
       return {
-        success: true,
+        ok: true,
         attemptedAt,
         // P2-SECURITY FIX: Use crypto.randomUUID() instead of Math.random() for unique IDs
         deliveryId: `email_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`
       };
     } catch (error) {
       return {
-        success: false,
+        ok: false,
         attemptedAt,
         error: error instanceof Error ? error.message : String(error),
         errorCode: error instanceof DeliveryAdapterError ? error.code : 'UNKNOWN_ERROR'
