@@ -4,6 +4,7 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
 import { DomainOwnershipService } from '../../services/domain-ownership';
 import { getAuthContext } from '../types';
 import { PostgresContentRevisionRepository } from '../../../domains/content/infra/persistence/PostgresContentRevisionRepository';
@@ -11,6 +12,8 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+
+const logger = getLogger('content-revisions');
 
 export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   const ownership = new DomainOwnershipService(pool);
@@ -20,21 +23,22 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   });
 
   app.get('/content/:id/revisions', async (req, res) => {
-  // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('content', 50);
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['admin','editor','viewer']);
+  try {
+    // SECURITY FIX: Rate limit BEFORE auth to prevent DoS (per-IP isolation)
+    await rateLimit('content', 50, req, res);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['admin','editor','viewer']);
 
-  // Validate params
-  const paramsResult = ParamsSchema.safeParse(req.params);
-  if (!paramsResult.success) {
+    // Validate params
+    const paramsResult = ParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
     return errors.badRequest(res, 'Invalid content ID', ErrorCodes.INVALID_PARAMS);
-  }
+    }
 
-  const { id } = paramsResult.data;
+    const { id } = paramsResult.data;
 
-  // Check if content exists and user has access
-  const { rows } = await pool.query(
+    // Check if content exists and user has access
+    const { rows } = await pool.query(
     `SELECT domain_id FROM content_items
     WHERE id = $1 AND domain_id IN (
     SELECT domain_id FROM memberships m
@@ -42,16 +46,20 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
     WHERE m.user_id = $2
     )`,
     [id, ctx.userId]
-  );
+    );
 
-  if (rows.length === 0) {
+    if (rows.length === 0) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
+
+    await ownership.assertOrgOwnsDomain(ctx["orgId"], rows[0].domain_id);
+
+    const repo = new PostgresContentRevisionRepository(pool);
+    const revisions = await repo.listByContent(id, 20);
+    return { revisions };
+  } catch (error: unknown) {
+    logger.error('[content-revisions] Internal error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
   }
-
-  await ownership.assertOrgOwnsDomain(ctx["orgId"], rows[0].domain_id);
-
-  const repo = new PostgresContentRevisionRepository(pool);
-  const revisions = await repo.listByContent(id, 20);
-  return { revisions };
   });
 }

@@ -30,8 +30,8 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
 
   // P0-FIX: Use DOMPurify for robust XSS protection
   const config: DOMPurify.Config = {
-    ALLOWED_TAGS: options.ALLOWED_TAGS || DEFAULT_ALLOWED_TAGS,
-    ALLOWED_ATTR: options.ALLOWED_ATTR || DEFAULT_ALLOWED_ATTR,
+    ALLOWED_TAGS: options.ALLOWED_TAGS ?? DEFAULT_ALLOWED_TAGS,
+    ALLOWED_ATTR: options.ALLOWED_ATTR ?? DEFAULT_ALLOWED_ATTR,
     // P0-FIX (P0-6): Expanded FORBID_ATTR to block 'style' (CSS expression injection)
     // and all event handler attributes not already covered by DOMPurify defaults.
     FORBID_ATTR: [
@@ -44,8 +44,8 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
       'onscroll', 'onwheel', 'onresize', 'onselect',
       'formaction', 'form',
     ],
-    // Keep the content of removed tags
-    KEEP_CONTENT: true,
+    // Discard content of removed tags to prevent mutation XSS
+    KEEP_CONTENT: false,
     // Prevent data URIs that could contain JavaScript
     FORBID_DATA_URI: true,
   };
@@ -88,18 +88,23 @@ export function sanitizeUrl(url: string | undefined | null): string {
   }
 
   const trimmed = url.trim();
-  const lowerUrl = trimmed.toLowerCase();
 
-  // Only allow explicit safe protocols. Allowlist approach is safer than blocklist:
-  // - Blocklist misses protocol-relative URLs like //evil.com (no protocol prefix)
-  // - Blocklist misses encoded variants like &#106;avascript:
-  const SAFE_PROTOCOLS = ['https://', 'http://'];
-  if (!SAFE_PROTOCOLS.some(proto => lowerUrl.startsWith(proto))) {
+  // Use URL parsing for structural validation — string prefix matching cannot
+  // reliably catch "https:// evil.com" (space injection) or encoded variants.
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return '';
+  }
+
+  // Only allow explicit safe protocols.
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     return '';
   }
 
   return trimmed;
 }
 
-// Re-export DOMPurify for advanced use cases
-export { DOMPurify };
+// DOMPurify is intentionally not re-exported: exposing the singleton allows
+// callers to install persistent hooks that corrupt concurrent SSR requests.

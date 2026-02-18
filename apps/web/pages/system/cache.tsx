@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { GetServerSideProps } from 'next';
 import { getAuth } from '@clerk/nextjs/server';
@@ -7,7 +5,6 @@ import { getAuth } from '@clerk/nextjs/server';
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
 import { fetchWithCsrf } from '../../lib/csrf';
-import { getPoolInstance } from '../../lib/db';
 
 interface CacheStats {
   l1Hits: number;
@@ -331,6 +328,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     return { redirect: { destination: '/login', permanent: false } };
   }
   try {
+    const { getPoolInstance } = await import('../../lib/db');
     const pool = await getPoolInstance();
     const { rows } = await pool.query(
       `SELECT m.role FROM memberships m

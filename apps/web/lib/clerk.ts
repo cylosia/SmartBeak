@@ -128,17 +128,20 @@ export { getClerkSecretKey as getSecretKey };
 
 /**
 * Clerk webhook secret for verifying webhook signatures
-
-* Note: This is optional - returns empty string if not set
+*
+* Throws if not configured — an empty HMAC key allows signature forgery.
 */
 function getWebhookSecretInternal(): string {
   const value = process.env['CLERK_WEBHOOK_SECRET'];
-  return value || '';
+  if (!value) {
+    throw new Error('CLERK_WEBHOOK_SECRET is not configured');
+  }
+  return value;
 }
 
 /**
 * Lazy getter for webhook secret
-* Returns empty string if not configured (non-critical)
+* Throws if not configured to prevent HMAC forgery via empty key.
 */
 export function getClerkWebhookSecret(): string {
   return getWebhookSecretInternal();

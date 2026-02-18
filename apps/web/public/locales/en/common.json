@@ -28,6 +28,7 @@
     },
     "statuses": {
       "draft": "Draft",
+      "scheduled": "Scheduled",
       "published": "Published",
       "archived": "Archived"
     }

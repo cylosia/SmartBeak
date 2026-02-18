@@ -10,6 +10,7 @@ import { DomainOwnershipService } from '../../services/domain-ownership';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { ScheduleContent } from '../../../domains/content/application/handlers/ScheduleContent';
+import { getContainer } from '../../services/container';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
@@ -26,8 +27,8 @@ const BodySchema = z.object({
 export async function contentScheduleRoutes(app: FastifyInstance) {
   app.post('/content/:id/schedule', async (req, res) => {
   try {
-    // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-    await rateLimit('content', 50);
+    // SECURITY FIX: Rate limit BEFORE auth to prevent DoS (per-IP isolation)
+    await rateLimit('content', 50, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor']);
 
@@ -60,12 +61,12 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     if (!contentItem) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
-    // Verify org owns the domain that owns this content
-    if (contentItem.domainId) {
-    const { getContainer } = await import('../../services/container');
+    // Reject content with no associated domain — never skip the ownership check
+    if (!contentItem.domainId) {
+    return errors.badRequest(res, 'Content has no associated domain', ErrorCodes.INVALID_PARAMS);
+    }
     const ownership = new DomainOwnershipService(getContainer().db);
     await ownership.assertOrgOwnsDomain(ctx.orgId, contentItem.domainId);
-    }
 
     const handler = new ScheduleContent(repo);
     const event = await handler.execute(id, publishDate);
