@@ -5,12 +5,14 @@ import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
 
+import { NotificationAttemptRepository } from '../../application/ports/NotificationAttemptRepository';
+
 const logger = getLogger('notification:attempt:repository');
 
 /**
 * Repository implementation for Notification Attempts using PostgreSQL
 * */
-export class PostgresNotificationAttemptRepository {
+export class PostgresNotificationAttemptRepository implements NotificationAttemptRepository {
   constructor(private pool: Pool) {}
 
   /**

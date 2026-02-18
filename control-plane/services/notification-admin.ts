@@ -31,22 +31,6 @@ export class NotificationAdminService {
   constructor(private pool: Pool) {}
 
   /**
-   * Verify notification ownership
-   * SECURITY FIX: Issue 19 - Check org ownership before returning data
-   * 
-   * @param notificationId - Notification ID to check
-   * @param orgId - Organization ID to verify ownership
-   * @returns True if notification belongs to org
-   */
-  private async verifyOwnership(notificationId: string, orgId: string): Promise<boolean> {
-    const { rows } = await this.pool.query(
-      'SELECT 1 FROM notifications WHERE id = $1 AND org_id = $2',
-      [notificationId, orgId]
-    );
-    return rows.length > 0;
-  }
-
-  /**
    * List notifications for a specific organization
    * SECURITY FIX: Issue 19 - Enforce org-scoped queries
    * 

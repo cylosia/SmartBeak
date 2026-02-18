@@ -5,15 +5,20 @@ import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
 
+import { NotificationDLQRepository } from '../../application/ports/NotificationDLQRepository';
+
 const logger = getLogger('notification:dlq:repository');
 
 // Maximum limit constant
 const MAX_LIMIT = 1000;
+// Reason/error messages are truncated at this length before DB insertion to
+// prevent large adapter stack traces from exhausting storage.
+const MAX_REASON_LENGTH = 1000;
 
 /**
 * Repository implementation for Notification DLQ (Dead Letter Queue) using PostgreSQL
 * */
-export class PostgresNotificationDLQRepository {
+export class PostgresNotificationDLQRepository implements NotificationDLQRepository {
   constructor(private pool: Pool) {}
 
   /**
@@ -32,12 +37,18 @@ export class PostgresNotificationDLQRepository {
     throw new Error('reason must be a non-empty string');
   }
 
+  // P2-FIX: Truncate reason to prevent unbounded storage from large stack traces.
+  // Consistent with PostgresNotificationAttemptRepository which truncates at 1000 chars.
+  const safeReason = reason.length > MAX_REASON_LENGTH
+    ? reason.slice(0, MAX_REASON_LENGTH) + '…'
+    : reason;
+
   const queryable = client ?? this.pool;
   try {
     await queryable.query(
     `INSERT INTO notification_dlq (id, notification_id, channel, reason)
     VALUES ($1, $2, $3, $4)`,
-    [randomUUID(), notificationId, channel, reason]
+    [randomUUID(), notificationId, channel, safeReason]
     );
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));

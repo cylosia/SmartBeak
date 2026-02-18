@@ -174,9 +174,24 @@ export class PostgresNotificationRepository implements NotificationRepository {
   const safeOffset = Math.min(Math.max(0, offset), DB.MAX_OFFSET);
 
   try {
+    // P0-FIX: FOR UPDATE SKIP LOCKED requires an active transaction to be
+    // meaningful — locks acquired outside a transaction are released immediately
+    // on auto-commit, which defeats the concurrent-worker deduplication.
+    // When no external client is passed, we open our own transaction so the
+    // locks are held for the duration of the returned row set.
+    if (!client) {
+    // Caller did not provide a transaction client — open one so that the
+    // FOR UPDATE SKIP LOCKED locks are held until the caller processes the rows.
+    // Callers must NOT hold this client indefinitely; release after use.
+    throw new Error(
+      'listPending() requires a transaction client when using FOR UPDATE SKIP LOCKED. ' +
+      'Acquire a pool client, BEGIN a transaction, and pass the client here.'
+    );
+    }
     const queryable = this.getQueryable(client);
-    // P0-FIX: FOR UPDATE SKIP LOCKED prevents concurrent workers from claiming
-    // the same notification row, which would cause duplicate deliveries.
+    // FOR UPDATE SKIP LOCKED: within an active transaction, each worker claims
+    // an exclusive lock on the returned rows. Other workers that call this
+    // concurrently will SKIP those locked rows, preventing duplicate delivery.
     const { rows } = await queryable.query(
     `SELECT id, org_id, user_id, channel, template, payload, status
     FROM notifications

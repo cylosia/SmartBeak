@@ -120,11 +120,16 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   }
   try {
     const queryable = client || this.pool;
+    // P1-FIX: Conflict target must be (user_id, channel) — the unique constraint
+    // that governs business identity — not (id).  ON CONFLICT (id) never triggers
+    // when a new UUID is generated for a new preference, so concurrent inserts for
+    // the same (user, channel) pair would race and produce a unique-constraint
+    // violation instead of the intended upsert.
     await queryable.query(
     `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
     VALUES ($1, $2, $3, $4, $5)
-    ON CONFLICT (id)
-    DO UPDATE SET enabled = $4, frequency = $5`,
+    ON CONFLICT (user_id, channel)
+    DO UPDATE SET id = EXCLUDED.id, enabled = EXCLUDED.enabled, frequency = EXCLUDED.frequency`,
     [pref["id"], pref.userId, pref.channel, pref.isEnabled(), pref.frequency]
     );
   } catch (error) {
@@ -192,22 +197,25 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
     return;
   }
 
-  // When a client is provided, the caller manages the transaction
-  if (client) {
-    await client.query(
-    `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
+  // P1-FIX: Use ON CONFLICT (user_id, channel) for the same reason as upsert().
+  // Both the client-provided and self-managed paths must use the same target.
+  const BATCH_SQL = `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
     SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::bool[], $5::text[])
-    ON CONFLICT (id) DO UPDATE SET
+    ON CONFLICT (user_id, channel) DO UPDATE SET
+    id = EXCLUDED.id,
     enabled = EXCLUDED.enabled,
-    frequency = EXCLUDED.frequency`,
-    [
+    frequency = EXCLUDED.frequency`;
+  const BATCH_PARAMS = [
     prefs.map(p => p["id"]),
     prefs.map(p => p.userId),
     prefs.map(p => p.channel),
     prefs.map(p => p.isEnabled()),
     prefs.map(p => p.frequency)
-    ]
-    );
+  ];
+
+  // When a client is provided, the caller manages the transaction
+  if (client) {
+    await client.query(BATCH_SQL, BATCH_PARAMS);
     return;
   }
 
@@ -215,26 +223,12 @@ export class PostgresNotificationPreferenceRepository implements NotificationPre
   const ownClient = await this.pool.connect();
   try {
     await ownClient.query('BEGIN');
-
-    // Use unnest for efficient batch insert
-    await ownClient.query(
-    `INSERT INTO notification_preferences (id, user_id, channel, enabled, frequency)
-    SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::bool[], $5::text[])
-    ON CONFLICT (id) DO UPDATE SET
-    enabled = EXCLUDED.enabled,
-    frequency = EXCLUDED.frequency`,
-    [
-    prefs.map(p => p["id"]),
-    prefs.map(p => p.userId),
-    prefs.map(p => p.channel),
-    prefs.map(p => p.isEnabled()),
-    prefs.map(p => p.frequency)
-    ]
-    );
-
+    await ownClient.query(BATCH_SQL, BATCH_PARAMS);
     await ownClient.query('COMMIT');
   } catch (error) {
-    await ownClient.query('ROLLBACK');
+    // P1-FIX: Wrap ROLLBACK in its own try-catch so a failed ROLLBACK doesn't
+    // replace the original error that the caller needs to see.
+    try { await ownClient.query('ROLLBACK'); } catch { /* ignore secondary error */ }
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Failed to batch save preferences', err, { count: prefs.length });
     throw error;

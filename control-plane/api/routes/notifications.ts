@@ -173,12 +173,25 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     }
 
     const { channel, enabled, frequency } = bodyResult.data;
-    // M2-FIX: Default frequency to 'immediate' instead of non-null assertion on optional field
     const result = await prefs.set(ctx.userId, channel, enabled, frequency ?? 'immediate');
-    return res.send(result);
+    // P1-FIX: Do not send the raw service result — it includes an `error` field with
+    // internal details (DB messages, stack traces) when success=false.  Instead,
+    // check the result and return a sanitised HTTP response.
+    if (!result.success) {
+    return errors.internal(res, 'Failed to update preferences');
+    }
+    // Map domain entity to a plain DTO — entities serialize private fields
+    // (e.g., _enabled) which leaks naming conventions and confuses consumers.
+    const pref = result.preference;
+    return res.send(pref ? {
+    id: pref.id,
+    userId: pref.userId,
+    channel: pref.channel,
+    enabled: pref.isEnabled(),
+    frequency: pref.frequency,
+    } : null);
   } catch (error) {
     logger.error('[notifications/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
-    // P1-FIX: Removed error.message leak to client
     return errors.internal(res, 'Failed to update preferences');
   }
   });
