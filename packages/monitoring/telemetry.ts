@@ -30,6 +30,7 @@ import {
   Span,
   SpanStatusCode,
   SpanKind,
+  SamplingDecision,
   Context,
   propagation,
   ROOT_CONTEXT,
@@ -48,6 +49,9 @@ const logger = getLogger('telemetry');
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
+
+// Defined here (not at bottom) so it's in scope for all usages throughout the file
+type AttributeValue = string | number | boolean | Array<string> | Array<number> | Array<boolean>;
 
 /**
  * Telemetry configuration options
@@ -98,13 +102,14 @@ export interface TracedOperationOptions {
 }
 
 // Type definitions for instrumentation hooks
-interface HttpRequest {
+// Using IncomingMessage/ServerResponse compatible shapes to avoid importing http module
+type HttpRequestLike = {
   headers: Record<string, string | string[] | undefined>;
-}
+};
 
-interface HttpResponse {
+type HttpResponseLike = {
   headers: Record<string, string | string[] | undefined>;
-}
+};
 
 // ============================================================================
 // Global State
@@ -155,7 +160,12 @@ export function initTelemetry(config: TelemetryConfig): void {
       resource,
       sampler: {
         shouldSample: () => ({
-          decision: Math.random() < (config.samplingRate ?? 1.0) ? 1 : 0,
+          // SamplingDecision.RECORD_AND_SAMPLED (2) = record span AND export to collector
+      // SamplingDecision.NOT_RECORD (0) = drop span entirely
+      // Using 1 (RECORD only) would record but not export — effectively losing all traces
+      decision: Math.random() < (config.samplingRate ?? 1.0)
+        ? SamplingDecision.RECORD_AND_SAMPLED
+        : SamplingDecision.NOT_RECORD,
           attributes: {},
         }),
         toString: () => 'ProbabilitySampler',
@@ -193,14 +203,16 @@ export function initTelemetry(config: TelemetryConfig): void {
       registerInstrumentations({
         instrumentations: [
           new HttpInstrumentation({
-            requestHook: ((span: Span, request: HttpRequest) => {
+            requestHook: (span: Span, request: HttpRequestLike) => {
+              const contentLength = request.headers['content-length'];
               span.setAttribute('http.request.body.size',
-                request.headers['content-length'] || 0);
-            }) as never,
-            responseHook: ((span: Span, response: HttpResponse) => {
+                typeof contentLength === 'string' ? contentLength : 0);
+            },
+            responseHook: (span: Span, response: HttpResponseLike) => {
+              const contentLength = response.headers['content-length'];
               span.setAttribute('http.response.body.size',
-                response.headers['content-length'] || 0);
-            }) as never,
+                typeof contentLength === 'string' ? contentLength : 0);
+            },
           }),
           new PgInstrumentation({
             enhancedDatabaseReporting: true,
@@ -225,7 +237,7 @@ export function initTelemetry(config: TelemetryConfig): void {
   } catch (error) {
     // P2-11 FIX: Don't re-throw — telemetry is non-critical infrastructure.
     // A failure should not crash the application.
-    logger.error('Failed to initialize telemetry', error as Error);
+    logger.error('Failed to initialize telemetry', error instanceof Error ? error : new Error(String(error)));
     isInitialized = false;
     tracerProvider = null;
   }
@@ -245,7 +257,7 @@ export async function shutdownTelemetry(): Promise<void> {
     tracerProvider = null;
     logger.info('Telemetry shutdown complete');
   } catch (error) {
-    logger.error('Error during telemetry shutdown', error as Error);
+    logger.error('Error during telemetry shutdown', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 }
@@ -524,8 +536,4 @@ export function Trace(
   };
 }
 
-// ============================================================================
-// Utility Types
-// ============================================================================
-
-type AttributeValue = string | number | boolean | Array<string> | Array<number> | Array<boolean>;
+// AttributeValue type is defined at the top of the Types section — see above.
