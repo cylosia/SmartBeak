@@ -22,8 +22,20 @@ const DEFAULT_USAGE_VALUE = 0;
 * ```
 */
 export class UsageService {
-  // P1-FIX: Cache org existence to avoid N+1 INSERT...ON CONFLICT before every increment
+  // Cache org existence to avoid an INSERT…ON CONFLICT before every increment.
+  //
+  // Two problems with a plain Set:
+  //   1. Race condition: check-then-act is not atomic across await boundaries.
+  //      Two concurrent requests for the same new org both see has() = false
+  //      and both call ensureOrg(), doubling DB writes.
+  //   2. Unbounded growth: a long-lived service handling millions of orgs will
+  //      eventually exhaust heap memory.
+  //
+  // Fix: coalesce concurrent calls via a pending-Promise map, and evict the
+  // set when it exceeds MAX_KNOWN_ORGS to cap memory usage.
   private knownOrgs = new Set<string>();
+  private pendingEnsureOrg = new Map<string, Promise<void>>();
+  private static readonly MAX_KNOWN_ORGS = 10_000;
 
   /**
   * Creates a new UsageService instance
@@ -87,10 +99,21 @@ export class UsageService {
     throw new Error('Increment value must be a non-negative integer');
   }
 
-  // P1-FIX: Only call ensureOrg on first encounter to eliminate N+1 queries
   if (!this.knownOrgs.has(orgId)) {
-    await this.ensureOrg(orgId);
-    this.knownOrgs.add(orgId);
+    // Coalesce concurrent first-time calls for the same org into one DB round-trip.
+    if (!this.pendingEnsureOrg.has(orgId)) {
+      const p = this.ensureOrg(orgId).then(() => {
+        this.knownOrgs.add(orgId);
+        // Simple cap — evict the entire set rather than implementing an LRU to
+        // keep the code dependency-free. The next request re-warms the cache.
+        if (this.knownOrgs.size > UsageService.MAX_KNOWN_ORGS) {
+          this.knownOrgs.clear();
+        }
+        this.pendingEnsureOrg.delete(orgId);
+      });
+      this.pendingEnsureOrg.set(orgId, p);
+    }
+    await this.pendingEnsureOrg.get(orgId);
   }
 
   // SECURITY: Field is validated against whitelist before use
@@ -199,10 +222,18 @@ export class UsageService {
     throw new Error('Value must be a non-negative integer');
   }
 
-  // P1-FIX: Only call ensureOrg on first encounter to eliminate N+1 queries
   if (!this.knownOrgs.has(orgId)) {
-    await this.ensureOrg(orgId);
-    this.knownOrgs.add(orgId);
+    if (!this.pendingEnsureOrg.has(orgId)) {
+      const p = this.ensureOrg(orgId).then(() => {
+        this.knownOrgs.add(orgId);
+        if (this.knownOrgs.size > UsageService.MAX_KNOWN_ORGS) {
+          this.knownOrgs.clear();
+        }
+        this.pendingEnsureOrg.delete(orgId);
+      });
+      this.pendingEnsureOrg.set(orgId, p);
+    }
+    await this.pendingEnsureOrg.get(orgId);
   }
 
   const { rowCount } = await this.pool.query(

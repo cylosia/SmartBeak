@@ -51,10 +51,17 @@ export function createViewerUser(options: Omit<UserFactoryOptions, 'role'> = {})
 }
 
 export function createUserList(count: number, options: UserFactoryOptions = {}) {
-  return Array.from({ length: count }, (_, index) =>
-    createUser({
-      ...options,
-      email: options.email || `user${index}@example.com`,
-    })
-  );
+  return Array.from({ length: count }, (_, index) => {
+    // When a base email is provided, append a sub-address (+index) to each
+    // entry so every user gets a unique email that satisfies DB unique constraints.
+    // Without this, all users share the same email and integration tests fail.
+    let email: string;
+    if (options.email) {
+      const [local, domain] = options.email.split('@');
+      email = `${local}+${index}@${domain}`;
+    } else {
+      email = `user${index}@example.com`;
+    }
+    return createUser({ ...options, email });
+  });
 }

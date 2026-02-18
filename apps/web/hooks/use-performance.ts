@@ -61,7 +61,10 @@ export function useRenderPerformance(componentName: string): PerformanceMetrics 
   const renderCount = useRef(0);
   const renderStartTime = useRef<number>(0);
   const totalRenderTime = useRef(0);
-  const [metrics, setMetrics] = useState<PerformanceMetrics>({
+  // Use a ref instead of state so updating metrics never triggers a re-render.
+  // setState inside a dependency-less useEffect causes an infinite loop:
+  // setState → re-render → effect fires → setState → …
+  const metricsRef = useRef<PerformanceMetrics>({
     renderCount: 0,
     averageRenderTime: 0,
     lastRenderTime: 0,
@@ -86,7 +89,7 @@ export function useRenderPerformance(componentName: string): PerformanceMetrics 
       totalRenderTime: totalRenderTime.current,
     };
 
-    setMetrics(newMetrics);
+    metricsRef.current = newMetrics;
 
     // Log slow renders in development
     if (process.env.NODE_ENV === 'development' && renderTime > 16) {
@@ -101,7 +104,7 @@ export function useRenderPerformance(componentName: string): PerformanceMetrics 
     }
   });
 
-  return metrics;
+  return metricsRef.current;
 }
 
 // ============================================================================
@@ -110,6 +113,12 @@ export function useRenderPerformance(componentName: string): PerformanceMetrics 
 
 export function useWebVitals(onReport?: (metrics: WebVitalsMetrics) => void): WebVitalsMetrics {
   const [vitals, setVitals] = useState<WebVitalsMetrics>({});
+  // Ref mirrors state so PerformanceObserver callbacks always read the latest
+  // accumulated vitals without capturing a stale closure from the first render.
+  const vitalsRef = useRef<WebVitalsMetrics>({});
+  useEffect(() => {
+    vitalsRef.current = vitals;
+  }, [vitals]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -122,7 +131,7 @@ export function useWebVitals(onReport?: (metrics: WebVitalsMetrics) => void): We
         if (lastEntry) {
           const lcp = lastEntry.startTime;
           setVitals(prev => ({ ...prev, lcp }));
-          onReport?.({ ...vitals, lcp });
+          onReport?.({ ...vitalsRef.current, lcp });
         }
       });
       observer.observe({ entryTypes: ['largest-contentful-paint'] });
@@ -136,7 +145,7 @@ export function useWebVitals(onReport?: (metrics: WebVitalsMetrics) => void): We
         entries.forEach(entry => {
           const fid = entry.processingStart - entry.startTime;
           setVitals(prev => ({ ...prev, fid }));
-          onReport?.({ ...vitals, fid });
+          onReport?.({ ...vitalsRef.current, fid });
         });
       });
       observer.observe({ entryTypes: ['first-input'] });
@@ -154,7 +163,7 @@ export function useWebVitals(onReport?: (metrics: WebVitalsMetrics) => void): We
           }
         });
         setVitals(prev => ({ ...prev, cls: clsValue }));
-        onReport?.({ ...vitals, cls: clsValue });
+        onReport?.({ ...vitalsRef.current, cls: clsValue });
       });
       observer.observe({ entryTypes: ['layout-shift'] });
       return () => observer.disconnect();
@@ -167,7 +176,7 @@ export function useWebVitals(onReport?: (metrics: WebVitalsMetrics) => void): We
         entries.forEach(entry => {
           if (entry.name === 'first-contentful-paint') {
             setVitals(prev => ({ ...prev, fcp: entry.startTime }));
-            onReport?.({ ...vitals, fcp: entry.startTime });
+            onReport?.({ ...vitalsRef.current, fcp: entry.startTime });
           }
         });
       });
@@ -181,7 +190,7 @@ export function useWebVitals(onReport?: (metrics: WebVitalsMetrics) => void): We
       if (navigation) {
         const ttfb = navigation.responseStart - navigation.startTime;
         setVitals(prev => ({ ...prev, ttfb }));
-        onReport?.({ ...vitals, ttfb });
+        onReport?.({ ...vitalsRef.current, ttfb });
       }
     };
 

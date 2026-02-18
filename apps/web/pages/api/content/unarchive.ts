@@ -27,13 +27,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!validateMethod(req, res, ['POST'])) return;
 
   try {
-    // RATE LIMITING: Write endpoint - 30 requests/minute
-    const allowed = await rateLimit('content:unarchive', 30, req, res);
-    if (!allowed) return;
-
-    // Authenticate request
+    // Authenticate before rate-limiting so the limit can be scoped per-user.
+    // A global key ('content:unarchive') lets one user exhaust the quota for
+    // all users; per-user keying eliminates that DoS vector.
     const auth = await requireAuth(req, res);
     if (!auth) return;
+
+    const allowed = await rateLimit(`content:unarchive:${auth.userId}`, 30, req, res);
+    if (!allowed) return;
 
     const { contentId, reason } = req.body;
 
@@ -104,18 +105,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         [now, reason || 'User initiated restore', contentId, auth["orgId"]]
       );
 
-      // Record unarchive action in audit log if table exists
+      // Record unarchive action in audit log.
+      // Only ignore error 42P01 (undefined_table) — the table may not yet exist
+      // in environments where the migration hasn't run. Any other failure
+      // (permissions, constraint violation, disk full) re-throws so the
+      // transaction is rolled back and no unarchive occurs without a trace.
       try {
         await client.query(
           `INSERT INTO content_archive_audit (content_id, action, reason, performed_at, org_id)
           VALUES ($1, $2, $3, $4, $5)`,
-          [contentId, 'unarchived', reason || 'User initiated restore', now, auth["orgId"]]
+          [contentId, 'unarchived', reason || 'User initiated restore', now, auth['orgId']]
         );
       } catch (auditError: unknown) {
-        // Audit table may not exist yet - log but don't fail
-        const err = auditError as { code?: string; message?: string };
-        if (err.code !== '42P01') {
-          logger.warn('Audit log error', { error: err.message });
+        const err = auditError as { code?: string };
+        if (err.code === '42P01') {
+          logger.warn('content_archive_audit table missing; skipping audit log', { contentId });
+        } else {
+          // Re-throw to roll back the transaction — content must not be unarchived
+          // without a corresponding audit record.
+          throw auditError;
         }
       }
 
