@@ -192,7 +192,7 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
       return errors.validationFailed(res, bodyResult['error'].issues);
     }
 
-    const { name, domainType } = bodyResult.data;
+    const { name, domainType, settings } = bodyResult.data;
 
     // DM-5-FIX NOTE (P1): The plan is fetched before the transaction to avoid holding
     // the org_usage FOR UPDATE lock during an external billing call (which would cause
@@ -240,18 +240,16 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
         [domainId, ctx['orgId'], name, 'active']
       );
 
-      // Insert into domain_registry if domain type provided
-      if (domainType) {
-        await client.query(
-          'INSERT INTO domain_registry (id, org_id, domain_type) VALUES ($1, $2, $3)',
-          [domainId, ctx['orgId'], domainType]
-        );
-      } else {
-        await client.query(
-          'INSERT INTO domain_registry (id, org_id) VALUES ($1, $2)',
-          [domainId, ctx['orgId']]
-        );
-      }
+      // P2-SETTINGS-FIX: Extract and persist the `settings` field as `custom_config`
+      // in domain_registry. Previously `settings` was validated by Zod but silently
+      // dropped (never written to any column), causing complete data loss for any
+      // domain created with configuration. The domain-details GET endpoint returns
+      // this column as `customConfig`, confirming domain_registry.custom_config is
+      // the correct storage target. A single INSERT handles all field combinations.
+      await client.query(
+        'INSERT INTO domain_registry (id, org_id, domain_type, custom_config) VALUES ($1, $2, $3, $4)',
+        [domainId, ctx['orgId'], domainType ?? null, settings !== undefined ? JSON.stringify(settings) : null]
+      );
 
       // Increment usage count
       await client.query(

@@ -12,9 +12,10 @@ import { ErrorCodes } from '@errors';
 
 const logger = getLogger('domain-details');
 
+// P2-STRICT-FIX: Added .strict() per CLAUDE.md conventions — reject extra URL params.
 const DomainIdParamSchema = z.object({
   id: z.string().uuid()
-});
+}).strict();
 
 export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
   // GET /domains/:id - Get detailed domain information

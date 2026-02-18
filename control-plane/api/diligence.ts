@@ -77,13 +77,16 @@ export async function registerDiligenceRoutes(app: FastifyInstance) {
   if (!session) return reply.code(404).send({ error: 'Not found' });
 
   // M02-FIX: Run queries in parallel instead of sequentially
+  // P1-LIMIT-FIX: Added LIMIT 500 to both queries. Without it, a domain with thousands
+  // of intent or artifact records returns all rows to the buyer — a potential OOM/DoS
+  // vector. The parallel Promise.all amplifies the impact (two unbounded scans at once).
   const [intents, aiArtifacts] = await Promise.all([
     appWithDb.db.query(
-      'SELECT id, domain_id, intent_type, requested_at, status FROM human_intents WHERE domain_id = $1 ORDER BY requested_at ASC',
+      'SELECT id, domain_id, intent_type, requested_at, status FROM human_intents WHERE domain_id = $1 ORDER BY requested_at ASC LIMIT 500',
       [session.domain_id]
     ),
     appWithDb.db.query(
-      'SELECT id, domain_id, artifact_type, created_at FROM ai_advisory_artifacts WHERE domain_id = $1 AND buyer_visible = true',
+      'SELECT id, domain_id, artifact_type, created_at FROM ai_advisory_artifacts WHERE domain_id = $1 AND buyer_visible = true LIMIT 500',
       [session.domain_id]
     ),
   ]);
