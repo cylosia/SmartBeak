@@ -1,6 +1,6 @@
 /**
  * Test Factories: Organization
- * 
+ *
  * Provides factory functions for creating test organization data.
  */
 
@@ -12,23 +12,32 @@ export interface OrgFactoryOptions {
   slug?: string;
   plan?: 'free' | 'pro' | 'enterprise';
   planStatus?: 'active' | 'cancelled' | 'past_due';
-  // FIX (M13): Use Record<string, unknown> instead of Record<string, any> for type safety
   settings?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   createdAt?: Date;
+  // P2-P3: Allow creating soft-deleted orgs for testing deletion/cascade behaviour
+  deletedAt?: Date | null;
 }
 
 export function createOrganization(options: OrgFactoryOptions = {}) {
-  const _timestamp = Date.now();
   const randomSuffix = crypto.randomBytes(4).toString('hex');
   const name = options.name || `Test Organization ${randomSuffix}`;
 
+  // P2-12: Resolve plan default BEFORE computing limits so max_users/max_domains
+  // are always derived from the same plan value that ends up in the returned object.
+  const plan = options.plan ?? 'free';
+
+  const slug = options.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  // P3-13: Guarantee created_at < updated_at even when both resolve within the same ms.
+  const createdAt = options.createdAt ?? new Date();
+  const updatedAt = new Date(createdAt.getTime() + 1);
+
   return {
-    // FIX (M15): Use UUID format to match production (randomUUID generates v4 UUIDs)
     id: options.id || crypto.randomUUID(),
     name,
-    slug: options.slug || name.toLowerCase().replace(/\s+/g, '-'),
-    plan: options.plan || 'free',
+    slug,
+    plan,
     plan_status: options.planStatus || 'active',
     settings: {
       default_timezone: 'UTC',
@@ -36,11 +45,12 @@ export function createOrganization(options: OrgFactoryOptions = {}) {
       ...options.settings,
     },
     metadata: options.metadata || {},
-    created_at: options.createdAt || new Date(),
-    updated_at: new Date(),
-    deleted_at: null,
-    max_users: options.plan === 'enterprise' ? 100 : options.plan === 'pro' ? 25 : 5,
-    max_domains: options.plan === 'enterprise' ? 50 : options.plan === 'pro' ? 10 : 2,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    // P2-3: Support soft-deleted orgs in test data
+    deleted_at: options.deletedAt !== undefined ? options.deletedAt : null,
+    max_users: plan === 'enterprise' ? 100 : plan === 'pro' ? 25 : 5,
+    max_domains: plan === 'enterprise' ? 50 : plan === 'pro' ? 10 : 2,
   };
 }
 
@@ -58,7 +68,6 @@ export interface MembershipFactoryOptions {
   id?: string;
   userId?: string;
   orgId?: string;
-  // FIX (M14): Match production role types (owner, admin, editor, viewer) instead of 'member'
   role?: 'owner' | 'admin' | 'editor' | 'viewer';
   status?: 'active' | 'inactive' | 'pending';
   invitedAt?: Date;
@@ -66,15 +75,12 @@ export interface MembershipFactoryOptions {
 }
 
 export function createMembership(options: MembershipFactoryOptions = {}) {
-  const _timestamp = Date.now();
-  const _randomSuffix = crypto.randomBytes(4).toString('hex');
+  // P3-12: Removed dead _timestamp and _randomSuffix variables — neither was used.
 
   return {
-    // FIX (M15): Use UUID format to match production
     id: options.id || crypto.randomUUID(),
     user_id: options.userId || crypto.randomUUID(),
     org_id: options.orgId || crypto.randomUUID(),
-    // FIX (M14): Default to 'editor' instead of non-existent 'member' role
     role: options.role || 'editor',
     status: options.status || 'active',
     invited_at: options.invitedAt || new Date(),

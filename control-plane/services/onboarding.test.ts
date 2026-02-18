@@ -1,16 +1,27 @@
 
 import { OnboardingService, OnboardingStep } from './onboarding';
 
-// Mock pg Pool
+// Mock pg Pool — supports both pool.query() (for mark/reset/ensure)
+// and pool.connect() + client (for get(), which wraps in a REPEATABLE READ transaction).
 function createMockPool() {
   const queryResults: Array<{ rows: unknown[]; rowCount: number }> = [];
   const queryCalls: Array<{ text: string; values: unknown[] }> = [];
+
+  // Client returned by pool.connect() — shares the result queue with pool.query
+  const createMockClient = () => ({
+    query: jest.fn(async (text: string, values?: unknown[]) => {
+      queryCalls.push({ text, values: values ?? [] });
+      return queryResults.shift() ?? { rows: [], rowCount: 0 };
+    }),
+    release: jest.fn(),
+  });
 
   const pool = {
     query: jest.fn(async (text: string, values?: unknown[]) => {
       queryCalls.push({ text, values: values ?? [] });
       return queryResults.shift() ?? { rows: [], rowCount: 0 };
     }),
+    connect: jest.fn(async () => createMockClient()),
     _setResults(results: Array<{ rows: unknown[]; rowCount: number }>) {
       queryResults.length = 0;
       queryResults.push(...results);
@@ -22,10 +33,23 @@ function createMockPool() {
       queryResults.length = 0;
       queryCalls.length = 0;
       pool.query.mockClear();
+      pool.connect.mockClear();
     },
   };
 
   return pool;
+}
+
+// Helper: default result entries consumed by get()'s transaction preamble
+// (BEGIN, SET TRANSACTION, _ensure INSERT, SELECT) with no auto-completion.
+function getSetupResults(selectRow: unknown) {
+  return [
+    { rows: [], rowCount: 0 },   // BEGIN
+    { rows: [], rowCount: 0 },   // SET TRANSACTION ISOLATION LEVEL REPEATABLE READ
+    { rows: [], rowCount: 1 },   // _ensure INSERT ON CONFLICT DO NOTHING
+    { rows: selectRow ? [selectRow] : [], rowCount: selectRow ? 1 : 0 }, // SELECT
+    { rows: [], rowCount: 0 },   // COMMIT
+  ];
 }
 
 describe('OnboardingService', () => {
@@ -49,8 +73,8 @@ describe('OnboardingService', () => {
   });
 
   describe('validateStep (via mark)', () => {
-    test('accepts valid steps: profile, billing, team', async () => {
-      const validSteps: OnboardingStep[] = ['profile', 'billing', 'team'];
+    test('accepts valid steps: step_create_domain, step_create_content, step_publish_content', async () => {
+      const validSteps: OnboardingStep[] = ['step_create_domain', 'step_create_content', 'step_publish_content'];
       for (const step of validSteps) {
         pool._reset();
         pool._setResults([{ rows: [], rowCount: 1 }]);
@@ -62,12 +86,18 @@ describe('OnboardingService', () => {
       await expect(service.mark('org-123', 'invalid' as OnboardingStep)).rejects.toThrow('Invalid step');
     });
 
+    test('rejects old step names that no longer exist', async () => {
+      for (const old of ['profile', 'billing', 'team']) {
+        await expect(service.mark('org-123', old as OnboardingStep)).rejects.toThrow('Invalid step');
+      }
+    });
+
     test('rejects SQL injection attempts via step parameter', async () => {
       const injectionAttempts = [
-        "profile; DROP TABLE org_onboarding--",
-        "profile = true, admin",
+        "step_create_domain; DROP TABLE org_onboarding--",
+        "step_create_domain = true, admin",
         "' OR '1'='1",
-        "profile\"; DELETE FROM org_onboarding; --",
+        'step_create_domain"; DELETE FROM org_onboarding; --',
       ];
       for (const attempt of injectionAttempts) {
         await expect(service.mark('org-123', attempt as OnboardingStep)).rejects.toThrow('Invalid step');
@@ -103,19 +133,19 @@ describe('OnboardingService', () => {
   describe('mark', () => {
     test('uses UPSERT to set step column to true', async () => {
       pool._setResults([{ rows: [], rowCount: 1 }]);
-      const result = await service.mark('org-123', 'profile');
+      const result = await service.mark('org-123', 'step_create_domain');
       expect(result).toBe(1);
       const calls = pool._getCalls();
       expect(calls).toHaveLength(1);
       expect(calls[0]!.text).toContain('INSERT INTO org_onboarding');
       expect(calls[0]!.text).toContain('ON CONFLICT');
-      expect(calls[0]!.text).toContain('"profile"');
+      expect(calls[0]!.text).toContain('"step_create_domain"');
       expect(calls[0]!.text).toContain('updated_at');
       expect(calls[0]!.values).toEqual(['org-123']);
     });
 
     test('uses column map for each step', async () => {
-      const steps: OnboardingStep[] = ['profile', 'billing', 'team'];
+      const steps: OnboardingStep[] = ['step_create_domain', 'step_create_content', 'step_publish_content'];
       for (const step of steps) {
         pool._reset();
         pool._setResults([{ rows: [], rowCount: 1 }]);
@@ -127,81 +157,107 @@ describe('OnboardingService', () => {
 
     test('returns 0 when no row affected', async () => {
       pool._setResults([{ rows: [], rowCount: 0 }]);
-      const result = await service.mark('org-123', 'profile');
+      const result = await service.mark('org-123', 'step_create_domain');
       expect(result).toBe(0);
     });
 
     test('handles null rowCount', async () => {
       pool._setResults([{ rows: [], rowCount: null as any }]);
-      const result = await service.mark('org-123', 'profile');
+      const result = await service.mark('org-123', 'step_create_domain');
       expect(result).toBe(0);
     });
 
     test('rejects empty orgId', async () => {
-      await expect(service.mark('', 'profile')).rejects.toThrow('Valid orgId is required');
+      await expect(service.mark('', 'step_create_domain')).rejects.toThrow('Valid orgId is required');
     });
   });
 
   describe('get', () => {
     test('returns onboarding state for existing org', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
-        { rows: [{ org_id: 'org-123', profile: true, billing: false, team: false, completed: false }], rowCount: 1 },
-      ]);
-      const result = await service.get('org-123');
-      expect(result).toEqual({
+      const row = {
         org_id: 'org-123',
-        profile: true,
-        billing: false,
-        team: false,
+        step_create_domain: true,
+        step_create_content: false,
+        step_publish_content: false,
         completed: false,
-      });
+      };
+      pool._setResults(getSetupResults(row));
+      const result = await service.get('org-123');
+      expect(result?.['org_id']).toBe('org-123');
+      expect(result?.['step_create_domain']).toBe(true);
+      expect(result?.['step_create_content']).toBe(false);
+      expect(result?.['step_publish_content']).toBe(false);
+      expect(result?.completed).toBe(false);
     });
 
-    test('returns null when row is missing (H06 fix)', async () => {
+    test('returns null when row is missing after ensure', async () => {
+      // SELECT returns nothing even after ensure
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
-        { rows: [], rowCount: 0 }, // SELECT returns nothing
+        { rows: [], rowCount: 0 },   // BEGIN
+        { rows: [], rowCount: 0 },   // SET TRANSACTION
+        { rows: [], rowCount: 1 },   // _ensure
+        { rows: [], rowCount: 0 },   // SELECT — empty
+        { rows: [], rowCount: 0 },   // COMMIT
       ]);
       const result = await service.get('org-123');
       expect(result).toBeNull();
     });
 
-    test('auto-completes when all steps are true', async () => {
+    test('auto-completes and uses RETURNING when all steps are true', async () => {
+      const row = {
+        org_id: 'org-123',
+        step_create_domain: true,
+        step_create_content: true,
+        step_publish_content: true,
+        completed: false,
+      };
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
-        { rows: [{ org_id: 'org-123', profile: true, billing: true, team: true, completed: false }], rowCount: 1 },
-        { rows: [], rowCount: 1 }, // UPDATE completed=true
+        { rows: [], rowCount: 0 },                   // BEGIN
+        { rows: [], rowCount: 0 },                   // SET TRANSACTION
+        { rows: [], rowCount: 1 },                   // _ensure
+        { rows: [row], rowCount: 1 },                // SELECT
+        { rows: [{ completed: true }], rowCount: 1 }, // UPDATE RETURNING completed
+        { rows: [], rowCount: 0 },                   // COMMIT
       ]);
       const result = await service.get('org-123');
       expect(result?.completed).toBe(true);
       const calls = pool._getCalls();
-      const updateCall = calls[2];
-      expect(updateCall!.text).toContain('SET completed=true');
-      expect(updateCall!.text).toContain('updated_at=now()');
-      expect(updateCall!.text).toContain('AND completed=false');
+      const updateCall = calls.find(c => c.text.includes('SET completed = true'));
+      expect(updateCall).toBeDefined();
+      expect(updateCall!.text).toContain('updated_at = now()');
+      expect(updateCall!.text).toContain('AND completed = false');
+      expect(updateCall!.text).toContain('RETURNING completed');
     });
 
     test('does not update when already completed', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
-        { rows: [{ org_id: 'org-123', profile: true, billing: true, team: true, completed: true }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-123',
+        step_create_domain: true,
+        step_create_content: true,
+        step_publish_content: true,
+        completed: true,
+      };
+      pool._setResults(getSetupResults(row));
       const result = await service.get('org-123');
       expect(result?.completed).toBe(true);
       const calls = pool._getCalls();
-      // Should only have 2 calls (ensure + select), no update
-      expect(calls).toHaveLength(2);
+      // BEGIN, SET TXN, _ensure, SELECT, COMMIT — no UPDATE
+      expect(calls.every(c => !c.text.includes('SET completed'))).toBe(true);
     });
 
     test('does not auto-complete when not all steps are done', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
-        { rows: [{ org_id: 'org-123', profile: true, billing: true, team: false, completed: false }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-123',
+        step_create_domain: true,
+        step_create_content: true,
+        step_publish_content: false,
+        completed: false,
+      };
+      pool._setResults(getSetupResults(row));
       const result = await service.get('org-123');
       expect(result?.completed).toBe(false);
-      expect(pool._getCalls()).toHaveLength(2); // no update
+      const calls = pool._getCalls();
+      expect(calls.every(c => !c.text.includes('SET completed'))).toBe(true);
     });
 
     test('rejects empty orgId', async () => {
@@ -211,25 +267,36 @@ describe('OnboardingService', () => {
 
   describe('isCompleted', () => {
     test('returns true when completed', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 },
-        { rows: [{ org_id: 'org-1', profile: true, billing: true, team: true, completed: true }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-1',
+        step_create_domain: true,
+        step_create_content: true,
+        step_publish_content: true,
+        completed: true,
+      };
+      pool._setResults(getSetupResults(row));
       expect(await service.isCompleted('org-1')).toBe(true);
     });
 
     test('returns false when not completed', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 },
-        { rows: [{ org_id: 'org-1', profile: false, billing: false, team: false, completed: false }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-1',
+        step_create_domain: false,
+        step_create_content: false,
+        step_publish_content: false,
+        completed: false,
+      };
+      pool._setResults(getSetupResults(row));
       expect(await service.isCompleted('org-1')).toBe(false);
     });
 
     test('returns false when row is null', async () => {
       pool._setResults([
-        { rows: [], rowCount: 1 },
-        { rows: [], rowCount: 0 },
+        { rows: [], rowCount: 0 },   // BEGIN
+        { rows: [], rowCount: 0 },   // SET TRANSACTION
+        { rows: [], rowCount: 1 },   // _ensure
+        { rows: [], rowCount: 0 },   // SELECT — empty
+        { rows: [], rowCount: 0 },   // COMMIT
       ]);
       expect(await service.isCompleted('org-1')).toBe(false);
     });
@@ -237,41 +304,66 @@ describe('OnboardingService', () => {
 
   describe('getProgress', () => {
     test('returns 0 when no steps complete', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 },
-        { rows: [{ org_id: 'org-1', profile: false, billing: false, team: false, completed: false }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-1',
+        step_create_domain: false,
+        step_create_content: false,
+        step_publish_content: false,
+        completed: false,
+      };
+      pool._setResults(getSetupResults(row));
       expect(await service.getProgress('org-1')).toBe(0);
     });
 
     test('returns 33 when 1 of 3 steps complete', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 },
-        { rows: [{ org_id: 'org-1', profile: true, billing: false, team: false, completed: false }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-1',
+        step_create_domain: true,
+        step_create_content: false,
+        step_publish_content: false,
+        completed: false,
+      };
+      pool._setResults(getSetupResults(row));
       expect(await service.getProgress('org-1')).toBe(33);
     });
 
     test('returns 67 when 2 of 3 steps complete', async () => {
-      pool._setResults([
-        { rows: [], rowCount: 1 },
-        { rows: [{ org_id: 'org-1', profile: true, billing: true, team: false, completed: false }], rowCount: 1 },
-      ]);
+      const row = {
+        org_id: 'org-1',
+        step_create_domain: true,
+        step_create_content: true,
+        step_publish_content: false,
+        completed: false,
+      };
+      pool._setResults(getSetupResults(row));
       expect(await service.getProgress('org-1')).toBe(67);
     });
 
-    test('returns 100 when all steps complete', async () => {
+    test('returns 100 when all steps complete (triggers auto-completion)', async () => {
+      const row = {
+        org_id: 'org-1',
+        step_create_domain: true,
+        step_create_content: true,
+        step_publish_content: true,
+        completed: false,
+      };
       pool._setResults([
+        { rows: [], rowCount: 0 },
+        { rows: [], rowCount: 0 },
         { rows: [], rowCount: 1 },
-        { rows: [{ org_id: 'org-1', profile: true, billing: true, team: true, completed: false }], rowCount: 1 },
-        { rows: [], rowCount: 1 }, // auto-complete UPDATE
+        { rows: [row], rowCount: 1 },
+        { rows: [{ completed: true }], rowCount: 1 }, // UPDATE RETURNING
+        { rows: [], rowCount: 0 },
       ]);
       expect(await service.getProgress('org-1')).toBe(100);
     });
 
     test('returns 0 when row is null', async () => {
       pool._setResults([
+        { rows: [], rowCount: 0 },
+        { rows: [], rowCount: 0 },
         { rows: [], rowCount: 1 },
+        { rows: [], rowCount: 0 },
         { rows: [], rowCount: 0 },
       ]);
       expect(await service.getProgress('org-1')).toBe(0);
@@ -279,14 +371,14 @@ describe('OnboardingService', () => {
   });
 
   describe('reset', () => {
-    test('resets all steps to false', async () => {
+    test('resets all steps to false using correct column names', async () => {
       pool._setResults([{ rows: [], rowCount: 1 }]);
       await service.reset('org-123');
       const calls = pool._getCalls();
       expect(calls).toHaveLength(1);
-      expect(calls[0]!.text).toContain('profile = false');
-      expect(calls[0]!.text).toContain('billing = false');
-      expect(calls[0]!.text).toContain('team = false');
+      expect(calls[0]!.text).toContain('step_create_domain = false');
+      expect(calls[0]!.text).toContain('step_create_content = false');
+      expect(calls[0]!.text).toContain('step_publish_content = false');
       expect(calls[0]!.text).toContain('completed = false');
       expect(calls[0]!.text).toContain('updated_at = now()');
       expect(calls[0]!.values).toEqual(['org-123']);

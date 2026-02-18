@@ -71,126 +71,134 @@ export class MembershipService {
   }
 
   async addMember(orgId: string, userId: string, role: Role): Promise<void> {
-  // Validate inputs
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('Valid userId is required');
-  }
+    // P1-6: Reject 'owner' role at the service layer as defence-in-depth.
+    // The route schema already excludes 'owner', but any future code path calling
+    // addMember() directly (jobs, admin scripts) would bypass that validation.
+    if (role === 'owner') {
+      throw new Error('Owner role cannot be assigned via addMember; use createOrg instead');
+    }
 
-  const client = await this.pool.connect();
+    if (!orgId || typeof orgId !== 'string') {
+      throw new Error('Valid orgId is required');
+    }
+    if (!userId || typeof userId !== 'string') {
+      throw new Error('Valid userId is required');
+    }
 
-  try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
+    const client = await this.pool.connect();
 
-    // Check for duplicates inside transaction with row locking
-    // This prevents race conditions where two concurrent requests
-    // Could add the same member simultaneously
-    await this.checkDuplicateMember(client, orgId, userId);
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-    await client.query(
-    'INSERT INTO memberships (user_id, org_id, role) VALUES ($1,$2,$3)',
-    [userId, orgId, role]
-    );
+      await this.checkDuplicateMember(client, orgId, userId);
 
-    await client.query('COMMIT');
-    // P3-5 FIX: Call audit log after successful mutations
-    await this.auditLog('addMember', orgId, userId, { role });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+      await client.query(
+        'INSERT INTO memberships (user_id, org_id, role) VALUES ($1,$2,$3)',
+        [userId, orgId, role]
+      );
+
+      await client.query('COMMIT');
+      await this.auditLog('addMember', orgId, userId, { role });
+    } catch (error) {
+      // P1-7: Wrap ROLLBACK so a connection failure doesn't replace the original error.
+      try { await client.query('ROLLBACK'); }
+      catch (rbErr) {
+        logger.error('ROLLBACK failed in addMember', rbErr instanceof Error ? rbErr : new Error(String(rbErr)));
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateRole(orgId: string, userId: string, role: Role): Promise<void> {
-  // Validate inputs
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('Valid userId is required');
-  }
-
-  const client = await this.pool.connect();
-
-  try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
-
-    const result = await client.query(
-    'UPDATE memberships SET role=$3 WHERE user_id=$1 AND org_id=$2',
-    [userId, orgId, role]
-    );
-
-    if (result.rowCount === 0) {
-    throw new Error('Membership not found');
+    if (!orgId || typeof orgId !== 'string') {
+      throw new Error('Valid orgId is required');
+    }
+    if (!userId || typeof userId !== 'string') {
+      throw new Error('Valid userId is required');
     }
 
-    await client.query('COMMIT');
-    // P3-5 FIX: Call audit log after successful mutations
-    await this.auditLog('updateRole', orgId, userId, { role });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL statement_timeout = $1', [30000]);
+
+      const result = await client.query(
+        'UPDATE memberships SET role=$3 WHERE user_id=$1 AND org_id=$2',
+        [userId, orgId, role]
+      );
+
+      if (result.rowCount === 0) {
+        throw new Error('Membership not found');
+      }
+
+      await client.query('COMMIT');
+      await this.auditLog('updateRole', orgId, userId, { role });
+    } catch (error) {
+      // P1-7: Wrap ROLLBACK so a connection failure doesn't replace the original error.
+      try { await client.query('ROLLBACK'); }
+      catch (rbErr) {
+        logger.error('ROLLBACK failed in updateRole', rbErr instanceof Error ? rbErr : new Error(String(rbErr)));
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async removeMember(orgId: string, userId: string): Promise<void> {
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('Valid userId is required');
-  }
-
-  const client = await this.pool.connect();
-
-  try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
-
-    // Prevent removing the last owner
-    const { rows } = await client.query(
-    'SELECT role FROM memberships WHERE user_id = $1 AND org_id = $2',
-    [userId, orgId]
-    );
-
-    if (rows.length === 0) {
-    throw new Error('Membership not found');
+    if (!orgId || typeof orgId !== 'string') {
+      throw new Error('Valid orgId is required');
+    }
+    if (!userId || typeof userId !== 'string') {
+      throw new Error('Valid userId is required');
     }
 
-    if (rows[0].role === 'owner') {
-    // P1-8 FIX: Lock ALL owner rows with FOR UPDATE to prevent concurrent
-    // removal of different owners from racing past this check.
-    const { rows: ownerRows } = await client.query(
-    'SELECT COUNT(*) as count FROM memberships WHERE org_id = $1 AND role = $2 FOR UPDATE',
-    [orgId, 'owner']
-    );
-    if (parseInt(ownerRows[0].count, 10) <= 1) {
-    throw new Error('Cannot remove the last owner of the organization');
-    }
-    }
+    const client = await this.pool.connect();
 
-    await client.query(
-    'DELETE FROM memberships WHERE user_id=$1 AND org_id=$2',
-    [userId, orgId]
-    );
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-    await client.query('COMMIT');
-    // P3-5 FIX: Call audit log after successful mutations
-    await this.auditLog('removeMember', orgId, userId, {});
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+      const { rows } = await client.query(
+        'SELECT role FROM memberships WHERE user_id = $1 AND org_id = $2',
+        [userId, orgId]
+      );
+
+      if (rows.length === 0) {
+        throw new Error('Membership not found');
+      }
+
+      if (rows[0].role === 'owner') {
+        const { rows: ownerRows } = await client.query(
+          'SELECT COUNT(*) as count FROM memberships WHERE org_id = $1 AND role = $2 FOR UPDATE',
+          [orgId, 'owner']
+        );
+        if (parseInt(ownerRows[0]['count'], 10) <= 1) {
+          throw new Error('Cannot remove the last owner of the organization');
+        }
+      }
+
+      await client.query(
+        'DELETE FROM memberships WHERE user_id=$1 AND org_id=$2',
+        [userId, orgId]
+      );
+
+      await client.query('COMMIT');
+      await this.auditLog('removeMember', orgId, userId, {});
+    } catch (error) {
+      // P1-7: Wrap ROLLBACK so a connection failure doesn't replace the original error.
+      try { await client.query('ROLLBACK'); }
+      catch (rbErr) {
+        logger.error('ROLLBACK failed in removeMember', rbErr instanceof Error ? rbErr : new Error(String(rbErr)));
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

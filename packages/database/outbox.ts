@@ -10,6 +10,22 @@ import { PoolClient } from 'pg';
 import { DomainEventEnvelope } from '@packages/types/domain-event';
 
 /**
+ * Assert that `client` is inside an active transaction.
+ * Prevents phantom events from being committed when the caller forgot BEGIN.
+ */
+async function assertInTransaction(client: PoolClient): Promise<void> {
+  // pg_current_xact_id_if_assigned() returns NULL when no transaction is active.
+  const { rows } = await client.query<{ in_txn: boolean }>(
+    `SELECT (pg_current_xact_id_if_assigned() IS NOT NULL) AS in_txn`
+  );
+  if (!rows[0]?.in_txn) {
+    throw new Error(
+      'writeToOutbox must be called within an active transaction (BEGIN not called)'
+    );
+  }
+}
+
+/**
  * Write a single event to the outbox table within an existing transaction.
  * The outbox relay will poll and publish this event later.
  *
@@ -20,6 +36,11 @@ export async function writeToOutbox(
   client: PoolClient,
   event: DomainEventEnvelope<unknown>
 ): Promise<void> {
+  // P1-5: Guard against accidental auto-commit writes that would produce phantom
+  // domain events for rolled-back business transactions (e.g. billing for orders
+  // that never committed).
+  await assertInTransaction(client);
+
   await client.query(
     `INSERT INTO event_outbox (event_name, event_version, payload, meta, occurred_at)
      VALUES ($1, $2, $3, $4, $5)`,
@@ -45,6 +66,9 @@ export async function writeMultipleToOutbox(
   events: DomainEventEnvelope<unknown>[]
 ): Promise<void> {
   if (events.length === 0) return;
+
+  // P1-5: Same transaction guard as writeToOutbox.
+  await assertInTransaction(client);
 
   const values: unknown[] = [];
   const placeholders: string[] = [];
