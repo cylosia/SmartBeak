@@ -79,9 +79,9 @@ export const getServerSideProps: GetServerSideProps = async ({ params, req }) =>
     return authCheck.result;
   }
 
-  // TODO: Wire to domain_integrations table
-  const integrations = [
-  { provider: 'Google Search Console', status: 'connected', account_identifier: 'sc-domain:example.com' }
-  ];
+  // Return an empty list until the domain_integrations table endpoint is wired.
+  // The previous hardcoded placeholder ("sc-domain:example.com") was misleading:
+  // it showed fake "connected" state to users who had no real integrations.
+  const integrations: DomainIntegration[] = [];
   return { props: { domainId, integrations } };
 };

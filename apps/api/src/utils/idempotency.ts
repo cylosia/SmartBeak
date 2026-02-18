@@ -89,7 +89,8 @@ const DEFAULT_ENCODING: BinaryToTextEncoding = 'hex';
 // Pre-compiled regex patterns for key format validation (per-encoding, not always hex)
 const HEX_PATTERN = /^[a-f0-9]+$/i;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+=*$/;
-const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+=*$/;
+// Base64url does NOT use padding characters; RFC 4648 §5 prohibits '=' in url-safe alphabet
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 // ============================================================================
 // Hash Algorithm Utilities
@@ -374,12 +375,22 @@ export function hashPayload<T extends Record<string, unknown>>(payload: T): stri
 }
 
 /**
-* Compare two payloads for equality
+* Compare two payloads for equality using a timing-safe comparison.
+*
+* Using `===` on hash strings leaks timing information: the comparison exits
+* at the first differing byte, so an attacker can infer partial hash values
+* through repeated measurements. `crypto.timingSafeEqual` always takes
+* constant time regardless of where the bytes diverge.
 *
 * @param payload1 - First payload
 * @param payload2 - Second payload
 * @returns Whether the payloads are equal
 */
 export function payloadsEqual<T extends Record<string, unknown>>(payload1: T, payload2: T): boolean {
-  return hashPayload(payload1) === hashPayload(payload2);
+  const h1 = hashPayload(payload1);
+  const h2 = hashPayload(payload2);
+  // Both hashes are hex-encoded SHA-256 digests (64 chars), so lengths are equal.
+  // timingSafeEqual requires equal-length Buffers.
+  if (h1.length !== h2.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(h1, 'utf8'), Buffer.from(h2, 'utf8'));
 }

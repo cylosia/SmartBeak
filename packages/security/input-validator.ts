@@ -135,6 +135,14 @@ export function sanitizeHtmlTags(input: string): string {
 
     // Check for tag start
     if (char === '<' && !inTag) {
+      // Peek ahead: if no '>' follows anywhere, treat '<' as a literal character
+      // to avoid silently swallowing all subsequent text for an unclosed tag.
+      const closeIdx = input.indexOf('>', i + 1);
+      if (closeIdx === -1) {
+        // No closing '>' — not a real tag; emit '<' as-is and stop tag scanning.
+        result.push(char);
+        continue;
+      }
       inTag = true;
       continue;
     }
@@ -465,7 +473,10 @@ export function validateQueryParam(
   // Type-specific validation
   switch (options.type) {
     case 'number':
-      if (isNaN(Number(strValue))) {
+      // `Number('')` and `Number('  ')` both produce 0, not NaN, so an empty
+      // or whitespace-only string would pass the isNaN check and be returned as
+      // a valid number. Trim first, then reject empty strings before converting.
+      if (strValue.trim() === '' || isNaN(Number(strValue.trim()))) {
         return null;
       }
       break;
@@ -514,7 +525,9 @@ export function validatePaginationParams(params: {
   limit?: unknown;
   maxLimit?: number;
 }): { page: number; limit: number } {
-  const maxLimit = params.maxLimit || 100;
+  // Use ?? instead of || so that an explicit maxLimit of 0 is preserved.
+  // (0 || 100) evaluates to 100, silently overriding the caller's intent.
+  const maxLimit = params.maxLimit ?? 100;
 
   // Parse page
   let page = 1;
@@ -567,9 +580,4 @@ export const ValidationSchemas = {
     }),
 };
 
-// ============================================================================
-// Export all utilities
-// ============================================================================
-
-export default {
-};
+// All utilities are available as named exports above; no default export needed.

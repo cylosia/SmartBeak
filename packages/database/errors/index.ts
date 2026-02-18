@@ -65,7 +65,7 @@ export class TransactionError extends Error {
  * @returns Sanitized error message
  */
 export function sanitizeDBError(error: Error): string {
-  const message = error["message"].toLowerCase();
+  const message = error.message.toLowerCase();
 
   // Check for specific database error patterns
   if (message.includes('connection') || message.includes('econnrefused')) {
@@ -106,7 +106,7 @@ export function sanitizeDBError(error: Error): string {
  * @returns True if it's a known database error
  */
 export function isDBError(error: Error): boolean {
-  const message = error["message"].toLowerCase();
+  const message = error.message.toLowerCase();
   return (
     message.includes('database') ||
     message.includes('connection') ||
@@ -126,7 +126,7 @@ export function isDBError(error: Error): boolean {
  */
 export function createSanitizedError(error: Error, context?: Record<string, unknown>): Error {
   // Log the original error for debugging
-  logger["error"]('Database error', error, context);
+  logger.error('Database error', error, context);
   
   // Return sanitized error
   return new Error(sanitizeDBError(error));

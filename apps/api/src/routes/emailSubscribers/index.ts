@@ -173,7 +173,7 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         },
       });
     } catch (error) {
-      logger.error('Error listing subscribers: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error('Error listing subscribers', error instanceof Error ? error : new Error(String(error)));
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -250,7 +250,7 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         message: doubleOptIn ? 'Confirmation email sent' : 'Subscriber created',
       });
     } catch (error) {
-      logger.error('Error creating subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error('Error creating subscriber', error instanceof Error ? error : new Error(String(error)));
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -288,7 +288,7 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
 
       return reply.send({ data: subscriber });
     } catch (error) {
-      logger.error('Error fetching subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error('Error fetching subscriber', error instanceof Error ? error : new Error(String(error)));
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -360,7 +360,7 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
 
       return reply.send({ data: result });
     } catch (error) {
-      logger.error('Error updating subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error('Error updating subscriber', error instanceof Error ? error : new Error(String(error)));
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -400,7 +400,7 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
 
       return reply.status(204).send();
     } catch (error) {
-      logger.error('Error deleting subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      logger.error('Error deleting subscriber', error instanceof Error ? error : new Error(String(error)));
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });

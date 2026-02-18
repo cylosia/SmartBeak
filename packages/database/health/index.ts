@@ -29,7 +29,7 @@ export async function checkHealth(): Promise<{
     return {
       healthy: false,
       latency: Date.now() - start,
-      error: error instanceof Error ? error["message"] : String(error),
+      error: error instanceof Error ? error.message : String(error),
       metrics: getConnectionMetrics(),
     };
   }
@@ -76,7 +76,7 @@ export async function checkSequenceHealth(): Promise<{
     };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger["error"]('Failed to check sequence health', err);
+    logger.error('Failed to check sequence health', err);
     return {
       healthy: false, // P2-MEDIUM FIX: Return false on error to properly indicate health check failure
       sequences: [],

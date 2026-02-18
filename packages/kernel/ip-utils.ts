@@ -14,7 +14,16 @@ export function isValidIp(ip: string): boolean {
   // IPv4: split on '.' and validate each octet
   const v4Parts = ip.split('.');
   if (v4Parts.length === 4) {
-    return v4Parts.every(p => /^\d{1,3}$/.test(p) && parseInt(p, 10) <= 255);
+    return v4Parts.every(p => {
+      // Reject leading zeros (e.g. "007"): they are syntactically ambiguous.
+      // Some downstream parsers treat them as octal, allowing an attacker to
+      // craft an IP that passes an allowlist check as decimal 7 but is routed
+      // as octal 7 (== decimal 7 here, but "010" == 8 decimal vs 10 decimal
+      // depending on the parser). Normalise by rejecting any multi-digit
+      // component with a leading zero.
+      if (p.length > 1 && p.startsWith('0')) return false;
+      return /^\d{1,3}$/.test(p) && parseInt(p, 10) <= 255;
+    });
   }
   // IPv6: split on ':' and validate each group
   if (ip.includes(':')) {
@@ -57,6 +66,12 @@ export function getClientIp(
     }
   }
 
-  // Fallback to direct connection IP
-  return requestIp || 'unknown';
+  // Fallback to direct connection IP.
+  // Validate before returning: framework values like req.ip come from trusted
+  // infrastructure, but req.socket.remoteAddress may contain unexpected
+  // formats in test environments or unusual proxy setups.
+  if (requestIp && isValidIp(requestIp)) {
+    return requestIp;
+  }
+  return 'unknown';
 }
