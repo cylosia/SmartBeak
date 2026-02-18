@@ -72,25 +72,32 @@ export class PostgresSearchDocumentRepository implements SearchDocumentRepositor
     }
   }
 
-  async search(query: string, limit = 20): Promise<SearchResultRow[]> {
+  // P0-FIX: Added indexId parameter to scope search to a single tenant's index.
+  // Without it search returned results from ALL organisations in the system
+  // (cross-tenant data leak).
+  async search(query: string, indexId: string, limit = 20): Promise<SearchResultRow[]> {
+    if (!indexId || typeof indexId !== 'string') {
+      throw new Error('indexId must be a non-empty string');
+    }
 
     const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-    
+
     // SECURITY FIX: Sanitize FTS query to prevent injection and DoS
     const sanitizedQuery = this.sanitizeFtsQuery(query);
-    
+
     try {
       const { rows } = await this.pool.query(`SELECT id, fields,
         ts_rank(tsv_weighted, plainto_tsquery('english', $1)) AS rank
     FROM search_documents
     WHERE status = 'indexed'
+      AND index_id = $3
       AND tsv_weighted @@ plainto_tsquery('english', $1)
     ORDER BY rank DESC
-    LIMIT $2`, [sanitizedQuery, safeLimit]);
+    LIMIT $2`, [sanitizedQuery, safeLimit, indexId]);
       return rows as SearchResultRow[];
     }
     catch (error) {
-      logger.error('Failed to search documents', error as Error, { query: sanitizedQuery });
+      logger.error('Failed to search documents', error as Error, { query: sanitizedQuery, indexId });
       throw error;
     }
   }

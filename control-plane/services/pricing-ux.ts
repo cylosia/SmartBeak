@@ -12,7 +12,18 @@ export class PricingUXService {
   const plan = await this.billing.getActivePlan(orgId);
   const usage = await this.usage.getUsage(orgId) as Record<string, number>;
 
-  if (!plan || plan.max_domains === null) {
+  // P1-FIX: Split no-plan from unlimited-plan case.
+  // Previously !plan fell through to 'Unlimited domains', so users with
+  // cancelled/expired/absent subscriptions got unlimited access.
+  if (!plan) {
+    return {
+    allowed: false,
+    upgradeRequired: true,
+    message: 'No active subscription'
+    };
+  }
+
+  if (plan.max_domains === null) {
     return {
     allowed: true,
     message: 'Unlimited domains'

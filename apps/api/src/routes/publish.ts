@@ -25,14 +25,14 @@ class IdempotencyService {
   constructor(pool: Pool) {
     this.pool = pool;
   }
-  async checkOrCreate(idempotencyKey: string, operation: string, payload: unknown) {
+  async checkOrCreate(idempotencyKey: string, operation: string, payload: unknown, orgId: string) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      // Check for existing intent
+      // Check for existing intent — scoped to the calling org (P0-FIX: IDOR prevention)
       const { rows } = await client.query(`SELECT result, status
     FROM idempotency_keys
-    WHERE key = $1 AND operation = $2`, [idempotencyKey, operation]);
+    WHERE key = $1 AND operation = $2 AND org_id = $3`, [idempotencyKey, operation, orgId]);
       if (rows.length > 0) {
         // Key exists - return cached result
         await client.query('COMMIT');
@@ -41,9 +41,9 @@ class IdempotencyService {
           existingResult: rows[0].result
         };
       }
-      // Create new intent record
-      await client.query(`INSERT INTO idempotency_keys (key, operation, payload, status, created_at)
-    VALUES ($1, $2, $3, 'pending', NOW())`, [idempotencyKey, operation, JSON.stringify(payload)]);
+      // P0-FIX: Store org_id so GET /publish/intents/:id can enforce ownership
+      await client.query(`INSERT INTO idempotency_keys (key, operation, payload, status, org_id, created_at)
+    VALUES ($1, $2, $3, 'pending', $4, NOW())`, [idempotencyKey, operation, JSON.stringify(payload), orgId]);
       await client.query('COMMIT');
       return { isNew: true };
     }
@@ -108,8 +108,9 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
       }
       // Generate idempotency key if not provided
       const idempotencyKey = validated.idempotencyKey || crypto.randomUUID();
-      // Check idempotency
-      const { isNew, existingResult } = await idempotencyService.checkOrCreate(idempotencyKey, 'publish_intent', validated);
+      // Check idempotency — pass orgId for tenant scoping (P0-FIX: IDOR prevention)
+      const orgId = req.authContext['orgId'] as string;
+      const { isNew, existingResult } = await idempotencyService.checkOrCreate(idempotencyKey, 'publish_intent', validated, orgId);
       if (!isNew) {
         // Return cached result
         return res.status(200).send({
@@ -155,9 +156,12 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
     try {
       const params = req.params as { id: string };
       const { id } = params;
+      const reqOrgId = req.authContext['orgId'] as string;
+      // P0-FIX: Scope by org_id to prevent IDOR — without this any authenticated
+      // user could read any organisation's publish intent by knowing its key.
       const { rows } = await pool.query(`SELECT key, status, result, error, created_at, completed_at
     FROM idempotency_keys
-    WHERE key = $1`, [id]);
+    WHERE key = $1 AND org_id = $2`, [id, reqOrgId]);
       if (rows.length === 0) {
         return errors.notFound(res, 'Intent', ErrorCodes.INTENT_NOT_FOUND);
       }

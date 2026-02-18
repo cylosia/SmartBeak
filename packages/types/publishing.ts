@@ -6,6 +6,13 @@
 * cross-boundary imports between plugins and domains.
 */
 
+/**
+ * Full publish target configuration including credentials.
+ * P0-FIX: This type MUST NOT be embedded in BullMQ job payloads or any
+ * data structure that is serialized to Redis or logs. Credentials must be
+ * resolved at execution time from a secrets store, never queued.
+ * Use PublishJobPayload for job queue entries instead.
+ */
 export interface PublishTargetConfig {
   url?: string;
   token?: string;
@@ -14,6 +21,25 @@ export interface PublishTargetConfig {
   options?: Record<string, unknown>;
 }
 
+/**
+ * Job queue payload — safe to serialize to Redis/BullMQ.
+ * P0-FIX: Replaces PublishInput for all job-queue use. Credentials are
+ * referenced by a credentialRef ID and resolved at execution time from the
+ * secrets vault; they are never stored in the queue payload.
+ */
+export interface PublishJobPayload {
+  domainId: string;
+  contentId: string;
+  targetId: string;
+  /** Opaque reference resolved to credentials at execution time — never the credential itself */
+  credentialRef: string;
+}
+
+/**
+ * @deprecated Use PublishJobPayload for job queues to avoid storing secrets in Redis.
+ * PublishInput (with embedded targetConfig) may only be used for in-process calls
+ * where credentials are resolved and passed directly without serialization.
+ */
 export interface PublishInput {
   domainId: string;
   contentId: string;

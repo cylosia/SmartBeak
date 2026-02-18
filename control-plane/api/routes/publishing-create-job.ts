@@ -51,12 +51,16 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
 
     const { contentId, targetId, scheduleAt } = parseResult.data;
 
-    return svc.createJob({
+    // P0-FIX: await the result so the handler returns the resolved value,
+    // not a Promise object serialized as {}, and errors are caught by the
+    // try/catch instead of becoming unhandled promise rejections.
+    const result = await svc.createJob({
     domainId: ctx["domainId"]!,
     contentId,
     targetId,
     ...(scheduleAt !== undefined && { scheduleAt }),
     });
+    return res.status(201).send(result);
   } catch (error) {
     if (error instanceof RoleAccessError) {
     return errors.forbidden(res);

@@ -192,8 +192,12 @@ export class MLPredictionEngine extends EventEmitter {
   * Predict content decay
   */
   async predictContentDecay(domainId: string): Promise<ContentDecayPrediction[]> {
+  // P0-FIX: Added missing SELECT keyword inside the CTE — the original query
+  // was missing SELECT after 'content_stats AS (' causing a PostgreSQL parse error
+  // meaning predictContentDecay() always threw and was entirely non-functional.
   const { rows } = await this.db.query(
     `WITH content_stats AS (
+    SELECT
     c.id as content_id,
     c.title,
     AVG(cp.page_views) as avg_views,
@@ -271,8 +275,12 @@ export class MLPredictionEngine extends EventEmitter {
   );
 
   // Get high-volume keywords not ranking well
+  // P0-FIX: Added missing SELECT keyword inside the CTE and added keyword column
+  // to SELECT list so GROUP BY keyword is valid and rows have a keyword field.
   const { rows: opportunities } = await this.db.query(
     `WITH competitor_keywords AS (
+    SELECT
+    keyword,
     AVG(volume) as avg_volume,
     AVG(difficulty) as avg_difficulty,
     COUNT(DISTINCT domain_id) as competitor_count

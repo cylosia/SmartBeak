@@ -220,7 +220,8 @@ export class PaaAdapter implements KeywordIngestionAdapter {
   /**
   * Fetch from DataForSEO
   */
-  private async fetchFromDataForSeo(_keyword: string): Promise<KeywordSuggestion[]> {
+  // P1-FIX: Rename _keyword → keyword so the value is included in the request body
+  private async fetchFromDataForSeo(keyword: string): Promise<KeywordSuggestion[]> {
   const login = process.env['DATAFORSEO_LOGIN'];
   const password = process.env['DATAFORSEO_PASSWORD'];
 
@@ -242,6 +243,7 @@ export class PaaAdapter implements KeywordIngestionAdapter {
     'Content-Type': 'application/json',
     },
     body: JSON.stringify([{
+    keyword,
     location_code: this.getLocationCode(this.country),
     language_code: this.language,
     depth: 100,
@@ -308,6 +310,31 @@ export class PaaAdapter implements KeywordIngestionAdapter {
   const customEndpoint = process.env['CUSTOM_SERP_ENDPOINT'];
   if (!customEndpoint) {
     throw new Error('CUSTOM_SERP_ENDPOINT is required for custom provider');
+  }
+
+  // P0-SECURITY FIX: Validate CUSTOM_SERP_ENDPOINT to prevent SSRF.
+  // Without validation an attacker who controls this env var can reach
+  // internal services (AWS IMDS, databases, internal APIs).
+  try {
+    const parsed = new URL(customEndpoint);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error(`Unsupported protocol: ${parsed.protocol}`);
+    }
+    const forbidden = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', '169.254.170.2'];
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      forbidden.includes(hostname) ||
+      // Block private IPv4 ranges
+      /^10\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+      // Block link-local
+      /^169\.254\./.test(hostname)
+    ) {
+      throw new Error(`CUSTOM_SERP_ENDPOINT points to a private/reserved address: ${hostname}`);
+    }
+  } catch (e) {
+    throw new Error(`Invalid CUSTOM_SERP_ENDPOINT: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const controller = new AbortController();
@@ -388,5 +415,20 @@ export class PaaAdapter implements KeywordIngestionAdapter {
   }
 }
 
-// Backward-compatible default export
-export const paaAdapter = new PaaAdapter();
+// P0-FIX: Lazy singleton — eager instantiation crashes the process at import time
+// if SERP_API_KEY is absent (e.g. in test runners, workers missing the env var).
+let _paaAdapterInstance: PaaAdapter | undefined;
+export function getPaaAdapter(): PaaAdapter {
+  return (_paaAdapterInstance ??= new PaaAdapter());
+}
+
+/**
+ * @deprecated Use getPaaAdapter() to avoid process crash on missing SERP_API_KEY.
+ * This export is kept for backward compatibility but will throw if SERP_API_KEY
+ * is not set at module load time.
+ */
+export const paaAdapter: PaaAdapter = new Proxy({} as PaaAdapter, {
+  get(_target, prop) {
+    return getPaaAdapter()[prop as keyof PaaAdapter];
+  },
+});
