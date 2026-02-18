@@ -51,30 +51,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get internal link statistics
     const internalStats = await client.query(`
-      SELECT COUNT(DISTINCT p["id"]) as total_pages,
+      SELECT COUNT(DISTINCT p.id) as total_pages,
       COUNT(DISTINCT CASE WHEN NOT EXISTS (
-      SELECT 1 FROM links l2 WHERE l2.source_id = p["id"]
-      ) THEN p["id"] END) as orphan_pages,
-      COUNT(DISTINCT CASE WHEN l.broken = true THEN l["id"] END) as broken_links,
+      SELECT 1 FROM links l2 WHERE l2.source_id = p.id
+      ) THEN p.id END) as orphan_pages,
+      COUNT(DISTINCT CASE WHEN l.broken = true THEN l.id END) as broken_links,
       COALESCE(AVG(link_counts.link_count), 0) as avg_links_per_page
     FROM pages p
-    LEFT JOIN links l ON l.source_id = p["id"]
+    LEFT JOIN links l ON l.source_id = p.id
     LEFT JOIN (
       SELECT source_id, COUNT(*) as link_count
       FROM links
       GROUP BY source_id
-    ) link_counts ON link_counts.source_id = p["id"]
+    ) link_counts ON link_counts.source_id = p.id
     WHERE p.domain_id = $1
     `, [domainId]);
 
     // Get external link statistics
     const externalStats = await client.query(`
       SELECT COUNT(*) as total_external,
-      COUNT(DISTINCT CASE WHEN l.broken = true THEN l["id"] END) as broken_links,
-      COUNT(DISTINCT CASE WHEN l.rel = 'affiliate' THEN l["id"] END) as affiliate_links,
+      COUNT(DISTINCT CASE WHEN l.broken = true THEN l.id END) as broken_links,
+      COUNT(DISTINCT CASE WHEN l.rel = 'affiliate' THEN l.id END) as affiliate_links,
       COUNT(DISTINCT l.target_domain) as domains_linked
     FROM links l
-    JOIN pages p ON l.source_id = p["id"]
+    JOIN pages p ON l.source_id = p.id
     WHERE p.domain_id = $1 AND l.is_external = true
     `, [domainId]);
 
@@ -103,12 +103,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     res.json(linkSummary);
+  } catch (queryError: unknown) {
+    await client.query('ROLLBACK').catch((rbErr: unknown) => {
+      getLogger('diligence:links').error('ROLLBACK failed', rbErr instanceof Error ? rbErr : undefined);
+    });
+    throw queryError;
   } finally {
     client.release();
   }
   } catch (error: unknown) {
   if (error instanceof Error && error.name === 'AuthError') return;
-  getLogger('diligence:links').error('Error fetching link summary', error instanceof Error ? error : undefined, { error: String(error) });
+  getLogger('diligence:links').error('Error fetching link summary', error instanceof Error ? error : undefined);
   sendError(res, 500, 'Failed to fetch link summary');
   }
 }

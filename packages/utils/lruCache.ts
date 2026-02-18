@@ -188,6 +188,9 @@ export class BoundedMap<K, V> extends Map<K, V> {
   constructor(maxSize: number, entries?: readonly (readonly [K, V])[] | null) {
   super(entries);
   this.maxSize = maxSize;
+  if (this.size > maxSize) {
+    throw new Error(`BoundedMap initial entries (${this.size}) exceed maxSize (${maxSize})`);
+  }
   }
 
   override set(key: K, value: V): this {
