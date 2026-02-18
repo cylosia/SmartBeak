@@ -39,7 +39,7 @@ export const envSchema = z.object({
   SERVICE_NAME: z.string().min(2).regex(/^[a-zA-Z0-9_-]+$/, {
     message: 'SERVICE_NAME must contain only alphanumeric characters, hyphens, and underscores',
   }),
-  PORT: z.coerce.number().int().positive().optional(),
+  PORT: z.coerce.number().int().min(1).max(65535).optional(),
 
   // -- Database --
   CONTROL_PLANE_DB: nonPlaceholder,
