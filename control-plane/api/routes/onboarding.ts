@@ -47,9 +47,12 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     if (!ctx) {
     return errors.unauthorized(res);
     }
-    requireRole(ctx, ['owner', 'admin', 'editor']);
-    // SECURITY FIX (C03): Use per-user identifier instead of global static string
+    // SECURITY FIX (order): Rate-limit before role check so that callers with
+    // insufficient roles still consume quota.  The previous order let any
+    // authenticated-but-wrong-role user probe authorization state without ever
+    // being rate-limited, enabling unlimited auth-enumeration requests.
     await rateLimit(`onboarding:${ctx.userId}`, 50);
+    requireRole(ctx, ['owner', 'admin', 'editor']);
 
     const status = await onboarding.get(ctx["orgId"]);
     return res.send(status);
@@ -105,9 +108,9 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     if (!ctx) {
     return errors.unauthorized(res);
     }
-    requireRole(ctx, ['owner', 'admin', 'editor']);
-    // SECURITY FIX (C03): Use per-user identifier instead of global static string
+    // SECURITY FIX (order): Rate-limit before role check (see GET /onboarding for rationale).
     await rateLimit(`onboarding:step:${ctx.userId}`, 50);
+    requireRole(ctx, ['owner', 'admin', 'editor']);
 
     // SECURITY FIX (H02): Validate step against enum at route boundary
     const paramsResult = StepParamsSchema.safeParse(req.params);

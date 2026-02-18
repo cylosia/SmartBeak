@@ -190,13 +190,25 @@ export class OutboxRelay {
           );
         }
 
-        // Increment retry_count for failures
-        for (const f of failedUpdates) {
+        // FIX (P1-n1): Batch the retry_count increments for failed events into a
+        // single UPDATE using UNNEST instead of one round-trip per failure.
+        // Previously this was an N+1 loop that caused O(failures) DB queries per
+        // poll cycle, creating excessive load when the event bus is degraded.
+        if (failedUpdates.length > 0) {
           await client.query(
             `UPDATE event_outbox
-             SET retry_count = retry_count + 1, last_error = $1
-             WHERE id = $2`,
-            [f.error, f.id]
+             SET retry_count = retry_count + 1,
+                 last_error  = updates.last_error
+             FROM (
+               SELECT
+                 unnest($1::text[])::bigint AS id,
+                 unnest($2::text[])         AS last_error
+             ) AS updates
+             WHERE event_outbox.id = updates.id`,
+            [
+              failedUpdates.map((f) => f.id),
+              failedUpdates.map((f) => f.error),
+            ]
           );
         }
 
@@ -208,9 +220,25 @@ export class OutboxRelay {
           failed: failedUpdates.length,
         });
 
-        this.resetBackoff();
+        // FIX (P2-backoff): Only reset the backoff when at least one event was
+        // successfully published.  If every event in the batch failed (e.g. the
+        // event bus is degraded), keep increasing the delay so we don't hammer
+        // the DB with tight polling loops while the downstream is unavailable.
+        if (publishedIds.length > 0) {
+          this.resetBackoff();
+        } else {
+          this.increaseBackoff();
+        }
       } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
+        // FIX (P1-rollback): Log ROLLBACK failures so operators can detect
+        // connections left open due to network errors. Re-throw the original
+        // error so the outer catch sees the root cause.
+        await client.query('ROLLBACK').catch((rbErr: unknown) => {
+          logger.error(
+            'OutboxRelay: ROLLBACK failed',
+            rbErr instanceof Error ? rbErr : new Error(String(rbErr))
+          );
+        });
         client.release(true);
         throw err;
       }
