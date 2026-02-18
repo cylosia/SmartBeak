@@ -350,6 +350,21 @@ export class HealthChecksRegistry extends EventEmitter {
       .filter(([, config]) => config.severity === 'critical')
       .map(([name]) => name);
 
+    // P2-FIX: Fail-safe when no critical checks are registered.
+    // Array.prototype.every() returns true on an empty array (vacuous truth), so
+    // without this guard a misconfigured registry (all checks set to 'warning'/'info')
+    // would declare the pod ready despite zero dependency verification.
+    // This causes Kubernetes to route traffic to pods with dead DB/Redis connections.
+    if (criticalChecks.length === 0) {
+      logger.warn('checkReadiness: no critical health checks registered — pod is NOT ready (fail-safe)');
+      return {
+        ready: false,
+        timestamp: new Date().toISOString(),
+        checks: [],
+        dependencies: [],
+      };
+    }
+
     // P1-AUDIT-FIX: Run critical checks in parallel (was sequential with for-await).
     // Sequential: N checks * 5s timeout = N*5s worst case (exceeds K8s probe timeout).
     // Parallel: max(timeouts) = 5s worst case.

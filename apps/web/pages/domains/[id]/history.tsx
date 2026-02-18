@@ -1,9 +1,14 @@
 import type { GetServerSidePropsContext } from 'next';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
+// P3-FIX: Import DomainId branded type and its unsafe cast factory.
+// The UUID regex validation in getServerSideProps guarantees the string is a
+// well-formed UUID, making the unsafeAsDomainId cast here safe by construction.
+import type { DomainId } from '@kernel/branded';
+import { unsafeAsDomainId } from '@kernel/branded';
 
 interface DomainHistoryProps {
-  domainId: string;
+  domainId: DomainId;
 }
 
 // P1-AUDIT-FIX: Replaced hardcoded mock data with explicit placeholder.
@@ -26,5 +31,6 @@ export async function getServerSideProps({ params }: GetServerSidePropsContext) 
   if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return { notFound: true };
   }
-  return { props: { domainId: id } };
+  // P3-FIX: Cast to DomainId after UUID validation — safe by construction.
+  return { props: { domainId: unsafeAsDomainId(id) } };
 }

@@ -96,7 +96,10 @@ export function registerHealthCheck(check: HealthCheck): void {
         const result = await check.check();
         getMutableLastResults().set(check.name, result);
       } catch (err: unknown) {
-        logger.error(`Health check '${check.name}' failed:`, err as Error);
+        // P2-FIX: Replaced `err as Error` unsafe cast with structured logging.
+        // If `err` is not an Error instance (e.g., a thrown string or object),
+        // the cast would silently log undefined for .message and .stack.
+        logger.error(`Health check '${check.name}' failed`, { error: err instanceof Error ? err.message : String(err) });
         const errorMessage = err instanceof Error ? err.message : String(err);
         getMutableLastResults().set(check.name, {
         name: check.name,
@@ -114,22 +117,33 @@ export function registerHealthCheck(check: HealthCheck): void {
 }
 
 /**
-* P1-FIX: Cleanup health check timers
-* @param name - Optional name of specific health check to cleanup, or all if not provided
+* P2-FIX: Full health check reset — clears timers AND check registrations.
+* The previous implementation only cleared timers, leaving stale check registrations
+* and last-result entries in the state store. Consequences:
+*   - Memory leak: registrations accumulate over server lifetime with no bound.
+*   - Test pollution: checks registered in one test bleed into subsequent tests,
+*     causing false health results that depend on test execution order.
+* @param name - Optional name of a specific health check to remove, or all if omitted.
 */
 export function cleanupHealthCheckTimers(name?: string): void {
   if (name) {
     const timer = stateStore.timers.get(name);
     if (timer) {
-    clearInterval(timer);
-    stateStore.timers.delete(name);
+      clearInterval(timer);
+      stateStore.timers.delete(name);
     }
+    // P2-FIX: Also remove the check registration and its last result
+    stateStore.healthChecks.delete(name);
+    stateStore.lastResults.delete(name);
   } else {
     // Clear all timers
-    for (const [checkName, timer] of stateStore.timers) {
-    clearInterval(timer);
-    stateStore.timers.delete(checkName);
+    for (const [, timer] of stateStore.timers) {
+      clearInterval(timer);
     }
+    stateStore.timers.clear();
+    // P2-FIX: Also clear all check registrations and cached results
+    stateStore.healthChecks.clear();
+    stateStore.lastResults.clear();
   }
 }
 
@@ -271,7 +285,10 @@ export function createExternalApiHealthCheck(
   name: string,
   healthUrl: string,
   options?: {
-  method?: string;
+  // P2-FIX: Constrain to safe read-only HTTP methods. An unconstrained `string`
+  // allows passing 'DELETE' or 'CONNECT', which could delete the target resource
+  // or establish a tunnel on every probe interval (every 60 seconds by default).
+  method?: 'GET' | 'HEAD' | 'POST';
   headers?: Record<string, string>;
   timeoutMs?: number;
   expectedStatus?: number;

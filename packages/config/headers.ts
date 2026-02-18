@@ -36,6 +36,15 @@ export const BASE_SECURITY_HEADERS: Record<string, string> = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
   'X-DNS-Prefetch-Control': 'off',
   'Cross-Origin-Opener-Policy': 'same-origin',
+  // P2-FIX: Added Cross-Origin-Embedder-Policy.
+  // COEP: require-corp + COOP: same-origin together enable cross-origin isolation,
+  // which is required to mitigate Spectre/Meltdown timing attacks (access to
+  // SharedArrayBuffer, high-resolution timers). Without COEP, browsers cannot
+  // grant cross-origin isolation even with the correct COOP value already set.
+  // NOTE: Verify that all cross-origin subresources (Clerk, Stripe iframes,
+  // CDN assets) set Cross-Origin-Resource-Policy: cross-origin on their responses,
+  // or this header will block them. Audit before enabling on the web app surface.
+  'Cross-Origin-Embedder-Policy': 'require-corp',
   'Cross-Origin-Resource-Policy': 'same-origin',
 };
 
