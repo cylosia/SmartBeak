@@ -25,7 +25,7 @@ export interface AuthenticatedRequest extends FastifyRequest {
   auth: AuthContext;
 }
 
-export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) {
+export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const admin = new NotificationAdminService(pool);
   const dlq = new PostgresNotificationDLQRepository(pool);
 

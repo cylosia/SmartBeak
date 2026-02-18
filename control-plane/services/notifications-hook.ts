@@ -116,19 +116,26 @@ export function registerNotificationsDomain(eventBus: EventBus, pool: Pool): voi
 
     const adminEmail = getAdminEmail();
 
-    // P1-FIX: Removed `...event["payload"]` spread that allowed attacker-controlled
-    // fields to override sanitized values (e.g., `to: adminEmail` could be overwritten
-    // by a `to` field in the event payload). Only explicitly validated fields are passed.
+    // P0-FIX: Use orgId (not domainId) as the org_id stored in the notifications
+    // table. domainId ≠ orgId; using domainId as orgId corrupted all tenant-scoped
+    // admin queries (listNotifications, metrics, DLQ) for these notifications.
+    // Fall back to domainId only when orgId is absent from the event.
+    const orgId = event["meta"]["orgId"] ?? event["meta"]["domainId"];
+
+    // Only explicitly validated fields are passed — no spread of event.payload
+    // which would let attacker-controlled keys override sanitised values.
     const result = await service.create(
-    event["meta"]["domainId"],
+    orgId,
     'admin-user',
     'email',
     'publishing_failed',
     {
     to: adminEmail,
+    orgId,
     domainId: event["meta"]["domainId"],
     contentId: event["payload"]?.["contentId"],
-    error: event["payload"]?.["error"],
+    // Truncate to prevent unbounded payload from large stack traces.
+    error: event["payload"]?.["error"]?.slice(0, 500),
     target: event["payload"]?.["target"],
     timestamp: new Date().toISOString(),
     }
