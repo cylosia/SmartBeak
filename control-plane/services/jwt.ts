@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getLogger } from '../../packages/kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
-import { rejectDisallowedAlgorithm } from '../../packages/security/jwt';
+import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken } from '../../packages/security/jwt';
 
 
 /**
@@ -483,16 +483,14 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
 * @throws {MissingClaimError} When required claims are missing
 * @throws {TokenBindingError} When org binding check fails
 */
-export async function verifyToken(
+export function verifyToken(
   token: string,
   aud: string = DEFAULT_AUDIENCE,
   iss: string = DEFAULT_ISSUER
-): Promise<JwtClaims> {
-  // Import from unified auth package
-  const { verifyToken: verifyTokenSync } = await import('@kernel/auth');
-  // P2-13 FIX: Remove incorrect Promise<JwtClaims> cast. verifyTokenSync returns
-  // JwtClaims synchronously; the async function auto-wraps it in a Promise.
-  return verifyTokenSync(token, { audience: aud, issuer: iss }) as JwtClaims;
+): JwtClaims {
+  // Delegate directly to packages/security/jwt.ts — the canonical implementation.
+  // The previous dynamic import(@kernel/auth) routed through a stub that always threw.
+  return securityVerifyToken(token, { audience: aud, issuer: iss }) as JwtClaims;
 }
 
 // ============================================================================

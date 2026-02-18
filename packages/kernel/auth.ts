@@ -1,6 +1,6 @@
 /**
  * Kernel Auth Package
- * 
+ *
  * Authentication and authorization utilities for the kernel package.
  * P0-FIX: Created this file to resolve TS2307 errors from missing module.
  */
@@ -8,7 +8,7 @@
 /**
  * Auth error types
  */
-export type AuthErrorCode = 
+export type AuthErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
   | 'TOKEN_EXPIRED'
@@ -25,7 +25,7 @@ export type AuthErrorCode =
  */
 export class AuthError extends Error {
   readonly code: AuthErrorCode;
-  
+
   constructor(message: string, code: AuthErrorCode = 'UNAUTHORIZED') {
     super(message);
     this.name = 'AuthError';
@@ -92,18 +92,19 @@ export interface VerifyTokenOptions {
   // F29-FIX: Removed ignoreExpiration - expired tokens must always be rejected
 }
 
+// Delegate to the real implementation in packages/security/jwt.ts.
+// Static import is safe: security/jwt only imports @kernel/logger, no circular dep.
+import { verifyToken as securityVerifyToken } from '../security/jwt';
+
 /**
- * Verify a JWT token synchronously
- * Note: This is a stub implementation. In production, this should delegate
- * to a proper JWT verification service.
- * 
+ * Verify a JWT token synchronously.
+ * Delegates to packages/security/jwt.ts which holds the real implementation.
+ *
  * @param token - JWT token string
  * @param options - Verification options
  * @returns Decoded claims
- * @throws {TokenInvalidError} When token is invalid
+ * @throws {TokenInvalidError} When token is invalid or verification fails
  */
-export function verifyToken(token: string, _options: VerifyTokenOptions = {}): unknown {
-  // This is a placeholder - actual implementation would verify JWT signature
-  // and return decoded claims
-  throw new TokenInvalidError('Token verification not implemented in kernel package. Use packages/security/auth.ts');
+export function verifyToken(token: string, options: VerifyTokenOptions = {}): unknown {
+  return securityVerifyToken(token, { audience: options.audience, issuer: options.issuer });
 }

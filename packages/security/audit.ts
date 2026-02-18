@@ -173,11 +173,15 @@ export class AuditLogger extends EventEmitter {
     id: this.generateEventId(),
     timestamp: new Date(),
     previousHash: this.lastHash,
-    hash: '', // Will be calculated
+    hash: '', // Placeholder — replaced below
   };
 
-  // Calculate hash for tamper detection
-  fullEvent.hash = this.calculateHash(fullEvent);
+  // P44-FIX: calculateHash must NOT include the hash field itself in its input.
+  // The verifyIntegrity path correctly destructures {hash: _, ...rest} before
+  // hashing, but log() was passing the full object with hash:'', producing
+  // hashes that always mismatched during verification (broken tamper detection).
+  const { hash: _placeholder, ...eventWithoutHash } = fullEvent;
+  fullEvent.hash = this.calculateHash(eventWithoutHash as Omit<AuditEvent, 'hash'>);
   this.lastHash = fullEvent.hash;
 
   this.buffer.push(fullEvent);

@@ -9,6 +9,10 @@
  */
 
 import { EventEmitter } from 'events';
+// P0-3 FIX: Use top-level ESM import instead of require('crypto').
+// require() does not exist in ESM modules — it crashed every fireAlert() call,
+// meaning zero alerts were ever stored or delivered.
+import { randomBytes } from 'crypto';
 import { getLogger } from '@kernel/logger';
 import { Pool } from 'pg';
 import { MetricsCollector } from './metrics-collector';
@@ -415,6 +419,9 @@ export class AlertRulesEngine extends EventEmitter {
   private readonly rules: Map<string, AlertRule> = new Map();
   private readonly activeAlerts: Map<string, AlertInstance> = new Map();
   private readonly notificationHandlers: Map<AlertChannel, NotificationHandler[]> = new Map();
+  // P0-4 FIX: Health providers injected by callers — each returns 1 (healthy) or 0 (unhealthy).
+  // Register via registerHealthProvider() before starting evaluation.
+  private readonly healthProviders: Map<string, () => number> = new Map();
   private evaluationInterval: NodeJS.Timeout | undefined;
   private readonly db: Pool | undefined;
   private readonly metricsCollector: MetricsCollector | undefined;
@@ -423,6 +430,16 @@ export class AlertRulesEngine extends EventEmitter {
     super();
     this.db = config.db;
     this.metricsCollector = config.metricsCollector;
+  }
+
+  /**
+   * Register a health-check provider for a specific metric key (e.g. 'health.db').
+   * The provider must return 1 for healthy and 0 for unhealthy.
+   * P0-4 FIX: Callers must register providers before starting the engine so
+   * health-based alert rules can actually evaluate real system state.
+   */
+  registerHealthProvider(metric: string, provider: () => number): void {
+    this.healthProviders.set(metric, provider);
   }
 
   /**
@@ -604,12 +621,22 @@ export class AlertRulesEngine extends EventEmitter {
   }
 
   /**
-   * Get health metric value
+   * Get health metric value from injected health-check callbacks.
+   *
+   * P0-4 FIX: The previous implementation always returned 1 (healthy),
+   * meaning availability alerts for DB/Redis could never fire regardless
+   * of actual system state. Now delegates to registered health providers;
+   * throws if none are registered so the misconfiguration is visible.
    */
-  private getHealthMetricValue(_metric: string): number {
-    // This would integrate with health checks
-    // Returns 1 for healthy, 0 for unhealthy
-    return 1; // Default to healthy
+  private getHealthMetricValue(metric: string): number {
+    const provider = this.healthProviders?.get(metric);
+    if (!provider) {
+      // Fail loudly — a missing health provider means the alert rule is
+      // misconfigured, not that the system is healthy.
+      logger.warn('No health provider registered for metric', { metric });
+      return 0; // Conservative: treat unknown health metric as unhealthy
+    }
+    return provider();
   }
 
   /**
@@ -655,9 +682,7 @@ export class AlertRulesEngine extends EventEmitter {
     }
 
     const alert: AlertInstance = {
-      // P2-FIX: Use crypto.randomBytes for consistent ID generation
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      id: `alert_${Date.now()}_${require('crypto').randomBytes(6).toString('hex')}`,
+      id: `alert_${Date.now()}_${randomBytes(6).toString('hex')}`,
       ruleId: rule.id,
       ruleName: rule.name,
       severity: rule.severity,

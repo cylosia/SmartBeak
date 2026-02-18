@@ -22,7 +22,9 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
   // GET /affiliates/offers - List available affiliate offers
   app.get('/affiliates/offers', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('affiliates', 50);
+  // P1-FIX: Include client IP in the key — the static 'affiliates' key shared
+  // one bucket for all tenants, making per-client rate limiting non-functional.
+  await rateLimit(`affiliates:${req.ip ?? 'unknown'}`, 50);
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
