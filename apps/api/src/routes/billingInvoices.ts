@@ -4,36 +4,42 @@ import { z } from 'zod';
 
 import { verifyToken, extractBearerToken as extractTokenFromHeader, TokenExpiredError, TokenInvalidError, } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
+import { getBillingConfig } from '@config';
 import { getDb } from '../db';
+import { verifyOrgMembership } from '../services/membership';
 import { errors, sendError } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 const billingInvoicesLogger = getLogger('billingInvoices');
 
-// Stripe key is validated at startup in config/index.ts
-const stripeKey = process.env['STRIPE_SECRET_KEY'];
-if (!stripeKey) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
-}
-const stripe = new Stripe(stripeKey, {
-  apiVersion: '2023-10-16'
+// P2-FIX (P2-1): Use config for Stripe credentials and API version so all Stripe
+// client instances stay in sync via a single config change (billingInvoiceExport.ts
+// already follows this pattern).
+const billingConfig = getBillingConfig();
+const stripe = new Stripe(billingConfig.stripeSecretKey, {
+  apiVersion: billingConfig.stripeApiVersion,
 });
 
+// P2-FIX (P2-2): Added .strict() to reject unknown query parameters silently passed
+// through (e.g. debug flags, injection probes).
+// P2-FIX (P2-3): Relaxed startingAfter to z.string().max(200) — the previous regex
+// hard-coded the 'in_' Stripe prefix, breaking pagination for future resource types.
+// Stripe's own API validates the cursor format; we only need a length bound.
 const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(10),
-  startingAfter: z.string().regex(/^in_[A-Za-z0-9_-]+$/).optional(),
-});
+  startingAfter: z.string().max(200).optional(),
+}).strict();
 
 export type QueryType = z.infer<typeof QuerySchema>;
 
-/**
-* JWT claims with optional Stripe customer ID
-*/
-export interface JwtClaims {
-  sub?: string | undefined;
-  orgId?: string | undefined;
-  [key: string]: unknown;
-}
+// P1-FIX (P1-2): Validate JWT claims with Zod instead of casting to JwtClaims.
+// The former JwtClaims interface had an `[key: string]: unknown` index signature,
+// meaning any cast to it was trivially satisfied — a JWT with numeric `sub` silently
+// set user.id to a number, bypassing downstream string-equality membership checks.
+const InvoiceClaimsSchema = z.object({
+  sub: z.string().min(1),
+  orgId: z.string().min(1),
+});
 
 type AuthenticatedRequest = FastifyRequest & {
   user: {
@@ -69,17 +75,6 @@ export interface ErrorResponse {
   code: string;
 }
 
-/**
- * Verify user membership in organization
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
-}
-
 export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> {
 
   app.addHook('onRequest', async (req, reply) => {
@@ -91,12 +86,16 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
   }
 
   try {
-    // Use unified auth package for token verification
-    const claims = verifyToken(token) as JwtClaims;
+    const rawClaims = verifyToken(token);
+    // P1-FIX (P1-2): Validate claims shape at runtime with Zod instead of unsafe cast.
+    const claimsResult = InvoiceClaimsSchema.safeParse(rawClaims);
+    if (!claimsResult.success) {
+      return errors.unauthorized(reply, 'Invalid token claims');
+    }
 
     (req as AuthenticatedRequest).user = {
-      id: claims.sub,
-      orgId: claims.orgId,
+      id: claimsResult.data.sub,
+      orgId: claimsResult.data.orgId,
     };
   } catch (error) {
     if (error instanceof TokenExpiredError) {
@@ -124,7 +123,8 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
 
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
-      return errors.forbidden(reply, 'Forbidden');
+      // P3-FIX (P3-5): Use consistent message across billing routes.
+      return errors.forbidden(reply, 'Organization membership required');
     }
   });
 

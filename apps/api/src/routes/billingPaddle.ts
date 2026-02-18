@@ -10,14 +10,13 @@ import { createPaddleCheckout } from '../billing/paddle';
 import { extractAndVerifyToken } from '@security/jwt';
 import { rateLimitMiddleware } from '../middleware/rateLimiter';
 import { getLogger } from '@kernel/logger';
-import { getDb } from '../db';
+import { verifyOrgMembership } from '../services/membership';
 import { errors, sendError } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
 const billingPaddleLogger = getLogger('billingPaddle');
 
 const ALLOWED_PADDLE_FIELDS = ['planId'] as const;
-const ALLOWED_PLAN_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 
 // P2-FIX: Import shared whitelistFields — previously duplicated verbatim here
 // and in billingStripe.ts. Single canonical source prevents divergence.
@@ -29,10 +28,6 @@ export interface CheckoutBody {
 
 export interface CheckoutRouteParams {
   Body: CheckoutBody;
-}
-
-function validatePlanId(planId: string): boolean {
-  return ALLOWED_PLAN_ID_PATTERN.test(planId);
 }
 
 /**
@@ -53,18 +48,6 @@ type AuthenticatedRequest = FastifyRequest & {
   stripeCustomerId?: string | undefined;
   };
 };
-
-/**
- * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
-}
 
 export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
   // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing (5 req/min)
@@ -121,11 +104,9 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
         return errors.validationFailed(reply, parseResult.error.issues);
     }
 
+    // P3-FIX (P3-1): Removed redundant validatePlanId() call — CheckoutBodySchema
+    // already validates the same regex pattern. Dead code eliminated.
     const { planId } = parseResult.data;
-
-    if (!validatePlanId(planId)) {
-        return errors.badRequest(reply, 'Invalid planId format');
-    }
 
     const orgId = authReq.user?.orgId;
     if (!orgId) {

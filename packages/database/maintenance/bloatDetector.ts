@@ -206,7 +206,10 @@ export async function getDuplicateIndexes(
   knex: Knex
 ): Promise<Array<{
   tablename: string;
-  index_columns: string;
+  // P2-FIX (P2-7): array_agg()::text returns SQL NULL when the aggregation
+  // produces an empty set. The previous type (string) caused runtime surprises
+  // when callers tried to split or pattern-match on the value.
+  index_columns: string | null;
   indexes: string;
   total_size: string;
 }>> {
@@ -215,7 +218,7 @@ export async function getDuplicateIndexes(
       const result = await trx.raw<{
         rows: Array<{
           tablename: string;
-          index_columns: string;
+          index_columns: string | null;
           indexes: string;
           total_size: string;
         }>;
@@ -261,19 +264,37 @@ export async function reindexTable(
       )
     );
 
-    // REINDEX CONCURRENTLY cannot run inside a transaction; use a separate
-    // statement_timeout session variable set before the command.
-    // P1-FIX: Wrap each REINDEX in try-finally so RESET statement_timeout is
-    // always executed even when REINDEX throws (lock contention, out of disk,
-    // etc.). Without finally, the connection is returned to the pool with the
-    // 30 s session timeout still active, silently capping all subsequent queries
-    // on that connection regardless of their intended timeout.
+    // REINDEX CONCURRENTLY cannot run inside a transaction, so we cannot use
+    // SET LOCAL. Instead, acquire a dedicated connection for each index so that
+    // SET statement_timeout and REINDEX share one session — and that session is
+    // destroyed afterwards, guaranteeing the timeout never leaks into the pool.
+    //
+    // P2-FIX (P2-6): The previous implementation called knex.raw() three times
+    // (SET / REINDEX / RESET). Each knex.raw() acquires a DIFFERENT connection
+    // from Knex's pool: SET ran on connection A (setting its timeout), REINDEX
+    // ran on connection B (no timeout applied!), and RESET ran on connection C.
+    // Additionally, if REINDEX threw between SET and RESET, connection A was
+    // returned to the pool with the 30-s cap still active.
+    const kClient = knex.client as {
+      acquireConnection(): Promise<unknown>;
+      query(conn: unknown, obj: { sql: string; bindings: unknown[] }): Promise<unknown>;
+      destroyRawConnection(conn: unknown): Promise<void>;
+    };
+
     for (const { indexname } of indexes.rows) {
+      const conn = await kClient.acquireConnection();
       try {
-        await knex.raw('SET statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
-        await knex.raw('REINDEX INDEX CONCURRENTLY ??', [indexname]);
+        await kClient.query(conn, {
+          sql: 'SET statement_timeout = ?',
+          bindings: [BLOAT_QUERY_TIMEOUT_MS],
+        });
+        await kClient.query(conn, {
+          sql: 'REINDEX INDEX CONCURRENTLY ??',
+          bindings: [indexname],
+        });
       } finally {
-        await knex.raw('RESET statement_timeout');
+        // Destroy (not release) so the session-scoped SET doesn't leak back.
+        await kClient.destroyRawConnection(conn).catch(() => { /* best effort */ });
       }
     }
 

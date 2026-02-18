@@ -33,11 +33,21 @@ export function computePortfolioRoi(rows: PortfolioRow[]): PortfolioRoi {
   };
   }
 
-  const totalCost = rows.reduce((sum, r) => sum + (r.production_cost_usd || 0), 0);
-  const totalMonthlyRevenue = rows.reduce(
-  (sum, r) => sum + (r.monthly_revenue_estimate || 0),
-  0
+  // P2-FIX (P2-10): Use integer-cents arithmetic to eliminate IEEE 754 accumulation
+  // errors. For portfolios with hundreds of rows, repeated float additions can
+  // introduce sub-cent bias (e.g. $0.02 drift on a 500-row portfolio), skewing
+  // buyer acquisition decisions. Rounding each value to the nearest cent before
+  // summing eliminates per-row rounding error accumulation.
+  const totalCostCents = rows.reduce(
+    (sum, r) => sum + Math.round((r.production_cost_usd || 0) * 100),
+    0
   );
+  const totalCost = totalCostCents / 100;
+  const totalMonthlyRevenueCents = rows.reduce(
+    (sum, r) => sum + Math.round((r.monthly_revenue_estimate || 0) * 100),
+    0
+  );
+  const totalMonthlyRevenue = totalMonthlyRevenueCents / 100;
 
   const avgPayback =
   totalMonthlyRevenue > 0

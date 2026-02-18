@@ -54,11 +54,13 @@ function validateRoiRow(row: unknown): RoiRow {
 const MAX_ROI_PAGE_SIZE = 500;
 const DEFAULT_ROI_PAGE_SIZE = 100;
 
+// P2-FIX (P2-9): Added .strict() to reject extra query parameters that would
+// otherwise pass through silently (e.g. debug flags, injection probes).
 const BuyerRoiQuerySchema = z.object({
   domain: z.string().uuid('Domain must be a valid UUID'),
   limit: z.coerce.number().int().min(1).max(MAX_ROI_PAGE_SIZE).default(DEFAULT_ROI_PAGE_SIZE),
   cursor: z.string().uuid().optional(),
-});
+}).strict();
 
 export type BuyerRoiQueryType = z.infer<typeof BuyerRoiQuerySchema>;
 
@@ -195,7 +197,9 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
       );
 
     if (cursor) {
-      void query.where('content_roi_models.id', '>', cursor);
+      // P3-FIX (P3-4): Knex QueryBuilder is mutable; .where() modifies in place.
+      // Removed the misleading `void` keyword — the cursor filter IS applied.
+      query.where('content_roi_models.id', '>', cursor);
     }
 
     const rawRows = await query;
