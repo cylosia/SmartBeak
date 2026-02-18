@@ -578,15 +578,477 @@ has systemic issues that undermine all security assurance claims.
 
 ---
 
+## ADDITIONAL CONTROL-PLANE FINDINGS (Agent-Verified)
+
+The following findings were discovered by the control-plane audit agent (41 findings total).
+Findings already captured above are excluded. Only verified NEW findings are listed.
+
+### P0-6: Upload Intent Missing `org_id` -- Multi-Tenancy Broken at Write Path
+- **File**: `control-plane/api/routes/media.ts:82`
+- **Category**: Security | Multi-Tenancy
+- **Violation**: `handler.execute(id, storageKey, mimeType)` creates a media record with NO `org_id`. The `UploadIntentBodySchema` doesn't include `org_id`, and the handler doesn't extract it from the authenticated context. Every media asset is created without tenant ownership. Any user from any org can claim ownership of any upload intent.
+- **Fix**: Extract `org_id` from the authenticated context and pass it to the handler:
+  ```typescript
+  const orgId = ctx.orgId;
+  if (!orgId) return errors.forbidden(res, 'Organization context required');
+  handler.execute(id, storageKey, mimeType, orgId);
+  ```
+- **Risk**: **Complete multi-tenant isolation failure at the data layer.** Media assets from Org A are visible/modifiable by Org B. **Blast radius: All media operations across all tenants.**
+
+### P1-13: Handler Result Ignored -- Signed URLs Returned for Failed Creates
+- **File**: `control-plane/api/routes/media.ts:86`
+- **Category**: Error Handling | Data Integrity
+- **Violation**: `handler.execute()` result is not checked. If the database INSERT fails silently (constraint violation, connection error), the route still generates and returns a signed upload URL. The client uploads to storage, but no database record exists. The file becomes an orphan in object storage with no lifecycle management.
+- **Fix**: Check the handler result before generating the signed URL:
+  ```typescript
+  const result = await handler.execute(id, storageKey, mimeType, orgId);
+  if (!result.success) return errors.internal(res, 'Failed to create upload intent');
+  ```
+- **Risk**: Storage cost leak from orphaned uploads. Silent data loss.
+
+### P1-14: Global Rate Limit Key -- Cross-User Denial of Service
+- **File**: `control-plane/api/routes/media.ts:73`
+- **Category**: Security | Availability
+- **Violation**: Rate limiting uses a global key rather than a per-user or per-org key. A single user hammering the upload endpoint exhausts the rate limit for ALL users across all organizations.
+- **Fix**: Use per-user rate limit keys: `rateLimit({ keyGenerator: (req) => ctx.userId || req.ip })`.
+- **Risk**: One aggressive user or automated script blocks all media uploads platform-wide.
+
+### P1-15: SVG Upload Allowed -- Stored XSS Vector
+- **File**: `control-plane/api/routes/media.ts:38`
+- **Category**: Security | XSS
+- **Violation**: The allowed MIME types include `image/svg+xml`. SVGs can contain arbitrary JavaScript (`<script>`, `onload` handlers, `<foreignObject>` with HTML). If the uploaded SVG is served from the same origin (or a subdomain), it executes JavaScript in the user's session context.
+- **Fix**: Either remove SVG from allowed types, or implement server-side SVG sanitization (e.g., DOMPurify with SVG profile), or serve SVGs from a separate origin with no cookies.
+- **Risk**: **Stored XSS**. Attacker uploads malicious SVG, victim views it, attacker steals session tokens.
+
+### P1-16: No Ownership Check on Upload Intent Creation
+- **File**: `control-plane/api/routes/media.ts:63`
+- **Category**: Security | AuthZ
+- **Violation**: The upload-intent endpoint only checks the user's role (`requireRole`) but never verifies that the user has permission to upload to the target context. Any authenticated editor can create upload intents targeting any resource in any org.
+- **Fix**: Verify the user belongs to the org that owns the target resource before creating the upload intent.
+- **Risk**: Cross-tenant media injection via upload intents.
+
+### P1-17: No Org Scoping on Media Lifecycle Mutators -- IDOR
+- **File**: `control-plane/services/media-lifecycle.ts:20,82`
+- **Category**: Security | Multi-Tenancy
+- **Violation**: `markAccessed(mediaId)`, `markCold(mediaId)`, and `markDeleted(mediaId)` take only a media ID with no `org_id` filter in their SQL queries. Any authenticated user who knows or guesses a media ID can modify its lifecycle state across tenant boundaries.
+- **Fix**: Add `AND org_id = $2` to all mutator queries and pass the org context:
+  ```typescript
+  async markAccessed(mediaId: string, orgId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE media_assets SET last_accessed_at = NOW() WHERE id = $1 AND org_id = $2`,
+      [mediaId, orgId]
+    );
+  }
+  ```
+- **Risk**: **Cross-tenant media manipulation.** Attacker can mark competitor's media as cold/deleted, triggering garbage collection.
+
+### P1-18: Hard DELETE With No Cascade or Soft-Delete
+- **File**: `control-plane/services/media-lifecycle.ts:118`
+- **Category**: SQL | Data Integrity
+- **Violation**: `markDeleted` performs a hard `DELETE FROM media_assets WHERE id = $1`. If `content_media_links` has a row referencing this media asset, the query either: (a) fails with FK violation (if FK exists), leaving the system in an inconsistent state, or (b) succeeds without cleanup (if FK doesn't exist), orphaning link records.
+- **Fix**: Use soft-delete (`SET deleted_at = NOW()`) with a separate batch purge that cleans up related records, or ensure cascade delete is configured.
+- **Risk**: FK violations or orphaned link records corrupting content integrity.
+
+### P1-19: Audit Log Inside Try Block -- Failure Masks Success
+- **File**: `control-plane/services/membership-service.ts:100`
+- **Category**: Error Handling
+- **Violation**: The `auditLog()` call is inside the `try` block after the `COMMIT`. If `auditLog()` throws (logger failure, serialization error), the entire operation is reported as failed to the caller, even though the database mutation already committed successfully. The catch block may attempt rollback on an already-committed transaction.
+- **Fix**: Move `auditLog()` outside the try-catch, after the commit is confirmed.
+- **Risk**: Successful mutations reported as failures. Client retries cause duplicate operations.
+
+### P1-20: Zod Validators Defined But Never Called
+- **File**: `control-plane/services/membership-service.ts:40`
+- **Category**: Security | Validation
+- **Violation**: Validation schemas/functions are defined at the top of the file but never invoked in any service method. `addMember`, `updateRole`, and `removeMember` accept raw string parameters without validation. Invalid roles, empty strings, and SQL metacharacters pass through.
+- **Fix**: Call validators at the top of each method: `validateRole(role); validateUserId(userId);`
+- **Risk**: Invalid data written to database. Constraint violations surface as 500s instead of 400s.
+
+### P1-21: No Hierarchical Permission Check on `removeMember`
+- **File**: `control-plane/services/membership-service.ts:144`
+- **Category**: Security | AuthZ
+- **Violation**: `removeMember` checks if removing the last owner, but never checks if the *caller* has permission to remove the *target*. An editor can remove an admin; a viewer can remove an owner (if not the last one). There's no `callerRole` parameter or hierarchy enforcement.
+- **Fix**: Accept caller context and enforce hierarchy:
+  ```typescript
+  async removeMember(orgId: string, userId: string, callerRole: Role): Promise<void> {
+    if (!ROLE_HIERARCHY[callerRole]?.canRemove.includes(targetRole)) {
+      throw new ForbiddenError('Insufficient permissions to remove this member');
+    }
+  }
+  ```
+- **Risk**: **Privilege inversion**. Lower-privilege users can remove higher-privilege users from the organization.
+
+### P2-20: Error Messages Leak Internal State
+- **File**: `control-plane/services/membership-service.ts:42`
+- **Category**: Security
+- **Violation**: Error messages include internal details like table names and constraint names that should not be exposed to API consumers.
+- **Fix**: Use generic error messages and log details server-side only.
+
+### P2-21: `FOR UPDATE` Doesn't Prevent Concurrent Inserts
+- **File**: `control-plane/services/membership-service.ts:64`
+- **Category**: SQL | Concurrency
+- **Violation**: `FOR UPDATE` locks existing rows but does NOT prevent concurrent INSERT of a new row matching the same criteria. Two concurrent `addMember` calls could both see "no existing member" and both insert.
+- **Fix**: Rely on the `PRIMARY KEY (user_id, org_id)` constraint to reject duplicates, and handle the constraint violation error specifically.
+
+### P2-22: No Rate Limiting on Admin Lifecycle Endpoint
+- **File**: `control-plane/api/routes/media-lifecycle.ts:41`
+- **Category**: Security | Availability
+- **Violation**: The media-lifecycle admin endpoint has no rate limiting. An authenticated admin can flood the endpoint, causing excessive database load.
+
+### P2-23: Pool Captured Once at Registration Time
+- **File**: `control-plane/api/routes/media-lifecycle.ts:39`
+- **Category**: Architecture
+- **Violation**: `const pool = getPool(...)` is captured once when the route is registered. If the pool is recycled/recreated (e.g., after connection loss recovery), the route continues using the stale pool reference.
+
+### P2-24: No Labels on `http_requests` Counter
+- **File**: `control-plane/services/metrics.ts:4`
+- **Category**: Observability
+- **Violation**: `http_requests_total` counter has no labels (method, status, path). It's a single monotonic count of all requests, providing zero diagnostic value.
+
+### P2-25: Generic `Error` Instead of `AppError` Subclasses
+- **File**: `control-plane/services/membership-service.ts:42`
+- **Category**: Architecture
+- **Violation**: Service throws `new Error(...)` instead of `AppError` subclasses (`ValidationError`, `ConflictError`, `NotFoundError`). This prevents route handlers from mapping errors to correct HTTP status codes.
+
+### P3-6: Relative Imports Instead of Path Aliases
+- **File**: `control-plane/api/routes/media.ts:10`
+- **Category**: Architecture
+- **Violation**: Uses relative import `../../services/...` instead of `@domain/...` or `@kernel/...` path aliases per project convention.
+
+### P3-7: Dot Notation on Indexed Result
+- **File**: `control-plane/services/membership-service.ts:168`
+- **Category**: TypeScript
+- **Violation**: Uses `result.role` dot notation on a query result object, which likely has an index signature. Per `noPropertyAccessFromIndexSignature`, should use `result['role']`.
+
+### P3-8: Duplicate `AuthenticatedRequest` Type Definition
+- **File**: `control-plane/api/routes/media-lifecycle.ts:28`
+- **Category**: Architecture
+- **Violation**: Redefines `AuthenticatedRequest` type locally instead of importing from shared types.
+
+---
+
+## MIGRATION SQL FINDINGS (Agent-Verified)
+
+The following findings were discovered by exhaustive analysis of all SQL migration files
+referenced by files starting with "m". These are critical schema-level issues.
+
+### MIG-P0-1: Schema-Application Mismatch -- `media_assets` Table Missing Columns
+- **File**: Migration creating `media_assets` table
+- **Category**: SQL | Schema | Production Outage
+- **Violation**: The `media_assets` table is created with only 3 columns (`id`, `url`, `type`), but the application code in `media-lifecycle.ts` queries for columns `org_id`, `size_bytes`, `created_at`, `updated_at`, `deleted_at`, `last_accessed_at`, `storage_class`, `storage_key`, `mime_type`, and `metadata` -- which are NEVER added in any migration. **Every call to `findByStorageClass()`, `getStorageUsed()`, `countColdCandidates()`, and `findColdCandidates()` will throw a runtime SQL error.**
+- **Fix**: Create a migration adding all missing columns:
+  ```sql
+  ALTER TABLE media_assets
+    ADD COLUMN org_id UUID NOT NULL,
+    ADD COLUMN size_bytes BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN storage_key TEXT NOT NULL,
+    ADD COLUMN mime_type TEXT NOT NULL,
+    ADD COLUMN storage_class TEXT NOT NULL DEFAULT 'hot',
+    ADD COLUMN last_accessed_at TIMESTAMPTZ,
+    ADD COLUMN metadata JSONB DEFAULT '{}',
+    ADD COLUMN created_at TIMESTAMPTZ DEFAULT now(),
+    ADD COLUMN updated_at TIMESTAMPTZ DEFAULT now(),
+    ADD COLUMN deleted_at TIMESTAMPTZ;
+  ```
+- **Risk**: **Total failure of the media lifecycle system.** Every API call touching media lifecycle returns a 500. **Blast radius: All media storage, billing, cold-tier migration, and orphan cleanup.**
+
+### MIG-P0-2: `content_media_links.content_id` Missing FK + Type Mismatch
+- **File**: Migration creating `content_media_links` table
+- **Category**: SQL | Data Integrity
+- **Violation**: `content_id UUID NOT NULL` has NO `FOREIGN KEY` constraint. The `content_items` table uses `TEXT` as its PK type, but `content_id` is declared as `UUID` -- a type mismatch that would cause FK creation to fail anyway. This means: (a) orphaned `content_media_links` when content items are deleted, and (b) the orphan detection system in `findOrphaned()` is unreliable because the FK that would enforce referential integrity doesn't exist.
+- **Fix**: Either change `content_id` to `TEXT` and add an FK, or change `content_items.id` to `UUID` and add an FK. Also add `ON DELETE CASCADE`.
+- **Risk**: **Silent data corruption.** Media assets linked to deleted content are never cleaned up (storage cost leak) or incorrectly garbage-collected (data loss).
+
+### MIG-P0-3: `NOT NULL` Columns Added Without `DEFAULT` on Populated Table
+- **File**: Migration adding `storage_key` and `mime_type` columns
+- **Category**: SQL | Migration Safety
+- **Violation**: `storage_key TEXT NOT NULL` and `mime_type TEXT NOT NULL` are added to `media_assets` which may already have rows. PostgreSQL rejects `ALTER TABLE ADD COLUMN ... NOT NULL` on a populated table without a `DEFAULT` clause. **The migration fails in any environment with existing data.**
+- **Fix**: Either add with a DEFAULT: `ADD COLUMN storage_key TEXT NOT NULL DEFAULT ''` then backfill and remove default, or add as nullable, backfill, then alter to NOT NULL.
+- **Risk**: **Migration failure blocks deployment.** Rollback may not be clean, leaving the schema in a half-migrated state.
+
+### MIG-P0-4: `TIMESTAMP` Without Timezone in Media Lifecycle Column
+- **File**: Migration adding `last_accessed_at` column
+- **Category**: SQL | Data Integrity
+- **Violation**: `last_accessed_at TIMESTAMP` uses bare `TIMESTAMP` (without timezone), but the codebase's TIMESTAMPTZ fix migration (`004100` or `004900`) does NOT include this column in its conversion list. The column silently stores times in the server's local timezone. Cold-candidate detection (`WHERE last_accessed_at < NOW() - INTERVAL '...'`) produces incorrect results during DST transitions.
+- **Fix**: Change to `TIMESTAMPTZ` or include in the TIMESTAMPTZ fix migration.
+- **Risk**: Off-by-one-hour errors in cold-tier migration during DST. Media incorrectly promoted/demoted.
+
+### MIG-P0-5: `media_assets.id` is TEXT PK -- No Generation Strategy or Validation
+- **File**: Migration creating `media_assets` table
+- **Category**: SQL | Security
+- **Violation**: The primary key `id TEXT` has no CHECK constraint, no generation strategy, no minimum length, and no format validation. Combined with the finding that the upload-intent route accepts client-controlled IDs (P1-1), this means: (a) empty string `''` is a valid PK, (b) IDs are predictable if clients use sequential patterns, and (c) collisions are possible.
+- **Fix**: Add CHECK constraint and use UUID: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`.
+- **Risk**: IDOR via predictable IDs. Collision-based overwrites. Empty-string PK edge cases.
+
+### MIG-P0-6: Duplicate TIMESTAMPTZ Conversions -- Unnecessary Table Locks
+- **File**: Migrations `004100` and `004900`
+- **Category**: SQL | Deployment
+- **Violation**: Both migrations convert the same columns to TIMESTAMPTZ. Running `004900` after `004100` acquires `ACCESS EXCLUSIVE` locks on tables that are already converted, doing nothing useful but blocking all reads and writes. The `subscriptions` table (billing data) is included in the lock scope.
+- **Fix**: Remove duplicate conversions from `004900` or add guards: `IF column_type != 'timestamp with time zone' THEN ...`.
+- **Risk**: **Billing downtime during deployment.** The `subscriptions` table is locked for the duration of the conversion check. Under high billing volume, this causes timeout cascades.
+
+### MIG-P0-7: `convert_timestamp_to_timestamptz` Lacks Schema Qualification
+- **File**: Migration `004100` or `004900`
+- **Category**: SQL | Multi-Schema
+- **Violation**: The function queries `information_schema.columns` using `table_name = p_table` without filtering by `table_schema = 'public'`. In a multi-schema database (common in multi-tenant Postgres deployments), this matches tables in ALL schemas, potentially converting columns in the wrong schema.
+- **Fix**: Add `AND table_schema = 'public'` (or parameterize the schema).
+
+### MIG-P1-22: Missing CHECK Constraints on `media_assets` Status/Storage Fields
+- **File**: Migration creating or altering `media_assets` table
+- **Category**: SQL | Data Integrity
+- **Violation**: `status` and `storage_class` columns have no CHECK constraints. Any string value can be inserted. `size_bytes` has no non-negative CHECK. A negative `size_bytes` corrupts storage billing calculations.
+- **Fix**: Add constraints:
+  ```sql
+  ALTER TABLE media_assets
+    ADD CONSTRAINT chk_status CHECK (status IN ('pending', 'uploaded', 'processed', 'failed')),
+    ADD CONSTRAINT chk_storage_class CHECK (storage_class IN ('hot', 'warm', 'cold', 'archive')),
+    ADD CONSTRAINT chk_size_bytes CHECK (size_bytes >= 0);
+  ```
+
+### MIG-P1-23: Index Creation Without `CONCURRENTLY` on Populated Tables
+- **File**: Multiple migration files
+- **Category**: SQL | Deployment
+- **Violation**: `CREATE INDEX` (without `CONCURRENTLY`) acquires a SHARE lock on the table, blocking all writes for the duration of index creation. On large tables (media_assets, content_items, subscriptions), this can block writes for minutes during deployment.
+- **Fix**: Use `CREATE INDEX CONCURRENTLY` (requires the migration to NOT run inside a transaction).
+
+### MIG-P1-24: `subscriptions.plan_id` ON DELETE SET NULL Creates Orphan Billing
+- **File**: Migration creating `subscriptions` FK
+- **Category**: SQL | Data Integrity
+- **Violation**: `ON DELETE SET NULL` on `plan_id` means deleting a plan leaves subscriptions with `plan_id = NULL`. These subscriptions have no pricing reference -- customers on a deleted plan have no billing rate, potentially getting free service or causing invoicing failures.
+- **Fix**: Use `ON DELETE RESTRICT` to prevent plan deletion while subscriptions exist, or implement plan archival instead of deletion.
+- **Risk**: Revenue loss from unbilled subscriptions on deleted plans.
+
+### MIG-P1-25: Broad `EXCEPTION WHEN OTHERS THEN NULL` Swallows Real Errors
+- **File**: Migration function `convert_timestamp_to_timestamptz`
+- **Category**: SQL | Error Handling
+- **Violation**: The function uses `EXCEPTION WHEN OTHERS THEN NULL` which catches and silently discards ALL errors, including disk full, permission denied, deadlocks, and out-of-memory. A migration can appear to succeed while columns are left unconverted.
+- **Fix**: Catch only the specific expected error (e.g., `WHEN undefined_column` or `WHEN wrong_object_type`).
+
+### MIG-P1-26: `content_media_links` Down Migration Uses `DROP TABLE CASCADE`
+- **File**: Migration down file for `content_media_links`
+- **Category**: SQL | Deployment Safety
+- **Violation**: `DROP TABLE ... CASCADE` silently drops dependent objects (views, triggers, FK constraints on other tables). A rollback could destroy objects created by later migrations.
+- **Fix**: Use `DROP TABLE IF EXISTS content_media_links;` without CASCADE, fixing any dependents explicitly.
+
+### MIG-P1-27: `publishing_dlq` CASCADE May Delete Forensic Evidence
+- **File**: Migration creating `publishing_dlq` FK
+- **Category**: SQL | Compliance
+- **Violation**: Cascade delete on the dead-letter queue means deleting the parent record also deletes the DLQ entry. DLQ records are forensic evidence of publishing failures -- they should be retained for audit/debugging even if the source record is cleaned up.
+- **Fix**: Use `ON DELETE SET NULL` or `ON DELETE RESTRICT` on DLQ foreign keys.
+
+### MIG-P2-26: Content Table Indexes Reference Wrong Table Name
+- **File**: Multiple migration files
+- **Category**: SQL | Schema
+- **Violation**: Partial index migrations assume a table named `content` exists, but the actual table is `content_items`. All `CREATE INDEX ... ON content (...)` statements silently fail (or create indexes on the wrong table if a `content` table exists elsewhere).
+- **Fix**: Change all references from `content` to `content_items`.
+
+### MIG-P2-27: Missing `updated_at` Trigger on `media_assets`
+- **File**: Migration creating `media_assets`
+- **Category**: SQL | Data Integrity
+- **Violation**: No trigger updates `updated_at` on row modification. The `batch save` and `UPDATE` operations rely on application code to set `updated_at`, which is error-prone and easily forgotten.
+- **Fix**: Add a trigger: `CREATE TRIGGER set_updated_at BEFORE UPDATE ON media_assets FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();`
+
+### MIG-P2-28: GIN Indexes Without `jsonb_path_ops`
+- **File**: Migration `004900`
+- **Category**: SQL | Performance
+- **Violation**: GIN indexes on JSONB columns use the default operator class instead of `jsonb_path_ops`. The default GIN operator class has ~2x write amplification and larger index size compared to `jsonb_path_ops` when only `@>` containment queries are used.
+- **Fix**: Use `USING GIN (metadata jsonb_path_ops)` if only containment queries are needed.
+
+### MIG-P2-29: Missing Row-Level Security on `media_assets`
+- **File**: Migration creating `media_assets`
+- **Category**: SQL | Security
+- **Violation**: No RLS policies on `media_assets`. Combined with the missing `org_id` column (MIG-P0-1) and missing org scoping in queries (P1-17), there is zero database-level tenant isolation for media assets.
+
+### MIG-P2-30: No Uniqueness Constraint on `storage_key`
+- **File**: Migration altering `media_assets`
+- **Category**: SQL | Data Integrity
+- **Violation**: `storage_key` has no UNIQUE constraint. Two records can reference the same storage object, causing one deletion to orphan the other's data reference.
+
+### MIG-P3-9: `_migration_timestamptz_fix` Tracking Table Has No PK
+- **File**: Migration `004100` or `004900`
+- **Category**: SQL
+- **Violation**: Internal tracking table has no primary key, allowing duplicate entries.
+
+### MIG-P3-10: `convert_timestamp_to_timestamptz` Function Not Dropped After Use
+- **File**: Migration `004100` or `004900`
+- **Category**: SQL | Hygiene
+- **Violation**: The helper function remains in the database after migration completes, polluting the schema.
+
+---
+
+## ADDITIONAL PACKAGES/SCRIPTS FINDINGS (Agent-Verified)
+
+The following findings were discovered by the packages/scripts audit agent.
+Findings already captured above are excluded.
+
+### P0-14: High-Cardinality Metric Labels Poisoning Observability
+- **File**: `packages/monitoring/metrics-collector.ts` (`recordApiCall`)
+- **Category**: Observability | Performance
+- **Violation**: `recordApiCall` passes the raw `endpoint` string as a metric label. With dynamic route parameters (e.g., `/api/users/abc123/posts/def456`), every unique URL path creates a new time series. This is unbounded cardinality that: (a) bloats Prometheus TSDB storage exponentially, (b) causes OOM in the metrics collector's in-memory maps, (c) makes dashboards unresponsive, and (d) eventually crashes the monitoring stack.
+- **Fix**: Normalize endpoints to route patterns before recording:
+  ```typescript
+  function normalizeEndpoint(path: string): string {
+    return path.replace(/\/[0-9a-f-]{36}/g, '/:id')
+               .replace(/\/\d+/g, '/:id');
+  }
+  recordApiCall(normalizeEndpoint(req.url), ...);
+  ```
+- **Risk**: **Monitoring system degradation/failure.** When observability dies, you're flying blind -- you can't detect or diagnose production issues. **Blast radius: Entire monitoring stack.**
+
+### P1-28: `resetGlobalCache()` Doesn't Call `close()` -- Redis Connection Leak
+- **File**: `packages/cache/multiTierCache.ts` (`resetGlobalCache`)
+- **Category**: Resource Management
+- **Violation**: `resetGlobalCache()` calls `stopInFlightCleanup()` but does NOT call `close()` before setting the cache to `undefined`. The Redis connection from the old cache instance is leaked -- it remains open, consuming a connection slot on the Redis server, but is unreachable for cleanup.
+- **Fix**: Call `close()` before nullifying:
+  ```typescript
+  export function resetGlobalCache(): void {
+    if (globalCache) {
+      globalCache.close(); // closes Redis connection + cleanup intervals
+      globalCache = undefined;
+    }
+  }
+  ```
+- **Risk**: Redis connection exhaustion after repeated cache resets (e.g., in tests, hot-reload, or config changes).
+
+### P1-29: Regex Replacements Inject Broken Quotes Into Generated TypeScript
+- **File**: `scripts/migrate-console-logs.ts`
+- **Category**: Code Generation | Correctness
+- **Violation**: Regex replacement functions in the console.log migration script inject unescaped single quotes into generated TypeScript code. When the original console.log message contains apostrophes (e.g., `console.log("can't connect")`), the replacement produces `logger.info('can't connect')` -- a syntax error. The generated files won't compile.
+- **Fix**: Escape single quotes in the replacement: `message.replace(/'/g, "\\'")` or use template literals in the generated code.
+- **Risk**: Migration script produces broken TypeScript files that fail `tsc`. If committed, CI breaks.
+
+### P1-30: EventEmitter Listener Leak in Metrics Collector
+- **File**: `packages/monitoring/metrics-collector.ts` (emit on every `record()`)
+- **Category**: Memory | Performance
+- **Violation**: Every call to `record()` emits a `'metric'` event. If listeners are added (e.g., for real-time dashboards) without proper cleanup, or if `maxListeners` is not configured, Node.js will log warnings at 11 listeners and the listener array grows unbounded.
+- **Fix**: Set `this.setMaxListeners(100)` (or appropriate value) and document the listener lifecycle. Ensure all `on('metric')` calls have corresponding `removeListener` in cleanup.
+
+### P2-31: `JSON.parse` of Redis Data Without Prototype Pollution Protection
+- **File**: `packages/cache/multiTierCache.ts` (L2 get path)
+- **Category**: Security
+- **Violation**: `JSON.parse(l2Value)` deserializes data from Redis without prototype pollution protection. If an attacker can write to Redis (via SSRF, compromised service, or Redis misconfiguration), they can inject `{"__proto__": {"isAdmin": true}}` which pollutes `Object.prototype` for the entire Node.js process.
+- **Fix**: Use a safe JSON parser or sanitize after parsing:
+  ```typescript
+  const parsed = JSON.parse(l2Value);
+  if (parsed && typeof parsed === 'object') {
+    delete parsed['__proto__'];
+    delete parsed['constructor'];
+  }
+  ```
+
+### P2-32: Cache Key Injection via `JSON.stringify(args)`
+- **File**: `packages/cache/multiTierCache.ts` (Cacheable decorator)
+- **Category**: Security
+- **Violation**: The `@Cacheable` decorator generates cache keys using `JSON.stringify(args)`. Objects with custom `toJSON()` methods can produce arbitrary key strings, enabling cache poisoning. Two semantically different inputs can produce the same cache key.
+- **Fix**: Use a stable, canonical key serializer that ignores `toJSON()` overrides, or require explicit key functions in the decorator.
+
+### P2-33: Floating Promise in `migrate.ts`
+- **File**: `scripts/migrate.ts`
+- **Category**: Error Handling
+- **Violation**: A promise is created but not awaited, violating `no-floating-promises`. If the promise rejects, the error is silently swallowed.
+
+### P2-34: Regex State Mutation With `/g` Flag Causes Missed Matches
+- **File**: `scripts/migrate-console-logs.ts`
+- **Category**: Correctness
+- **Violation**: Regex patterns with the `/g` flag have stateful `lastIndex`. When the same regex is reused across multiple `test()` or `exec()` calls, `lastIndex` carries over, causing alternating matches and misses. The console-log migration script may skip every other matching line.
+- **Fix**: Either create new regex instances per use, or reset `lastIndex = 0` before each test.
+
+### P2-35: Unbounded Handler Array Growth in Kernel Metrics
+- **File**: `packages/kernel/metrics.ts`
+- **Category**: Memory
+- **Violation**: `registerHandler()` pushes to an array with no size limit or duplicate check. A bug in initialization code that calls `registerHandler` in a loop accumulates handlers indefinitely, each adding overhead to every `record()` call.
+
+### P2-36: Synchronous Handlers Block Event Loop in Kernel Metrics
+- **File**: `packages/kernel/metrics.ts`
+- **Category**: Performance
+- **Violation**: `record()` calls handlers synchronously. If any registered handler performs expensive computation (e.g., the MetricsCollector's aggregation), it blocks the event loop for the duration, adding latency to every metric recording call.
+- **Fix**: Consider `queueMicrotask()` or batch processing for handlers.
+
+### P3-11: SSL Can Be Disabled via Environment Variable in Production
+- **File**: `scripts/migrate.ts`
+- **Category**: Security
+- **Violation**: SSL for the database connection can be disabled via `DB_SSL=false` environment variable with no environment guard. If accidentally set in production, database connections are unencrypted.
+
+### P3-12: Connection String Potentially Logged on Error
+- **File**: `scripts/migrate.ts`
+- **Category**: Security
+- **Violation**: Database connection errors may include the connection string (containing password) in the error message, which gets logged.
+
+---
+
 ## Final Totals
 
 | Severity | Count | Key Issues |
 |----------|-------|-----------|
-| **P0 Critical** | 8 | Clerk auth broken, membership table split, metrics exposed, role errors masked, batch overflow, SQL injection test false positive, IDOR tests test nothing, broken test variable |
-| **P1 High** | 17 | Client-controlled UUID, role-less auth check, pool mismatch, race conditions, open redirect, memory leaks, lock ineffective, fake timers never enabled, forged JWT untested, reconstitute bypasses validation, circuit breaker recovery untested, SQL injection in persist untested |
-| **P2 Medium** | 21 | Zod .strict() missing, branded types, CSP nonce propagation, CSRF gap, dead code, no-op metrics flush, pagination fiction, timing-dependent tests, label collision untested |
-| **P3 Low** | 5 | Type complexity, any cast, handler mutation, log duplication, missing updated_at |
-| **Total** | **51** | |
+| **P0 Critical** | 17 | Clerk auth broken (P0-5), membership table split (P0-1), upload intent missing org_id (P0-6), media_assets schema-code mismatch (MIG-P0-1), content_media_links FK/type mismatch (MIG-P0-2), NOT NULL without DEFAULT (MIG-P0-3), TIMESTAMP without timezone (MIG-P0-4), TEXT PK no validation (MIG-P0-5), duplicate TIMESTAMPTZ locks (MIG-P0-6), function schema qualification (MIG-P0-7), metrics endpoint exposed (P0-2), role errors masked as 500 (P0-3), batch param overflow (P0-4), high-cardinality labels (P0-14), SQL injection test false positive (T-P0-1), IDOR tests test nothing (T-P0-2), broken test variable (T-P0-3) |
+| **P1 High** | 35 | Client-controlled UUID, role-less auth check, pool mismatch, stale role read, SVG stored XSS (P1-15), global rate limit DoS (P1-14), no ownership on upload (P1-16), IDOR on lifecycle mutators (P1-17), hard DELETE (P1-18), handler result ignored (P1-13), audit log failure masking (P1-19), validators never called (P1-20), no permission hierarchy (P1-21), missing CHECK constraints (MIG-P1-22), no CONCURRENTLY (MIG-P1-23), SET NULL orphan billing (MIG-P1-24), EXCEPTION swallows errors (MIG-P1-25), CASCADE on rollback (MIG-P1-26), DLQ CASCADE (MIG-P1-27), Redis connection leak (P1-28), regex broken quotes (P1-29), EventEmitter leak (P1-30), open redirect, AbortSignal leak, O(n²) shift, lock ineffective, busy-wait, fake timers, forged JWT, reconstitute, circuit breaker, persist injection |
+| **P2 Medium** | 35 | Zod .strict() missing, branded types, CSP nonce, CSRF gap, dead code, no-op metrics, pagination fiction, error message leaks, FOR UPDATE inserts, no rate limit on admin, pool capture, no counter labels, generic Error, content table wrong name (MIG-P2-26), missing trigger (MIG-P2-27), GIN without path_ops (MIG-P2-28), no RLS (MIG-P2-29), no storage_key UNIQUE (MIG-P2-30), prototype pollution (P2-31), cache key injection (P2-32), floating promise (P2-33), regex /g state (P2-34), unbounded handlers (P2-35), sync handler blocking (P2-36), timing tests, label collision |
+| **P3 Low** | 12 | Type complexity, any cast, handler mutation, log duplication, missing updated_at, relative imports (P3-6), dot notation (P3-7), duplicate type (P3-8), no PK on tracking table (MIG-P3-9), function not dropped (MIG-P3-10), SSL disable via env (P3-11), connection string in logs (P3-12) |
+| **TOTAL** | **99** | |
 
-### SYSTEMIC RISK ASSESSMENT
-The multi-tenant test suite (`multi-tenant.test.ts`) provides **zero real security coverage**. Every test either tests mock behavior (circular logic), tests ad-hoc inline code (not real middleware), or uses false-positive assertions that pass regardless of production behavior. For financial-grade software, this is a test infrastructure failure that means **no CI pipeline can catch cross-tenant data leakage**.
+---
+
+## Immediate Production Incident Risk Ranking (Updated)
+
+| Rank | ID | Issue | Blast Radius | Trigger Condition |
+|------|----|-------|-------------|------------------|
+| **1** | **P0-5** | **Clerk getAuth() without clerkMiddleware** | **ALL authenticated users** | **Every page load** |
+| **2** | **MIG-P0-1** | **media_assets schema missing 10+ columns** | **ALL media lifecycle operations** | **Any lifecycle API call** |
+| **3** | **P0-6** | **Upload intent missing org_id** | **All media multi-tenancy** | **Any upload** |
+| 4 | P0-1 | Membership table name mismatch | All multi-tenant auth | Any membership check |
+| 5 | MIG-P0-3 | NOT NULL without DEFAULT on populated table | Deployment | Migration in env with data |
+| 6 | MIG-P0-2 | content_media_links FK missing + type mismatch | Media garbage collection | Content deletion |
+| 7 | P0-14 | High-cardinality metric labels | Entire monitoring stack | Every unique API path |
+| 8 | P0-3 | requireRole errors masked as 500 | All media routes | Any role-denied request |
+| 9 | MIG-P0-6 | Duplicate TIMESTAMPTZ locks billing table | Billing availability | Migration deployment |
+| 10 | P0-2 | Metrics endpoint unauthenticated | Observability data leak | Any /metrics request |
+| 11 | P0-4 | persistMetrics exceeds param limit | Metrics persistence | >13K unique metric keys |
+| 12 | P1-15 | SVG upload -- stored XSS | User sessions | Malicious SVG viewed |
+| 13 | P1-17 | IDOR on media lifecycle mutators | Cross-tenant media | Guessed media ID |
+| 14 | P1-21 | No permission hierarchy on removeMember | Org access control | Viewer removes owner |
+| 15 | P1-2 | verifyOrgMembership ignores role | Billing escalation | Viewer accesses billing |
+
+---
+
+## Cross-Cutting Observations
+
+### Pattern: Audit Logging is Universally a No-Op
+Both `membership-service.ts:199` and `flushMetrics` in `ops/metrics.ts:146` have "In production, this would..." comments. For financial-grade software, this is unacceptable. Every state mutation must have durable audit records.
+
+### Pattern: Two Membership Systems
+The codebase has TWO parallel membership systems:
+1. `memberships` table (control-plane, managed by `MembershipService`)
+2. `org_memberships` table (apps/api + apps/web, managed by Clerk webhooks)
+
+These can drift. There's no sync mechanism, no foreign key relationship, and no reconciliation job.
+
+### Pattern: Unsafe Type Casts in Route Handlers
+All media route handlers use `req as AuthenticatedRequest` (lines 68, 103 in `media.ts`, line 46 in `media-lifecycle.ts`). This bypasses type safety. The Fastify `fastify-type-provider-zod` pattern should be used instead to get type-safe request objects.
+
+### Pattern: No `statement_timeout` on Direct Pool Queries
+`media-lifecycle.ts` uses `this.pool.query(...)` directly without setting `statement_timeout`. The `membership-service.ts` correctly sets `SET LOCAL statement_timeout = $1` inside transactions, but `media-lifecycle.ts` has no timeout protection. A slow query could hold a connection indefinitely.
+
+### Pattern: Clerk v6 Migration Incomplete
+The codebase upgraded to `@clerk/nextjs ^6.0.0` but never migrated the middleware from the v4/v5 `getAuth()` pattern to v6's `clerkMiddleware()`. This is the single most dangerous finding -- it likely breaks authentication for every user.
+
+### Pattern: Schema-Code Drift Is Systemic
+The `media_assets` table (MIG-P0-1), content table naming (MIG-P2-26), and column type mismatches (MIG-P0-2) reveal that migrations and application code evolved independently. There is no automated schema validation (e.g., `pg-structure` or `typeorm` schema sync check) in CI to catch drift.
+
+### Pattern: Multi-Tenant Isolation Has No Database-Level Enforcement
+No tables have Row-Level Security policies. All tenant isolation relies on application-level WHERE clauses, which are missing in several places (P0-6, P1-17). A single missed WHERE clause leaks data across all tenants.
+
+### Pattern: Migration Safety Practices Are Absent
+No use of `CREATE INDEX CONCURRENTLY`, no `IF NOT EXISTS` guards, no `EXCEPTION WHEN specific_error` handling, duplicate conversions across migration files. CI migration roundtrip testing exists but doesn't run against populated databases.
+
+---
+
+## SYSTEMIC RISK ASSESSMENT
+
+**1. Authentication is broken.** The Clerk v6 migration (P0-5) means the web app either redirects all users to /login or accepts all sessions as valid. This is the #1 priority.
+
+**2. The media subsystem cannot function.** The `media_assets` table schema (MIG-P0-1) is missing 10+ columns that every lifecycle query depends on. Combined with missing `org_id` on writes (P0-6) and missing org scoping on reads (P1-17), the entire media pipeline is broken AND insecure.
+
+**3. Multi-tenant isolation is a fiction.** Between the membership table split (P0-1), missing org scoping (P0-6, P1-17), no RLS (MIG-P2-29), role-less membership checks (P1-2), and false-positive security tests (T-P0-1, T-P0-2), there is NO working layer of tenant isolation. Any authenticated user can likely access any other tenant's data.
+
+**4. The test suite provides false confidence.** SQL injection tests that always pass (T-P0-1), IDOR tests that test inline code (T-P0-2), broken variable references (T-P0-3), and fake timers never enabled (T-P1-1) mean CI provides zero security assurance. For financial-grade software, this is a test infrastructure failure that means **no CI pipeline can catch cross-tenant data leakage**.
+
+**5. Monitoring will degrade under load.** High-cardinality labels (P0-14), O(n²) cleanup (P1-7), unbounded batch inserts (P0-4), and EventEmitter leaks (P1-30) mean the monitoring system fails when you need it most -- during incidents.
