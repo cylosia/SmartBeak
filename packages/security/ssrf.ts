@@ -266,8 +266,21 @@ export async function validateUrlWithDnsCheck(
       return syncResult;
     }
 
-    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
-    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    // P1-FIX: Add timeout to DNS resolution. Without a deadline, a slow or
+    // adversarially-controlled DNS server can stall the request indefinitely,
+    // creating an application-layer DoS vector. Fail closed on timeout so we
+    // don't accidentally allow a URL that we couldn't fully validate.
+    const DNS_TIMEOUT_MS = 3000;
+    const dnsTimeout = <T>(p: Promise<T>): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error('DNS timeout')), DNS_TIMEOUT_MS)
+        ),
+      ]);
+
+    const addresses = await dnsTimeout(dns.resolve4(hostname)).catch(() => [] as string[]);
+    const addresses6 = await dnsTimeout(dns.resolve6(hostname)).catch(() => [] as string[]);
     const allAddresses = [...addresses, ...addresses6];
 
     for (const ip of allAddresses) {

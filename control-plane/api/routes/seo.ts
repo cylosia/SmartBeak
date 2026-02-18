@@ -70,8 +70,11 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const repo = new PostgresSeoRepository(pool);
     const handler = new UpdateSeo(repo);
 
-    const event = await handler.execute(id, title, description);
-    return { ok: true, event };
+    // P0-FIX: Discard the internal domain event object. Returning it to the client
+    // leaks internal domain structure (entity IDs, aggregate state, event metadata).
+    // Route handlers must only expose public API surface.
+    await handler.execute(id, title, description);
+    return res.send({ ok: true });
   } catch (error) {
     logger.error('[seo] Route error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);

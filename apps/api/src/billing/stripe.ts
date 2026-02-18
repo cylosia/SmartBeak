@@ -110,7 +110,15 @@ function isRetryableStripeError(error: unknown): boolean {
     case 'StripeIdempotencyError':   // Idempotency key reuse with different params
       return false;
     default:
-      return true; // Unknown subtypes — retry conservatively
+      // P2-FIX: Changed from `return true` (retry) to `return false` (don't retry).
+      // "Unknown Stripe error subtypes" includes new error codes added by Stripe after
+      // this code was written. Retrying unknown errors risks:
+      //   1. Re-triggering fraud-detection alerts on repeated failed charge attempts
+      //   2. Amplifying billing operations (charges, refunds) that should only run once
+      //   3. Wasting 3× delay budget on errors that retrying cannot fix
+      // The conservative safe default for financial operations is: don't retry unknown
+      // errors. The Stripe SDK already handles well-known transient errors above.
+      return false;
   }
 }
 

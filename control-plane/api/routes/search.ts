@@ -103,8 +103,10 @@ function sanitizeSearchQuery(query: string): string {
   // Skip HTML tag brackets
   if (char === '<' || char === '>') continue;
 
-  // Skip path traversal characters
-  if (char === '.' || char === '/') continue;
+  // P1-FIX: Removed '.' and '/' from the blocklist. These characters are legitimate
+  // in search queries (e.g. "example.com", "v1/api/auth", "node.js") and removing them
+  // silently corrupts user input. SQL injection protection is provided by parameterised
+  // queries — character removal here adds no security benefit for those chars.
 
   // Skip SQL comment sequences (--)
   if (char === '-' && result.length > 0 && result[result.length - 1] === '-') {

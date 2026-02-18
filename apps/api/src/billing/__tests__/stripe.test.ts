@@ -47,8 +47,10 @@ describe('Stripe Integration - P0 Critical Tests', () => {
       expect(result.url).toBe('https://checkout.stripe.com/test');
     });
 
-    it('P0-FIX: should use cryptographically secure idempotency key', async () => {
-      // P0-FIX: Previously used Date.now() which could collide within same millisecond
+    it('P0-FIX: should use deterministic time-bucketed idempotency key', async () => {
+      // P0-FIX: Previously used randomUUID() which generated a new key on every call,
+      // defeating idempotency. Now uses a 1-hour time bucket so retries within the window
+      // hit the Stripe idempotency cache.
       mockStripeSessionsCreate.mockResolvedValue({
         id: 'cs_test_123',
         url: 'https://checkout.stripe.com/test',
@@ -65,10 +67,12 @@ describe('Stripe Integration - P0 Critical Tests', () => {
       expect(idempotencyKey).toContain('org_123');
       expect(idempotencyKey).toContain('price_123');
       
-      // 2. Use UUID format (not timestamp)
-      // UUID pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-      const uuidPattern = /^checkout_org_123_price_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      expect(idempotencyKey).toMatch(uuidPattern);
+      // 2. Use time-bucketed format: checkout_<orgId>_<priceId>_<hourBucket>
+      // hourBucket = Math.floor(Date.now() / 3_600_000) — a plain integer, not a UUID.
+      // Retries within the same 1-hour window reuse the same key (idempotency cache hit);
+      // a new session can be created after the hour expires.
+      const hourBucketPattern = /^checkout_org_123_price_123_\d+$/;
+      expect(idempotencyKey).toMatch(hourBucketPattern);
     });
 
     it('P0-FIX: should pass idempotency key to Stripe API', async () => {

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Knex } from 'knex';
 
@@ -32,6 +32,20 @@ export class SqlMigrationSource implements Knex.MigrationSource<string> {
     const upPath = join(SQL_DIR, `${migration}.up.sql`);
     const downPath = join(SQL_DIR, `${migration}.down.sql`);
     const upSql = readFileSync(upPath, 'utf8');
+
+    // P2-FIX: Eagerly validate that the rollback file exists when the migration
+    // object is constructed (at migrate-plan time), not lazily when `down()` is
+    // called. Without this check, a migration can be applied successfully but then
+    // fail at rollback time — leaving the database in a partially-rolled-back state
+    // that is difficult to recover from. Fail fast here to catch missing .down.sql
+    // files before any schema changes are made.
+    if (!existsSync(downPath)) {
+      throw new Error(
+        `Migration rollback file missing: ${downPath}. ` +
+        `Every migration must have a corresponding .down.sql file.`
+      );
+    }
+
     const needsNoTransaction = /CONCURRENTLY/i.test(upSql);
 
     const migrationObj: Knex.Migration = {

@@ -184,13 +184,21 @@ describe('P1-9: Stripe Webhook Security', () => {
   // -------------------------------------------------------------------------
   // 2. Timestamp staleness (replay window)
   // -------------------------------------------------------------------------
+  // The handler delegates replay-window enforcement to the Stripe SDK's
+  // constructEvent(), which validates the `t=` timestamp embedded in the
+  // stripe-signature header (5-minute tolerance). A manual check on
+  // `event.created` was deliberately removed because it incorrectly rejected
+  // legitimate Stripe webhook retries that arrive more than 5 minutes after the
+  // original delivery attempt (e.g., after a transient server outage).
+  // This test verifies the handler does NOT reject events based on event.created.
 
-  it('rejects events whose created timestamp is older than 5 minutes', async () => {
-    const staleTimestamp = Math.floor(Date.now() / 1000) - 6 * 60; // 6 min ago
-    const staleEvent = makeStripeEvent({ created: staleTimestamp });
+  it('does not reject events based on event.created age — SDK enforces the replay window via the signature header', async () => {
+    const staleCreated = Math.floor(Date.now() / 1000) - 6 * 60; // 6 min ago
+    const staleEvent = makeStripeEvent({ created: staleCreated });
 
     const mockStripe = {
       webhooks: {
+        // constructEvent succeeds (the SDK accepted the t= header timestamp)
         constructEvent: jest.fn().mockReturnValue(staleEvent),
       },
     };
@@ -203,28 +211,8 @@ describe('P1-9: Stripe Webhook Security', () => {
 
     await handler(req, res as unknown as NextApiResponse);
 
-    expect(res._status).toBe(400);
-    expect((res._body as Record<string, string>)['error']).toMatch(/timestamp too old/i);
-  });
-
-  it('accepts events whose created timestamp is within the 5-minute window', async () => {
-    const freshTimestamp = Math.floor(Date.now() / 1000) - 2 * 60; // 2 min ago
-    const freshEvent = makeStripeEvent({ created: freshTimestamp });
-
-    const mockStripe = {
-      webhooks: {
-        constructEvent: jest.fn().mockReturnValue(freshEvent),
-      },
-    };
-    (getStripe as jest.Mock).mockReturnValue(mockStripe);
-
-    const req = createMockReq(Buffer.from(JSON.stringify(freshEvent)), {
-      'stripe-signature': 't=1,v1=valid',
-    });
-    const res = createMockRes();
-
-    await handler(req, res as unknown as NextApiResponse);
-
+    // Handler must not 400 on stale event.created — only the SDK's constructEvent
+    // may reject, and here it returned successfully.
     expect(res._status).not.toBe(400);
   });
 

@@ -157,7 +157,7 @@ export class SoundCloudAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('uploadTrack', latency, false);
     this.metrics.recordError('uploadTrack', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to upload to SoundCloud', context, error as Error);
+    this.logger.error('Failed to upload to SoundCloud', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -214,7 +214,7 @@ export class SoundCloudAdapter {
     return data;
   } catch (error) {
     this.metrics.recordError('getTrack', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to get SoundCloud track', context, error as Error);
+    this.logger.error('Failed to get SoundCloud track', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);
