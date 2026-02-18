@@ -67,7 +67,16 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
       if (/\brel=/i.test(before) || /\brel=/i.test(after)) {
         return `${before}target="_blank"${after}`.replace(
           /\brel=(["'])(.*?)\1/i,
-          (_r, q, v) => `rel=${q}${v.includes('noopener') ? v : `${v} noopener noreferrer`.trim()}${q}`
+          // P0-FIX: Previously only checked for 'noopener', missing 'noreferrer'.
+          // A rel="noopener" without noreferrer still allows referrer headers to leak,
+          // and some older browsers only respect 'noreferrer' for opener isolation.
+          // Both tokens are required for complete tabnapping protection.
+          (_r, q, v) => {
+            const parts = v.split(/\s+/).filter(Boolean);
+            if (!parts.includes('noopener')) parts.push('noopener');
+            if (!parts.includes('noreferrer')) parts.push('noreferrer');
+            return `rel=${q}${parts.join(' ')}${q}`;
+          }
         );
       }
       return `${before}target="_blank" rel="noopener noreferrer"${after}`;

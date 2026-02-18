@@ -1,7 +1,3 @@
-import { getLogger } from './logger';
-
-const _logger = getLogger('semaphore');
-
 /**
  * Async semaphore for backpressure and concurrency control.
  *

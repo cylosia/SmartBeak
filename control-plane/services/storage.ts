@@ -134,10 +134,13 @@ const VALID_MIME_TYPES = new Set([
 
 function validateMimeType(mimeType: string): boolean {
   if (!mimeType || typeof mimeType !== 'string') return false;
-  // P1-FIX: Use strict allowlist only. Removed .startsWith('image/'), .startsWith('video/'),
-  // and .startsWith('audio/') fallbacks — they bypassed the allowlist and accepted arbitrary
-  // MIME types like 'image/x-arbitrary'. The VALID_MIME_TYPES set is the sole source of truth.
-  return VALID_MIME_TYPES.has(mimeType.toLowerCase());
+  // P1-FIX: Strip MIME type parameters before allowlist lookup.
+  // Browsers and HTTP clients send Content-Type with parameters such as
+  // 'image/jpeg; charset=utf-8' or 'image/png; boundary=...'. Without stripping
+  // the parameter portion, all parameterised MIME types fail validation even
+  // when the base type is in the allowlist, blocking legitimate uploads.
+  const baseType = mimeType.split(';')[0]!.trim().toLowerCase();
+  return VALID_MIME_TYPES.has(baseType);
 }
 
 export function generateStorageKey(domain: string, mimeType?: string): string {

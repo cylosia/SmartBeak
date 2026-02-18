@@ -66,7 +66,14 @@ const SortEnumSchema = z.union([
 
 export const SearchQuerySchema = z.object({
   q: z.string().min(1).max(200).transform(sanitizeSearchQuery),
-  filters: z.record(z.string(), z.string()).optional(),
+  // P1-FIX: Add key-count limit on the filters record. Without this an attacker
+  // can send 100,000 key-value pairs that Zod validates one-by-one, consuming CPU
+  // and memory proportional to the input size — an application-layer DoS vector.
+  filters: z.record(z.string(), z.string())
+    .refine((r) => Object.keys(r).length <= 50, {
+      message: 'filters must contain at most 50 entries',
+    })
+    .optional(),
   sort: SortEnumSchema.default('relevance'),
 });
 

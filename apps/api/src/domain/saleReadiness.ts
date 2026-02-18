@@ -87,6 +87,14 @@ function validateInput(input: SaleReadinessInput): { valid: boolean; errors: str
   errors.push('audience_growth_rate must be a number');
   } else if (isNaN(input.audience_growth_rate) || !isFinite(input.audience_growth_rate)) {
   errors.push('audience_growth_rate must be a valid number');
+  } else if (input.audience_growth_rate < -100) {
+  // P1-FIX: No lower bound allowed exaggerated negative values (e.g. -Infinity or
+  // -100000) to flow into score arithmetic, producing nonsensical negative scores.
+  // -100% represents a complete monthly audience loss — the realistic floor.
+  errors.push('audience_growth_rate must be >= -100 (monthly %)');
+  } else if (input.audience_growth_rate > 100000) {
+  // Upper bound prevents unrealistic inputs (e.g. 1e9) from skewing the score.
+  errors.push('audience_growth_rate must be <= 100000 (monthly %)');
   }
 
   // Validate revenue_monthly

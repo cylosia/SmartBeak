@@ -125,9 +125,12 @@ export interface TikTokPostResponse {
 export function isTikTokPostResponse(data: unknown): data is TikTokPostResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  // Only validate publishId — the declared interface field.
-  // Falling back to 'id' would accept a different (unexpected) response shape.
-  return typeof obj['publishId'] === 'string';
+  // P1-FIX: Also validate the required `status` field. The interface declares
+  // `status: 'processing' | 'published' | 'failed'` as non-optional. Without this
+  // check, any object with `publishId: string` passes the guard and downstream code
+  // accessing `.status` gets `undefined`, causing silent logic errors in job polling.
+  return typeof obj['publishId'] === 'string' &&
+    (obj['status'] === 'processing' || obj['status'] === 'published' || obj['status'] === 'failed');
 }
 
 // ============================================================================

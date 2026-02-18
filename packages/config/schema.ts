@@ -141,12 +141,23 @@ export const envSchema = z.object({
   NEXT_PUBLIC_ENABLE_CHAT: z.enum(['true', 'false', '1', '0']).optional(),
 }).refine(
   (data) => {
-    // P0-SECURITY FIX: Use timing-safe comparison to prevent timing-oracle attacks.
-    // Plain `!==` leaks key length and content via timing differences.
+    // P2-FIX: The previous implementation had an early return `if (a.length !== b.length)`
+    // that leaked JWT key length information to a timing attacker — an attacker measuring
+    // response time during config validation could determine whether the two keys have
+    // the same length, narrowing the brute-force space. While this runs at startup and
+    // is hard to exploit in practice, defensive coding should never leak via early exit.
+    // Fix: pad both buffers to equal length so timingSafeEqual always executes in O(n).
+    // A key whose length differs from the other will always produce an unequal comparison
+    // after padding (the padding bytes are zero on one side and non-zero on the other),
+    // which is semantically correct — different-length keys are definitely not equal.
     const a = Buffer.from(data.JWT_KEY_1, 'utf8');
     const b = Buffer.from(data.JWT_KEY_2, 'utf8');
-    if (a.length !== b.length) return true; // Different lengths → definitely different
-    return !timingSafeEqual(a, b);
+    const maxLen = Math.max(a.length, b.length);
+    const paddedA = Buffer.alloc(maxLen);
+    const paddedB = Buffer.alloc(maxLen);
+    a.copy(paddedA);
+    b.copy(paddedB);
+    return !timingSafeEqual(paddedA, paddedB);
   },
   { message: 'JWT_KEY_1 and JWT_KEY_2 must be different values', path: ['JWT_KEY_2'] }
 );

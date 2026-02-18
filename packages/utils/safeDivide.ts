@@ -10,7 +10,10 @@
 * @returns Result of division or default value
 */
 export function safeDivide(dividend: number, divisor: number, defaultValue: number = 0): number {
-  if (divisor === 0 || !isFinite(divisor)) {
+  // P1-FIX: Also guard NaN/Infinity dividend. Without this check, safeDivide(NaN, 2)
+  // returns NaN instead of defaultValue, silently propagating bad values through
+  // calculations (e.g. financial metrics, SLO percentages) with no error signal.
+  if (divisor === 0 || !isFinite(divisor) || !isFinite(dividend)) {
     return defaultValue;
   }
   return dividend / divisor;
@@ -24,7 +27,8 @@ export function safeDivide(dividend: number, divisor: number, defaultValue: numb
 * @returns Percentage value or default value
 */
 export function safePercentage(value: number, total: number, defaultValue: number = 0): number {
-  if (total === 0 || !isFinite(total)) {
+  // P1-FIX: Guard both operands — an NaN/Infinity value produces NaN output.
+  if (total === 0 || !isFinite(total) || !isFinite(value)) {
     return defaultValue;
   }
   return (value / total) * 100;
@@ -38,7 +42,8 @@ export function safePercentage(value: number, total: number, defaultValue: numbe
 * @returns Ratio or default value
 */
 export function safeRatio(numerator: number, denominator: number, defaultValue: number = 0): number {
-  if (denominator === 0 || !isFinite(denominator)) {
+  // P1-FIX: Guard both operands — an NaN/Infinity numerator produces NaN output.
+  if (denominator === 0 || !isFinite(denominator) || !isFinite(numerator)) {
     return defaultValue;
   }
   return numerator / denominator;
