@@ -18,14 +18,22 @@ function getEmailHashSecret(): string {
   return secret;
 }
 
-// P2-FIX: Lazy initialization to avoid module-level side effect that crashes
-// any test importing this module when EMAIL_HASH_SECRET is not set.
+// Validate eagerly at module load time so the app crashes immediately on startup
+// rather than the first time a subscriber email is hashed (potentially minutes
+// into a production deployment with real traffic already flowing).
+// Tests must set process.env.EMAIL_HASH_SECRET to a test value before importing
+// this module — e.g. via a jest.setup.ts or dotenv-based test env file.
 let _emailHashSecret: string | undefined;
 function getSecret(): string {
   if (!_emailHashSecret) {
     _emailHashSecret = getEmailHashSecret();
   }
   return _emailHashSecret;
+}
+if (process.env['NODE_ENV'] !== 'test') {
+  // Throws synchronously if the secret is absent or is the known default,
+  // preventing the app from starting in a misconfigured state.
+  getSecret();
 }
 
 /**

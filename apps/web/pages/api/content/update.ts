@@ -27,18 +27,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!validateMethod(req, res, ['POST'])) return;
 
   try {
-    // RATE LIMITING: Write endpoint - 30 requests/minute
-    const allowed = await rateLimit('content:update', 30, req, res);
-    if (!allowed) return;
-
-    // Authenticate request
+    // Authenticate before rate-limiting so the limit can be scoped per-user.
+    // A global key ('content:update') lets one user exhaust the quota for
+    // all users; per-user keying eliminates that DoS vector.
     const auth = await requireAuth(req, res);
     if (!auth) return;
+
+    const allowed = await rateLimit(`content:update:${auth.userId}`, 30, req, res);
+    if (!allowed) return;
 
     const { contentId, title, body } = req.body;
 
     if (!contentId) {
       return sendError(res, 400, 'contentId is required');
+    }
+
+    // Require at least one real field — otherwise the UPDATE is skipped but the
+    // handler would still return { updated: true }, desynchronising client state.
+    if (title === undefined && body === undefined) {
+      return sendError(res, 400, 'At least one field (title or body) must be provided');
     }
 
     // Validate UUID format
@@ -153,6 +160,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `UPDATE content_items SET ${updates.join(', ')} WHERE id = $${paramIndex} AND org_id = $${paramIndex + 1}`,
           values
         );
+      }
+
+      // Record the update in the audit log.
+      // 42P01 = undefined_table: tolerated while the migration hasn't run yet.
+      // Any other failure re-throws so the transaction is rolled back — content
+      // must not be silently modified without a corresponding audit record.
+      try {
+        await client.query(
+          `INSERT INTO content_audit_log
+             (content_id, action, changed_fields, performed_by, performed_at, org_id)
+           VALUES ($1, 'updated', $2, $3, $4, $5)`,
+          [
+            contentId,
+            JSON.stringify({ title: title !== undefined, body: body !== undefined }),
+            auth.userId,
+            new Date(),
+            auth['orgId'],
+          ]
+        );
+      } catch (auditError: unknown) {
+        const err = auditError as { code?: string };
+        if (err.code === '42P01') {
+          logger.warn('content_audit_log table missing; skipping audit log', { contentId });
+        } else {
+          throw auditError;
+        }
       }
 
       // Fetch updated content

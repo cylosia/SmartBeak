@@ -451,8 +451,6 @@ export function useApi() {
         credentials: 'include',
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to GET ${path}`);
-      return { data: await response.json() };
-      if (!response.ok) throw new Error(`Failed to GET ${path}`);
       return { data: await response.json() as T };
     },
     post: async <T = unknown>(path: string, body: unknown): Promise<{ data: T }> => {
@@ -464,8 +462,6 @@ export function useApi() {
         body: JSON.stringify(body),
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to POST ${path}`);
-      return { data: await response.json() };
-      if (!response.ok) throw new Error(`Failed to POST ${path}`);
       return { data: await response.json() as T };
     },
     patch: async <T = unknown>(path: string, body: unknown): Promise<{ data: T }> => {
@@ -477,8 +473,6 @@ export function useApi() {
         body: JSON.stringify(body),
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to PATCH ${path}`);
-      return { data: await response.json() };
-      if (!response.ok) throw new Error(`Failed to PATCH ${path}`);
       return { data: await response.json() as T };
     },
     delete: async <T = unknown>(path: string): Promise<{ data: T }> => {
@@ -488,8 +482,6 @@ export function useApi() {
         credentials: 'include',
       }, DEFAULT_REQUEST_TIMEOUT_MS);
       await assertOk(response, `Failed to DELETE ${path}`);
-      return { data: await response.json() };
-      if (!response.ok) throw new Error(`Failed to DELETE ${path}`);
       return { data: await response.json() as T };
     },
   }), []);

@@ -3,47 +3,74 @@ import React, { useState } from 'react';
 
 import { BillingProviderSelector } from '../../components/BillingProviderSelector';
 
-// P0-SECURITY FIX: Allowlist of trusted checkout redirect domains
-const TRUSTED_CHECKOUT_DOMAINS = [
+// Allowlist of trusted checkout redirect domains — exact match only.
+// endsWith() was removed: it permitted evil.checkout.stripe.com to pass.
+const TRUSTED_CHECKOUT_HOSTNAMES = new Set([
   'checkout.stripe.com',
   'pay.paddle.com',
   'sandbox-checkout.paddle.com',
-];
+]);
 
 function isValidCheckoutUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);
-    // Only allow https protocol
     if (url.protocol !== 'https:') return false;
-    // Only allow trusted domains
-    return TRUSTED_CHECKOUT_DOMAINS.some(
-      (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
-    );
+    return TRUSTED_CHECKOUT_HOSTNAMES.has(url.hostname);
   } catch {
     return false;
   }
 }
+
+// Allowlist of accepted billing providers.
+// The provider value is interpolated into the fetch URL, so any unlisted
+// value would be a path-traversal vector.
+const VALID_PROVIDERS = ['stripe', 'paddle'] as const;
+type BillingProvider = typeof VALID_PROVIDERS[number];
 
 export default function UpgradePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function startCheckout(provider: string) {
+    // Reject unlisted providers before the value touches the URL.
+    if (!(VALID_PROVIDERS as readonly string[]).includes(provider)) {
+      setError('Invalid payment provider selected.');
+      return;
+    }
+    const validProvider = provider as BillingProvider;
+
     setError(null);
     setLoading(true);
+
+    // Unique key per checkout attempt so the server can deduplicate network
+    // retries without creating duplicate sessions or charges.
+    const idempotencyKey = crypto.randomUUID();
+
+    // Hard timeout so the user is never left on a frozen "Redirecting…" screen.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
     try {
-      const res = await fetch(`/billing/${provider}/checkout`, {
+      // priceId is intentionally omitted: the server must resolve the canonical
+      // Stripe/Paddle price ID from planId using its own database record.
+      // Allowing clients to supply priceId would let them self-select free plans.
+      const res = await fetch(`/billing/${validProvider}/checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: 'price_pro', planId: 'pro' })
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({ planId: 'pro' }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
         throw new Error('Failed to create checkout session');
       }
       const data = await res.json();
       const checkoutUrl = data.url || data.checkoutUrl;
 
-      // P0-SECURITY FIX: Validate redirect URL against allowlist
       if (!checkoutUrl || !isValidCheckoutUrl(checkoutUrl)) {
         throw new Error('Invalid checkout URL received from server');
       }
@@ -52,7 +79,9 @@ export default function UpgradePage() {
         window.location.href = checkoutUrl;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+      clearTimeout(timeoutId);
+      // Never surface raw server error messages to the UI.
+      setError('Checkout failed. Please try again.');
       setLoading(false);
     }
   }

@@ -2,6 +2,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
+import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
@@ -11,13 +12,19 @@ import { errors } from '@errors/responses';
 
 const logger = getLogger('usage-routes');
 
-export interface UsageStats {
-  orgId: string;
-  period: string;
-  totalRequests: number;
-  totalTokens: number;
-  costEstimate: number;
-}
+// Schema mirrors the exact columns returned by UsageService.getUsage().
+// Using .strict() ensures any unexpected DB columns are caught at the boundary
+// rather than leaking internal fields to API consumers.
+const UsageStatsSchema = z.object({
+  org_id: z.string(),
+  domain_count: z.number(),
+  content_count: z.number(),
+  media_count: z.number(),
+  publish_count: z.number(),
+  updated_at: z.union([z.date(), z.string()]).optional(),
+}).strict();
+
+export type UsageStats = z.infer<typeof UsageStatsSchema>;
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -58,7 +65,8 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
 
     let stats: UsageStats;
     try {
-    stats = await usage.getUsage(ctx["orgId"]) as unknown as UsageStats;
+    const rawStats = await usage.getUsage(ctx['orgId']);
+    stats = UsageStatsSchema.parse(rawStats);
     } catch (serviceError) {
     logger.error('[usage] Service error', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
     return errors.serviceUnavailable(res, 'Unable to fetch usage data. Please try again later.');
