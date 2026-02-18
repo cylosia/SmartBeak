@@ -19,11 +19,14 @@ export class TimeoutError extends Error {
 *
 * @param promise - The promise to wrap
 * @param timeoutMs - Timeout in milliseconds
-* @param options - Optional configuration
+* @param options - Optional configuration object (or deprecated string message)
 * @param options.message - Custom timeout error message
 * @param options.controller - AbortController to abort when the timeout fires.
 *   Pass the AbortController (not controller.signal) so we can call .abort() on it.
 * @returns Promise that rejects if timeout is exceeded
+*
+* @deprecated Passing a plain string as `options` is deprecated.
+*   Use `{ message: '...' }` instead.
 */
 export function withTimeout<T>(
   promise: Promise<T>,
@@ -92,6 +95,21 @@ export async function fetchWithTimeout(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), safeTimeoutMs);
 
+  // P1-2 FIX: Honor the caller's existing AbortSignal rather than silently
+  // overwriting it. When the caller aborts, we also abort our timeout controller
+  // so the fetch sees the cancellation immediately.
+  const callerSignal = options.signal instanceof AbortSignal ? options.signal : undefined;
+  let callerAbortListener: (() => void) | undefined;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      clearTimeout(timeoutId);
+      controller.abort(callerSignal.reason);
+    } else {
+      callerAbortListener = () => { controller.abort(callerSignal.reason); };
+      callerSignal.addEventListener('abort', callerAbortListener, { once: true });
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -106,5 +124,8 @@ export async function fetchWithTimeout(
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    if (callerSignal && callerAbortListener) {
+      callerSignal.removeEventListener('abort', callerAbortListener);
+    }
   }
 }

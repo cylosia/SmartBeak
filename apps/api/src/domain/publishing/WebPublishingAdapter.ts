@@ -80,7 +80,7 @@ const activeControllers = new Map<string, { controller: AbortController; created
 const CONTROLLER_MAX_AGE_MS = 5 * 60 * 1000;
 const CONTROLLER_CLEANUP_INTERVAL_MS = 60 * 1000;
 
-const controllerCleanupInterval = setInterval(() => {
+function runControllerCleanup(): void {
   const now = Date.now();
   for (const [id, entry] of activeControllers) {
     if (now - entry.createdAt > CONTROLLER_MAX_AGE_MS) {
@@ -88,9 +88,22 @@ const controllerCleanupInterval = setInterval(() => {
       activeControllers.delete(id);
     }
   }
-}, CONTROLLER_CLEANUP_INTERVAL_MS);
+}
+
+const controllerCleanupInterval = setInterval(runControllerCleanup, CONTROLLER_CLEANUP_INTERVAL_MS);
+// P2-1 FIX: unref() prevents the timer from keeping the process/test-runner alive.
+// Expose stopControllerCleanup() so tests can clear the interval explicitly
+// and avoid timer-leak warnings from Vitest/Jest.
 if (controllerCleanupInterval.unref) {
   controllerCleanupInterval.unref();
+}
+
+/**
+ * Stop the background controller cleanup interval.
+ * Call this in tests (afterAll) or during process shutdown to prevent timer leaks.
+ */
+export function stopControllerCleanup(): void {
+  clearInterval(controllerCleanupInterval);
 }
 
 /**
@@ -227,9 +240,12 @@ export class WebPublishingAdapter extends PublishingAdapter {
     const payload = this.buildPayload(content);
 
     try {
+      // P1-1 FIX: Spread config.headers first, then pin Content-Type so that
+      // user-controlled headers cannot override the JSON content type and
+      // potentially confuse server-side parsers or bypass WAF rules.
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
         ...config.headers,
+        'Content-Type': 'application/json',
       };
 
       // Add authentication headers
@@ -252,8 +268,18 @@ export class WebPublishingAdapter extends PublishingAdapter {
             break;
           }
           case 'api-key':
-            // P0-3 SECURITY FIX: Validate keyHeader against allowlist to prevent header injection
-            if (config.auth.keyHeader && config.auth.token) {
+            // P0-3 SECURITY FIX: Validate keyHeader against allowlist to prevent header injection.
+            // P0-3b FIX: Both keyHeader and token are required. Previously if either was
+            // absent the branch was silently skipped, sending the request unauthenticated
+            // while the caller believed auth was active (silent auth bypass).
+            if (!config.auth.keyHeader || !config.auth.token) {
+              return {
+                success: false,
+                error: 'api-key auth requires both keyHeader and token',
+                timestamp: new Date(),
+              };
+            }
+            {
               const normalizedHeader = config.auth.keyHeader.toLowerCase();
               if (!ALLOWED_API_KEY_HEADERS.has(normalizedHeader)) {
                 return {

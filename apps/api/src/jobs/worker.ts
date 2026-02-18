@@ -31,7 +31,20 @@ catch (error) {
 }
 
 // Initialize scheduler and workers
-const scheduler = initializeJobScheduler(undefined, undefined);
+// P0-2 FIX: Wrap scheduler initialization in try/catch. Previously this was
+// bare at module level — if initializeJobScheduler() threw synchronously, it
+// would be an uncaught exception BEFORE the process.on('uncaughtException')
+// handler was registered, bypassing graceful shutdown entirely.
+function createScheduler(): ReturnType<typeof initializeJobScheduler> {
+  try {
+    return initializeJobScheduler(undefined, undefined);
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to initialize job scheduler', err);
+    process.exit(1);
+  }
+}
+const scheduler = createScheduler();
 logger.info('Job workers started');
 logger.info('Registered queues: high_priority, ai-tasks, publishing, low_priority_exports, notifications, analytics');
 logger.info('Waiting for jobs...');
@@ -60,7 +73,18 @@ writeHeartbeat();
 const heartbeatInterval = setInterval(writeHeartbeat, HEARTBEAT_INTERVAL_MS);
 heartbeatInterval.unref();
 
+// P2-4 FIX: Guard against concurrent gracefulShutdown() invocations.
+// If SIGTERM fires while an uncaughtException is mid-shutdown (or vice versa),
+// a second call to scheduler.stop() could cause undefined behavior depending
+// on the scheduler implementation. The guard ensures only one shutdown runs.
+let shutdownInProgress = false;
+
 async function gracefulShutdown(signal: string): Promise<void> {
+  if (shutdownInProgress) {
+    logger.warn(`${signal} received but shutdown already in progress — skipping duplicate`);
+    return;
+  }
+  shutdownInProgress = true;
   logger.info(`${signal} received, shutting down gracefully`);
 
   // Stop heartbeat writes so the probe detects a dead worker if shutdown hangs.
