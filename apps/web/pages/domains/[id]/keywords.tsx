@@ -2,6 +2,11 @@ import type { GetServerSidePropsContext } from 'next';
 import { requireDomainAccess } from '../../../lib/auth';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
+// FIX BUG-12: Import UUID_RE from the shared utility instead of duplicating it.
+import { UUID_RE } from '../../../lib/uuid';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('keywords-page');
 
 interface KeywordsProps {
   domainId: string;
@@ -35,12 +40,11 @@ export default function Keywords({ domainId }: KeywordsProps) {
   );
 }
 
-// FIX P3-03: UUID validation regex extracted to a named constant (shared pattern)
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   // FIX P2-13: Wrap in try/catch so auth errors are logged and return 404
   // rather than propagating to Next.js default error handler.
+  // FIX BUG-13: Log errors before returning notFound so auth infrastructure
+  // failures are visible in structured logs rather than silently swallowed.
   try {
     const id = params?.['id'];
     if (typeof id !== 'string' || !UUID_RE.test(id)) {
@@ -51,7 +55,8 @@ export async function getServerSideProps({ params, req }: GetServerSidePropsCont
       return authCheck.result;
     }
     return { props: { domainId: id } };
-  } catch {
+  } catch (error) {
+    logger.error('[keywords] getServerSideProps error', error instanceof Error ? error : new Error(String(error)));
     return { notFound: true };
   }
 }

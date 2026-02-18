@@ -229,7 +229,7 @@ export class KeyRotationManager extends EventEmitter {
       await this.processScheduledInvalidations();
     }
     catch (error) {
-      logger.error('[KeyRotation] Initial check failed:', error as Error);
+      logger.error('[KeyRotation] Initial check failed:', error instanceof Error ? error : new Error(String(error)));
       this.emit('error', { phase: 'initialCheck', error });
     }
   }
@@ -291,13 +291,15 @@ export class KeyRotationManager extends EventEmitter {
       if (this.providerSalts.has(provider)) {
         return; // Already loaded
       }
-      const { rows } = await this.db.query(
+      // FIX BUG-04: Added typed generic to avoid implicit any on rows[0].
+      // Changed dot notation to bracket notation per noPropertyAccessFromIndexSignature.
+      const { rows } = await this.db.query<{ salt: string | null }>(
         'SELECT salt FROM provider_key_metadata WHERE provider = $1',
         [provider],
       );
 
-      if (rows.length > 0 && rows[0].salt) {
-        this.providerSalts.set(provider, Buffer.from(rows[0].salt, 'hex'));
+      if (rows.length > 0 && rows[0]['salt']) {
+        this.providerSalts.set(provider, Buffer.from(rows[0]['salt'], 'hex'));
       } else {
         const salt = randomBytes(32);
         this.providerSalts.set(provider, salt);
@@ -431,55 +433,89 @@ export class KeyRotationManager extends EventEmitter {
 
   /**
    * Process scheduled invalidations - called periodically.
-   * FIX P1-04: Wrapped in a transaction with SELECT ... FOR UPDATE SKIP LOCKED to
-   * prevent duplicate processing when multiple instances run concurrently.
+   * FIX BUG-01: Replaced a single shared transaction (BEGIN / for-loop / COMMIT) with
+   * per-provider autonomous transactions. The old design committed the entire batch even
+   * when individual providers failed, silently leaving old keys active while marking
+   * invalidation_status = 'completed'. Each provider now has its own BEGIN/COMMIT/ROLLBACK
+   * so a failure for provider A does not affect provider B.
+   *
+   * FIX BUG-06: The old design held one PoolClient open across the loop and then called
+   * invalidateOldKey() which issued this.db.query() — a second pool acquisition while one
+   * connection was already held. Under pool exhaustion this deadlocked. Each provider now
+   * acquires and fully releases its own connection, eliminating nested pool acquisition.
    */
   async processScheduledInvalidations(): Promise<void> {
-    let client: PoolClient | undefined;
-    try {
-      client = await this.db.connect();
-      await client.query('BEGIN');
+    // Fetch candidates outside any transaction; a stale read is acceptable here
+    // because each provider re-checks its own row under FOR UPDATE SKIP LOCKED below.
+    const { rows: candidates } = await this.db.query<{ provider: string }>(
+      `SELECT provider
+       FROM api_keys
+       WHERE scheduled_invalidation_at <= NOW()
+         AND invalidation_status = 'pending'`,
+    );
 
-      const { rows } = await client.query<{ provider: string }>(
-        `SELECT provider
-         FROM api_keys
-         WHERE scheduled_invalidation_at <= NOW()
-           AND invalidation_status = 'pending'
-         FOR UPDATE SKIP LOCKED`,
-      );
+    for (const candidate of candidates) {
+      let client: PoolClient | undefined;
+      try {
+        client = await this.db.connect();
+        await client.query('BEGIN');
 
-      for (const row of rows) {
-        try {
-          await this.invalidateOldKey(row['provider']);
-          await client.query(
-            `UPDATE api_keys
-             SET invalidation_status = 'completed',
-                 previous_key = NULL
-             WHERE provider = $1`,
-            [row['provider']],
-          );
-          logger.info(`[KeyRotation] Completed invalidation for ${row['provider']}`);
+        // Re-check and lock only this provider's row. SKIP LOCKED ensures concurrent
+        // instances skip rows already held by another process rather than queuing.
+        const { rows: locked } = await client.query<{ provider: string }>(
+          `SELECT provider
+           FROM api_keys
+           WHERE provider = $1
+             AND scheduled_invalidation_at <= NOW()
+             AND invalidation_status = 'pending'
+           FOR UPDATE SKIP LOCKED`,
+          [candidate['provider']],
+        );
+
+        if (locked.length === 0) {
+          // Another instance already claimed this row; nothing to do.
+          await client.query('ROLLBACK');
+          continue;
         }
-        catch (error) {
-          logger.error(`[KeyRotation] Failed to invalidate old key for ${row['provider']}:`, error as Error);
-          this.emit('error', { phase: 'invalidation', provider: row['provider'], error });
-          await this.alertOnInvalidationFailure(row['provider'], error);
-        }
-      }
 
-      await client.query('COMMIT');
-    }
-    catch (error) {
-      if (client) {
-        await client.query('ROLLBACK').catch((rbErr: unknown) => {
-          logger.error('[KeyRotation] Rollback failed in processScheduledInvalidations', rbErr as Error);
-        });
+        // Update in-memory state before committing to DB.
+        const config = this.keys.get(candidate['provider']);
+        if (config) {
+          config.previousKey = undefined;
+        }
+
+        // All DB writes go through the same client to avoid nested pool acquisition
+        // inside an active transaction (root cause of the former BUG-06 deadlock).
+        await client.query(
+          `UPDATE api_keys
+           SET previous_key = NULL,
+               status = 'active',
+               invalidation_status = 'completed'
+           WHERE provider = $1`,
+          [candidate['provider']],
+        );
+
+        await client.query('COMMIT');
+        this.emit('oldKeyInvalidated', { provider: candidate['provider'] });
+        logger.info(`[KeyRotation] Completed invalidation for ${candidate['provider']}`);
+      } catch (error) {
+        if (client) {
+          await client.query('ROLLBACK').catch((rbErr: unknown) => {
+            logger.error(
+              '[KeyRotation] Rollback failed in processScheduledInvalidations',
+              rbErr instanceof Error ? rbErr : new Error(String(rbErr)),
+            );
+          });
+        }
+        logger.error(
+          `[KeyRotation] Failed to invalidate old key for ${candidate['provider']}:`,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        this.emit('error', { phase: 'invalidation', provider: candidate['provider'], error });
+        await this.alertOnInvalidationFailure(candidate['provider'], error);
+      } finally {
+        client?.release();
       }
-      logger.error('[KeyRotation] Error processing scheduled invalidations:', error as Error);
-      this.emit('error', { phase: 'processScheduledInvalidations', error });
-    }
-    finally {
-      client?.release();
     }
   }
 
@@ -488,7 +524,7 @@ export class KeyRotationManager extends EventEmitter {
    */
   private async alertOnInvalidationFailure(provider: string, error: unknown): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    logger.error(`[KeyRotation] ALERT: Invalidation failed for ${provider}`, error as Error);
+    logger.error(`[KeyRotation] ALERT: Invalidation failed for ${provider}`, error instanceof Error ? error : new Error(String(error)));
     this.emit('alert', {
       severity: 'critical',
       message: `Key invalidation failed for ${provider}`,
@@ -530,22 +566,6 @@ export class KeyRotationManager extends EventEmitter {
         `(rowCount=${result.rowCount}). In-memory state may have diverged from DB.`,
       );
     }
-  }
-
-  /**
-   * Invalidate old key after grace period
-   */
-  private async invalidateOldKey(provider: string): Promise<void> {
-    const config = this.keys.get(provider);
-    if (!config)
-      return;
-    config.previousKey = undefined;
-    await this.db.query(
-      `UPDATE api_keys SET previous_key = NULL, status = 'active' WHERE provider = $1`,
-      [provider],
-    );
-    this.emit('oldKeyInvalidated', { provider });
-    logger.info(`[KeyRotation] Old key invalidated for ${provider}`);
   }
 
   /**
@@ -607,8 +627,11 @@ export class KeyRotationManager extends EventEmitter {
   /**
    * Decrypt key from storage.
    * FIX P1-09: Added explicit byte-length validation for IV and auth tag before use.
+   * FIX BUG-02: Changed from public to private — only used internally by
+   * loadKeysFromDatabase. Exposing decryption as a public method creates an
+   * unnecessary decryption oracle on the instance.
    */
-  async decryptKey(encryptedData: string, provider: string): Promise<string> {
+  private async decryptKey(encryptedData: string, provider: string): Promise<string> {
     const parts = encryptedData.split(':');
     if (parts.length < 3) {
       throw new Error('Invalid encrypted data format: expected iv:authTag:ciphertext');
@@ -642,8 +665,12 @@ export class KeyRotationManager extends EventEmitter {
    * Hash key for identification in logs and events (not for storage or auth).
    * FIX P2-04: Uses HMAC-SHA256 with the instance secret instead of plain SHA256,
    * preventing pre-computation of a rainbow table against known key formats.
+   * FIX BUG-03: Changed from public to private. Exposing this as a public method
+   * creates a keyed-HMAC oracle over the master encryption secret: any caller with
+   * a manager reference could probe arbitrary inputs and use the MAC prefix to
+   * confirm key formats or fingerprint keys from event logs.
    */
-  hashKey(key: string): string {
+  private hashKey(key: string): string {
     return createHmac('sha256', this.encryptionSecret).update(key).digest('hex').slice(0, 16);
   }
 

@@ -319,8 +319,11 @@ describe('Key Rotation Security Tests', () => {
     });
 
     it('should handle decryption with invalid format', async () => {
+      // decryptKey is now private (BUG-02 fix); access via index accessor as
+      // permitted in test files (no-non-null-assertion and no-explicit-any are
+      // disabled in test files per project convention).
       await expect(
-        manager.decryptKey('invalid-format', 'provider1')
+        (manager as any)['decryptKey']('invalid-format', 'provider1')
       ).rejects.toThrow('Invalid encrypted data format');
     });
   });
