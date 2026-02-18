@@ -83,6 +83,9 @@ export type ApiKeyId = Branded<string, 'ApiKeyId'>;
 export type AuditEventId = Branded<string, 'AuditEventId'>;
 
 // Additional branded types (consolidated from kernel/branded.ts)
+/** Experiment ID branded type */
+export type ExperimentId = Branded<string, 'ExperimentId'>;
+
 /** Membership ID branded type */
 export type MembershipId = Branded<string, 'MembershipId'>;
 /** Domain Registry ID branded type */
@@ -630,6 +633,21 @@ export function createSubscriptionId(id: string): SubscriptionId {
     throw new ValidationError(`Invalid SubscriptionId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
   }
   return id as SubscriptionId;
+}
+
+/**
+ * Create a branded ExperimentId from a string.
+ * P1-TYPE FIX: Experiment.id was typed as plain `string`, allowing any string
+ * (including invalid UUIDs or IDs from other entity types) to be passed where
+ * an ExperimentId is expected. Branded type enforces UUID format at construction
+ * time and prevents accidental mixing with ContentId, UserId, etc.
+ * @throws ValidationError if the ID is not a valid UUID
+ */
+export function createExperimentId(id: string): ExperimentId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid ExperimentId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as ExperimentId;
 }
 
 /** Type guard for any valid UUID string */

@@ -26,7 +26,7 @@ export function EmailExperimentBuilder({ variants, onCreate }: EmailExperimentBu
     <h2>Email Experiment</h2>
     {variants.map((v) => (
     <label key={v.id}>
-      <input type='checkbox' onChange={() => toggle(v.id)} />
+      <input type='checkbox' checked={selected.includes(v.id)} onChange={() => toggle(v.id)} />
       {v.name}
     </label>
     ))}
