@@ -1,4 +1,5 @@
 
+import crypto from 'crypto';
 import { DomainEventEnvelope } from '../../../../packages/types/domain-event';
 
 export class SearchIndexFailed {
@@ -8,7 +9,7 @@ export class SearchIndexFailed {
     version: 1,
     occurredAt: new Date().toISOString(),
     payload: { contentId, error },
-    meta: { correlationId: correlationId || '', domainId: 'search', source: 'domain' }
+    meta: { correlationId: correlationId || crypto.randomUUID(), domainId: 'search', source: 'domain' }
   };
   }
 }

@@ -61,7 +61,8 @@ export interface InstagramPostResponse {
 export function isInstagramPostResponse(data: unknown): data is InstagramPostResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return typeof obj['id'] === 'string';
+  return typeof obj['id'] === 'string' &&
+    (obj['status'] === 'published' || obj['status'] === 'failed');
 }
 
 // ============================================================================
@@ -120,7 +121,9 @@ export interface TikTokPostResponse {
 export function isTikTokPostResponse(data: unknown): data is TikTokPostResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return typeof obj['publishId'] === 'string' || typeof obj['id'] === 'string';
+  // Only validate publishId — the declared interface field.
+  // Falling back to 'id' would accept a different (unexpected) response shape.
+  return typeof obj['publishId'] === 'string';
 }
 
 // ============================================================================

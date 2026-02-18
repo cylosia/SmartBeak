@@ -87,24 +87,18 @@ export function sanitizeUrl(url: string | undefined | null): string {
     return '';
   }
 
-  const lowerUrl = url.toLowerCase().trim();
-  
-  // Block dangerous protocols
-  const dangerousProtocols = [
-    'javascript:',
-    'data:text/html',
-    'vbscript:',
-    'mocha:',
-    'livescript:',
-    'about:',
-    'file:',
-  ];
-  
-  if (dangerousProtocols.some(proto => lowerUrl.startsWith(proto))) {
+  const trimmed = url.trim();
+  const lowerUrl = trimmed.toLowerCase();
+
+  // Only allow explicit safe protocols. Allowlist approach is safer than blocklist:
+  // - Blocklist misses protocol-relative URLs like //evil.com (no protocol prefix)
+  // - Blocklist misses encoded variants like &#106;avascript:
+  const SAFE_PROTOCOLS = ['https://', 'http://'];
+  if (!SAFE_PROTOCOLS.some(proto => lowerUrl.startsWith(proto))) {
     return '';
   }
 
-  return url;
+  return trimmed;
 }
 
 // Re-export DOMPurify for advanced use cases

@@ -277,7 +277,10 @@ export async function getMaintenanceStatus(
   const seqMap = new Map(sequenceHealth.rows.map(r => [r.status, r.count]));
   const bloatMap = new Map(bloatStatus.rows.map(r => [r.status, r.count]));
   const totalBloat = bloatStatus.rows.reduce((sum, r) => sum + r.count, 0);
-  const avgBloat = bloatStatus.rows.reduce((sum, r) => sum + (r.avg_bloat * r.count), 0) / totalBloat;
+  // Guard against division by zero when no bloat data is available.
+  const avgBloat = totalBloat === 0
+    ? 0
+    : bloatStatus.rows.reduce((sum, r) => sum + (r.avg_bloat * r.count), 0) / totalBloat;
   
   return {
     sequences: {

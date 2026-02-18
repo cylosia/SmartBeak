@@ -362,7 +362,15 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
   // Without this check, an attacker who controls checkout metadata can upgrade
   // any arbitrary org to a paid plan. The Fastify handler had this check but
   // this Next.js handler did not.
-  const customerId = session.customer as string;
+  // Stripe types session.customer as string | Customer | DeletedCustomer | null.
+  // In webhook payloads (without explicit expand[]) it is always a string customer ID.
+  // We still extract safely to defend against future API changes.
+  const rawCustomer = session.customer;
+  const customerId: string | null = typeof rawCustomer === 'string' ? rawCustomer
+    : rawCustomer !== null && typeof rawCustomer === 'object' && 'id' in rawCustomer
+      ? String((rawCustomer as { id: unknown }).id)
+      : null;
+
   if (customerId) {
     const verifyClient = await pool.connect();
     try {

@@ -243,7 +243,12 @@ export async function deployShardToVercel(
       .update({ status: 'building' });
 
     // 3. Fetch files from storage to temp directory
-    const files = JSON.parse(shard.file_manifest) as Record<string, { sha: string; size: number }>;
+    let files: Record<string, { sha: string; size: number }>;
+    try {
+      files = JSON.parse(shard.file_manifest) as Record<string, { sha: string; size: number }>;
+    } catch {
+      throw new Error(`Corrupted file manifest for shard ${shardId}`);
+    }
     const fileList: ShardFile[] = [];
 
     await mkdir(tempDir, { recursive: true });
@@ -288,17 +293,13 @@ export async function deployShardToVercel(
     }
     const vercelAdapter = new VercelAdapter(vercelToken);
 
-    // TODO: Implement direct file upload method in VercelAdapter
-    // @ts-expect-error -- deployFilesDirectly not yet implemented on VercelAdapter
-    const deployment = await vercelAdapter.deployFilesDirectly({
-      projectId: vercelProjectId,
-      files: fileList.map(f => ({
-        file: f.path,
-        data: Buffer.from(f.content).toString('base64'),
-        encoding: 'base64',
-      })),
-      target: 'production',
-    });
+    // VercelAdapter.deployFilesDirectly is not yet implemented.
+    // Throwing here is intentional: fail fast and loudly rather than silently
+    // corrupting deployment state with an undefined method call.
+    throw new Error(
+      'VercelAdapter.deployFilesDirectly is not yet implemented. ' +
+      'Track progress in GitHub issue for direct file upload support.'
+    );
 
     // 5. Update database with deployment info
     await knex('site_shards')
@@ -370,7 +371,13 @@ export async function getShardDownloadUrl(
   if (!site) return null;
 
   // SECURITY FIX P0 #5: Validate filePath exists in the shard's manifest
-  const manifest = JSON.parse(shard.file_manifest) as Record<string, unknown>;
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(shard.file_manifest) as Record<string, unknown>;
+  } catch {
+    logger.error('Corrupted file manifest', { shardId });
+    return null;
+  }
   if (!manifest[safePath]) {
     return null;
   }

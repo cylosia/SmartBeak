@@ -109,10 +109,14 @@ export function getStripeWebhookSecret(): string {
 }
 
 /**
-* Backward compatible export
-* @deprecated Use getStripeWebhookSecret() instead
+* @deprecated Use getStripeWebhookSecret() instead. This constant was removed
+* because reading process.env at module load time breaks the deferred validation
+* pattern and can silently produce an empty string in production environments
+* where the secret is injected after module initialisation.
+*
+* Migrate all call-sites to: getStripeWebhookSecret()
 */
-export const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'] || '';
+// STRIPE_WEBHOOK_SECRET removed — do not re-add a module-level const here.
 
 /**
 * Validates that Stripe is properly configured

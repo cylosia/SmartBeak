@@ -37,8 +37,7 @@ export interface SecurityAlert {
   userId?: string;
   orgId?: string;
   message: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  details: Record<string, any>;
+  details: Record<string, unknown>;
 }
 
 export type SecurityAlertType =
@@ -189,8 +188,7 @@ export class SecurityAlertManager extends EventEmitter {
   severity: SecurityAlert['severity'],
   type: SecurityAlertType,
   message: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  details: Record<string, any> = {},
+  details: Record<string, unknown> = {},
   userId?: string,
   orgId?: string
   ): Promise<void> {
@@ -290,11 +288,11 @@ export class SecurityAlertManager extends EventEmitter {
     );
   }
 
-  // Check for unusual IP
-  const knownIPs = new Set(
+  // Check for unusual IP — guard against non-string detail values
+  const knownIPs = new Set<string>(
     this.alerts
-    .filter(a => a["userId"] === userId && a.details?.["ip"])
-    .map(a => a.details["ip"])
+    .filter(a => a["userId"] === userId && typeof a.details?.["ip"] === 'string')
+    .map(a => a.details["ip"] as string)
   );
 
   if (knownIPs.size > 0 && !knownIPs.has(event["ip"])) {

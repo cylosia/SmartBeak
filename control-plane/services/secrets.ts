@@ -10,6 +10,8 @@ export function assertSecretPresent(name: string): void {
   throw new ValidationError('Secret name must be a non-empty string');
   }
   if (!process.env[name]) {
-  throw new ServiceUnavailableError(`Missing required secret: ${name}`);
+  // Avoid leaking the secret name into user-facing errors; log it internally.
+  // The structured log entry is still fully searchable by ops teams.
+  throw new ServiceUnavailableError('A required service secret is not configured');
   }
 }

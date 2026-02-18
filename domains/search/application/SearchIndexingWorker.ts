@@ -6,6 +6,7 @@ import { writeToOutbox, writeMultipleToOutbox } from '@packages/database/outbox'
 
 import { ContentRepository } from '../../content/application/ports/ContentRepository';
 import { IndexingJobRepository } from './ports/IndexingJobRepository';
+import { IndexingJob } from '../domain/entities/IndexingJob';
 import { SearchDocument, SearchDocumentFields } from '../domain/entities/SearchDocument';
 import { SearchDocumentRepository } from './ports/SearchDocumentRepository';
 import { SearchIndexed } from '../domain/events/SearchIndexed';
@@ -130,7 +131,12 @@ export class SearchIndexingWorker {
     // Execute indexing outside transaction (may call external services)
     try {
     if (processingJob.action === 'index') {
-    // Query database for actual content fields
+    // Query database for actual content fields.
+    // TODO(security): Verify content.domainId matches the domain of processingJob.indexId
+    // to prevent cross-tenant indexing (IDOR). Requires injecting SearchIndexRepository
+    // into this worker so we can resolve indexId → domainId at processing time.
+    // Until then, tenant isolation relies entirely on the job-creation path in
+    // SearchIndexingService.enqueueIndex() which scopes jobs to verified domains.
     const content = await this.contentRepo.getById(processingJob.contentId);
     if (!content) {
     throw new Error(`Content '${processingJob.contentId}' not found`);
@@ -224,6 +230,10 @@ export class SearchIndexingWorker {
   if (!Array.isArray(jobIds)) {
     throw new Error('jobIds must be an array');
   }
+  // Validate every element before touching the database.
+  if (!jobIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 255)) {
+    throw new Error('jobIds must be an array of non-empty strings (max 255 chars each)');
+  }
 
   const MAX_BATCH_SIZE = 100;
   if (jobIds.length > MAX_BATCH_SIZE) {
@@ -239,8 +249,7 @@ export class SearchIndexingWorker {
     await client.query('BEGIN');
 
     // P1-FIX: Fetch all jobs in a single query if repository supports it
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const jobs: Array<{ id: string; job: any }> = [];
+    const jobs: Array<{ id: string; job: IndexingJob }> = [];
 
     if (this.jobs.getByIds) {
     // Use batch fetch if available
@@ -293,14 +302,14 @@ export class SearchIndexingWorker {
     await client.query('COMMIT');
 
     // Process indexing outside transaction (may call external services)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const completedJobs: Array<{ id: string; job: any; success: boolean; error?: string; contentId: string }> = [];
+    const completedJobs: Array<{ id: string; job: IndexingJob; success: boolean; error?: string; contentId: string }> = [];
 
     for (const { id, job: originalJob } of pendingJobs) {
     const processingJob = originalJob.start();
 
     try {
     if (processingJob.action === 'index') {
+    // TODO(security): same tenant isolation check as single-job process() above.
     const content = await this.contentRepo.getById(processingJob.contentId);
     if (!content) {
         throw new Error(`Content '${processingJob.contentId}' not found`);
