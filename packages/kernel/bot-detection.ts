@@ -47,7 +47,14 @@ export function detectBot(headers: Record<string, string | string[] | undefined>
   // These patterns appear in Playwright/Cypress/WebDriver UAs used by integration
   // tests and visual regression pipelines — flagging them as bots blocks CI health
   // checks. Production keeps strict enforcement; other environments allow them.
-  const isNonProduction = process.env['NODE_ENV'] !== 'production';
+  //
+  // P1-FIX: Use an explicit allowlist of env names ('test', 'development') instead
+  // of `!== 'production'`. The previous check allowed any non-production NODE_ENV
+  // (e.g. 'staging', 'preview', or an unset variable) to bypass bot detection,
+  // meaning a trivial User-Agent injection bypassed rate limiting on any environment
+  // that was not explicitly named 'production'.
+  const CI_ALLOWED_ENVS = new Set(['test', 'development']);
+  const isNonProduction = CI_ALLOWED_ENVS.has(process.env['NODE_ENV'] ?? '');
   const isCiTool = isNonProduction && [...CI_TESTING_AGENTS].some(p => userAgent.includes(p));
   if (isCiTool) {
     return { isBot: false, confidence: 0, indicators: [] };

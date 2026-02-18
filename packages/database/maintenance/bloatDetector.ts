@@ -179,7 +179,11 @@ export async function getUnusedIndexes(
           s.indexrelname as indexname,
           pg_size_pretty(pg_relation_size(s.indexrelid)) as index_size,
           s.idx_scan,
-          COALESCE(EXTRACT(DAY FROM NOW() - st.last_analyze), 0)::int as index_age_days
+          -- P2-FIX: Use 9999 as sentinel for never-analyzed tables instead of 0.
+          -- COALESCE(..., 0) made a table that was never analyzed appear to be
+          -- 0 days old, causing DBA tooling to treat ancient unused indexes as
+          -- recently created and skip dropping them.
+          COALESCE(EXTRACT(DAY FROM NOW() - st.last_analyze), 9999)::int as index_age_days
         FROM pg_stat_user_indexes s
         JOIN pg_index i ON s.indexrelid = i.indexrelid
         LEFT JOIN pg_stat_user_tables st ON s.relid = st.relid
@@ -259,10 +263,18 @@ export async function reindexTable(
 
     // REINDEX CONCURRENTLY cannot run inside a transaction; use a separate
     // statement_timeout session variable set before the command.
+    // P1-FIX: Wrap each REINDEX in try-finally so RESET statement_timeout is
+    // always executed even when REINDEX throws (lock contention, out of disk,
+    // etc.). Without finally, the connection is returned to the pool with the
+    // 30 s session timeout still active, silently capping all subsequent queries
+    // on that connection regardless of their intended timeout.
     for (const { indexname } of indexes.rows) {
-      await knex.raw('SET statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
-      await knex.raw('REINDEX INDEX CONCURRENTLY ??', [indexname]);
-      await knex.raw('RESET statement_timeout');
+      try {
+        await knex.raw('SET statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
+        await knex.raw('REINDEX INDEX CONCURRENTLY ??', [indexname]);
+      } finally {
+        await knex.raw('RESET statement_timeout');
+      }
     }
 
     const duration = Date.now() - startTime;

@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
 import { getRedis } from '@kernel/redis';
+import { counter } from '@monitoring';
 
 import { PaymentGateway, StubPaymentGateway } from './stripe';
 
@@ -142,7 +143,12 @@ export class BillingService {
         logger.info(`Compensated: deleted Stripe customer ${customerId}`);
     }
     } catch (compError: unknown) {
+    // P2-FIX: Log the failure AND increment a metric so that compensation failures
+    // surface in dashboards and alert rules. A silently-logged compensation failure
+    // leaves DB and Stripe in an inconsistent state that is only discovered during
+    // manual reconciliation — potentially weeks later.
     logger.error('Compensation failed', compError instanceof Error ? compError : new Error(String(compError)));
+    counter('billing.compensation_failures_total', 1, { operation: 'stripe' });
     }
   }
 
@@ -224,8 +230,12 @@ export class BillingService {
       [orgId, 'active']
     );
     if (recheckRows.length > 0) {
+      // P1-FIX: Do NOT call compensateStripe here. This throw is caught by the
+      // outer catch block at line 253 which already calls compensateStripe — calling
+      // it here too results in two Stripe cancellation requests for the same
+      // subscription/customer (double compensation). ROLLBACK is still needed to
+      // release the transaction; compensation is handled once in the catch.
       await client.query('ROLLBACK');
-      await this.compensateStripe(stripeCustomerId, stripeSubscriptionId);
       const errorMessage = 'Organization already has an active subscription';
       await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
       throw new Error(errorMessage);
