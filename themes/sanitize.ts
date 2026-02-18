@@ -61,8 +61,11 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
 
   const result = DOMPurify.sanitize(html, config);
 
-  // Remove the hook after use to prevent accumulation across calls
-  DOMPurify.removeAllHooks();
+  // P1-5 FIX: Use removeHook('afterSanitizeAttributes') instead of removeAllHooks().
+  // removeAllHooks() silently discards hooks registered by any other code that shares
+  // this DOMPurify instance (e.g. plugins or test utilities). removeHook targets only
+  // the specific hook type we added here, leaving all other hooks intact.
+  DOMPurify.removeHook('afterSanitizeAttributes');
 
   return result;
 }

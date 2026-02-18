@@ -72,7 +72,7 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
   const SHUTDOWN_TIMEOUT_MS = 60000;
 
   const timeout = setTimeout(() => {
-  logger["error"]('Shutdown timeout exceeded, forcing exit');
+  logger.error('Shutdown timeout exceeded, forcing exit');
   process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
 
@@ -95,7 +95,7 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
     logger.info(`Shutdown handler ${handlerName} completed successfully`);
     } catch (err) {
     // P1-FIX: Log error but don't stop other handlers
-    logger["error"](`Shutdown handler ${handlerName} failed:`, err as Error);
+    logger.error(`Shutdown handler ${handlerName} failed:`, err as Error);
     // Continue with other handlers - don't let one failure stop shutdown
     }
   });
@@ -104,11 +104,11 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
   const results = await Promise.allSettled(handlerPromises);
   const failures = results.filter(r => r.status === 'rejected');
   if (failures.length > 0) {
-    logger["error"](`${failures.length} shutdown handlers failed`);
+    logger.error(`${failures.length} shutdown handlers failed`);
   }
   } catch (error) {
   // P1-FIX: Catch any unexpected errors during shutdown
-  logger["error"]('Unexpected error during shutdown:', error as Error);
+  logger.error('Unexpected error during shutdown:', error as Error);
   } finally {
   clearTimeout(timeout);
   process.exit(exitCode);
@@ -148,14 +148,14 @@ export function setupShutdownHandlers(): void {
 
   process.on('SIGTERM', () => {
   void gracefulShutdown('SIGTERM').catch((error) => {
-    logger["error"]('SIGTERM shutdown error:', error as Error);
+    logger.error('SIGTERM shutdown error:', error as Error);
     process.exit(1);
   });
   });
 
   process.on('SIGINT', () => {
   void gracefulShutdown('SIGINT').catch((error) => {
-    logger["error"]('SIGINT shutdown error:', error as Error);
+    logger.error('SIGINT shutdown error:', error as Error);
     process.exit(1);
   });
   });

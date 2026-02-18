@@ -36,8 +36,11 @@ describe('Graceful Shutdown - Chaos Scenarios', () => {
     vi.clearAllMocks();
     clearShutdownHandlers();
     resetShutdownState();
-    // Override process.exit to prevent actual exit
-    process.exit = vi.fn() as never;
+    // Override process.exit to prevent actual exit.
+    // P2-9 FIX: cast via unknown instead of directly to never. process.exit has
+    // return type never; casting vi.fn() directly to never is semantically wrong
+    // (the mock returns undefined, not never) and confuses the type-checker.
+    (process.exit as unknown as (code?: number) => void) = vi.fn();
   });
 
   afterEach(() => {
@@ -93,8 +96,12 @@ describe('Graceful Shutdown - Chaos Scenarios', () => {
     // body and vi.useRealTimers() appeared after assertions — if any assertion failed,
     // the exception propagated past useRealTimers(), leaving all subsequent tests in
     // the suite running with fake timers active (causing hangs and incorrect results).
+    // P2-8 FIX: shouldAdvanceTime: false (was true). true causes real wall-clock time
+    // to advance alongside fake time, creating non-deterministic races on slow CI
+    // machines where the real 30s handler timeout could fire before advanceTimersByTimeAsync
+    // completes, making tests pass or fail unpredictably depending on system load.
     beforeEach(() => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.useFakeTimers({ shouldAdvanceTime: false });
     });
 
     afterEach(() => {
@@ -128,6 +135,29 @@ describe('Graceful Shutdown - Chaos Scenarios', () => {
       expect(executionLog).toContain('fast-handler-done');
       expect(executionLog).toContain('another-fast-handler-done');
     });
+
+    it('should call process.exit(1) when the global 60s shutdown timeout is exceeded', async () => {
+      // P1-8 FIX: Test that the global SHUTDOWN_TIMEOUT_MS = 60000 safety net fires.
+      // Previously only the 30s per-handler timeout was tested; the outer 60s timeout
+      // (which calls process.exit(1) and is the last-resort escape hatch) had zero
+      // coverage. A regression removing or extending that timeout would go undetected,
+      // leaving the process hung indefinitely on broken shutdown handlers in production.
+      registerShutdownHandler(async () => {
+        // This handler never resolves — simulates a completely hung handler that
+        // also suppresses the per-handler timeout (e.g. a Promise.race override).
+        await new Promise<void>(() => { /* intentionally never resolves */ });
+      });
+
+      const shutdownPromise = gracefulShutdown('SIGTERM');
+
+      // Advance fake time past the global 60s shutdown timeout
+      await vi.advanceTimersByTimeAsync(61000);
+
+      await shutdownPromise;
+
+      // The global timeout must have fired process.exit(1)
+      expect(process.exit).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('Double SIGTERM Prevention', () => {
@@ -150,6 +180,11 @@ describe('Graceful Shutdown - Chaos Scenarios', () => {
 
       // Handler should only have been called once
       expect(callCount).toBe(1);
+      // P1-9 FIX: Assert process.exit was called exactly once. Without this, a
+      // re-entry guard regression (where isShuttingDown check is accidentally removed)
+      // would pass the callCount assertion but call process.exit twice — undetected.
+      expect(process.exit).toHaveBeenCalledTimes(1);
+      expect(process.exit).toHaveBeenCalledWith(0);
     });
   });
 

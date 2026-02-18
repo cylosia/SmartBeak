@@ -23,6 +23,17 @@ export interface GSCCredentials {
   refreshToken?: string | undefined;
 }
 
+/**
+ * Validates OAuth state parameter: minimum 32 alphanumeric characters required for
+ * sufficient CSRF entropy. Matches the requirement enforced in gbp.ts and linkedin.ts.
+ */
+function validateState(state: string): boolean {
+  if (!state || state.length < 32) {
+    return false;
+  }
+  return /^[a-zA-Z0-9_-]+$/.test(state);
+}
+
 export class GscAdapter implements KeywordIngestionAdapter {
   readonly source = 'gsc';
   private auth: Auth.OAuth2Client;
@@ -57,14 +68,21 @@ export class GscAdapter implements KeywordIngestionAdapter {
   }
 
   /**
-  * Generate OAuth URL for GSC authorization
+  * Generate OAuth URL for GSC authorization.
+  * state is required and must be at least 32 alphanumeric characters for CSRF protection.
   */
-  getAuthUrl(state?: string): string {
+  getAuthUrl(state: string): string {
+  // P1-7 SEC FIX: Validate state to enforce minimum-entropy requirement consistent
+  // with gbp.ts and linkedin.ts. Previously state was optional and unvalidated,
+  // allowing callers to omit it entirely or pass a trivially guessable value.
+  if (!validateState(state)) {
+    throw new Error('state must be at least 32 alphanumeric characters (required for CSRF protection)');
+  }
   return this.auth.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/webmasters.readonly'],
     prompt: 'consent',
-    ...(state ? { state } : {}),
+    state,
   });
   }
 
@@ -132,34 +150,49 @@ export class GscAdapter implements KeywordIngestionAdapter {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    // P2-1 FIX: use .slice(0, 10) — toISOString() always returns 'YYYY-MM-DDTHH:mm:ss.sssZ'
+    // so slice is safe and avoids suppressing noUncheckedIndexedAccess with an 'as string' cast.
+    // Capture in typed string variables so dateRange below can reference them without re-casting
+    // through the googleapis Schema type (which widens them to string | null | undefined).
+    const startDateStr = startDate.toISOString().slice(0, 10);
+    const endDateStr = endDate.toISOString().slice(0, 10);
+
     const requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest = {
-    // P2-1 FIX: use .slice(0, 10) instead of .split('T')[0] — toISOString()
-    // always returns 'YYYY-MM-DDTHH:mm:ss.sssZ' so slice is safe and avoids
-    // suppressing noUncheckedIndexedAccess with an 'as string' cast.
-    startDate: startDate.toISOString().slice(0, 10),
-    endDate: endDate.toISOString().slice(0, 10),
+    startDate: startDateStr,
+    endDate: endDateStr,
     dimensions: ['query'],
     rowLimit: 1000,
     aggregationType: 'auto',
     };
 
-    const fetchPromise = this.searchConsole.searchanalytics.query({
-    siteUrl,
-    requestBody,
-    });
+    // P1-2 SEC FIX: Use AbortController so that when the manual timeout fires, the
+    // underlying HTTP connection to Google is actually cancelled. Without abort,
+    // Promise.race() resolves the race client-side but the inflight HTTP request
+    // continues holding a socket indefinitely. Under sustained load this exhausts all
+    // available file descriptors and causes a cascading service outage.
+    const controller = new AbortController();
+    const fetchPromise = this.searchConsole.searchanalytics.query(
+      { siteUrl, requestBody },
+      { signal: controller.signal }
+    );
 
-    let timeoutId: ReturnType<typeof setTimeout>;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('GSC request timeout')), this.timeoutMs);
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error('GSC request timeout'));
+    }, this.timeoutMs);
     });
 
     let response: Awaited<typeof fetchPromise>;
     try {
     response = await Promise.race([fetchPromise, timeoutPromise]);
     } finally {
-    clearTimeout(timeoutId!);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
     }
-    const rows = response.data.rows || [];
+    }
+    const rows = response.data.rows ?? [];
 
     const suggestions = rows
     .map((row): KeywordSuggestion => {
@@ -169,17 +202,19 @@ export class GscAdapter implements KeywordIngestionAdapter {
       keyword: query,
       metrics: {
       // P1-5 FIX: use ?? not || for numeric metrics. || treats 0 the same as
-      // null/undefined; ?? correctly distinguishes them. Also avoids NaN || 0 === 0
-      // silently masking data-quality issues from the GSC API.
+      // null/undefined; ?? correctly distinguishes them.
       clicks: row.clicks ?? 0,
       impressions: row.impressions ?? 0,
       ctr: row.ctr ?? 0,
       position: row.position ?? 0,
       source: 'gsc',
       fetchedAt: new Date().toISOString(),
+      // P2-2 FIX: reference the typed string variables captured above rather
+      // than re-indexing requestBody with an 'as string' cast that bypasses
+      // the type-checker's narrowing (Schema fields are string | null | undefined).
       dateRange: {
-        start: requestBody['startDate'] as string,
-        end: requestBody['endDate'] as string,
+        start: startDateStr,
+        end: endDateStr,
       },
       },
     };
@@ -258,14 +293,20 @@ export class GscAdapter implements KeywordIngestionAdapter {
   async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string }> {
   const start = Date.now();
 
-  let timeoutId: ReturnType<typeof setTimeout>;
+  // P1-2 SEC FIX: Use AbortController so the underlying HTTP connection to Google is
+  // cancelled when the health-check timeout fires. Previously Promise.race() rejected
+  // but the inflight sites.list() request continued holding a socket indefinitely.
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    // Try to list sites as health check
     const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('Health check timeout')), timeoutConfig.short);
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Health check timeout'));
+    }, timeoutConfig.short);
     });
 
-    const checkPromise = this.listSites();
+    const checkPromise = this.searchConsole.sites.list({}, { signal: controller.signal });
     await Promise.race([checkPromise, timeoutPromise]);
 
     return {
@@ -280,13 +321,15 @@ export class GscAdapter implements KeywordIngestionAdapter {
     error: errMessage,
     };
   } finally {
-    clearTimeout(timeoutId!);
+    if (timeoutId !== undefined) {
+    clearTimeout(timeoutId);
+    }
   }
   }
 }
 
 // Backward-compatible lazy-initialized singleton (avoids crash at import time if env vars are missing)
-// P1-7 NOTE: this singleton lives for the process lifetime. After secret rotation
+// NOTE: this singleton lives for the process lifetime. After secret rotation
 // (GSC_CLIENT_ID / GSC_CLIENT_SECRET), the singleton continues using stale credentials
 // until process restart. Call resetGscAdapter() immediately after rotating secrets,
 // or prefer passing explicit credentials to new GscAdapter(credentials) directly.

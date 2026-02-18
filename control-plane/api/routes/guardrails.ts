@@ -10,13 +10,13 @@ import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 import { getLogger } from '@kernel/logger';
 
-// P0-2: featureFlags (env-level) intentionally NOT imported here.
-// Env-based flags reflect internal platform topology and must not be exposed
-// to tenant-level roles (owner/admin). Use a super-admin endpoint if needed.
+// Env-based feature flags (from @config/features) are intentionally NOT imported here.
+// Env flags reflect internal platform topology and must not be enumerable by tenant-level
+// roles (owner/admin). Use a super-admin endpoint if needed.
 
 const logger = getLogger('guardrailRoutes');
 
-// P2-10: hoist per-request Zod schemas to module scope to avoid per-call allocation
+// Hoist per-request Zod schemas to module scope to avoid per-call allocation
 const OrgIdSchema = z.string().uuid();
 
 const FeatureFlagKeySchema = z.string()
@@ -40,8 +40,6 @@ const AlertBodySchema = z.object({
   threshold: z.number()
   .finite('Threshold must be a finite number')
   .safe('Threshold must be a safe number')
-  // P1-11 FIX: reject negative thresholds — a negative threshold causes permanent
-  // alert storm or total alert suppression depending on comparison direction.
   .min(0, 'Threshold must be non-negative'),
 });
 
@@ -49,10 +47,21 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   const flags = new FlagService(pool);
   const alerts = new AlertService(pool);
 
-  // POST /admin/flags/:key - Set a feature flag
+  // POST /admin/flags/:key - Set a feature flag (scoped to the authenticated org)
   app.post('/admin/flags/:key', async (req, res) => {
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner']);
+
+  // SEC FIX (P0): Validate and bind orgId so flag writes are scoped to the caller's
+  // tenant. Before this fix, flags were global (no org_id column in system_flags),
+  // meaning any org-level 'owner' could toggle platform-wide feature flags.
+  if (!ctx['orgId']) {
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
+  }
+  const orgIdResult = OrgIdSchema.safeParse(ctx['orgId']);
+  if (!orgIdResult.success) {
+    return errors.badRequest(res, 'Invalid organization ID', ErrorCodes.VALIDATION_ERROR, orgIdResult['error'].issues);
+  }
 
   // Validate params
   const paramsResult = FeatureFlagParamsSchema.safeParse(req.params);
@@ -68,16 +77,19 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
 
   const { key } = paramsResult.data;
   const { value } = bodyResult.data;
+  const orgId = orgIdResult.data;
 
-  await flags.set(key, value);
+  // Capture previous value for audit trail before mutating
+  const previousValue = await flags.isEnabled(key, orgId);
+  await flags.set(key, value, orgId);
 
-  // P1-9 FIX: structured audit log — every flag mutation must be attributable
-  // for incident post-mortems and SOC2/ISO27001 compliance.
+  // Structured audit log with before/after values for incident post-mortems and SOC2 compliance
   logger.info('feature_flag_set', {
     userId: ctx['userId'],
-    orgId: ctx['orgId'],
+    orgId,
     flagKey: key,
-    flagValue: value,
+    previousValue,
+    newValue: value,
   });
 
   return { ok: true, key };
@@ -88,9 +100,6 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin']);
 
-  // Validate orgId
-  // P0-3 FIX: removed dead ctx?.["orgId"] optional-chain. getAuthContext() throws
-  // on missing auth so ctx is always non-null here. Validate orgId presence explicitly.
   if (!ctx["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
   }
@@ -116,6 +125,14 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin']);
 
+  if (!ctx['orgId']) {
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
+  }
+  const orgIdResult = OrgIdSchema.safeParse(ctx['orgId']);
+  if (!orgIdResult.success) {
+    return errors.badRequest(res, 'Invalid organization ID', ErrorCodes.VALIDATION_ERROR, orgIdResult['error'].issues);
+  }
+
   // Validate params
   const paramsResult = FeatureFlagParamsSchema.safeParse(req.params);
   if (!paramsResult.success) {
@@ -123,20 +140,26 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   }
 
   const { key } = paramsResult.data;
-  const value = await flags.isEnabled(key);
+  const value = await flags.isEnabled(key, orgIdResult.data);
   return { key, value };
   });
 
-  // GET /admin/flags - List database-backed feature flags for this tenant
-  // P0-2 FIX: env-based flags (from @config/features) are intentionally excluded.
-  // Env flags reflect internal platform topology and must not be enumerable by
-  // tenant-level roles (owner/admin). Only DB-persisted flags — those explicitly
-  // set via POST /admin/flags/:key — are returned here.
-  app.get('/admin/flags', async (req) => {
+  // GET /admin/flags - List database-backed feature flags for this tenant only.
+  // Env-based flags (from @config/features) are intentionally excluded because they
+  // reflect internal platform topology and must not be enumerable by tenant roles.
+  app.get('/admin/flags', async (req, res) => {
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin']);
 
-  const dbFlags = await flags.getAll();
+  if (!ctx['orgId']) {
+    return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
+  }
+  const orgIdResult = OrgIdSchema.safeParse(ctx['orgId']);
+  if (!orgIdResult.success) {
+    return errors.badRequest(res, 'Invalid organization ID', ErrorCodes.VALIDATION_ERROR, orgIdResult['error'].issues);
+  }
+
+  const dbFlags = await flags.getAll(orgIdResult.data);
 
   const result = dbFlags
     .map(dbFlag => ({
@@ -155,15 +178,12 @@ export async function guardrailRoutes(app: FastifyInstance, pool: Pool) {
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin']);
 
-  // Validate orgId
   if (!ctx["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required', ErrorCodes.MISSING_PARAMETER);
   }
 
   const orgIdResult = OrgIdSchema.safeParse(ctx["orgId"]);
   if (!orgIdResult.success) {
-    // P1-8 FIX: was missing ErrorCodes and Zod issues, making this the only
-    // error response in the file with a different shape — breaking API clients.
     return errors.badRequest(res, 'Invalid organization ID', ErrorCodes.VALIDATION_ERROR, orgIdResult["error"].issues);
   }
 

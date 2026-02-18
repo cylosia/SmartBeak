@@ -76,35 +76,49 @@ describe('Google OAuth Adapter Tests', () => {
   });
 
   describe('LinkedIn OAuth Authorization URL', () => {
+    // State must be 32+ alphanumeric characters — LinkedIn enforces the same minimum
+    // entropy requirement as GBP to prevent brute-force CSRF attacks.
+    const VALID_LI_STATE = 'abcdefghijklmnopqrstuvwxyz1234567890';
+
     it('should generate valid LinkedIn authorization URL', () => {
       const clientId = 'test-client-id';
       const redirectUri = 'https://example.com/callback';
-      const state = 'random-state-token';
 
-      const authUrl = getLinkedInAuthUrl(clientId, redirectUri, state);
+      const authUrl = getLinkedInAuthUrl(clientId, redirectUri, VALID_LI_STATE);
 
       expect(authUrl).toContain('https://www.linkedin.com/oauth/v2/authorization');
       expect(authUrl).toContain(`client_id=${clientId}`);
       expect(authUrl).toContain(`redirect_uri=${encodeURIComponent(redirectUri)}`);
-      expect(authUrl).toContain(`state=${state}`);
+      expect(authUrl).toContain(`state=${VALID_LI_STATE}`);
       expect(authUrl).toContain('response_type=code');
     });
 
     it('should include LinkedIn required scopes', () => {
-      const authUrl = getLinkedInAuthUrl('client-id', 'https://example.com/callback', 'state');
-      
+      const authUrl = getLinkedInAuthUrl('client-id', 'https://example.com/callback', VALID_LI_STATE);
+
       expect(authUrl).toContain('scope=');
-      expect(authUrl).toContain('r_liteprofile');
-      expect(authUrl).toContain('r_emailaddress');
+      expect(authUrl).toContain('w_organization_social');
+      expect(authUrl).toContain('r_organization_social');
     });
 
-    it('should validate LinkedIn OAuth parameters', () => {
+    it('should validate LinkedIn state parameter - too short', () => {
+      // P1-1 FIX: Previous tests used 'state' (5 chars) and 'random-state-token' (18 chars),
+      // both below the 32-char minimum enforced by linkedin.ts:14. Those tests silently
+      // threw before any expect() ran, providing zero coverage of the actual URL format.
       expect(() => {
-        getLinkedInAuthUrl('', 'https://example.com/callback', 'state');
-      }).toThrow();
+        getLinkedInAuthUrl('client-id', 'https://example.com/callback', 'tooshort');
+      }).toThrow('Invalid state');
+    });
 
+    it('should validate LinkedIn OAuth parameters - empty clientId', () => {
       expect(() => {
-        getLinkedInAuthUrl('client-id', 'http://insecure.com/callback', 'state');
+        getLinkedInAuthUrl('', 'https://example.com/callback', VALID_LI_STATE);
+      }).toThrow();
+    });
+
+    it('should validate LinkedIn OAuth parameters - non-HTTPS redirect', () => {
+      expect(() => {
+        getLinkedInAuthUrl('client-id', 'http://insecure.com/callback', VALID_LI_STATE);
       }).toThrow();
     });
   });

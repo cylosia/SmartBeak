@@ -23,10 +23,34 @@ function validateOAuthParams(clientId: string, redirectUri: string, state: strin
   if (!/^[a-zA-Z0-9._-]+$/.test(clientId)) {
     throw new ValidationError('Invalid clientId', { code: ErrorCodes.VALIDATION_ERROR });
   }
-  // TODO P2-5: validate against a server-side allowlist of approved redirect URIs,
-  // not just a protocol-prefix check (open redirect risk).
   if (!redirectUri.startsWith('https://')) {
     throw new ValidationError('Invalid redirectUri', { code: ErrorCodes.VALIDATION_ERROR });
+  }
+  // SEC FIX (P0): Enforce a server-side allowlist of approved redirect URI hostnames to
+  // close the open-redirect vulnerability. Without an allowlist, any attacker who obtains
+  // the clientId (compiled into apps, leaked in logs) can direct the OAuth flow to
+  // https://attacker.com/callback and exchange the authorization code for a refresh token,
+  // gaining permanent write access to the victim's Google Business Profile.
+  // Set OAUTH_GBP_REDIRECT_ALLOWLIST to a comma-separated list of approved hostnames,
+  // e.g. "app.example.com,staging.example.com". If the env var is unset the check is
+  // skipped (backwards-compatible default), but it MUST be set in production.
+  const allowedDomains = (process.env['OAUTH_GBP_REDIRECT_ALLOWLIST'] ?? '')
+    .split(',')
+    .map((d: string) => d.trim())
+    .filter(Boolean);
+  if (allowedDomains.length > 0) {
+    let redirectHost: string;
+    try {
+      redirectHost = new URL(redirectUri).hostname;
+    } catch {
+      throw new ValidationError('Invalid redirectUri: malformed URL', { code: ErrorCodes.VALIDATION_ERROR });
+    }
+    const allowed = allowedDomains.some(
+      (d: string) => redirectHost === d || redirectHost.endsWith('.' + d)
+    );
+    if (!allowed) {
+      throw new ValidationError('Invalid redirectUri: domain not in allowlist', { code: ErrorCodes.VALIDATION_ERROR });
+    }
   }
   if (!validateState(state)) {
     throw new ValidationError('Invalid state', { code: ErrorCodes.VALIDATION_ERROR });

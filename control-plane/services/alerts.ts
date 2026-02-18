@@ -90,7 +90,11 @@ export class AlertService {
     [orgId, metric, threshold]
     );
 
-    logger.info(`Created alert for org ${orgId}: ${metric} > ${threshold}`);
+    // P1-10 FIX: Use structured key-value logging instead of template literals.
+    // Template literals embed orgId, metric, and threshold in a single string that
+    // log aggregators cannot reliably redact or filter, exposing business-sensitive
+    // configuration (e.g. billing tier thresholds) in plain text log streams.
+    logger.info('alert_created', { orgId, metric, threshold });
   } catch (error: unknown) {
     logger.error('Error creating alert', new Error(getErrorMessage(error)));
     throw new Error(`Failed to create alert: ${getErrorMessage(error)}`);
@@ -126,11 +130,16 @@ export class AlertService {
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
     // P1-FIX: Use SKIP LOCKED instead of NOWAIT to gracefully skip contended rows
-    // instead of raising errors under concurrent access
-    const { rows } = await client.query<Alert>(
-    `SELECT * FROM usage_alerts
+    // instead of raising errors under concurrent access.
+    // P1-6 FIX: SELECT only id and threshold (not *) and add LIMIT to bound the
+    // lock scope. Without LIMIT, an org with thousands of matching alerts locks
+    // all of them in one transaction, blocking concurrent check() calls and
+    // causing a lock storm under load. Process in bounded batches of 100.
+    const { rows } = await client.query<Pick<Alert, 'id' | 'threshold'>>(
+    `SELECT id, threshold FROM usage_alerts
     WHERE org_id = $1 AND metric = $2 AND triggered = false AND threshold <= $3
-    FOR UPDATE SKIP LOCKED`,
+    FOR UPDATE SKIP LOCKED
+    LIMIT 100`,
     [orgId, metric, value]
     );
 
@@ -138,14 +147,14 @@ export class AlertService {
 
     // P1-FIX: Batch UPDATE instead of loop-based individual updates
     if (rows.length > 0) {
-    const ids = rows.map(alert => alert.id);
+    const ids = rows.map(alert => alert['id']);
     await client.query(
     'UPDATE usage_alerts SET triggered = true, updated_at = NOW() WHERE id = ANY($1)',
     [ids]
     );
 
     for (const alert of rows) {
-    logger.warn(`[ALERT TRIGGERED] org=${orgId}, metric=${metric}, threshold=${alert.threshold}, value=${value}`);
+    logger.warn('alert_triggered', { orgId, metric, threshold: alert['threshold'], value });
     }
     }
 
@@ -174,10 +183,17 @@ export class AlertService {
   }
 
   try {
+    // P1-4 FIX: SELECT explicit columns (not *) and add LIMIT to prevent a tenant
+    // with many alerts from loading unbounded rows into the Node.js heap, which
+    // causes an OOM crash that takes down all other tenants on the same process.
+    // The idx_usage_alerts_org_active partial index covers (org_id) WHERE triggered=false
+    // so this query no longer requires a full table scan.
     const { rows } = await this.pool.query<Alert>(
-    `SELECT * FROM usage_alerts
+    `SELECT id, org_id, metric, threshold, triggered, created_at
+    FROM usage_alerts
     WHERE org_id = $1 AND triggered = false
-    ORDER BY created_at DESC`,
+    ORDER BY created_at DESC
+    LIMIT 200`,
     [orgId]
     );
 
