@@ -13,7 +13,8 @@ const logger = getLogger('content:update');
 * Updates draft content only. Published content cannot be modified directly.
 * Requires: contentId, updates (title, body, etc.)
 * SECURITY FIX: P1-HIGH Issue 4 - IDOR in Content Access
-* Verifies org_id matches for all content access
+* Verifies domain membership for all content access (content_items has no org_id column;
+* org scope is enforced through the domain_id → memberships → domain_registry join).
 */
 
 // UUID validation regex
@@ -21,7 +22,9 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 // Maximum input lengths
 const MAX_TITLE_LENGTH = 500;
-const MAX_BODY_LENGTH = 100000; // 100KB
+// P0-FIX: Use byte length (not char length) so multi-byte Unicode cannot exceed column storage.
+// 100,000 UTF-8 bytes matches the documented "100KB" limit.
+const MAX_BODY_BYTES = 100_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!validateMethod(req, res, ['POST'])) return;
@@ -67,8 +70,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof body !== 'string') {
         return sendError(res, 400, 'body must be a string');
       }
-      if (body.length > MAX_BODY_LENGTH) {
-        return sendError(res, 413, `body exceeds maximum length of ${MAX_BODY_LENGTH} characters`);
+      // P0-FIX: Measure UTF-8 bytes, not JS character count, to match DB storage limits.
+      if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) {
+        return sendError(res, 413, `body exceeds maximum length of ${MAX_BODY_BYTES} bytes`);
       }
     }
 
@@ -78,19 +82,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await client.query('BEGIN');
 
-      // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify org_id matches for all content access
+      // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify domain membership for content access.
+      // content_items has no org_id column; access is scoped by verifying that the item's
+      // domain_id is reachable through the current user's org memberships.
+      // P0-FIX: ci["id"] was invalid PostgreSQL syntax (array subscript); corrected to ci.id.
       const { rows } = await client.query(
-        `SELECT ci["id"], ci.domain_id, ci.status, ci.org_id
+        `SELECT ci.id, ci.domain_id, ci.status
          FROM content_items ci
-         WHERE ci["id"] = $1
-         AND ci.org_id = $2
+         WHERE ci.id = $1
          AND ci.domain_id IN (
            SELECT domain_id FROM memberships m
            JOIN domain_registry dr ON dr.org_id = m.org_id
-           WHERE m.user_id = $3
+           WHERE m.user_id = $2
          )
          FOR UPDATE`,
-        [contentId, auth["orgId"], auth.userId]
+        [contentId, auth.userId]
       );
 
       if (rows.length === 0) {
@@ -103,26 +109,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const content = rows[0];
 
       // Only drafts can be updated
-      if (content.status === 'published') {
+      if (content['status'] === 'published') {
         await client.query('ROLLBACK');
         return sendError(res, 409, 'Cannot update published content. Create a new draft or unpublish first.');
       }
 
-      if (content.status === 'archived') {
+      if (content['status'] === 'archived') {
         await client.query('ROLLBACK');
         return sendError(res, 409, 'Cannot update archived content. Unarchive first.');
       }
 
       // Build update query dynamically
-      // P0-FIX: Whitelist validation for allowed fields to prevent SQL injection
+      // P0-FIX: Whitelist validation for allowed fields to prevent SQL injection.
+      // Only title and body are accepted from the request body; other fields in
+      // ALLOWED_FIELDS are reserved for future use.
       const ALLOWED_FIELDS: Record<string, string> = {
         title: 'title',
         body: 'body',
-        status: 'status',
-        content_type: 'content_type',
-        meta_description: 'meta_description',
-        meta_title: 'meta_title',
-        slug: 'slug',
       };
 
       const updates: string[] = [];
@@ -151,13 +154,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updates.push(`updated_at = $${paramIndex++}`);
       values.push(new Date());
 
-      // Add contentId and org_id as last parameters
+      // Add contentId as the last WHERE parameter.
+      // P0-FIX: Removed AND org_id = $N — content_items has no org_id column.
+      // Authorization is already enforced by the SELECT FOR UPDATE above.
       values.push(contentId);
-      values.push(auth["orgId"]);
 
       if (updates.length > 1) { // > 1 because updated_at is always included
         await client.query(
-          `UPDATE content_items SET ${updates.join(', ')} WHERE id = $${paramIndex} AND org_id = $${paramIndex + 1}`,
+          `UPDATE content_items SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
           values
         );
       }
@@ -169,14 +173,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         await client.query(
           `INSERT INTO content_audit_log
-             (content_id, action, changed_fields, performed_by, performed_at, org_id)
-           VALUES ($1, 'updated', $2, $3, $4, $5)`,
+             (content_id, action, changed_fields, performed_by, performed_at)
+           VALUES ($1, 'updated', $2, $3, $4)`,
           [
             contentId,
             JSON.stringify({ title: title !== undefined, body: body !== undefined }),
             auth.userId,
             new Date(),
-            auth['orgId'],
           ]
         );
       } catch (auditError: unknown) {
@@ -188,10 +191,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Fetch updated content
+      // Fetch updated content.
+      // P0-FIX: Removed AND org_id = $2 — content_items has no org_id column.
       const { rows: updatedRows } = await client.query(
-        'SELECT id, domain_id, title, body, status, content_type, created_at, updated_at FROM content_items WHERE id = $1 AND org_id = $2',
-        [contentId, auth["orgId"]]
+        'SELECT id, domain_id, title, body, status, content_type, created_at, updated_at FROM content_items WHERE id = $1',
+        [contentId]
       );
 
       await client.query('COMMIT');

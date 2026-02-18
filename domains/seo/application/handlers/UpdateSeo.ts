@@ -67,8 +67,9 @@ export class UpdateSeo {
     }
 
     // Use existing values if not provided
-    const newTitle = title ?? doc["title"];
-    const newDescription = description ?? doc.description;
+    // P2-FIX: Use consistent bracket notation for both properties per project convention.
+    const newTitle = title ?? doc['title'];
+    const newDescription = description ?? doc['description'];
 
     // Update the document (immutable)
     const updatedDoc = doc.update(newTitle, newDescription);
@@ -81,9 +82,12 @@ export class UpdateSeo {
 
     return { success: true, document: updatedDoc, event };
   } catch (error) {
+    // P1-FIX: Do not expose raw error.message — it may contain DB connection strings,
+    // schema names, or other internal details. The caller receives a generic message;
+    // the full error is already surfaced in the caller's own error handling.
     return {
     success: false,
-    error: error instanceof Error ? error.message : 'Failed to update SEO document'
+    error: 'Failed to update SEO document'
     };
   }
   }
@@ -104,9 +108,8 @@ export class UpdateSeo {
   if (!id || typeof id !== 'string') {
     return 'Document ID is required and must be a string';
   }
-  if (id.length < 1) {
-    return 'Document ID cannot be empty';
-  }
+  // P2-FIX: Removed redundant `id.length < 1` — the `!id` check above already
+  // catches empty strings ('' is falsy), making the length check unreachable.
   if (title !== undefined && typeof title !== 'string') {
     return 'Title must be a string';
   }

@@ -92,14 +92,15 @@ export function useRenderPerformance(componentName: string): PerformanceMetrics 
     metricsRef.current = newMetrics;
 
     // Log slow renders in development
-    if (process.env.NODE_ENV === 'development' && renderTime > 16) {
+    // P2-FIX: Use bracket notation per noPropertyAccessFromIndexSignature tsconfig rule.
+    if (process.env['NODE_ENV'] === 'development' && renderTime > 16) {
       console.warn(
         `[Performance] Slow render detected in ${componentName}: ${renderTime.toFixed(2)}ms`
       );
     }
 
     // Report to performance monitoring service in production
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env['NODE_ENV'] === 'production') {
       reportRenderTime(componentName, renderTime);
     }
   });
@@ -247,7 +248,7 @@ export function useInteractionTracking(
       interactionStartTime.current.delete(key);
 
       // Log slow interactions in development only
-      if (process.env.NODE_ENV === 'development' && duration > 100) {
+      if (process.env['NODE_ENV'] === 'development' && duration > 100) {
         console.warn(`[Performance] Slow ${type} interaction: ${duration.toFixed(2)}ms`);
       }
     },
@@ -432,6 +433,9 @@ export function useResourcePreload(): {
 } {
   const preloadImage = useCallback((src: string) => {
     if (typeof window === 'undefined') return;
+    // P2-FIX: Guard against duplicate <link> elements — calling this multiple times
+    // with the same src would append redundant hints to <head>.
+    if (document.querySelector(`link[rel="preload"][as="image"][href="${CSS.escape(src)}"]`)) return;
 
     const link = document.createElement('link');
     link.rel = 'preload';
@@ -442,6 +446,8 @@ export function useResourcePreload(): {
 
   const preloadFont = useCallback((url: string, type = 'font/woff2') => {
     if (typeof window === 'undefined') return;
+    // P2-FIX: Guard against duplicate font preload hints.
+    if (document.querySelector(`link[rel="preload"][as="font"][href="${CSS.escape(url)}"]`)) return;
 
     const link = document.createElement('link');
     link.rel = 'preload';
@@ -454,6 +460,8 @@ export function useResourcePreload(): {
 
   const prefetchRoute = useCallback((route: string) => {
     if (typeof window === 'undefined') return;
+    // P2-FIX: Guard against duplicate prefetch hints.
+    if (document.querySelector(`link[rel="prefetch"][href="${CSS.escape(route)}"]`)) return;
 
     const link = document.createElement('link');
     link.rel = 'prefetch';
