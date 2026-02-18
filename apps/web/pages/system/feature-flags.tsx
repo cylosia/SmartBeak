@@ -42,14 +42,18 @@ export default function FeatureFlags() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
 
-  const fetchFlags = useCallback(async () => {
+  const fetchFlags = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(apiUrl('admin/flags'), { credentials: 'include' });
+      const res = await fetch(apiUrl('admin/flags'), { credentials: 'include', signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: { flags: FlagEntry[] } = await res.json();
       setFlags(data.flags);
       setError('');
     } catch (err) {
+      // M6 FIX: Ignore AbortError — it means the component unmounted before
+      // the response arrived; calling setState on an unmounted component
+      // produces a React warning and is a potential memory leak.
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to fetch flags');
     } finally {
       setLoading(false);
@@ -57,7 +61,11 @@ export default function FeatureFlags() {
   }, []);
 
   useEffect(() => {
-    void fetchFlags();
+    // M6 FIX: Create an AbortController so the in-flight request is cancelled
+    // when the component unmounts, preventing setState on an unmounted component.
+    const controller = new AbortController();
+    void fetchFlags(controller.signal);
+    return () => { controller.abort(); };
   }, [fetchFlags]);
 
   const handleToggle = async (key: string, newValue: boolean) => {

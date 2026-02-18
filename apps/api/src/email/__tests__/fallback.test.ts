@@ -143,9 +143,15 @@ describe('Email Provider Fallback Tests', () => {
         // Expected to throw
       }
 
+      // P0-3 FIX: queueForRetry now masks PII before storing in Redis.
+      // Verify raw email address is NOT present, and masked form IS present.
       expect(mockRedis.lpush).toHaveBeenCalledWith(
         'email:failed',
-        expect.stringContaining('test@example.com')
+        expect.not.stringContaining('test@example.com')
+      );
+      expect(mockRedis.lpush).toHaveBeenCalledWith(
+        'email:failed',
+        expect.stringContaining('t***@e***.com')
       );
     });
   });
