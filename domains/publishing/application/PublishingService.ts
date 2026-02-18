@@ -167,32 +167,43 @@ export class PublishingService {
     return { success: false, error: 'Job ID is required and must be a string' };
   }
 
+  const client = await this.pool.connect();
   try {
-    const job = await this.jobs.getById(jobId);
+    // P1-FIX: Wrap read-check-write in a transaction with FOR UPDATE to prevent
+    // the check-then-act race. Without a lock, two concurrent retry requests can
+    // both pass the canRetry() check, both call job.retry(), and both save an
+    // illegal transition (e.g. published → pending), corrupting the state machine.
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-    // Handle not found case
+    const job = await this.jobs.getById(jobId, client, { forUpdate: true });
+
     if (!job) {
+    await client.query('ROLLBACK');
     return { success: false, error: `Publishing job '${jobId}' not found` };
     }
 
-    // Check if job can be retried
     if (!job.canRetry()) {
+    await client.query('ROLLBACK');
     return {
-    success: false,
-    error: `Job '${jobId}' cannot be retried. Current status: ${job["status"]}`
+      success: false,
+      error: `Job '${jobId}' cannot be retried. Current status: ${job["status"]}`
     };
     }
 
-    // Retry the job (immutable - returns new instance)
     const retriedJob = job.retry();
-    await this.jobs.save(retriedJob);
+    await this.jobs.save(retriedJob, client);
+    await client.query('COMMIT');
 
     return { success: true, job: retriedJob };
   } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* ignore */ }
     return {
     success: false,
     error: error instanceof Error ? error.message : 'Failed to retry publishing job'
     };
+  } finally {
+    client.release();
   }
   }
 
@@ -208,31 +219,42 @@ export class PublishingService {
     return { success: false, error: 'Job ID is required and must be a string' };
   }
 
+  const client = await this.pool.connect();
   try {
-    const job = await this.jobs.getById(jobId);
+    // P1-FIX: Wrap in a transaction with FOR UPDATE to prevent the race where a
+    // worker transitions the job from pending → publishing between our status check
+    // and our delete. Without the lock, the delete would remove a job that is
+    // actively being published, orphaning the attempt records.
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-    // Handle not found case
+    const job = await this.jobs.getById(jobId, client, { forUpdate: true });
+
     if (!job) {
+    await client.query('ROLLBACK');
     return { success: false, error: `Publishing job '${jobId}' not found` };
     }
 
-    // Only pending jobs can be cancelled
     if (job["status"] !== 'pending') {
+    await client.query('ROLLBACK');
     return {
-    success: false,
-    error: `Cannot cancel job with status '${job["status"]}'. Only pending jobs can be cancelled.`
+      success: false,
+      error: `Cannot cancel job with status '${job["status"]}'. Only pending jobs can be cancelled.`
     };
     }
 
-    // Delete the job
-    await this.jobs.delete(jobId);
+    await this.jobs.delete(jobId, client);
+    await client.query('COMMIT');
 
     return { success: true };
   } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* ignore */ }
     return {
     success: false,
     error: error instanceof Error ? error.message : 'Failed to cancel publishing job'
     };
+  } finally {
+    client.release();
   }
   }
 

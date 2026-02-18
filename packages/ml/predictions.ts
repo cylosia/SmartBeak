@@ -95,7 +95,12 @@ export class MLPredictionEngine extends EventEmitter {
   }
 
   // Simple linear regression
-  const positions = rows.map(r => parseFloat(r.avg_position));
+  // P1-FIX: Guard against NaN — parseFloat returns NaN when avg_position is null
+  // (e.g. no data rows in the window), which propagates silently through all arithmetic.
+  const positions = rows.map(r => {
+    const val = parseFloat(r.avg_position);
+    return isNaN(val) ? 0 : val;
+  });
   const n = positions.length;
 
   // Calculate trend using simple moving average slope
@@ -168,15 +173,19 @@ export class MLPredictionEngine extends EventEmitter {
     Math.abs(point.value - mean) > 3 * stdDev ? 'high' :
     Math.abs(point.value - mean) > 2 * stdDev ? 'medium' : 'low';
 
+    // P1-FIX: Use the actual `metric` parameter instead of the hardcoded
+    // 'content_decay' string — every anomaly was mislabeled regardless of
+    // whether detection ran for 'traffic', 'rankings', or 'engagement'.
+    // Also removed the unsafe `as Anomaly` cast so TypeScript verifies shape.
     anomalies.push({
     id: `anomaly_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`,
-    metric: 'content_decay',
+    metric,
     value: point.value,
     expectedRange: [lowerBound, upperBound],
     severity,
     timestamp: point.date,
     context: { mean, stdDev, domainId },
-    } as Anomaly);
+    });
     }
   }
 
@@ -299,7 +308,10 @@ export class MLPredictionEngine extends EventEmitter {
   );
 
   return opportunities
-    .filter(o => !rankedKeywords.has(o.keyword) || rankedKeywords.get(o.keyword)! > 20)
+    // P1-FIX: Replace non-null assertion (!) with ?? 0 — safe because has()
+    // short-circuits when the key is absent, so ?? 0 is only reached when
+    // get() provably returns a value, satisfying the type checker without !.
+    .filter(o => !rankedKeywords.has(o.keyword) || (rankedKeywords.get(o.keyword) ?? 0) > 20)
     .slice(0, limit)
     .map(o => {
     const volume = parseInt(o.avg_volume);
@@ -313,10 +325,14 @@ export class MLPredictionEngine extends EventEmitter {
     // Estimate traffic if ranking #5
     const estimatedTraffic = volume * 0.05; // ~5% CTR for position 5
 
+    // P1-FIX: Added missing `difficulty` field — the `as KeywordOpportunity`
+    // cast was silently hiding that the required field was absent, causing
+    // consumers to receive objects that violated the interface contract.
     return {
     keyword: o.keyword,
     searchVolume: volume,
-    currentPosition: position ?? undefined,
+    ...(position !== undefined ? { currentPosition: position } : {}),
+    difficulty,
     opportunityScore: Math.round(opportunityScore),
     estimatedTraffic: Math.round(estimatedTraffic),
     competitionLevel: o.competitor_count < 5 ? 'low' : o.competitor_count < 15 ? 'medium' : 'high',

@@ -86,6 +86,10 @@ export interface LatencyHistogram {
 
 export class SlidingWindowHistogram implements LatencyHistogram {
   private values: number[] = [];
+  // P1-FIX: Cache the sorted copy so that consecutive getPercentile(50/95/99)
+  // calls in getMetrics() each re-sort the same 1 000-element array.  The cache
+  // is invalidated on every record() or reset() so results stay correct.
+  private sortedCache: number[] | null = null;
   private maxSize: number;
 
   constructor(maxSize = 1000) {
@@ -94,6 +98,7 @@ export class SlidingWindowHistogram implements LatencyHistogram {
 
   record(value: number): void {
     this.values.push(value);
+    this.sortedCache = null; // invalidate sorted cache
     if (this.values.length > this.maxSize) {
       this.values.shift();
     }
@@ -101,10 +106,12 @@ export class SlidingWindowHistogram implements LatencyHistogram {
 
   getPercentile(p: number): number {
     if (this.values.length === 0) return 0;
-    
-    const sorted = [...this.values].sort((a, b) => a - b);
-    const index = Math.ceil((p / 100) * sorted.length) - 1;
-    return sorted[Math.max(0, index)] ?? 0;
+
+    if (!this.sortedCache) {
+      this.sortedCache = [...this.values].sort((a, b) => a - b);
+    }
+    const index = Math.ceil((p / 100) * this.sortedCache.length) - 1;
+    return this.sortedCache[Math.max(0, index)] ?? 0;
   }
 
   getAverage(): number {
@@ -119,6 +126,7 @@ export class SlidingWindowHistogram implements LatencyHistogram {
 
   reset(): void {
     this.values = [];
+    this.sortedCache = null;
   }
 }
 
@@ -127,6 +135,11 @@ export class SlidingWindowHistogram implements LatencyHistogram {
 // ============================================================================
 
 export class PerformanceMonitor {
+  // P1-FIX: Hard cap on recentAlerts so an alert storm (e.g. latency spikes
+  // arriving faster than the 5-minute dedup window) cannot grow the array
+  // without bound.  100 entries is more than sufficient for dedup purposes.
+  private static readonly MAX_RECENT_ALERTS = 100;
+
   private enabled = false;
   private sampleIntervalId: NodeJS.Timeout | null = null;
   private latencyHistogram = new SlidingWindowHistogram();
@@ -254,11 +267,14 @@ export class PerformanceMonitor {
     if (recentSimilar) return;
 
     this.recentAlerts.push(alert);
-    
-    // Clean old alerts
+
+    // Clean alerts older than 10 minutes, then enforce hard size cap
     this.recentAlerts = this.recentAlerts.filter(
       a => alert.timestamp - a.timestamp < 10 * 60 * 1000
     );
+    if (this.recentAlerts.length > PerformanceMonitor.MAX_RECENT_ALERTS) {
+      this.recentAlerts = this.recentAlerts.slice(-PerformanceMonitor.MAX_RECENT_ALERTS);
+    }
 
     this.options.onAlert(alert);
   }

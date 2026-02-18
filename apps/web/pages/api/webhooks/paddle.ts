@@ -92,21 +92,37 @@ async function getRawBody(req: NextApiRequest): Promise<Buffer> {
 }
 
 /**
- * Check if event was already processed. Fail closed on Redis error.
+ * Check if event was already processed (read-only). Fail closed on Redis error.
  */
-async function isDuplicateEvent(eventId: string): Promise<boolean> {
+async function isAlreadyProcessed(eventId: string): Promise<boolean> {
   try {
     const redis = await getRedis();
     const key = `webhook:paddle:event:${eventId}`;
-    // P0-FIX: Atomic SET NX replaces the previous non-atomic GET + SETEX pattern.
-    // Two concurrent Paddle webhook deliveries could both pass the GET check before
-    // either set the key, resulting in double billing events (double plan upgrades,
-    // duplicate audit entries). SET ... NX is a single atomic operation.
-    const result = await redis.set(key, '1', 'EX', EVENT_ID_TTL_SECONDS, 'NX');
-    return result === null; // null = key already existed = duplicate
+    const existing = await redis.get(key);
+    return existing !== null;
   } catch (error) {
-    logger.error('Redis unavailable for deduplication - failing closed', error instanceof Error ? error : undefined, { eventId });
+    logger.error('Redis unavailable for deduplication check - failing closed', error instanceof Error ? error : undefined, { eventId });
     throw new Error('Deduplication service unavailable');
+  }
+}
+
+/**
+ * Mark event as successfully processed. Called only AFTER DB writes commit.
+ * P0-FIX: Separated from the pre-processing duplicate check so that a failed
+ * processEvent() does not permanently mark the event as handled. Without this
+ * split, a DB error after isDuplicateEvent() set the Redis key would prevent
+ * Paddle from re-delivering the event, silently losing billing state updates.
+ */
+async function markEventProcessed(eventId: string): Promise<void> {
+  try {
+    const redis = await getRedis();
+    const key = `webhook:paddle:event:${eventId}`;
+    await redis.set(key, '1', 'EX', EVENT_ID_TTL_SECONDS, 'NX');
+  } catch (error) {
+    // Non-fatal: log but don't throw. Worst case: event is reprocessed once.
+    // The handlers are idempotent (FOR UPDATE + conditional UPDATE), so
+    // reprocessing is safe.
+    logger.warn('Failed to mark webhook event as processed in Redis', error instanceof Error ? error : undefined, { eventId });
   }
 }
 
@@ -178,10 +194,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Event timestamp too old or in future' });
   }
 
-  // Event deduplication
-  const eventId = typeof payload['event_id'] === 'string' ? payload['event_id'] : `sig:${parsed.h1}`;
+  // P0-FIX: Reject payloads without event_id. The previous fallback to the HMAC
+  // signature hash (`sig:${parsed.h1}`) was dangerous: two different events signed
+  // with the same secret can share an identical signature if the payload bytes are
+  // the same modulo timing, causing one event to be misidentified as a duplicate of
+  // the other and permanently lost. Paddle guarantees event_id on all real events.
+  const eventId = payload['event_id'];
+  if (!eventId || typeof eventId !== 'string') {
+    logger.warn('Missing event_id in Paddle webhook payload');
+    return res.status(400).json({ error: 'Missing event_id' });
+  }
+
+  // Pre-processing duplicate check (read-only Redis GET)
   try {
-    if (await isDuplicateEvent(eventId)) {
+    if (await isAlreadyProcessed(eventId)) {
       logger.info('Duplicate event ignored', { eventId });
       return res.status(200).json({ received: true, duplicate: true });
     }
@@ -229,6 +255,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     await processEvent(eventType, orgId, payload, eventId);
+    // P0-FIX: Mark as processed AFTER DB writes commit. If processEvent() throws,
+    // we return 500 so Paddle will retry. On retry the duplicate check will return
+    // false (not yet marked) and the event will be reprocessed. The handlers are
+    // idempotent so reprocessing is safe.
+    await markEventProcessed(eventId);
     return res.status(200).json({ received: true, type: eventType });
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));

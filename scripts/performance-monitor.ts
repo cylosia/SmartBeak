@@ -228,17 +228,22 @@ async function main(): Promise<void> {
     logger.info('Simulating cache operations for demonstration');
     
     // Simulate cache hits and misses
-    const simulationInterval = setInterval(async () => {
-      // Simulate a cache hit
-      await cache.getOrCompute('test-key-1', async () => ({ data: 'test' }), {
-        l1TtlMs: 5000,
-        l2TtlSeconds: 10,
-      });
+    // P0-FIX: Wrap async interval body in try-catch. setInterval does not await
+    // the async callback — an unhandled rejection from getOrCompute would crash
+    // the process in Node.js. Errors are logged and the simulation continues.
+    const simulationInterval = setInterval(() => {
+      (async () => {
+        await cache.getOrCompute('test-key-1', async () => ({ data: 'test' }), {
+          l1TtlMs: 5000,
+          l2TtlSeconds: 10,
+        });
 
-      // Simulate another operation
-      await cache.getOrCompute('test-key-2', async () => ({ data: 'test2' }), {
-        l1TtlMs: 5000,
-        l2TtlSeconds: 10,
+        await cache.getOrCompute('test-key-2', async () => ({ data: 'test2' }), {
+          l1TtlMs: 5000,
+          l2TtlSeconds: 10,
+        });
+      })().catch((error: unknown) => {
+        logger.error('Simulation interval error', error instanceof Error ? error : undefined);
       });
     }, 1000).unref();
 

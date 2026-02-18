@@ -24,13 +24,20 @@ export class PostgresPublishAttemptRepository {
   }
 
   /**
-  * Record a publish attempt
+  * Record a publish attempt.
+  *
+  * P0-FIX: Accept an optional transaction client so the INSERT participates in
+  * the same transaction as the sibling jobs.save() call in PublishingWorker.
+  * Without the client parameter, a crash between `record()` and `COMMIT` would
+  * produce a dual-write anomaly: attempt recorded as success but job state still
+  * "publishing", causing the worker to retry and publish to the external target twice.
   */
   async record(
   jobId: string,
   attempt: number,
   status: 'success' | 'failure',
-  error?: string
+  error?: string,
+  client?: PoolClient
   ): Promise<void> {
   // Validate inputs
   if (!jobId || typeof jobId !== 'string') {
@@ -43,15 +50,16 @@ export class PostgresPublishAttemptRepository {
   // Limit error message length
   const safeError = error && error.length > 1000 ? error.slice(0, 1000) + '...' : error;
 
+  const queryable = this.getQueryable(client);
+
   try {
-    await this.pool.query(
+    await queryable.query(
     `INSERT INTO publish_attempts (id, publishing_job_id, attempt_number, status, error)
     VALUES ($1, $2, $3, $4, $5)`,
     [randomUUID(), jobId, attempt, status, safeError ?? null]
     );
   } catch (err) {
-    logger.error('Failed to record publish attempt', err as Error, {
-    });
+    logger.error('Failed to record publish attempt', err as Error, { jobId, attempt, status });
     throw err;
   }
   }
