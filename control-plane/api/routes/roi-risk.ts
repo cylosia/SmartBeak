@@ -2,11 +2,18 @@
 
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
+import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, RoleAccessError, type AuthContext } from '../../services/auth';
+import { requireRole, RoleAccessError } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
+import { ErrorCodes } from '@errors';
+
+const AssetParamsSchema = z.object({
+  assetId: z.string().uuid(),
+});
 
 const logger = getLogger('ROIRisk');
 
@@ -19,14 +26,15 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // GET /roi-risk/:assetId - Get ROI and risk analysis for an asset
   app.get('/roi-risk/:assetId', async (req, res) => {
   try {
-    const ctx = req.auth as AuthContext;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
+    await rateLimit('roi-risk', 50, req, res);
+    const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('roi-risk', 50);
 
-    const { assetId } = req.params as { assetId: string };
+    const paramsResult = AssetParamsSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+    return errors.badRequest(res, 'Invalid asset ID', ErrorCodes.INVALID_PARAMS);
+    }
+    const { assetId } = paramsResult.data;
 
     const hasAccess = await verifyAssetOwnership(ctx["orgId"], assetId, pool);
     if (!hasAccess) {
@@ -97,15 +105,9 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     risk: {
     score: Math.round(avgRiskScore),
     level: avgRiskScore >= 70 ? 'high' : avgRiskScore >= 40 ? 'medium' : 'low',
-    factors: riskFactors.length > 0 ? riskFactors : [
-    { name: 'Traffic Concentration', level: 'medium', score: 45 },
-    { name: 'Revenue Diversification', level: 'low', score: 25 },
-    { name: 'Content Freshness', level: 'low', score: 20 },
-    ],
+    factors: riskFactors,
     },
-    recommendations: recommendations.length > 0
-    ? recommendations.map(r => r.text)
-    : ['Diversify traffic sources', 'Update top 10 articles', 'Add affiliate partnerships'],
+    recommendations: recommendations.map(r => r.text),
     };
 
     return analysis;

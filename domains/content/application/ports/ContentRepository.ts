@@ -53,7 +53,7 @@ export interface ContentRepository {
   domainId?: string,
   orgId?: string,
   client?: PoolClient
-  ): Promise<(ContentItem | null)[]>;
+  ): Promise<ContentItem[]>;
 
   /**
   * Find content items that are ready to be published
@@ -66,7 +66,7 @@ export interface ContentRepository {
   * @returns Promise resolving to array of publishable content items (may contain nulls)
   * @throws {Error} If query execution fails
   */
-  listReadyToPublish(now: Date, domainId?: string, client?: PoolClient): Promise<(ContentItem | null)[]>;
+  listReadyToPublish(now: Date, domainId?: string, client?: PoolClient): Promise<ContentItem[]>;
 
   /**
   * List all content items for a specific domain with optional pagination
@@ -78,7 +78,7 @@ export interface ContentRepository {
   * @returns Promise resolving to array of content items (may contain nulls)
   * @throws {Error} If query execution fails
   */
-  listByDomain(domainId: string, limit?: number, offset?: number, client?: PoolClient): Promise<(ContentItem | null)[]>;
+  listByDomain(domainId: string, limit?: number, offset?: number, client?: PoolClient): Promise<ContentItem[]>;
 
   /**
   * Delete a content item by ID

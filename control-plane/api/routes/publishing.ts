@@ -5,8 +5,11 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
 import { PublishingUIService } from '../../services/publishing-ui';
 import { rateLimit } from '../../services/rate-limit';
+
+const logger = getLogger('publishing-routes');
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
@@ -15,56 +18,77 @@ import { ErrorCodes } from '@errors';
 const TargetBodySchema = z.object({
   type: z.enum(['wordpress', 'webhook', 'api']),
   config: z.record(z.string(), z.unknown()),
-});
+}).strict();
 
 const IdParamSchema = z.object({
   id: z.string().uuid(),
+});
+
+const DomainQuerySchema = z.object({
+  domainId: z.string().uuid(),
 });
 
 export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new PublishingUIService(pool);
 
   app.get('/publishing/targets', async (req, res) => {
-  // M7-FIX: Use getAuthContext() instead of unsafe req.auth cast.
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin', 'editor']);
-  await rateLimit('publishing', 50);
+  try {
+    await rateLimit('publishing', 50, req, res);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin', 'editor']);
 
-  if (!ctx["domainId"]) {
-    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
+    const queryResult = DomainQuerySchema.safeParse(req.query);
+    if (!queryResult.success) {
+      return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
+    }
+
+    return svc.listTargets(queryResult.data.domainId);
+  } catch (error) {
+    logger.error('[publishing/targets] Error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
   }
-
-  return svc.listTargets(ctx["domainId"]);
   });
 
   app.post('/publishing/targets', async (req, res) => {
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin']);
-  await rateLimit('publishing', 30);
+  try {
+    await rateLimit('publishing', 30, req, res);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin']);
 
-  if (!ctx["domainId"]) {
-    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
+    const queryResult = DomainQuerySchema.safeParse(req.query);
+    if (!queryResult.success) {
+      return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
+    }
+
+    const bodyResult = TargetBodySchema.safeParse(req.body);
+    if (!bodyResult.success) {
+      return errors.validationFailed(res, bodyResult["error"].issues);
+    }
+
+    const { type, config } = bodyResult.data;
+    return svc.createTarget(queryResult.data.domainId, type, config);
+  } catch (error) {
+    logger.error('[publishing/targets] Create error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
   }
-
-  const bodyResult = TargetBodySchema.safeParse(req.body);
-  if (!bodyResult.success) {
-    return errors.validationFailed(res, bodyResult["error"].issues);
-  }
-
-  const { type, config } = bodyResult.data;
-  return svc.createTarget(ctx["domainId"], type, config);
   });
 
   app.get('/publishing/jobs', async (req, res) => {
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin', 'editor']);
-  await rateLimit('publishing', 50);
+  try {
+    await rateLimit('publishing', 50, req, res);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin', 'editor']);
 
-  if (!ctx["domainId"]) {
-    return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
+    const queryResult = DomainQuerySchema.safeParse(req.query);
+    if (!queryResult.success) {
+      return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
+    }
+
+    return svc.listJobs(queryResult.data.domainId);
+  } catch (error) {
+    logger.error('[publishing/jobs] Error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
   }
-
-  return svc.listJobs(ctx["domainId"]);
   });
 
   app.get('/publishing/jobs/:id', async (req, res) => {

@@ -4,10 +4,14 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, type AuthContext } from '../../services/auth';
+import { requireRole } from '../../services/auth';
+import { getAuthContext } from '../types';
 import { SearchQueryService } from '../../services/search-query';
 import { errors } from '@errors/responses';
+
+const logger = getLogger('search-routes');
 
 export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new SearchQueryService(pool);
@@ -23,39 +27,42 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
   });
 
   app.get('/search', async (req, res) => {
-  const ctx = req.auth as AuthContext;
-  if (!ctx) {
-    return errors.unauthorized(res);
-  }
-  requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-  await rateLimit('search', 30);
+  try {
+    await rateLimit('search', 30, req, res);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
-  // Validate query parameters
-  const parseResult = SearchQuerySchema.safeParse(req.query);
-  if (!parseResult.success) {
-    return errors.validationFailed(res, parseResult["error"].issues);
-  }
-
-  const { q, limit } = parseResult.data;
-  const page = Math.max(1, parseInt(String((req.query as Record<string, string | undefined>)['page'])) || 1);
-  if (!q || q.length < 2) {
-    return res.send({ results: [], pagination: { page, limit, total: 0, totalPages: 0 } });
-  }
-
-  // Parse pagination params - now validated by schema
-  const offset = (page - 1) * limit;
-
-  // P0-FIX: Pass auth context to search service for tenant isolation
-  const _results = await svc.search(q, limit, offset, ctx);
-
-  // P0-FIX: Pass orgId to searchCount for tenant isolation
-  const total = await svc.searchCount(q, ctx.orgId);
-
-  return res.send({
-    pagination: {
-    totalPages: Math.ceil(total / limit),
+    // Validate query parameters
+    const parseResult = SearchQuerySchema.safeParse(req.query);
+    if (!parseResult.success) {
+      return errors.validationFailed(res, parseResult["error"].issues);
     }
-  });
+
+    const { q, limit, page } = parseResult.data;
+    if (!q || q.length < 2) {
+      return res.send({ results: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    }
+
+    const offset = (page - 1) * limit;
+
+    const [results, total] = await Promise.all([
+      svc.search(q, limit, offset, ctx),
+      svc.searchCount(q, ctx.orgId),
+    ]);
+
+    return res.send({
+      results,
+      pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    logger.error('[search] Error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
+  }
   });
 }
 

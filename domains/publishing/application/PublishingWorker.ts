@@ -91,108 +91,90 @@ export class PublishingWorker {
     return await this.regionWorker.execute(jobId, async () => {
     const client = await this.pool.connect();
 
+    // Phase 1: atomically mark job as started
+    let job;
+    let updatedJob;
+    let attempt;
     try {
-    // P1-FIX: Begin transaction BEFORE any reads to ensure consistent snapshot
     await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-    // P0-5 FIX: Get job with FOR UPDATE to prevent stale reads under concurrency
-    const job = await this.jobs.getById(jobId, client, { forUpdate: true });
-
-    // Handle not found case
+    job = await this.jobs.getById(jobId, client, { forUpdate: true });
     if (!job) {
-        try {
         await client.query('ROLLBACK');
-        } catch (rollbackError) {
-        logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-        }
         return { success: false, error: `Publishing job '${jobId}' not found` };
     }
 
-    const attempt = job.attemptCount + 1;
-
-    // Start publishing - this returns a new job instance (immutable)
-    const updatedJob = job.start();
-    await this.jobs.save(updatedJob);
-
-    // Write event to outbox within the transaction for at-least-once delivery.
-    // The outbox relay will publish the event after this transaction commits.
+    attempt = job.attemptCount + 1;
+    updatedJob = job.start();
+    // Pass client so this save participates in the open transaction
+    await this.jobs.save(updatedJob, client);
     await writeToOutbox(client, new PublishingStarted().toEnvelope(job["id"]));
-
     await client.query('COMMIT');
-
-    try {
-    // Security: Validate target URL
-    const validatedConfig = this.validateTargetConfig(targetConfig);
-
-    // Execute the actual publishing (outside transaction as it calls external service)
-    await this.adapter.publish({
-        domainId: job.domainId,
-        contentId: job.contentId,
-        targetConfig: validatedConfig
-    });
-
-    // Success - record attempt and update state atomically
-    await client.query('BEGIN');
-    await this.attempts.record(job["id"], attempt, 'success');
-    const succeededJob = updatedJob.succeed();
-    await this.jobs.save(succeededJob);
-    await writeToOutbox(client, new PublishingSucceeded().toEnvelope(job["id"]));
-    await client.query('COMMIT');
-
-    await this.auditLog('publish_succeeded', job.domainId, {
-        jobId: job["id"],
-    });
-
-    addSpanAttributes({ 'publishing.result': 'success' });
-    try {
-      getBusinessKpis().recordPublishSuccess(platform);
-      getSloTracker().recordSuccess('slo.publishing.success_rate');
-    } catch { /* not initialized */ }
-
-    return { success: true };
-
-    } catch (err: unknown) {
-    // Failure - record attempt and update state atomically
-    try {
-        await client.query('ROLLBACK');
-    } catch (rollbackError) {
-        logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-    }
-    await client.query('BEGIN');
-
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    await this.attempts.record(job["id"], attempt, 'failure', errorMessage);
-
-    const failedJob = updatedJob.fail(errorMessage);
-    await this.jobs.save(failedJob);
-    await writeToOutbox(client, new PublishingFailed().toEnvelope(job["id"], errorMessage));
-
-    await client.query('COMMIT');
-
-    await this.auditLog('publish_failed', job.domainId, {
-        jobId: job["id"],
-        error: errorMessage
-    });
-
-    addSpanAttributes({ 'publishing.result': 'failure' });
-    recordSpanException(err instanceof Error ? err : new Error(String(err)));
-    try {
-      getBusinessKpis().recordPublishFailure(platform, errorMessage);
-      getSloTracker().recordFailure('slo.publishing.success_rate');
-    } catch { /* not initialized */ }
-
-    throw err;
-    }
-
     } catch (error) {
-    try {
-    await client.query('ROLLBACK');
-    } catch (rollbackError) {
-    logger.error(`Rollback failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`);
-    }
+    try { await client.query('ROLLBACK'); } catch { /* ignore secondary error */ }
     throw error;
     } finally {
     client.release();
+    }
+
+    // Phase 2: call external adapter (outside any transaction)
+    const validatedConfig = this.validateTargetConfig(targetConfig);
+    let publishError: unknown;
+    try {
+    await this.adapter.publish({
+        domainId: job.domainId,
+        contentId: job.contentId,
+        targetConfig: validatedConfig,
+    });
+    } catch (err: unknown) {
+    publishError = err;
+    }
+
+    // Phase 3: atomically record outcome on a fresh connection
+    const outcomeClient = await this.pool.connect();
+    try {
+    await outcomeClient.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    await outcomeClient.query('SET LOCAL statement_timeout = $1', [30000]);
+
+    if (!publishError) {
+        await this.attempts.record(job["id"], attempt, 'success');
+        const succeededJob = updatedJob.succeed();
+        await this.jobs.save(succeededJob, outcomeClient);
+        await writeToOutbox(outcomeClient, new PublishingSucceeded().toEnvelope(job["id"]));
+        await outcomeClient.query('COMMIT');
+
+        await this.auditLog('publish_succeeded', job.domainId, { jobId: job["id"] });
+        addSpanAttributes({ 'publishing.result': 'success' });
+        try {
+        getBusinessKpis().recordPublishSuccess(platform);
+        getSloTracker().recordSuccess('slo.publishing.success_rate');
+        } catch { /* not initialized */ }
+
+        return { success: true };
+    } else {
+        const errorMessage = publishError instanceof Error ? publishError.message : String(publishError);
+        await this.attempts.record(job["id"], attempt, 'failure', errorMessage);
+        const failedJob = updatedJob.fail(errorMessage);
+        await this.jobs.save(failedJob, outcomeClient);
+        await writeToOutbox(outcomeClient, new PublishingFailed().toEnvelope(job["id"], errorMessage));
+        await outcomeClient.query('COMMIT');
+
+        await this.auditLog('publish_failed', job.domainId, { jobId: job["id"], error: errorMessage });
+        addSpanAttributes({ 'publishing.result': 'failure' });
+        recordSpanException(publishError instanceof Error ? publishError : new Error(String(publishError)));
+        try {
+        getBusinessKpis().recordPublishFailure(platform, errorMessage);
+        getSloTracker().recordFailure('slo.publishing.success_rate');
+        } catch { /* not initialized */ }
+
+        throw publishError;
+    }
+    } catch (error) {
+    try { await outcomeClient.query('ROLLBACK'); } catch { /* ignore secondary error */ }
+    throw error;
+    } finally {
+    outcomeClient.release();
     }
     });
   } catch (err: unknown) {
@@ -210,14 +192,11 @@ export class PublishingWorker {
   * MEDIUM FIX M14: Explicit return type
   */
   private validateInputs(jobId: string, targetConfig: TargetConfig): string | undefined {
-    if (!jobId || typeof jobId !== 'string') {
+  if (!jobId || typeof jobId !== 'string') {
     return 'Job ID is required and must be a string';
   }
   if (jobId.length < 1 || jobId.length > 255) {
     return 'Job ID must be between 1 and 255 characters';
-  }
-  if (!jobId || typeof jobId !== 'string') {
-    return 'Job ID is required and must be a string';
   }
   if (!targetConfig || typeof targetConfig !== 'object') {
     return 'Target configuration is required';

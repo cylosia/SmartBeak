@@ -26,7 +26,7 @@ async function verifyMediaOwnership(userId: string, mediaId: string, pool: Pool)
   `SELECT EXISTS(
     SELECT 1 FROM media m
     JOIN memberships mem ON mem.org_id = m.org_id
-    WHERE m["id"] = $1 AND mem.user_id = $2
+    WHERE m.id = $1 AND mem.user_id = $2
   ) as has_access`,
   [mediaId, userId]
   );

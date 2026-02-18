@@ -68,7 +68,7 @@ export class CreateDraft {
     logger.error('Failed to create draft', error instanceof Error ? error : new Error(String(error)));
     return {
     success: false,
-    error: error instanceof Error ? error.message : 'Failed to create draft'
+    error: 'Failed to create draft'
     };
   }
   }

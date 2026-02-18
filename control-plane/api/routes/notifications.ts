@@ -110,6 +110,9 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     return res.send({
     data: rows,
     pagination: {
+    page,
+    limit,
+    total,
     totalPages: Math.ceil(total / limit),
     }
     });

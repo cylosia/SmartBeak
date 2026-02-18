@@ -1,7 +1,7 @@
 
 
 
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { validatePublishTargetConfig } from '@domain/shared/infra/validation/DatabaseSchemas';
 
 import { getLogger } from '@kernel/logger';
@@ -17,10 +17,14 @@ const logger = getLogger('publishing:target:repository');
 export class PostgresPublishTargetRepository implements PublishTargetRepository {
   constructor(private pool: Pool) {}
 
+  private getQueryable(client?: PoolClient): Pool | PoolClient {
+  return client ?? this.pool;
+  }
+
   /**
   * List enabled publish targets for a domain
   */
-  async listEnabled(domainId: string, limit: number = 100): Promise<PublishTarget[]> {
+  async listEnabled(domainId: string, limit: number = 100, client?: PoolClient): Promise<PublishTarget[]> {
   // Validate input
   if (!domainId || typeof domainId !== 'string') {
     throw new Error('domainId must be a non-empty string');
@@ -30,7 +34,7 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
   try {
-    const { rows } = await this.pool.query(
+    const { rows } = await this.getQueryable(client).query(
     `SELECT id, domain_id, type, config, enabled
     FROM publish_targets
     WHERE domain_id = $1 AND enabled = true
@@ -63,7 +67,7 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
   /**
   * Save a publish target
   */
-  async save(target: PublishTarget): Promise<void> {
+  async save(target: PublishTarget, client?: PoolClient): Promise<void> {
   // Validate input
   if (!target || typeof target.id !== 'string') {
     throw new Error('target must have a valid id');
@@ -72,7 +76,7 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
     // Validate JSONB config before saving
     validatePublishTargetConfig(target.config);
 
-    await this.pool.query(
+    await this.getQueryable(client).query(
     `INSERT INTO publish_targets (id, domain_id, type, config, enabled)
     VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (id)
@@ -95,13 +99,13 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
   /**
   * Get publish target by ID
   */
-  async getById(id: string): Promise<PublishTarget | null> {
+  async getById(id: string, client?: PoolClient): Promise<PublishTarget | null> {
   // Validate input
   if (!id || typeof id !== 'string') {
     throw new Error('id must be a non-empty string');
   }
   try {
-    const { rows } = await this.pool.query(
+    const { rows } = await this.getQueryable(client).query(
     `SELECT id, domain_id, type, config, enabled
     FROM publish_targets
     WHERE id = $1`,
@@ -135,13 +139,13 @@ export class PostgresPublishTargetRepository implements PublishTargetRepository 
   /**
   * Delete a publish target
   */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, client?: PoolClient): Promise<void> {
   // Validate input
   if (!id || typeof id !== 'string') {
     throw new Error('id must be a non-empty string');
   }
   try {
-    await this.pool.query(
+    await this.getQueryable(client).query(
     'DELETE FROM publish_targets WHERE id = $1',
     [id]
     );

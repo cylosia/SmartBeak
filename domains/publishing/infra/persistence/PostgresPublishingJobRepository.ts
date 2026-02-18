@@ -225,7 +225,7 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
     error_message, started_at, completed_at, attempt_count
     FROM publishing_jobs
     WHERE domain_id = $1
-    ORDER BY created_at DESC
+    ORDER BY started_at DESC NULLS LAST, id DESC
     LIMIT $2`,
     [domainId, safeLimit]
     );

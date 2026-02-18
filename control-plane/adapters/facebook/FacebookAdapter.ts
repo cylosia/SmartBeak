@@ -4,6 +4,7 @@ import { apiConfig, timeoutConfig } from '@config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString, isFacebookPostResponse } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
+import { validateUrlWithDns } from '@security/ssrf';
 import type { PublishAdapter, PublishInput } from '@domain/publishing/application/ports/PublishAdapter';
 
 
@@ -45,6 +46,13 @@ export class FacebookAdapter implements PublishAdapter {
 
   this.logger.info('Publishing to Facebook page', context, { pageId });
 
+  // SSRF protection: validate the constructed URL before making the outbound request
+  const targetUrl = `${this.baseUrl}/${pageId}/feed`;
+  const ssrfCheck = await validateUrlWithDns(targetUrl);
+  if (!ssrfCheck.allowed) {
+  throw new Error(`SSRF check failed for Facebook API URL: ${ssrfCheck.reason}`);
+  }
+
   const startTime = Date.now();
 
   // P1-3 FIX: AbortController was previously created OUTSIDE withRetry.
@@ -60,7 +68,7 @@ export class FacebookAdapter implements PublishAdapter {
 
     try {
     const response = await fetch(
-    `${this.baseUrl}/${pageId}/feed`,
+    targetUrl,
     {
     method: 'POST',
     headers: {
