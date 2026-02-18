@@ -111,15 +111,24 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
 
   // The WHERE clause ensures we only update if status is still not 'running'
   // This prevents multiple concurrent jobs from starting the same experiment
+  // F-4.8 FIX: Build the update payload conditionally to avoid NULL overwrite.
+  // With `exactOptionalPropertyTypes`, passing `metadata: undefined` to Knex causes
+  // `UPDATE experiments SET metadata = NULL` — silently erasing existing metadata
+  // on any retry that omits the metadata field. Only include metadata in the SET
+  // clause when the caller explicitly provides it.
+  const updatePayload: Record<string, unknown> = {
+    status: 'running',
+    started_at: new Date(),
+    started_by: triggeredBy ?? null,
+  };
+  if (metadata !== undefined) {
+    updatePayload['metadata'] = JSON.stringify(metadata);
+  }
+
   const updated = await trx('experiments')
     .where({ id: experimentId })
     .whereNotIn('status', ['running', 'completed', 'cancelled'])  // Only update valid states
-    .update({
-    status: 'running',
-    started_at: new Date(),
-    started_by: triggeredBy,
-    metadata: metadata ? JSON.stringify(metadata) : undefined,
-    })
+    .update(updatePayload)
     .returning(['id']);
 
   if (updated.length === 0) {

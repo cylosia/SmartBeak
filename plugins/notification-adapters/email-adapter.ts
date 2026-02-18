@@ -43,6 +43,20 @@ function stripCrlf(value: string): string {
   return value.replace(/[\r\n]/g, '');
 }
 
+/**
+ * F-5.4 FIX: Sanitise a value for use as an HTML href attribute.
+ * `escapeHtml` does not block javascript: URIs because none of the characters
+ * it escapes (&<>"'`) appear in `javascript:alert(1)`. We must validate the
+ * URL scheme before embedding the value in a href.
+ *
+ * Returns '#' (a safe no-op href) if the URL is not http or https.
+ */
+function sanitizeHref(url: string): string {
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return '#';
+  return trimmed;
+}
+
 /** Email provider types - MEDIUM FIX I8: Add enum validation */
 export type EmailProvider = 'ses' | 'smtp' | 'sendgrid' | 'postmark';
 
@@ -163,6 +177,24 @@ export class EmailAdapter implements DeliveryAdapter {
     this.provider = config?.provider || this.detectProvider();
 
     this.validateConfig();
+  }
+
+  /**
+   * F-5.1 FIX: Prevent credential leakage via serialisation.
+   * `this.config` contains awsSecretAccessKey, smtpPass, sendgridApiKey, and
+   * postmarkToken as plain enumerable string properties. If this adapter instance
+   * is ever logged (logger.error('adapter failed', adapter)) or JSON.stringify'd
+   * in a crash reporter, all credentials would be exposed.
+   *
+   * `toJSON()` is called by JSON.stringify automatically, so returning a safe
+   * subset means no credentials appear in any serialised output.
+   */
+  toJSON(): Record<string, unknown> {
+    return {
+      provider: this.provider,
+      fromEmail: this.config.fromEmail,
+      fromName: this.config.fromName,
+    };
   }
 
   /**
@@ -362,9 +394,14 @@ export class EmailAdapter implements DeliveryAdapter {
     const templates: Record<string, () => { subject: string; html: string; text: string }> = {
       'welcome': () => {
         const name = getString('name', 'there');
-        const dashboardUrl = getString('dashboardUrl', '#');
+        // F-5.4 FIX: Use sanitizeHref to block javascript: and data: URIs in href.
+        // escapeHtml() is insufficient — `javascript:alert(1)` passes through unchanged.
+        const rawDashboardUrl = typeof payload['dashboardUrl'] === 'string' ? payload['dashboardUrl'] : '#';
+        const dashboardUrl = sanitizeHref(rawDashboardUrl);
         return {
-          subject: `Welcome to SmartBeak, ${name}!`,
+          // F-5.3 FIX: Strip CRLF from subject values to prevent SMTP header injection.
+          // `name` comes from escapeHtml which does NOT strip \r\n.
+          subject: stripCrlf(`Welcome to SmartBeak, ${name}!`),
           html: `
             <h1>Welcome to SmartBeak!</h1>
             <p>Hi ${name},</p>
@@ -376,9 +413,13 @@ export class EmailAdapter implements DeliveryAdapter {
       },
       'content-published': () => {
         const contentTitle = getString('contentTitle', 'New Content');
-        const contentUrl = getString('contentUrl');
+        // F-5.4 FIX: Sanitize contentUrl as a URL before embedding in href.
+        // escapeHtml does not strip javascript: scheme — must validate scheme separately.
+        const rawContentUrl = typeof payload['contentUrl'] === 'string' ? payload['contentUrl'] : '';
+        const contentUrl = sanitizeHref(rawContentUrl);
         return {
-          subject: `Content Published: ${contentTitle}`,
+          // F-5.3 FIX: Strip CRLF from subject to prevent header injection.
+          subject: stripCrlf(`Content Published: ${contentTitle}`),
           html: `
             <h1>Content Published Successfully</h1>
             <p>Your content '${contentTitle}' has been published.</p>
@@ -410,13 +451,17 @@ export class EmailAdapter implements DeliveryAdapter {
         const message = getString('message');
         const severity = getString('severity', 'medium');
         return {
-          subject: `Alert: ${alertType}`,
+          // F-5.3 FIX: Strip CRLF from subject to prevent SMTP header injection.
+          subject: stripCrlf(`Alert: ${alertType}`),
           html: `
             <h1 style="color: #cc0000;">Alert: ${alertType}</h1>
             <p>${message}</p>
             <p><strong>Severity:</strong> ${severity}</p>
           `,
-          text: `ALERT: ${alertType}\n${message}`,
+          // F-5.5 FIX: Strip CRLF from alert plain-text body. An alertType or message
+          // containing \r\n followed by MIME boundary content could inject additional
+          // MIME parts into multipart messages, enabling MIME boundary injection attacks.
+          text: `ALERT: ${stripCrlf(alertType)}\n${message.replace(/\r\n/g, '\n')}`,
         };
       },
     };
