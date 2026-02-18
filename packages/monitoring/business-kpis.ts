@@ -262,6 +262,7 @@ let instance: BusinessKpiTracker | null = null;
 
 export function initBusinessKpis(collector?: MetricsCollector): BusinessKpiTracker {
   const c = collector ?? getMetricsCollector();
+  instance?.stop();
   instance = new BusinessKpiTracker(c);
   return instance;
 }

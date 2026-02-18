@@ -12,12 +12,18 @@ interface BulkPublishViewProps {
 }
 
 export function BulkPublishView({ drafts, onPublish }: BulkPublishViewProps) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggle(id: string) {
-  setSelected(prev =>
-    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-  );
+  setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) {
+    next.delete(id);
+    } else {
+    next.add(id);
+    }
+    return next;
+  });
   }
 
   return (
@@ -27,7 +33,7 @@ export function BulkPublishView({ drafts, onPublish }: BulkPublishViewProps) {
     <label key={d.id}>
       <input
       type='checkbox'
-      checked={selected.includes(d.id)}
+      checked={selected.has(d.id)}
       onChange={() => toggle(d.id)}
       />
       {d.title}
@@ -35,10 +41,10 @@ export function BulkPublishView({ drafts, onPublish }: BulkPublishViewProps) {
     ))}
 
     <button
-    disabled={selected.length === 0}
-    onClick={() => onPublish(selected)}
+    disabled={selected.size === 0}
+    onClick={() => onPublish([...selected])}
     >
-    Publish {selected.length} drafts
+    Publish {selected.size} drafts
     </button>
   </div>
   );

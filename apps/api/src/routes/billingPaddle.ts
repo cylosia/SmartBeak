@@ -1,6 +1,3 @@
-
-// Using 'as const' for type safety
-
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing
 
 import { FastifyInstance, FastifyRequest } from 'fastify';
@@ -113,9 +110,10 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
       return errors.unauthorized(reply);
     }
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orgId)) {
-        return errors.badRequest(reply, 'Invalid organization ID', ErrorCodes.INVALID_UUID);
+    // Use Zod uuid() which accepts all UUID versions (v1–v8).
+    // The previous regex only matched v1–v5, blocking orgs with UUIDv7 org IDs.
+    if (!z.string().uuid().safeParse(orgId).success) {
+      return errors.badRequest(reply, 'Invalid organization ID', ErrorCodes.INVALID_UUID);
     }
 
     // P1-FIX: Removed the db.transaction() wrapper. createPaddleCheckout is a
@@ -132,14 +130,13 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
     billingPaddleLogger.error('Error in paddle checkout', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     // Categorized error handling with error code checking
+    // Detect Paddle errors via code prefix / message — the .name === 'PaddleError'
+    // check was dead code since Paddle SDK does not use that exact class name.
     if (error instanceof Error) {
-        const errorCode = (error as Error & { code?: string }).code;
-        const isPaddleError = errorCode?.startsWith('paddle_') ||
-                    error["message"].includes('Paddle') ||
-                    error.name === 'PaddleError';
-        if (isPaddleError) {
+      const errorCode = (error as Error & { code?: string }).code;
+      if (errorCode?.startsWith('paddle_') || error['message'].includes('Paddle')) {
         return sendError(reply, 502, ErrorCodes.EXTERNAL_API_ERROR, 'Payment provider error');
-        }
+      }
     }
 
     return errors.internal(reply);

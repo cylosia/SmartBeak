@@ -27,7 +27,7 @@ export function BuyerSeoReportView({ report }: BuyerSeoReportViewProps) {
     </ul>
     <h4>Notes</h4>
     <ul>
-    {report.notes.map((n, i) => <li key={`note-${i}`}>{n}</li>)}
+    {report.notes.map((n) => <li key={n}>{n}</li>)}
     </ul>
   </div>
   );

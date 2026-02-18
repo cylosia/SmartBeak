@@ -180,10 +180,18 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
 
     const { format } = parseResult.data;
 
-    const invoices = await stripe.invoices.list({
-    customer: customerId,
-    limit: 50
-    });
+    // Follow Stripe pagination so orgs with >100 invoices get a complete export.
+    // Cap at 500 to bound memory usage; add a note in the CSV if truncated.
+    const MAX_EXPORT_INVOICES = 500;
+    const allInvoices: Stripe.Invoice[] = [];
+    let page = await stripe.invoices.list({ customer: customerId, limit: 100 });
+    allInvoices.push(...page.data);
+    while (page.has_more && allInvoices.length < MAX_EXPORT_INVOICES) {
+      const lastId = page.data[page.data.length - 1]?.id;
+      page = await stripe.invoices.list({ customer: customerId, limit: 100, starting_after: lastId });
+      allInvoices.push(...page.data);
+    }
+    const truncated = page.has_more;
 
     if (format === 'pdf') {
     // P2-FIX (P2-4): Return 501 Not Implemented instead of 200 with a string body.
@@ -195,7 +203,7 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     const headers = ['id', 'number', 'amount_paid', 'created'];
     const headerRow = headers.join(',') + '\n';
 
-    const body = invoices.data
+    const body = allInvoices
     .map((i: Stripe.Invoice) => [
     sanitizeCsvField(i.id),
     sanitizeCsvField(i.number),
@@ -204,11 +212,15 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     ].join(','))
     .join('\n');
 
+    const truncationNote = truncated
+    ? `\n# WARNING: Export truncated at ${MAX_EXPORT_INVOICES} invoices. Download remaining via Stripe dashboard.\n`
+    : '';
+
     return reply
-    .header('Content-Type', 'text/csv')
+    .header('Content-Type', 'text/csv; charset=utf-8')
     .header('Content-Disposition', 'attachment; filename="invoices.csv"')
     .header('X-Content-Type-Options', 'nosniff')
-    .send(headerRow + body);
+    .send(headerRow + body + truncationNote);
   } catch (error) {
     billingInvoiceExportLogger.error('Error exporting invoices', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(reply);

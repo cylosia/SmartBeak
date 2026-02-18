@@ -89,4 +89,7 @@ export function assertBillingConfig(): void {
   if (!jwtKey) {
     throw new Error('FATAL: JWT_KEY_1 environment variable is required');
   }
+  if (jwtKey.length < 32) {
+    throw new Error('FATAL: JWT_KEY_1 must be at least 32 characters for adequate security');
+  }
 }

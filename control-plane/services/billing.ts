@@ -407,6 +407,7 @@ export class BillingService {
     }
 
     const client = await this.pool.connect();
+    let committed = false;
 
     try {
     await client.query('BEGIN');
@@ -452,6 +453,7 @@ export class BillingService {
     );
 
     await client.query('COMMIT');
+    committed = true;
     logger.info(`Cancelled subscription for org ${orgId}`);
 
     // Stripe cancellation fires AFTER commit. If this fails, the subscription is
@@ -473,7 +475,9 @@ export class BillingService {
         }
     }
     } catch (error) {
-    await client.query('ROLLBACK');
+    if (!committed) {
+      await client.query('ROLLBACK');
+    }
     logger.error('Error cancelling subscription', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to cancel subscription: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -543,7 +547,8 @@ export class BillingService {
                 created_at, updated_at, grace_until, cancelled_at
         FROM subscriptions
         WHERE org_id = $1
-        ORDER BY created_at DESC`,
+        ORDER BY created_at DESC
+        LIMIT 100`,
         [orgId]
     );
 

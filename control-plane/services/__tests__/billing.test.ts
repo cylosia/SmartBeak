@@ -17,6 +17,7 @@ import type { PaymentGateway, CreateCustomerResult, CreateSubscriptionResult } f
 // ---------------------------------------------------------------------------
 const mockRedis = {
   get: vi.fn(),
+  set: vi.fn(),   // required by tryClaimProcessing: redis.set(key, value, 'EX', ttl, 'NX')
   setex: vi.fn(),
   del: vi.fn(),
   ttl: vi.fn(),
@@ -81,7 +82,8 @@ function makeGateway(overrides: Partial<PaymentGateway> = {}): PaymentGateway {
 describe('BillingService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRedis.get.mockResolvedValue(null);     // No idempotency record by default
+    mockRedis.get.mockResolvedValue(null);      // No idempotency record by default
+    mockRedis.set.mockResolvedValue('OK');      // NX succeeds by default (fresh key)
     mockRedis.setex.mockResolvedValue('OK');
     mockRedis.del.mockResolvedValue(1);
     mockRedis.ttl.mockResolvedValue(3600);
@@ -138,6 +140,8 @@ describe('BillingService', () => {
     });
 
     it('returns early on idempotent retry (status=completed)', async () => {
+      // Simulate: NX fails (key exists), GET returns completed entry
+      mockRedis.set.mockResolvedValue(null); // NX fails — key already owned
       mockRedis.get.mockResolvedValue(JSON.stringify({ status: 'completed', result: { subscriptionId: 'sub_old' } }));
       const gateway = makeGateway();
       const svc = new BillingService(makePool(makePoolClient({})), gateway);
@@ -148,6 +152,8 @@ describe('BillingService', () => {
     });
 
     it('throws on idempotent retry with status=processing (still in progress)', async () => {
+      // Simulate: NX fails (key exists), GET returns in-progress entry within timeout
+      mockRedis.set.mockResolvedValue(null); // NX fails
       mockRedis.get.mockResolvedValue(JSON.stringify({
         status: 'processing',
         startedAt: Date.now() - 1000, // 1 second ago — well within 5-minute timeout
@@ -157,28 +163,20 @@ describe('BillingService', () => {
       await expect(svc.assignPlan('org-1', 'plan-pro')).rejects.toThrow('still in progress');
     });
 
-    it('allows retry after processing timeout expires', async () => {
+    it('throws when processing entry has timed out (manual retry required)', async () => {
+      // tryClaimProcessing throws 'Previous operation timed out — please retry' when
+      // a processing entry's startedAt exceeds the 5-minute PROCESSING_TIMEOUT_MS.
+      // The caller must retry; there is no automatic re-claim.
       const FIVE_MIN_MS = 5 * 60 * 1000;
+      mockRedis.set.mockResolvedValue(null); // NX fails — key exists
       mockRedis.get.mockResolvedValue(JSON.stringify({
         status: 'processing',
         startedAt: Date.now() - FIVE_MIN_MS - 1000, // timed out
       }));
-      const plan = { id: 'plan-pro', name: 'Pro', price_cents: 999, interval: 'monthly', features: [] };
-      const client = makePoolClient({
-        'BEGIN': makeQueryResult([]),
-        'SET LOCAL': makeQueryResult([]),
-        'SELECT * FROM plans': makeQueryResult([plan]),
-        'SELECT stripe_subscription_id FROM subscriptions': makeQueryResult([]),
-        'INSERT INTO subscriptions': makeQueryResult([]),
-        'COMMIT': makeQueryResult([]),
-      });
-      const gateway = makeGateway();
-      const svc = new BillingService(makePool(client), gateway);
+      const svc = new BillingService(makePool(makePoolClient({})));
 
-      await svc.assignPlan('org-1', 'plan-pro');
-
-      expect(mockRedis.del).toHaveBeenCalled(); // timed-out record deleted
-      expect(gateway.createCustomer).toHaveBeenCalled();
+      await expect(svc.assignPlan('org-1', 'plan-pro'))
+        .rejects.toThrow('Previous operation timed out');
     });
 
     it('throws and compensates when plan not found', async () => {
@@ -249,24 +247,17 @@ describe('BillingService', () => {
       );
     });
 
-    it('handles corrupted idempotency record gracefully', async () => {
-      mockRedis.get.mockResolvedValue('not-valid-json{{');
-      const plan = { id: 'plan-pro', name: 'Pro', price_cents: 999, interval: 'monthly', features: [] };
-      const client = makePoolClient({
-        'BEGIN': makeQueryResult([]),
-        'SET LOCAL': makeQueryResult([]),
-        'SELECT * FROM plans': makeQueryResult([plan]),
-        'SELECT stripe_subscription_id FROM subscriptions': makeQueryResult([]),
-        'INSERT INTO subscriptions': makeQueryResult([]),
-        'COMMIT': makeQueryResult([]),
-      });
-      const gateway = makeGateway();
-      const svc = new BillingService(makePool(client), gateway);
+    it('handles corrupted idempotency record by failing safe (no double-charge)', async () => {
+      // When SET NX fails (key exists) but GET returns unparseable JSON,
+      // tryClaimProcessing returns { claimed: false } with no existingEntry.
+      // assignPlan treats this as a concurrent-operation guard and throws rather
+      // than risk processing twice. This is correct fail-safe behaviour.
+      mockRedis.set.mockResolvedValue(null);          // NX fails — key exists
+      mockRedis.get.mockResolvedValue('not-valid-json{{'); // corrupted payload
+      const svc = new BillingService(makePool(makePoolClient({})));
 
-      // Should delete bad record and retry
-      await svc.assignPlan('org-1', 'plan-pro');
-      expect(mockRedis.del).toHaveBeenCalled();
-      expect(gateway.createCustomer).toHaveBeenCalled();
+      await expect(svc.assignPlan('org-1', 'plan-pro'))
+        .rejects.toThrow('Concurrent operation in progress');
     });
   });
 

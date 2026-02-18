@@ -1,6 +1,3 @@
-
-// Using 'as const' for type safety
-
 // SECURITY FIX: P1-HIGH Issue 3 - Strict rate limiting for billing
 
 import crypto from 'crypto';
@@ -75,7 +72,10 @@ async function validateBillingCsrfToken(token: string, orgId: string): Promise<b
   try {
     const result = await redis.eval(luaScript, 1, key, orgId);
     return result === 1;
-  } catch {
+  } catch (err) {
+    // Log the error so Redis outages surface in ops dashboards instead of
+    // appearing as silent "Invalid CSRF token" 403s to customers.
+    billingStripeLogger.error('CSRF validation Redis error', err instanceof Error ? err : new Error(String(err)));
     return false;
   }
 }
@@ -128,10 +128,21 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     return errors.unauthorized(reply, result.error || 'Authentication required');
     }
 
-    // P1-FIX: Store full user context including id for membership verification
+    // Validate JWT claims shape at runtime with Zod to ensure both sub and orgId
+    // are non-empty strings. Without this a JWT with numeric sub (spec allows it)
+    // stores a number as user.id, bypassing downstream string-equality checks.
+    const StripeClaimsSchema = z.object({
+      sub: z.string().min(1),
+      orgId: z.string().min(1),
+    });
+    const claimsResult = StripeClaimsSchema.safeParse(result.claims);
+    if (!claimsResult.success) {
+      return errors.unauthorized(reply, 'Invalid token claims');
+    }
+
     (req as AuthenticatedRequest).user = {
-      id: result.claims.sub,
-      orgId: result.claims.orgId
+      id: claimsResult.data.sub,
+      orgId: claimsResult.data.orgId,
     };
   });
 
@@ -191,12 +202,11 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
       return errors.unauthorized(reply);
     }
 
-    // P2-FIX: Validate orgId format BEFORE using it in the CSRF token lookup.
-    // Previously the UUID check came after validateBillingCsrfToken(), meaning
-    // a malformed orgId was passed into the Redis key construction first.
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orgId)) {
-        return errors.badRequest(reply, 'Invalid organization ID');
+    // Validate orgId format BEFORE using it in the CSRF token lookup.
+    // Use Zod uuid() which accepts all UUID versions (v1–v8) instead of a
+    // regex that only matched v1–v5, blocking orgs with UUIDv7 org IDs.
+    if (!z.string().uuid().safeParse(orgId).success) {
+      return errors.badRequest(reply, 'Invalid organization ID');
     }
 
     const isValidCsrf = await validateBillingCsrfToken(csrfToken, orgId);
@@ -216,17 +226,17 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     billingStripeLogger.error('Error in stripe checkout', error instanceof Error ? error : new Error(String(error)));
     // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
     // Categorized error handling with error code checking
+    // Detect Stripe errors via the error code prefix — reliable across all SDK versions.
+    // The previous .name === 'StripeError' check was dead code: SDK subclasses report
+    // their own class name (e.g. 'StripeCardError'), never the base class name.
     if (error instanceof Error) {
-        const errorCode = (error as Error & { code?: string }).code;
-        const isStripeError = errorCode?.startsWith('stripe_') ||
-                    error.message.includes('Stripe') ||
-                    error.name === 'StripeError';
-        if (isStripeError) {
+      const errorCode = (error as Error & { code?: string }).code;
+      if (errorCode?.startsWith('stripe_') || error.message.includes('Stripe')) {
         return reply.status(502).send({
-            error: 'Payment provider error',
-            code: 'PROVIDER_ERROR'
+          error: 'Payment provider error',
+          code: 'PROVIDER_ERROR',
         });
-        }
+      }
     }
 
     return reply.status(500).send({
