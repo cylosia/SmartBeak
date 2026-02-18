@@ -99,20 +99,25 @@ export function freezeHandlers(): void {
 // Log Level Configuration
 // ============================================================================
 
+const VALID_LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
+
+/** Cached log level — env vars do not change at runtime. */
+let _cachedLogLevel: LogLevel | undefined;
+
 /**
 * Get configured log level from environment
 * Defaults to 'info' in production, 'debug' in development
 */
 function getConfiguredLogLevel(): LogLevel {
-  const envLevel = process.env['LOG_LEVEL']?.toLowerCase() as LogLevel;
-  const validLevels: LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
+  if (_cachedLogLevel !== undefined) return _cachedLogLevel;
 
-  if (validLevels.includes(envLevel)) {
-  return envLevel;
-  }
+  const envLevelRaw = process.env['LOG_LEVEL']?.toLowerCase();
+  const envLevel = envLevelRaw !== undefined && (VALID_LOG_LEVELS as readonly string[]).includes(envLevelRaw)
+    ? (envLevelRaw as LogLevel)
+    : undefined;
 
-  // Default based on environment
-  return process.env['NODE_ENV'] === 'production' ? 'info' : 'debug';
+  _cachedLogLevel = envLevel ?? (process.env['NODE_ENV'] === 'production' ? 'info' : 'debug');
+  return _cachedLogLevel;
 }
 
 /**
@@ -120,9 +125,8 @@ function getConfiguredLogLevel(): LogLevel {
 * @param level - Log level to check
 */
 function shouldLog(level: LogLevel): boolean {
-  const levels: LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
   const configuredLevel = getConfiguredLogLevel();
-  return levels.indexOf(level) >= levels.indexOf(configuredLevel);
+  return VALID_LOG_LEVELS.indexOf(level) >= VALID_LOG_LEVELS.indexOf(configuredLevel);
 }
 
 // ============================================================================

@@ -1,11 +1,16 @@
 /**
 * LRU (Least Recently Used) Cache with size limits
 * Prevents unbounded memory growth
+*
+* TTL semantics: ttlMs is an *idle timeout* — the clock resets on each
+* successful get(). An entry is evicted if it has not been accessed within
+* ttlMs milliseconds. Use cleanup() to proactively remove stale entries.
 */
 
 export interface LRUCacheOptions {
   maxSize: number;
-  ttlMs: number | undefined; // Optional TTL for entries
+  /** Idle-timeout TTL in ms. Entry expires if not accessed within this window. */
+  ttlMs: number | undefined;
 }
 
 export interface CacheEntry<V> {
@@ -226,9 +231,14 @@ export class BoundedArray<T> {
   }
 
   unshift(...newItems: T[]): number {
-  const available = this.maxSize - this.items.length;
-  const toAdd = newItems.slice(0, available);
-  this.items.unshift(...toAdd);
+  // Evict from the end (most-recently-pushed) when at capacity, symmetric
+  // with push() which evicts from the front (oldest).
+  for (const item of [...newItems].reverse()) {
+    if (this.items.length >= this.maxSize) {
+    this.items.pop();
+    }
+    this.items.unshift(item);
+  }
   return this.items.length;
   }
 

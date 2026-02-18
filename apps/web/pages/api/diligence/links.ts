@@ -53,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const internalStats = await client.query(`
       SELECT COUNT(DISTINCT p.id) as total_pages,
       COUNT(DISTINCT CASE WHEN NOT EXISTS (
-      SELECT 1 FROM links l2 WHERE l2.source_id = p.id
+      SELECT 1 FROM links l2 WHERE l2.target_id = p.id AND l2.is_external = false
       ) THEN p.id END) as orphan_pages,
       COUNT(DISTINCT CASE WHEN l.broken = true THEN l.id END) as broken_links,
       COALESCE(AVG(link_counts.link_count), 0) as avg_links_per_page
