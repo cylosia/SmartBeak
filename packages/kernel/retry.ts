@@ -604,8 +604,11 @@ export function jitteredBackoff(attempt: number, options: JitteredBackoffOptions
   const { baseMs = 1000, maxMs = 30000 } = options;
   const exponentialDelay = baseMs * Math.pow(2, attempt);
   const cappedDelay = Math.min(exponentialDelay, maxMs);
-  const jitter = Math.random() * cappedDelay;
-  return Math.floor(jitter);
+  // P3-1 FIX: Use "equal jitter" — guarantees a minimum wait of cappedDelay/2.
+  // The previous implementation discarded the exponential base and used only jitter,
+  // meaning Math.random() could return 0 and produce a 0 ms delay on any attempt.
+  // Equal jitter: delay ∈ [cappedDelay/2, cappedDelay)
+  return Math.floor(cappedDelay / 2 + Math.random() * (cappedDelay / 2));
 }
 
 /**

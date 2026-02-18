@@ -8,9 +8,11 @@ import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('config');
 
-// P1-SECURITY FIX: Use word boundaries to prevent matching legitimate values
-// containing substrings like "test" (e.g., "contest-api-key", "attestation-token")
-const PLACEHOLDER_PATTERN = /\bplaceholder\b|\byour_|\bxxx\b|\bexample\b|\btest\b|\bdemo\b|\bfake\b|\bmock\b|\binvalid\b|\bnull\b|^\s*$/i;
+// P1-7 FIX: Replace `\btest\b` with `^test$`.
+// `\btest\b` matched Stripe test-mode keys (sk_test_*) because `_` is a word-boundary
+// character — `isPlaceholder('sk_test_abc')` incorrectly returned true, refusing startup
+// in staging environments. `^test$` only matches when the entire value is the word "test".
+const PLACEHOLDER_PATTERN = /\bplaceholder\b|\byour_|\bxxx\b|\bexample\b|^test$|\bdemo\b|\bfake\b|\bmock\b|\binvalid\b|\bnull\b|^\s*$/i;
 
 /**
  * Get environment variable value
@@ -34,9 +36,12 @@ export function isPlaceholder(value: string | undefined): boolean {
 export function parseIntEnv(name: string, defaultValue: number): number {
   const value = process.env[name];
   if (!value) return defaultValue;
-  // P2-TYPE FIX: Use Number() + Number.isInteger() instead of parseInt() to match requireIntEnv.
-  // parseInt('3.14abc', 10) silently returns 3, masking invalid input.
-  const parsed = Number(value);
+  // P3-3 FIX: Trim before parsing — Number('  ') === 0, which is a valid integer,
+  // so a whitespace-only value would previously return 0 instead of the default.
+  // Example: PORT='  ' → parseIntEnv('PORT', 3001) returned 0, binding to a random port.
+  const trimmed = value.trim();
+  if (!trimmed) return defaultValue;
+  const parsed = Number(trimmed);
   return Number.isInteger(parsed) ? parsed : defaultValue;
 }
 

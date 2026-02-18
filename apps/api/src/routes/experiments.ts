@@ -8,10 +8,10 @@ import { validateExperiment } from '../domain/experiments/validateExperiment';
 import type { FastifyRequest } from 'fastify';
 import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
+import { getErrorMessage, ValidationError } from '@errors';
 
 const logger = getLogger('ExperimentService');
 
-// P1-SECURITY FIX: Replace z.any() with proper variant schema to prevent unconstrained data injection
 const ExperimentVariantSchema = z.object({
   intent: z.string().min(1).max(100),
   contentType: z.string().min(1).max(100),
@@ -20,47 +20,37 @@ const ExperimentVariantSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 }).strict();
 
-// P1-SECURITY FIX: Add .strict() to match codebase convention and reject extra fields
 const ExperimentBodySchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID'),
   variants: z.array(ExperimentVariantSchema).min(1, 'At least one variant is required').max(20),
 }).strict();
-// P1-SECURITY FIX: Use centralized @security/jwt instead of raw jwt.verify
-// Ensures consistent key rotation, clockTolerance, and timing-safe token comparison
+
 async function verifyAuth(req: FastifyRequest) {
   const authHeader = req.headers.authorization;
   const result = extractAndVerifyToken(authHeader);
-
-  if (!result.valid || !result.claims) {
-    return null;
-  }
-
+  if (!result.valid || !result.claims) return null;
   const claims = result.claims;
-  if (!claims.sub || !claims.orgId) {
-    return null;
-  }
-
+  if (!claims.sub || !claims.orgId) return null;
   return { userId: claims.sub, orgId: claims.orgId };
 }
 
-async function canAccessDomain(userId: string, domainId: string, orgId: string) {
-  try {
-    const db = await getDb();
-    const row = await db('domain_registry')
-      .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
-      .where('domain_registry.domain_id', domainId)
-      .where('memberships.user_id', userId)
-      .where('domain_registry.org_id', orgId)
-      .select('memberships.role')
-      .first();
-    return !!row;
-  }
-  catch (error) {
-    logger.error('Error checking domain access', error as Error);
-    return false;
-  }
+async function canAccessDomain(userId: string, domainId: string, orgId: string): Promise<boolean> {
+  // P1-2 FIX: Remove try/catch — let DB errors propagate as 5xx, not silent 403.
+  // Previously a transient DB failure returned false → HTTP 403, masking the real outage.
+  const db = await getDb();
+  const row = await db('domain_registry')
+    .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
+    .where('domain_registry.domain_id', domainId)
+    .where('memberships.user_id', userId)
+    .where('domain_registry.org_id', orgId)
+    .select('memberships.role')
+    // P2-13 FIX: Add query timeout to prevent connection pool starvation.
+    .timeout(10000)
+    .first();
+  return !!row;
 }
-async function recordAuditEvent(params: AuditEventParams) {
+
+async function recordAuditEvent(params: AuditEventParams): Promise<void> {
   try {
     const db = await getDb();
     await db('audit_events').insert({
@@ -71,29 +61,28 @@ async function recordAuditEvent(params: AuditEventParams) {
       entity_type: params.entityType,
       entity_id: params.entityId || null,
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-      ip_address: params["ip"],
+      ip_address: params['ip'],
       created_at: new Date(),
     });
-  }
-  catch (error) {
-    logger.error('Failed to record audit event', error as Error);
+  } catch (error) {
+    // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
+    // Non-fatal for experiment audit — log and continue (unlike financial exports).
+    logger.error('Failed to record audit event', { message: getErrorMessage(error) });
   }
 }
+
 export async function experimentRoutes(app: FastifyInstance) {
-  // P1-SECURITY FIX: Add CSRF protection for state-changing operations
   app.addHook('onRequest', csrfProtection() as (req: FRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
-  // P1-SECURITY FIX: Add rate limiting to prevent resource exhaustion
   app.addHook('onRequest', apiRateLimit() as (req: FRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
 
   app.post('/experiments', async (req, reply) => {
-    const ip = (req as unknown as { ip?: string }).ip || req.socket?.remoteAddress || 'unknown';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? 'unknown';
 
     const auth = await verifyAuth(req);
     if (!auth) {
       return errors.unauthorized(reply, 'Unauthorized. Bearer token required.');
     }
     try {
-      // Validate input
       const parseResult = ExperimentBodySchema.safeParse(req.body);
       if (!parseResult.success) {
         return errors.validationFailed(reply, parseResult.error.issues);
@@ -102,9 +91,13 @@ export async function experimentRoutes(app: FastifyInstance) {
 
       const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId);
       if (!hasAccess) {
-        logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to create experiment for domain ${domain_id}`);
+        logger.warn('Unauthorized experiment access attempt', { userId: auth.userId, domainId: domain_id });
         return errors.forbidden(reply, 'Access denied to domain');
       }
+
+      // P1-4 FIX: validateExperiment now throws ValidationError (not plain Error).
+      // Previously all domain-rule violations were caught here and returned as HTTP 500,
+      // inflating 5xx metrics with client-side errors.
       validateExperiment(variants);
 
       await recordAuditEvent({
@@ -112,21 +105,21 @@ export async function experimentRoutes(app: FastifyInstance) {
         userId: auth.userId,
         action: 'experiment_validated',
         entityType: 'experiment',
-        metadata: {
-          domain_id,
-          variant_count: variants.length,
-        },
+        metadata: { domain_id, variant_count: variants.length },
         ip,
       });
       return { status: 'validated' };
-    }
-    catch (error) {
-      logger.error('Error processing experiment request', error as Error);
+    } catch (error) {
+      // P1-4 FIX: Route ValidationError to HTTP 400, not 500.
+      if (error instanceof ValidationError) {
+        return errors.validationFailed(reply, [{ message: error.message, code: 'custom', path: [] }]);
+      }
+      // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
+      logger.error('Error processing experiment request', { message: getErrorMessage(error) });
       return errors.internal(reply);
     }
   });
 }
-
 
 export interface AuditEventParams {
   orgId: string;

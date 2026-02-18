@@ -1,19 +1,32 @@
 
-import { getAuth } from '@clerk/nextjs/server';
+import { getAuth, clerkClient } from '@clerk/nextjs/server';
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import { AppShell } from '../components/AppShell';
 
-// P0-SECURITY FIX: Added server-side authentication guard.
-// Previously this page had no auth check, exposing financial export options
-// (Revenue Ledger, Domain Transfer Package, Buyer Diligence Bundle) to
-// unauthenticated users.
+// P1-1 FIX: Enforce admin/owner role on the financial exports page.
+// Previously only authentication was checked; any viewer or editor in any org
+// could access Revenue Ledger, Domain Transfer Package, and Buyer Diligence Bundle.
+const EXPORT_ALLOWED_ROLES = new Set(['org:admin', 'org:owner']);
+
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const { userId } = getAuth(ctx.req);
+  const { userId, orgId } = getAuth(ctx.req);
   if (!userId) {
-    return {
-      redirect: { destination: '/login', permanent: false },
-    };
+    return { redirect: { destination: '/login', permanent: false } };
+  }
+  if (!orgId) {
+    return { redirect: { destination: '/select-org', permanent: false } };
+  }
+  try {
+    const membership = await clerkClient.organizations.getOrganizationMembership({
+      organizationId: orgId,
+      userId,
+    });
+    if (!EXPORT_ALLOWED_ROLES.has(membership.role)) {
+      return { redirect: { destination: '/unauthorized', permanent: false } };
+    }
+  } catch {
+    return { redirect: { destination: '/unauthorized', permanent: false } };
   }
   return { props: {} };
 };

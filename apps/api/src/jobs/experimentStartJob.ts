@@ -32,7 +32,10 @@ const logger = getLogger('experiment-start');
 // Zod validation schema
 const ExperimentStartInputSchema = z.object({
   experimentId: z.string().uuid(),
-  triggeredBy: z.string().optional(),
+  // P1-5 FIX: Cap triggeredBy to prevent DoS via oversized payload.
+  // An unbounded string causes either a PostgreSQL "value too long" error
+  // mid-transaction (stuck experiment state) or unbounded TEXT column growth.
+  triggeredBy: z.string().max(256).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -77,9 +80,13 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
 
   // Fetch experiment with row-level locking to prevent concurrent modifications
   // Lock acquired AFTER runs lock to maintain consistent locking order
+  // P2-4 FIX: Select only the columns consumed by validateExperiment.
+  // SELECT * unnecessarily fetches large JSONB/bytea columns inside a transaction
+  // holding a FOR UPDATE lock, increasing latency under contention.
   const expResult = await trx('experiments')
     .where({ id: experimentId })
-    .forUpdate()  // Lock the row until transaction completes
+    .forUpdate()
+    .select(['id', 'name', 'status', 'variants'])
     .first();
   const exp = expResult ? validateExperiment(expResult) : undefined;
 
@@ -88,16 +95,16 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
     throw new Error('Experiment not found');
   }
 
-  // Validate experiment state
+  // P1-3 FIX: Use an allowlist (only 'ready' can be started) instead of a blocklist.
+  // Previously 'draft' was implicitly allowed, letting incomplete/unapproved experiments
+  // run in production and corrupting A/B test results.
   if (exp.status === 'running') {
     logger.warn('Experiment is already running', { experimentId });
-    // Return early but still commit transaction (idempotent behavior)
     return { status: 'already_running', experimentId };
   }
-
-  if (exp.status === 'completed' || exp.status === 'cancelled') {
-    logger.error('Cannot start experiment - invalid state', undefined, {
-    currentStatus: exp.status
+  if (exp.status !== 'ready') {
+    logger.error('Cannot start experiment — not in ready state', undefined, {
+      currentStatus: exp.status,
     });
     throw new Error(`Cannot start experiment with status: ${exp.status}`);
   }
@@ -125,9 +132,10 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
     updatePayload['metadata'] = JSON.stringify(metadata);
   }
 
+  // P1-3 FIX: whereNotIn now explicitly includes 'draft' to match the allowlist guard above.
   const updated = await trx('experiments')
     .where({ id: experimentId })
-    .whereNotIn('status', ['running', 'completed', 'cancelled'])  // Only update valid states
+    .whereNotIn('status', ['running', 'completed', 'cancelled', 'draft'])
     .update(updatePayload)
     .returning(['id']);
 
@@ -151,13 +159,20 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
   // P1-CORRECTNESS FIX: Include explicit `id` to avoid failure when the table
   // has a UUID primary key without a DB-level default (gen_random_uuid() requires PG13+
   // and is not guaranteed to be set in all environments).
-  await trx('experiment_runs').insert({
-    id: randomUUID(),
-    experiment_id: experimentId,
-    started_at: new Date(),
-    started_by: triggeredBy ?? null,
-    status: 'running',
-  });
+  // P1-9 FIX: Use onConflict().ignore() to guard against duplicate run records.
+  // On retry after a partial commit (network partition between UPDATE and INSERT),
+  // the experiment_id+status unique partial index (status='running') prevents
+  // a duplicate experiment_runs row that would corrupt A/B result aggregation.
+  await trx('experiment_runs')
+    .insert({
+      id: randomUUID(),
+      experiment_id: experimentId,
+      started_at: new Date(),
+      started_by: triggeredBy ?? null,
+      status: 'running',
+    })
+    .onConflict(['experiment_id'])
+    .ignore();
 
   logger.info('Experiment started successfully', {
     name: exp.name,
