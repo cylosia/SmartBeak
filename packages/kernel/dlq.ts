@@ -212,7 +212,19 @@ class InMemoryDLQStorage implements DLQStorage {
   if (!callback) {
     return false;
   }
-  await callback();
+  // P1-REJECT-FIX: Wrap callback in try-catch. If callback() rejects, the unhandled
+  // rejection previously escaped the retry() caller, bypassed the delete() cleanup,
+  // and left the DLQ entry permanently stuck in a "retrying" state with no log entry.
+  try {
+    await callback();
+  } catch (callbackError) {
+    logger.error(
+      'DLQ retry callback failed',
+      callbackError instanceof Error ? callbackError : new Error(String(callbackError)),
+      { id }
+    );
+    return false;
+  }
   await this.delete(id);
   return true;
   }
