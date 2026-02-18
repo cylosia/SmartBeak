@@ -263,6 +263,23 @@ export class CursorPaginator<T extends Record<string, unknown>> {
     // Validate table name before using in SQL
     validateTableName(table);
 
+    // P0-SECURITY FIX: Validate select columns to prevent SQL injection.
+    // select array is string-interpolated directly into SQL; must be an
+    // identifier-only allowlist before concatenation.
+    const VALID_IDENT_RE = /^[a-zA-Z_][a-zA-Z0-9_.]*$|^\*$/;
+    for (const col of select) {
+      if (!VALID_IDENT_RE.test(col)) {
+        throw new Error(`Invalid column name in select: "${col}". Only alphanumeric identifiers and * are allowed.`);
+      }
+    }
+
+    // P0-SECURITY FIX: Validate the where string only contains safe characters.
+    // Reject any string containing SQL string delimiters or semicolons to prevent
+    // injection via the caller-supplied where predicate.
+    if (where && /['"`;]/.test(where)) {
+      throw new Error('Invalid characters in where clause. Use parameterized $N placeholders only.');
+    }
+
     // Build WHERE clause with cursor
     let whereClause = where || '';
     const params: unknown[] = [...whereParams];

@@ -88,13 +88,16 @@ export class AnalyticsPipeline {
   }
 
   /**
-  * Stop the pipeline
+  * Stop the pipeline and flush all buffered data.
+  * P0-FIX: Changed to async and awaits flush() so buffered records are not
+  * lost on graceful shutdown (SIGTERM). The previous void flush() allowed
+  * the process to exit before the write completed, losing all buffered data.
   */
-  stop(): void {
+  async stop(): Promise<void> {
   if (this.flushTimer) {
     clearInterval(this.flushTimer);
   }
-  void this.flush();
+  await this.flush();
   }
 
   /**
@@ -377,8 +380,12 @@ export class AnalyticsPipeline {
   engagement: number;
   engagementRate: number;
   }>> {
+  // P0-FIX: Added platform to SELECT list — it was in GROUP BY but not SELECT,
+  // causing a PostgreSQL error "column must appear in the GROUP BY clause or
+  // aggregate function". The function always threw in production.
   const { rows } = await this.db.query(
     `SELECT
+    platform,
     SUM(impressions) as impressions,
     SUM(likes + comments + shares) as engagement,
     AVG(engagement_rate) as engagement_rate

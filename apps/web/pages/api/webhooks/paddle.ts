@@ -98,11 +98,12 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
   try {
     const redis = await getRedis();
     const key = `webhook:paddle:event:${eventId}`;
-    const exists = await redis.get(key);
-    if (exists) return true;
-
-    await redis.setex(key, EVENT_ID_TTL_SECONDS, '1');
-    return false;
+    // P0-FIX: Atomic SET NX replaces the previous non-atomic GET + SETEX pattern.
+    // Two concurrent Paddle webhook deliveries could both pass the GET check before
+    // either set the key, resulting in double billing events (double plan upgrades,
+    // duplicate audit entries). SET ... NX is a single atomic operation.
+    const result = await redis.set(key, '1', 'EX', EVENT_ID_TTL_SECONDS, 'NX');
+    return result === null; // null = key already existed = duplicate
   } catch (error) {
     logger.error('Redis unavailable for deduplication - failing closed', error instanceof Error ? error : undefined, { eventId });
     throw new Error('Deduplication service unavailable');
@@ -205,6 +206,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing org_id' });
   }
 
+  // P0-FIX: Cross-reference org_id with Paddle customer_id to prevent privilege
+  // escalation. org_id is attacker-controlled custom_data; without this check any
+  // Paddle account holder can upgrade any org by crafting a webhook with a spoofed
+  // org_id. Verify the org's stored paddle_customer_id matches this payload.
+  const paddleCustomerId = typeof payload['customer_id'] === 'string'
+    ? payload['customer_id']
+    : (payload['customer'] as { id?: string } | undefined)?.id;
+
+  if (paddleCustomerId) {
+    const { rows: orgRows } = await pool.query(
+      'SELECT 1 FROM orgs WHERE id = $1 AND paddle_customer_id = $2',
+      [orgId, paddleCustomerId],
+    );
+    if (orgRows.length === 0) {
+      logger.warn('org_id/paddle_customer_id mismatch — rejecting webhook', { orgId, paddleCustomerId });
+      return res.status(400).json({ error: 'org_id does not match Paddle customer record' });
+    }
+  }
+
   logger.info('Processing Paddle webhook event', { eventType, orgId, eventId });
 
   try {
@@ -241,6 +261,16 @@ async function handleSubscriptionChange(
   payload: Record<string, unknown>,
   eventId: string,
 ): Promise<void> {
+  // P1-FIX: For subscription.updated, only upgrade when status is 'active'.
+  // Previously any subscription.updated (pause, downgrade, failed payment)
+  // was treated identically to a new active subscription, always upgrading.
+  const subscriptionStatus = typeof payload['status'] === 'string' ? payload['status'] : null;
+  const isActive = eventType === 'subscription.created' || subscriptionStatus === 'active';
+  if (!isActive) {
+    logger.info('subscription.updated with non-active status — not upgrading', { orgId, status: subscriptionStatus });
+    return;
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

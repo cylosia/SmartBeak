@@ -44,12 +44,15 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
   try {
     const redis = await getRedis();
     const key = `webhook:paddle:event:${eventId}`;
-    const exists = await redis.get(key);
-    if (exists) return true;
-    
-    // Mark as processed with 24h TTL
-    await redis.setex(key, 86400, '1');
-    return false;
+    // P0-FIX: Atomic SET NX (set if not exists) replaces the previous non-atomic
+    // GET + SETEX pattern. Under concurrent delivery (Paddle retries on 5xx) two
+    // workers could both pass the GET check before either sets the key, causing
+    // double plan upgrades. SET NX is a single atomic Redis command: it sets the
+    // key and returns OK only if the key did not exist, null if it already existed.
+    const result = await redis.set(key, '1', 'EX', 86400, 'NX');
+    // result === null  → key already existed → duplicate event
+    // result === 'OK'  → key was freshly set → first time seeing this event
+    return result === null;
   } catch (error) {
     // P0-FIX: Fail CLOSED on Redis failure — match Stripe's behavior.
     // Previously failed open ("return false"), allowing duplicate processing of
@@ -147,12 +150,44 @@ export async function handlePaddleWebhook(
     throw new Error('Invalid payload: missing or invalid org_id');
   }
 
+  // P0-FIX: Cross-reference org_id with Paddle customer_id to prevent privilege
+  // escalation. org_id is attacker-controlled custom_data; without this check any
+  // Paddle account holder can upgrade any org by crafting a webhook with a spoofed
+  // org_id. We verify the org's stored paddle_customer_id matches the payload.
+  const paddleCustomerId = typeof payload['customer_id'] === 'string'
+    ? payload['customer_id']
+    : (payload['customer'] as { id?: string } | undefined)?.id;
+
+  if (paddleCustomerId) {
+    const db = await getDb();
+    const { rows: orgRows } = await db.raw(
+      'SELECT 1 FROM orgs WHERE id = ? AND paddle_customer_id = ?',
+      [org_id, paddleCustomerId]
+    );
+    if (!orgRows || orgRows.length === 0) {
+      logger.warn('org_id/paddle_customer_id mismatch — rejecting webhook', { orgId: org_id, paddleCustomerId });
+      throw new Error('org_id does not match Paddle customer record');
+    }
+  }
+
   logger.info('Processing event', { eventType: event_type, orgId: org_id });
 
   try {
   if (event_type === 'subscription.created' || event_type === 'subscription.updated') {
     if (payload['customer'] && typeof payload['customer'] !== 'object') {
       throw new Error('Invalid customer data in payload');
+    }
+
+    // P1-FIX: For subscription.updated, inspect the new status before upgrading.
+    // Previously all subscription.updated events were treated as upgrades.
+    // A subscription.updated event can also represent a pause, downgrade, or
+    // failed payment — in those cases we must not upgrade the org to pro.
+    const subscriptionStatus = typeof payload['status'] === 'string' ? payload['status'] : null;
+    const isActiveSubscription = event_type === 'subscription.created' || subscriptionStatus === 'active';
+
+    if (!isActiveSubscription) {
+      logger.info('subscription.updated with non-active status — not upgrading', { orgId: org_id, status: subscriptionStatus });
+      return;
     }
 
     const db = await getDb();

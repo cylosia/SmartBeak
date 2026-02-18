@@ -5,8 +5,10 @@ import { pool } from '../../../lib/db';
 import { rateLimit } from '../../../lib/rate-limit';
 import { getStripe, validateStripeConfig } from '../../../lib/stripe';
 import { getLogger } from '@kernel/logger';
-// import { sanitizeForLogging } from '@security/logger';
-const sanitizeForLogging = (obj: unknown): unknown => obj;
+// P1-FIX: Restore real sanitizeForLogging import. The stub (identity function)
+// was left in place causing Stripe error messages (which can contain PII,
+// card fragments, or internal IDs) to be written to logs unsanitized.
+import { sanitizeForLogging } from '@security/logger';
 
 const logger = getLogger('StripePortal');
 
@@ -158,12 +160,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const stripeClient = getStripe();
-    
+
+    // P1-FIX: Validate returnUrl against allowed origins to prevent open redirect.
+    // Without this check an attacker can POST {returnUrl:'https://attacker.com/phish'}
+    // and the user is redirected there after interacting with the Stripe portal.
+    const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
+    const validOrigins = [appUrl, origin].filter((o): o is string => Boolean(o));
+    const safeReturnUrl = returnUrl && validOrigins.some(o => (returnUrl as string).startsWith(o))
+      ? (returnUrl as string)
+      : `${origin}/billing`;
+
     // SECURITY FIX: Issue 17 - Add timeout to Stripe API call
     const portal = await Promise.race([
       stripeClient.billingPortal.sessions.create({
         customer: stripeCustomerId,
-        return_url: returnUrl || `${origin}/billing`,
+        return_url: safeReturnUrl,
       }),
       new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Stripe API timeout')), 30000)
@@ -185,7 +196,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       'billing.stripe.com',
       'dashboard.stripe.com',
     ];
-    if (!allowedDomains.some(domain => portalUrl.hostname.endsWith(domain))) {
+    // P2-FIX: Use exact match or dot-prefixed suffix to prevent bypass via
+    // 'evilstripe.com' which would pass a plain endsWith('stripe.com') check.
+    if (!allowedDomains.some(domain => portalUrl.hostname === domain || portalUrl.hostname.endsWith('.' + domain))) {
       return res.status(400).json({ 
         error: 'Bad Request',
         code: 'INVALID_PORTAL_DOMAIN',

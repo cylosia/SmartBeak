@@ -38,28 +38,48 @@ export interface PaddleSubscription {
 }
 
 /**
-* Validate Paddle webhook signature
-
-*/
+ * @deprecated UNSAFE — signs a re-serialized JS object, not the raw HTTP body.
+ * Paddle signs the exact bytes it transmitted. Re-serializing a parsed object
+ * changes key ordering (V8 insertion order ≠ JSON wire order), allowing forgery.
+ * Use validatePaddleWebhookRaw() for all new callers.
+ *
+ * This function is kept only to avoid breaking existing callers during the
+ * migration, but MUST NOT be used for any security-sensitive check.
+ */
 export function validatePaddleWebhook(
-  payload: PaddleWebhookPayload,
-  signature: string,
-  secret: string
+  _payload: PaddleWebhookPayload,
+  _signature: string,
+  _secret: string
 ): boolean {
-  // Create signature from payload
-  const payloadString = JSON.stringify(payload);
-  const expectedSignature = crypto
-  .createHmac('sha256', secret)
-  .update(payloadString)
-  .digest('hex');
+  // P0-FIX: Unconditionally return false so any remaining callers fail closed
+  // instead of accepting forged signatures. The correct implementation is
+  // validatePaddleWebhookRaw() which operates on the raw request body buffer.
+  throw new Error(
+    'validatePaddleWebhook is unsafe and has been disabled. ' +
+    'Use validatePaddleWebhookRaw(rawBody, signature, secret) instead.'
+  );
+}
 
-  // Timing-safe comparison
+/**
+ * Validate Paddle webhook signature using the raw HTTP request body.
+ * This is the only correct implementation — Paddle signs the exact bytes
+ * it transmits; re-serializing the parsed object changes key ordering.
+ *
+ * @param rawBody - Raw request body Buffer (NOT parsed JSON)
+ * @param signature - h1 value from Paddle-Signature header
+ * @param secret - Webhook secret from Paddle dashboard
+ */
+export function validatePaddleWebhookRaw(rawBody: Buffer, signature: string, secret: string): boolean {
+  const hash = crypto
+    .createHmac('sha256', secret)
+    .update(rawBody)
+    .digest('hex');
   try {
-  const sigBuf = Buffer.from(signature, 'utf8');
-  const expectedBuf = Buffer.from(expectedSignature, 'utf8');
-  return sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const hashBuf = Buffer.from(hash, 'utf8');
+    return sigBuf.length === hashBuf.length && crypto.timingSafeEqual(sigBuf, hashBuf);
   } catch {
-  return false;
+    return false;
   }
 }
 

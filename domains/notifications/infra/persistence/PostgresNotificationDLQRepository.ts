@@ -90,28 +90,39 @@ export class PostgresNotificationDLQRepository {
   }
 
   /**
-  * Delete DLQ entry by ID
+  * Delete DLQ entry by ID, scoped to the caller's org.
+  * P0-FIX: Added orgId — without it any caller could delete any org's DLQ
+  * entries, destroying compliance/audit records across tenants.
   */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, orgId: string): Promise<void> {
   if (!id || typeof id !== 'string') {
     throw new Error('id must be a non-empty string');
   }
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId must be a non-empty string');
+  }
   try {
     await this.pool.query(
-    'DELETE FROM notification_dlq WHERE id = $1',
-    [id]
+    `DELETE FROM notification_dlq
+    WHERE id = $1
+    AND notification_id IN (
+      SELECT id FROM notifications WHERE org_id = $2
+    )`,
+    [id, orgId]
     );
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error('Failed to delete DLQ entry', err, { id });
+    logger.error('Failed to delete DLQ entry', err, { id, orgId });
     throw error;
   }
   }
 
   /**
-  * Get DLQ entry by ID
+  * Get DLQ entry by ID, scoped to the caller's org.
+  * P0-FIX: Added orgId — without it any caller could read any org's DLQ
+  * entries (cross-tenant notification failure data leak).
   */
-  async getById(id: string): Promise<{
+  async getById(id: string, orgId: string): Promise<{
   id: string;
   notificationId: string;
   channel: string;
@@ -121,12 +132,16 @@ export class PostgresNotificationDLQRepository {
   if (!id || typeof id !== 'string') {
     throw new Error('id must be a non-empty string');
   }
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId must be a non-empty string');
+  }
   try {
     const { rows } = await this.pool.query(
-    `SELECT id, notification_id, channel, reason, created_at
-    FROM notification_dlq
-    WHERE id = $1`,
-    [id]
+    `SELECT d.id, d.notification_id, d.channel, d.reason, d.created_at
+    FROM notification_dlq d
+    JOIN notifications n ON d.notification_id = n.id
+    WHERE d.id = $1 AND n.org_id = $2`,
+    [id, orgId]
     );
 
     if (!rows[0]) return null;
@@ -140,7 +155,7 @@ export class PostgresNotificationDLQRepository {
     };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger.error('Failed to get DLQ entry by ID', err, { id });
+    logger.error('Failed to get DLQ entry by ID', err, { id, orgId });
     throw error;
   }
   }

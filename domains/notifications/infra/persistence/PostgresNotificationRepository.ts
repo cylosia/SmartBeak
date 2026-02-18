@@ -175,12 +175,15 @@ export class PostgresNotificationRepository implements NotificationRepository {
 
   try {
     const queryable = this.getQueryable(client);
+    // P0-FIX: FOR UPDATE SKIP LOCKED prevents concurrent workers from claiming
+    // the same notification row, which would cause duplicate deliveries.
     const { rows } = await queryable.query(
     `SELECT id, org_id, user_id, channel, template, payload, status
     FROM notifications
     WHERE status IN ('pending', 'failed')
     ORDER BY created_at ASC
-    LIMIT $1 OFFSET $2`,
+    LIMIT $1 OFFSET $2
+    FOR UPDATE SKIP LOCKED`,
     [safeLimit, safeOffset]
     );
 

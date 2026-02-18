@@ -184,6 +184,9 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
 
   try {
     const queryable = this.getQueryable(client);
+    // P0-FIX: FOR UPDATE SKIP LOCKED prevents multiple workers from fetching
+    // the same rows simultaneously, which would cause duplicate publishes.
+    // Requires a transaction context (client parameter) to be meaningful.
     const { rows } = await queryable.query(
     `SELECT
     id, domain_id, content_id, target_id, status,
@@ -191,7 +194,8 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
     FROM publishing_jobs
     WHERE status IN ('pending', 'failed')
     ORDER BY attempt_count ASC, id ASC
-    LIMIT $1`,
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED`,
     [safeLimit]
     );
 

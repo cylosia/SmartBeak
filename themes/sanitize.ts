@@ -50,19 +50,29 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
     FORBID_DATA_URI: true,
   };
 
-  // P0-FIX (P0-7): Add rel="noopener noreferrer" to all target="_blank" links
-  // to prevent tabnabbing attacks where the opened page gains window.opener
-  // access and can redirect the original tab to a phishing page.
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
-      node.setAttribute('rel', 'noopener noreferrer');
+  const sanitized = DOMPurify.sanitize(html, config);
+
+  // P0-FIX: Replace addHook/removeAllHooks with post-processing string manipulation.
+  // Under concurrent SSR (Next.js App Router renders requests in parallel), using
+  // DOMPurify.addHook() mutates the global singleton and removeAllHooks() removes
+  // hooks belonging to other concurrent requests, causing intermittent tabnapping
+  // vulnerability. Post-processing the sanitized string is thread-safe.
+  //
+  // After DOMPurify sanitization the only remaining <a ...> tags are safe;
+  // we add rel="noopener noreferrer" to any that have target="_blank".
+  const result = sanitized.replace(
+    /(<a\b[^>]*)\btarget=["']_blank["']([^>]*>)/gi,
+    (_match, before, after) => {
+      // If rel is already present, augment it; otherwise add it.
+      if (/\brel=/i.test(before) || /\brel=/i.test(after)) {
+        return `${before}target="_blank"${after}`.replace(
+          /\brel=(["'])(.*?)\1/i,
+          (_r, q, v) => `rel=${q}${v.includes('noopener') ? v : `${v} noopener noreferrer`.trim()}${q}`
+        );
+      }
+      return `${before}target="_blank" rel="noopener noreferrer"${after}`;
     }
-  });
-
-  const result = DOMPurify.sanitize(html, config);
-
-  // Remove the hook after use to prevent accumulation across calls
-  DOMPurify.removeAllHooks();
+  );
 
   return result;
 }

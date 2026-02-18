@@ -57,8 +57,12 @@ export class PublishingPreviewService {
     [contentId]
   );
 
+  // P0-FIX: Scope media_assets to this content to prevent cross-tenant image URL
+  // leakage. Without a content_id filter every preview returned the most recently
+  // uploaded asset from any organisation in the system.
   const media = await this.pool.query(
-    'SELECT url FROM media_assets WHERE status=\'uploaded\' ORDER BY created_at DESC LIMIT 1'
+    "SELECT url FROM media_assets WHERE content_id = $1 AND status = 'uploaded' ORDER BY created_at DESC LIMIT 1",
+    [contentId]
   );
 
   const post = renderFacebookPost({

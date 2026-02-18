@@ -118,12 +118,15 @@ export class PostgresIndexingJobRepository implements IndexingJobRepository {
 
   const queryable = this.getQueryable(client);
   try {
+    // P0-FIX: FOR UPDATE SKIP LOCKED prevents concurrent workers from picking
+    // the same indexing job, which would cause duplicate search index writes.
     const { rows } = await queryable.query(
     `SELECT id, index_id, content_id, action, status, attempt_count
     FROM indexing_jobs
     WHERE status IN ('pending', 'failed')
     ORDER BY created_at ASC
-    LIMIT $1`,
+    LIMIT $1
+    FOR UPDATE SKIP LOCKED`,
     [safeLimit]
     );
 
