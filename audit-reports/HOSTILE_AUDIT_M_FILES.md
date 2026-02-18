@@ -504,12 +504,89 @@ The codebase upgraded to `@clerk/nextjs ^6.0.0` but never migrated the middlewar
 
 ---
 
+## TEST AUDIT FINDINGS (Agent-Verified)
+
+The following findings are from exhaustive analysis of 6 test files. The test suite
+has systemic issues that undermine all security assurance claims.
+
+### T-P0-1: Multi-Tenant SQL Injection Test is a FALSE POSITIVE
+- **File**: `apps/api/tests/integration/multi-tenant.test.ts:145-160`
+- **Category**: Test Correctness
+- **Violation**: The SQL injection test mocks `mockClient.query` to return `{ rows: [] }` **regardless of input**. It then asserts `rows.length === 0`, which always passes. The test would pass even if production code used raw string interpolation. It never exercises a real parameterized query parser.
+- **Fix**: Assert that `mockClient.query` was called with parameterized form `$1` and the malicious string as a parameter, NOT interpolated into SQL. Or use a real test database.
+- **Risk**: **SQL injection vulnerabilities in tenant isolation are invisible to CI.** A developer could switch to string concatenation and this test still passes.
+
+### T-P0-2: IDOR Tests Test Ad-Hoc Inline Code, Not Real Authorization
+- **File**: `apps/api/tests/integration/multi-tenant.test.ts:282-310`
+- **Category**: Test Correctness
+- **Violation**: The "Cross-Tenant Access Prevention" tests implement authorization logic **inline inside the test** (`const isAuthorized = userContext.orgId === requestedTenantId`). This does NOT test any actual middleware, route guard, or auth function from the codebase. The test literally asserts on its own implementation.
+- **Fix**: Import and test the actual authorization middleware from the codebase. Test that an authenticated request to Tenant A's resources using Tenant B's credentials returns 403/404.
+- **Risk**: **Zero real authorization code is tested.** Cross-tenant IDOR could exist in every route handler.
+
+### T-P0-3: Broken Variable Reference in Cache Memory Test
+- **File**: `packages/cache/__tests__/multiTierCache.memory.test.ts:97-98`
+- **Category**: Test Correctness
+- **Violation**: Line 97 declares `const _stats = ...` (prefixed underscore, intentionally unused) but line 98 references `stats.inFlightTimeouts` -- a different variable. Either this reads from an outer scope's `stats` (testing the wrong thing) or throws ReferenceError (masking the test as a crash, not a failure).
+- **Fix**: Change `const _stats` to `const stats` on line 97.
+- **Risk**: Timeout behavior of in-flight request cleanup is completely untested.
+
+### T-P1-1: `jest.advanceTimersByTime` Without `jest.useFakeTimers` (2 Files)
+- **Files**: `multiTierCache.memory.test.ts:131`, `metrics-collector.memory.test.ts:120`
+- **Category**: Test Correctness
+- **Violation**: Both files call `jest.advanceTimersByTime()` without ever calling `jest.useFakeTimers()`. Without fake timers, `advanceTimersByTime` is a no-op. The cleanup and retention tests provide zero coverage.
+- **Fix**: Add `jest.useFakeTimers()` in `beforeEach` and `jest.useRealTimers()` in `afterEach`.
+- **Risk**: Memory leak prevention (stale in-flight requests, metric retention) is completely untested.
+
+### T-P1-2: Missing Test: Forged JWT Token with Wrong Signing Key
+- **File**: `multi-tenant.test.ts:240-278` (absent)
+- **Category**: Security Test Gap
+- **Violation**: No test verifies that `getAuthContext` rejects tokens signed with an unknown/attacker key. A forged token with `orgId: "tenant-victim"` signed with an attacker key should be rejected.
+- **Fix**: Add test: `jwt.sign({sub: 'attacker', orgId: 'victim'}, 'wrong-key') -> expect null`.
+- **Risk**: Token forgery attacks against tenant isolation are untested.
+
+### T-P1-3: `reconstitute()` Bypasses All Validation -- Untested
+- **File**: `domains/media/domain/media.test.ts` (absent)
+- **Category**: Security Test Gap
+- **Violation**: `MediaAsset.reconstitute()` calls the private constructor **without any validation**. `reconstitute('', '', '', 'uploaded')` creates an invalid entity. The `reconstitute` path is completely untested.
+- **Fix**: Add validation to `reconstitute()` and test it, or document it as trusted-only with tests proving repository code doesn't pass invalid data.
+- **Risk**: If an attacker can influence persisted data (via SQL injection elsewhere), `reconstitute()` creates invalid domain objects that bypass all business rules.
+
+### T-P1-4: Circuit Breaker Half-Open Recovery Path Untested
+- **File**: `moduleCache.circuit-breaker.test.ts` (absent)
+- **Category**: Coverage Gap
+- **Violation**: Source configures `halfOpenMaxCalls: 3` and `resetTimeoutMs: 30000`. No test verifies the half-open state transition or circuit recovery. After tripping, the circuit may never recover.
+- **Fix**: Add test that trips circuit, advances time past resetTimeout, verifies exactly 3 test calls allowed, tests both recovery and re-trip paths.
+- **Risk**: Circuit breaker permanently disables module loading after transient failures.
+
+### T-P1-5: `persistMetrics()` SQL Construction Untested for Injection
+- **File**: `metrics-collector.memory.test.ts` (absent)
+- **Category**: Security Test Gap
+- **Violation**: `persistMetrics()` builds dynamic SQL with `VALUES ${values}`. No test verifies metric names containing SQL metacharacters (`'); DROP TABLE metrics;--`) are handled safely.
+- **Fix**: Add test with adversarial metric names and verify parameterized query execution.
+- **Risk**: SQL injection via crafted metric names when metrics are persisted to database.
+
+### T-P2-1: In-Flight Limit Test is Timing-Dependent (Flaky)
+- **File**: `multiTierCache.memory.test.ts:28-55`
+- **Category**: Race Condition
+- **Violation**: Creates 1100 concurrent promises with 100ms delays, then checks if slot 1101 is rejected. On fast machines, early promises may complete before 1101 is attempted, making the test flaky.
+- **Fix**: Use never-resolving promises: `() => new Promise(() => {})`.
+
+### T-P2-2: Label Collision in Metric Key Generation Untested
+- **File**: `metrics-collector.memory.test.ts` (absent)
+- **Category**: Security Test Gap
+- **Violation**: Key generation creates `name{key1=val1,key2=val2}`. Labels containing `=`, `,`, `{`, `}` cause key collisions that merge data from different label sets, corrupting financial metrics.
+
+---
+
 ## Final Totals
 
 | Severity | Count | Key Issues |
 |----------|-------|-----------|
-| **P0 Critical** | 5 | Clerk auth broken, membership table split, metrics exposed, role errors masked, batch overflow |
-| **P1 High** | 12 | Client-controlled UUID, role-less auth check, pool mismatch, race conditions, open redirect, memory leaks, lock ineffective |
-| **P2 Medium** | 19 | Zod .strict() missing, branded types, CSP nonce propagation, CSRF gap, dead code, no-op metrics flush, pagination fiction |
+| **P0 Critical** | 8 | Clerk auth broken, membership table split, metrics exposed, role errors masked, batch overflow, SQL injection test false positive, IDOR tests test nothing, broken test variable |
+| **P1 High** | 17 | Client-controlled UUID, role-less auth check, pool mismatch, race conditions, open redirect, memory leaks, lock ineffective, fake timers never enabled, forged JWT untested, reconstitute bypasses validation, circuit breaker recovery untested, SQL injection in persist untested |
+| **P2 Medium** | 21 | Zod .strict() missing, branded types, CSP nonce propagation, CSRF gap, dead code, no-op metrics flush, pagination fiction, timing-dependent tests, label collision untested |
 | **P3 Low** | 5 | Type complexity, any cast, handler mutation, log duplication, missing updated_at |
-| **Total** | **41** | |
+| **Total** | **51** | |
+
+### SYSTEMIC RISK ASSESSMENT
+The multi-tenant test suite (`multi-tenant.test.ts`) provides **zero real security coverage**. Every test either tests mock behavior (circular logic), tests ad-hoc inline code (not real middleware), or uses false-positive assertions that pass regardless of production behavior. For financial-grade software, this is a test infrastructure failure that means **no CI pipeline can catch cross-tenant data leakage**.
