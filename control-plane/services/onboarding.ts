@@ -2,6 +2,9 @@
 // Valid onboarding steps
 import { Pool, PoolClient } from 'pg';
 import { ValidationError, ErrorCodes } from '@errors';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('OnboardingService');
 
 const VALID_STEPS = ['profile', 'billing', 'team'] as const;
 export type OnboardingStep = typeof VALID_STEPS[number];
@@ -92,9 +95,23 @@ export class OnboardingService {
   // ran on separate pool connections with no ordering guarantee, and the
   // auto-complete UPDATE ran outside any transaction, making the read-modify-write
   // sequence vulnerable to TOCTOU races under concurrent requests.
+  //
+  // FIX (ON-3): Use REPEATABLE READ isolation.  The default READ COMMITTED level
+  // allows another transaction to modify the row between our SELECT (line ~109)
+  // and our conditional UPDATE (line ~126), creating a TOCTOU window where the
+  // allStepsDone check could be evaluated against a stale snapshot.  With
+  // REPEATABLE READ, all reads within the transaction see a consistent snapshot
+  // taken at BEGIN, eliminating the window.  If a concurrent transaction commits
+  // a conflicting write before we COMMIT, PostgreSQL raises a serialization error
+  // that the caller can handle (retry or surface to the user).
   const client: PoolClient = await this.pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+    // FIX (ON-4): Set per-statement and lock-acquisition timeouts so the
+    // transaction cannot hold a connection indefinitely under slow queries or
+    // lock contention, which would exhaust the connection pool.
+    await client.query('SET LOCAL statement_timeout = 5000');
+    await client.query('SET LOCAL lock_timeout = 2000');
 
     // Ensure the row exists (idempotent)
     await client.query(
@@ -139,9 +156,14 @@ export class OnboardingService {
     await client.query('ROLLBACK').catch((rbErr: unknown) => {
       // Log rollback failures but re-throw the original error so callers see
       // the root cause, not the rollback error.
-      const msg = rbErr instanceof Error ? rbErr.message : String(rbErr);
-      // eslint-disable-next-line no-console -- fallback before logger is available
-      console.error('OnboardingService.get ROLLBACK failed:', msg);
+      // FIX (ON-5): Use structured logger instead of console.error.
+      // console.* bypasses log aggregation, OpenTelemetry context propagation,
+      // and the logger's automatic PII redaction, violating the "Never use
+      // console.log" rule in CLAUDE.md.
+      logger.error('OnboardingService.get: ROLLBACK failed', {
+        orgId,
+        rbError: rbErr instanceof Error ? rbErr.message : String(rbErr),
+      });
     });
     throw err;
   } finally {

@@ -29,26 +29,54 @@ const MAX_EVENT_NAME_LENGTH = 255;
  * JSON replacer that converts BigInt values to strings so that
  * JSON.stringify never throws "TypeError: Do not know how to serialize a BigInt".
  *
- * FIX (OW-1 / DB-01): Also detects circular references using a WeakSet.
- * Previously JSON.stringify would throw "TypeError: Converting circular structure
- * to JSON" even with a replacer, if the object graph contained a cycle.  A
- * circular payload or meta object would cause writeToOutbox to throw inside the
- * business transaction, rolling it back and losing the domain state change.
+ * FIX (OW-1 / DB-01): Detects circular references using an ancestor-path stack
+ * rather than a WeakSet.
+ *
+ * WHY NOT WeakSet: A WeakSet-based approach marks every object as "seen" when
+ * first visited and never removes it.  This causes false positives for non-circular
+ * shared references — i.e. the same object appearing at two different positions in
+ * the JSON tree — because the second occurrence is incorrectly returned as
+ * '[Circular]', silently corrupting event payloads.
+ *
+ * HOW THE ANCESTOR-PATH ALGORITHM WORKS:
+ *   JSON.stringify's replacer is invoked with `this` = the containing object/array.
+ *   We maintain an `ancestors` array that represents the path from the root to the
+ *   node currently being processed.  When the replacer is called:
+ *     1. We find where the current `this` (parent) lives in `ancestors` and trim
+ *        everything after it — this rewinds the stack when JSON.stringify backtracks
+ *        up the tree (e.g. after finishing all properties of a sibling subtree).
+ *     2. We check whether `v` is already present in `ancestors` (true cycle).
+ *     3. If so, we return '[Circular]'; otherwise we push `v` and continue.
+ *
+ *   Because we trim on backtrack, shared non-circular references do NOT trigger
+ *   '[Circular]', which was the bug in the previous WeakSet implementation.
  *
  * Callers that need to reconstruct BigInt on the consumer side should document
  * which payload fields carry BigInt semantics.
  */
 function safeStringify(value: unknown): string {
-  const seen = new WeakSet<object>();
-  return JSON.stringify(value, function (_key, v) {
+  const ancestors: object[] = [];
+  return JSON.stringify(value, function (this: object, _key: string, v: unknown): unknown {
     // Handle BigInt
     if (typeof v === 'bigint') return v.toString();
-    // Detect circular references
+
     if (typeof v === 'object' && v !== null) {
-      if (seen.has(v)) {
+      // `this` is the parent object/array containing the current key.
+      // Trim the ancestors stack back to the current parent — this rewinds the
+      // stack correctly when JSON.stringify backtracks up the object tree after
+      // finishing a subtree, preventing false-positive cycle detection for shared
+      // (non-circular) object references.
+      const parentIdx = ancestors.lastIndexOf(this);
+      if (parentIdx >= 0) {
+        ancestors.length = parentIdx + 1;
+      }
+
+      // True cycle: `v` is already in the ancestor chain leading to `this`.
+      if (ancestors.indexOf(v as object) >= 0) {
         return '[Circular]';
       }
-      seen.add(v);
+
+      ancestors.push(v as object);
     }
     return v;
   });
@@ -79,6 +107,15 @@ function validateEvent(event: DomainEventEnvelope<string, unknown>): void {
   // validation (e.g. someString as IsoDateString) before they corrupt the table.
   if (!event.occurredAt || isNaN(new Date(event.occurredAt).getTime())) {
     throw new Error(`writeToOutbox: event.occurredAt is not a valid ISO date string: "${String(event.occurredAt)}"`);
+  }
+  // FIX (OW-4): Validate that payload is not undefined.
+  // DomainEventEnvelope<TName, TPayload> instantiates TPayload as `unknown`, which
+  // includes `undefined`.  JSON.stringify(undefined) returns JavaScript `undefined`
+  // (not the string "undefined"), which node-postgres binds as SQL NULL, violating
+  // the NOT NULL constraint on event_outbox.payload and causing an opaque DB error
+  // rather than a clear application error.  Fail fast with a descriptive message.
+  if (event.payload === undefined) {
+    throw new Error('writeToOutbox: event.payload must not be undefined; use null for intentionally absent payloads');
   }
 }
 
