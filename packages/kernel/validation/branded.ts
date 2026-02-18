@@ -117,6 +117,8 @@ export type SubscriptionId = Branded<string, 'SubscriptionId'>;
 export type AffiliateId = Branded<string, 'AffiliateId'>;
 /** Commission ID branded type */
 export type CommissionId = Branded<string, 'CommissionId'>;
+/** Keyword ID branded type */
+export type KeywordId = Branded<string, 'KeywordId'>;
 
 // ============================================================================
 // Branded Type Factory Functions
@@ -606,6 +608,14 @@ export function createCommissionId(id: string): CommissionId {
     throw new ValidationError(`Invalid CommissionId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
   }
   return id as CommissionId;
+}
+
+/** Factory function for KeywordId */
+export function createKeywordId(id: string): KeywordId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid KeywordId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as KeywordId;
 }
 
 /** Factory function for EmailSubscriberId */

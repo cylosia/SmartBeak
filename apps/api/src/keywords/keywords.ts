@@ -1,13 +1,13 @@
 
 import { getDb } from '../db';
-import type { DomainId } from '@kernel/branded';
+import type { DomainId, KeywordId } from '@kernel/branded';
 import { ValidationError, ErrorCodes } from '@errors';
 
 /**
  * Keyword row returned from the database
  */
 export interface KeywordRow {
-  id: string;
+  id: KeywordId;
   domain_id: DomainId;
   phrase: string;
   normalized_phrase: string;
@@ -59,8 +59,10 @@ export async function keywordCoverageForDomain(domainId: DomainId): Promise<Keyw
  * FIX P2-06: NFC normalization ensures that visually identical characters with
  * different Unicode representations (e.g. NFC vs NFD accents) produce the same
  * normalized_phrase, preventing duplicate keywords from bypassing the unique index.
+ * FIX: Use locale-pinned toLocaleLowerCase('en-US') to prevent Turkish-I and similar
+ * locale-dependent case-folding issues that would break the unique index in non-en envs.
  */
-const normalize = (s: string) => s.normalize('NFC').trim().toLowerCase();
+const normalize = (s: string) => s.normalize('NFC').trim().toLocaleLowerCase('en-US');
 
 /**
  * Maximum allowed phrase length (characters). Enforced before normalization to
@@ -95,20 +97,23 @@ export async function upsertKeyword(input: {
 
   const db = getDb();
   const normalized_phrase = normalize(input['phrase']);
-  // FIX BUG-11: Typed the query builder with db<KeywordRow>(...) so that
-  // .returning() infers KeywordRow[] and rows[0] is KeywordRow | undefined
-  // without an unsafe cast. The previous `as KeywordRow | undefined` assertion
-  // was applied after indexing into an untyped array.
-  const rows = await db<KeywordRow>('keywords')
-  .insert({
-    domain_id: input['domain_id'],
-    phrase: input['phrase'],
+  // FIX: Use raw SQL upsert with COALESCE so that a caller omitting `source` or
+  // `intent` (undefined → NULL) does NOT overwrite an existing non-null value.
+  // Knex's .merge() with no args or a column list cannot express this without raw SQL.
+  const result = await db.raw<{ rows: KeywordRow[] }>(`
+    INSERT INTO keywords (domain_id, phrase, normalized_phrase, source, intent)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (domain_id, normalized_phrase) DO UPDATE SET
+      phrase     = EXCLUDED.phrase,
+      source     = COALESCE(EXCLUDED.source, keywords.source),
+      intent     = COALESCE(EXCLUDED.intent, keywords.intent)
+    RETURNING id, domain_id, phrase, normalized_phrase, source, intent, created_at
+  `, [
+    input['domain_id'],
+    input['phrase'],
     normalized_phrase,
-    source: input['source'],
-    intent: input['intent'],
-  })
-  .onConflict(['domain_id', 'normalized_phrase'])
-  .merge()
-  .returning(['id', 'domain_id', 'phrase', 'normalized_phrase', 'source', 'intent', 'created_at']);
-  return rows[0];
+    input['source'] ?? null,
+    input['intent'] ?? null,
+  ]);
+  return result.rows[0];
 }

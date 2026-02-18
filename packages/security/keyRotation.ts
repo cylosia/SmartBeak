@@ -42,12 +42,17 @@ function validateSecret(secret: string | undefined): string {
   if (weakPatterns.test(secret)) {
     throw new Error('KEY_ENCRYPTION_SECRET appears to be weak. Please use a cryptographically secure random value.');
   }
-  // FIX P2-02: Entropy check: require a minimum of 128 bits of effective entropy.
-  // For non-hex secrets we require ≥48 characters of high-variance input.
-  // For hex secrets (0-9a-f), each character carries 4 bits: 32 hex chars = 128 bits.
+  // FIX P2-02 / FIX: Entropy check.
+  // For hex secrets (0-9a-f) each char carries only 4 bits, so 32 chars = 128 bits.
+  // We require ≥64 hex chars (256 bits / 32 bytes) for AES-256-level key strength.
+  // The earlier length < 32 guard ensures non-hex paths already have ≥32 chars, but
+  // hex paths need double the character count for equivalent entropy.
   const isHex = /^[a-f0-9]+$/i.test(secret);
-  if (isHex && secret.length < 32) {
-    throw new Error('KEY_ENCRYPTION_SECRET hex value must be at least 32 characters (128 bits).');
+  if (isHex && secret.length < 64) {
+    throw new Error(
+      'KEY_ENCRYPTION_SECRET hex value must be at least 64 characters (256 bits / 32 bytes). ' +
+      'Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+    );
   }
   if (!isHex && secret.length < 48) {
     // Require more characters for non-hex to compensate for lower bits-per-char.
@@ -75,7 +80,9 @@ interface RotationStatusRow {
   status: string;
   rotated_at: Date;
   expires_at: Date;
-  days_until_expiry: number;
+  // FIX: EXTRACT(DAY FROM ...) returns NULL if expires_at is NULL; type must reflect that.
+  // The ?? 0 fallback in getRotationStatus handles the null case at runtime.
+  days_until_expiry: number | null;
 }
 
 export interface KeyRotationEvent {
@@ -301,14 +308,30 @@ export class KeyRotationManager extends EventEmitter {
       if (rows.length > 0 && rows[0]['salt']) {
         this.providerSalts.set(provider, Buffer.from(rows[0]['salt'], 'hex'));
       } else {
+        // FIX: Use DO NOTHING instead of DO UPDATE SET salt = EXCLUDED.salt.
+        // In a multi-instance deployment, concurrent inserts would race and the last
+        // writer would overwrite the first-written salt. Each instance would then
+        // derive a different encryption key, causing cross-instance decryption failures.
+        // DO NOTHING preserves the first-committed salt; after the insert we re-read
+        // to load whichever salt actually won the race.
         const salt = randomBytes(32);
-        this.providerSalts.set(provider, salt);
         await this.db.query(
           `INSERT INTO provider_key_metadata (provider, salt, created_at)
            VALUES ($1, $2, NOW())
-           ON CONFLICT (provider) DO UPDATE SET salt = EXCLUDED.salt`,
+           ON CONFLICT (provider) DO NOTHING`,
           [provider, salt.toString('hex')],
         );
+        // Re-read the authoritative salt from DB (may differ from the one we generated
+        // if another instance committed first).
+        const { rows: reread } = await this.db.query<{ salt: string }>(
+          'SELECT salt FROM provider_key_metadata WHERE provider = $1',
+          [provider],
+        );
+        const authoritativeSalt = reread[0]?.['salt'];
+        if (!authoritativeSalt) {
+          throw new Error(`Failed to persist or read salt for provider ${provider}`);
+        }
+        this.providerSalts.set(provider, Buffer.from(authoritativeSalt, 'hex'));
       }
     });
   }
@@ -381,11 +404,30 @@ export class KeyRotationManager extends EventEmitter {
         throw new Error(`Failed to generate new key for ${provider}`);
       }
       const newKeyId = this.hashKey(newKey);
+
+      // FIX: Save original in-memory state before mutating. If the DB write fails,
+      // the catch block restores these values so the in-memory map stays consistent
+      // with the database. Without this, a DB failure leaves the in-memory map
+      // claiming the new key is active while the DB still holds the old one.
+      const savedCurrentKey = config.currentKey;
+      const savedPreviousKey = config.previousKey;
+      const savedRotatedAt = config.rotatedAt;
+      const savedExpiresAt = config.expiresAt;
+
       config.previousKey = config.currentKey;
       config.currentKey = newKey;
       config.rotatedAt = new Date();
       config.expiresAt = new Date(Date.now() + config.rotationIntervalDays * 24 * 60 * 60 * 1000);
-      await this.updateKeyInDatabase(provider, newKey, config.previousKey);
+      try {
+        await this.updateKeyInDatabase(provider, newKey, config.previousKey);
+      } catch (dbErr) {
+        // Roll back in-memory state: DB write failed, so the old key is still active.
+        config.currentKey = savedCurrentKey;
+        config.previousKey = savedPreviousKey;
+        config.rotatedAt = savedRotatedAt;
+        config.expiresAt = savedExpiresAt;
+        throw dbErr;
+      }
       await this.scheduleInvalidation(provider, config.gracePeriodDays);
       const event: KeyRotationEvent = {
         provider,
@@ -478,12 +520,6 @@ export class KeyRotationManager extends EventEmitter {
           continue;
         }
 
-        // Update in-memory state before committing to DB.
-        const config = this.keys.get(candidate['provider']);
-        if (config) {
-          config.previousKey = undefined;
-        }
-
         // All DB writes go through the same client to avoid nested pool acquisition
         // inside an active transaction (root cause of the former BUG-06 deadlock).
         await client.query(
@@ -496,6 +532,16 @@ export class KeyRotationManager extends EventEmitter {
         );
 
         await client.query('COMMIT');
+
+        // FIX: Update in-memory state AFTER the DB COMMIT succeeds.
+        // The previous code updated in-memory BEFORE COMMIT, so if COMMIT failed
+        // (network drop, DB error), the in-memory map would say previousKey = undefined
+        // while the DB still had the old key — a divergence causing silent auth failures.
+        const config = this.keys.get(candidate['provider']);
+        if (config) {
+          config.previousKey = undefined;
+        }
+
         this.emit('oldKeyInvalidated', { provider: candidate['provider'] });
         logger.info(`[KeyRotation] Completed invalidation for ${candidate['provider']}`);
       } catch (error) {
@@ -511,7 +557,11 @@ export class KeyRotationManager extends EventEmitter {
           `[KeyRotation] Failed to invalidate old key for ${candidate['provider']}:`,
           error instanceof Error ? error : new Error(String(error)),
         );
-        this.emit('error', { phase: 'invalidation', provider: candidate['provider'], error });
+        // FIX: emit('error', ...) must receive an Error instance. Emitting a plain object
+        // bypasses the default error handler's `instanceof Error` check and can crash the
+        // process in Node.js (unhandled 'error' event with a non-Error value).
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        this.emit('error', new Error(`Invalidation failed for ${candidate['provider']}: ${errorMsg}`));
         await this.alertOnInvalidationFailure(candidate['provider'], error);
       } finally {
         client?.release();

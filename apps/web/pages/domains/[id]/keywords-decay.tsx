@@ -5,11 +5,14 @@ import { DomainTabs } from '../../../components/DomainTabs';
 // FIX BUG-12: Import UUID_RE from the shared utility instead of duplicating it.
 import { UUID_RE } from '../../../lib/uuid';
 import { getLogger } from '@kernel/logger';
+import type { DomainId } from '@kernel/branded';
+import { createDomainId } from '@kernel/branded';
 
 const logger = getLogger('keywords-decay-page');
 
 interface KeywordDecayProps {
-  domainId: string;
+  // FIX: Brand domainId so the type system enforces ownership-checked identity.
+  domainId: DomainId;
 }
 
 export default function KeywordDecay({ domainId }: KeywordDecayProps) {
@@ -40,8 +43,10 @@ export async function getServerSideProps({ params, req }: GetServerSidePropsCont
     if (!authCheck.authorized) {
       return authCheck.result;
     }
-    return { props: { domainId: id } };
+    return { props: { domainId: createDomainId(id) } };
   } catch (error) {
+    // Security: return notFound for auth/authorization errors to prevent domain enumeration.
+    // Infrastructure failures (DB down) are also masked here intentionally; monitor logs.
     logger.error('[keywords-decay] getServerSideProps error', error instanceof Error ? error : new Error(String(error)));
     return { notFound: true };
   }

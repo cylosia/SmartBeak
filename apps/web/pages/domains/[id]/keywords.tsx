@@ -5,11 +5,15 @@ import { DomainTabs } from '../../../components/DomainTabs';
 // FIX BUG-12: Import UUID_RE from the shared utility instead of duplicating it.
 import { UUID_RE } from '../../../lib/uuid';
 import { getLogger } from '@kernel/logger';
+import type { DomainId } from '@kernel/branded';
+import { createDomainId } from '@kernel/branded';
 
 const logger = getLogger('keywords-page');
 
 interface KeywordsProps {
-  domainId: string;
+  // FIX: Brand domainId so the type system enforces ownership-checked identity
+  // throughout the component tree and any future API calls.
+  domainId: DomainId;
 }
 
 export default function Keywords({ domainId }: KeywordsProps) {
@@ -21,7 +25,8 @@ export default function Keywords({ domainId }: KeywordsProps) {
       <section>
         <h3>Active Keywords</h3>
         <p>Keywords explicitly accepted for this domain.</p>
-        <button>Add keyword manually</button>
+        {/* FIX: type="button" prevents accidental form submission if ever wrapped in a <form> */}
+        <button type="button">Add keyword manually</button>
       </section>
 
       {/* FIX P2-11: Removed hardcoded placeholder <li>. Connect to real API data. */}
@@ -31,10 +36,10 @@ export default function Keywords({ domainId }: KeywordsProps) {
           Suggestions are imported automatically from external sources.
           No keyword becomes active without explicit acceptance.
         </p>
-        <button>Run ingestion</button>
+        <button type="button">Run ingestion</button>
         <p><em>No suggestions yet. Run ingestion to import keyword suggestions.</em></p>
-        <button>Accept</button>
-        <button>Reject</button>
+        <button type="button">Accept</button>
+        <button type="button">Reject</button>
       </section>
     </AppShell>
   );
@@ -54,8 +59,12 @@ export async function getServerSideProps({ params, req }: GetServerSidePropsCont
     if (!authCheck.authorized) {
       return authCheck.result;
     }
-    return { props: { domainId: id } };
+    // createDomainId validates UUID format (redundant here since UUID_RE already checked,
+    // but enforces the branded type contract for the component prop).
+    return { props: { domainId: createDomainId(id) } };
   } catch (error) {
+    // Security: return notFound for auth/authorization errors to prevent domain enumeration.
+    // Infrastructure failures (DB down) are also masked here intentionally; monitor logs.
     logger.error('[keywords] getServerSideProps error', error instanceof Error ? error : new Error(String(error)));
     return { notFound: true };
   }
