@@ -3,9 +3,10 @@ import { Pool } from 'pg';
 
 import { getLogger } from '@kernel/logger';
 import { PublishingPreviewService } from '../../services/publishing-preview';
+import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthContext, RoleAccessError } from '../../services/auth';
 import { errors } from '@errors/responses';
-import { ErrorCodes } from '@errors';
+import { ErrorCodes, NotFoundError } from '@errors';
 
 const logger = getLogger('publishing-preview');
 
@@ -56,6 +57,9 @@ export async function publishingPreviewRoutes(app: FastifyInstance, pool: Pool) 
 
   app.get('/publishing/preview/facebook', async (req, res) => {
   try {
+    // P1-FIX: Rate limit before auth to prevent DoS via 3 DB queries per request.
+    await rateLimit('publishing', 50);
+
     const { auth: ctx, query } = req as AuthenticatedRequest & { query: PreviewQueryParams };
     if (!ctx) {
     return errors.unauthorized(res);
@@ -76,6 +80,9 @@ export async function publishingPreviewRoutes(app: FastifyInstance, pool: Pool) 
   } catch (error) {
     if (error instanceof RoleAccessError) {
     return errors.forbidden(res);
+    }
+    if (error instanceof NotFoundError) {
+    return errors.notFound(res, 'Content');
     }
     logger.error('[publishing/preview] Route error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);

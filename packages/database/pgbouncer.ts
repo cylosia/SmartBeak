@@ -117,8 +117,11 @@ export async function transactionWithPgBouncer<T>(
   try {
     await client.query('BEGIN');
     
-    // P1-FIX: Set transaction timeout for PgBouncer compatibility
-    await client.query('SET LOCAL statement_timeout = \'30s\'');
+    // P3-FIX: Use numeric milliseconds format for statement_timeout.
+    // The string format '30s' is PgBouncer-specific and not guaranteed to work
+    // across all PostgreSQL versions. The numeric form (ms) is universally
+    // supported and consistent with other SET LOCAL timeout calls in this repo.
+    await client.query('SET LOCAL statement_timeout = 30000');
     
     const result = await fn(client);
     await client.query('COMMIT');

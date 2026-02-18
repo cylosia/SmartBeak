@@ -1,13 +1,12 @@
-
-
 import { getLogger } from '@kernel/logger';
+// P3-FIX: Restore real getOptionalEnv import. The inline stub bypassed any
+// validation logic that @config adds (e.g. allowed env var allow-listing,
+// test-environment overrides) and would silently diverge if @config's
+// implementation ever changes.
+import { getOptionalEnv } from '@config';
 
 const logger = getLogger('providers');
 
-// import { getOptionalEnv } from '@config';
-const getOptionalEnv = (key: string): string | undefined => {
-  return process.env[key];
-};
 
 /**
 * Third-party provider configuration

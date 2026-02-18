@@ -23,7 +23,11 @@ export type AuthenticatedRequest = FastifyRequest & {
   } | null | undefined;
 };
 
-export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
+// P3-FIX: Added explicit return type annotation. Without it, the TypeScript
+// compiler infers `Promise<void | FastifyReply>` which is non-obvious and
+// masks potential missing-return paths. Explicit `Promise<void>` is the
+// correct contract: all code paths resolve via res.send() / res.status().
+export async function portfolioRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
 
   // GET /portfolio/revenue-confidence - Get revenue confidence metrics
   app.get('/portfolio/revenue-confidence', async (req, res) => {

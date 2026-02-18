@@ -26,17 +26,49 @@ export interface PublishingJobResult {
   status: 'pending';
 }
 
+/** PostgreSQL serialization failure error code (SQLSTATE 40001) */
+const PG_SERIALIZATION_FAILURE = '40001';
+/** Maximum attempts when SERIALIZABLE isolation triggers a serialization conflict */
+const MAX_SERIALIZATION_RETRIES = 3;
+
 export class PublishingCreateJobService {
   constructor(private pool: Pool) {}
 
   /**
-  * Create a publishing job
-  * to prevent race conditions and ensure atomicity
+  * Create a publishing job with SERIALIZABLE isolation and automatic retry on
+  * serialization conflict (SQLSTATE 40001).
+  *
+  * P1-FIX: SERIALIZABLE transactions can fail under concurrent load with
+  * "ERROR: could not serialize access due to concurrent update" (40001).
+  * Without retry logic the caller receives a raw 500 error. PostgreSQL
+  * documentation explicitly recommends retrying on 40001 at the application
+  * layer. We retry up to MAX_SERIALIZATION_RETRIES times with a short jitter
+  * delay; all other errors are re-thrown immediately.
   *
   * @param input - Job creation input
   * @returns Promise resolving to job creation result
   */
   async createJob(input: PublishingJobInput): Promise<PublishingJobResult> {
+  for (let attempt = 1; attempt <= MAX_SERIALIZATION_RETRIES; attempt++) {
+    try {
+    return await this.attemptCreateJob(input);
+    } catch (error: unknown) {
+    const pgError = error as { code?: string };
+    if (pgError.code === PG_SERIALIZATION_FAILURE && attempt < MAX_SERIALIZATION_RETRIES) {
+      // Brief exponential back-off with jitter before retrying.
+      const delayMs = Math.floor(50 * Math.pow(2, attempt - 1) * (0.75 + Math.random() * 0.5));
+      logger.warn('Serialization conflict, retrying', { attempt, delayMs });
+      await new Promise<void>(resolve => setTimeout(resolve, delayMs));
+      continue;
+    }
+    throw error;
+    }
+  }
+  // Unreachable — loop always returns or throws.
+  throw new Error('createJob: exceeded retry limit');
+  }
+
+  private async attemptCreateJob(input: PublishingJobInput): Promise<PublishingJobResult> {
   const client = await this.pool.connect();
 
   try {

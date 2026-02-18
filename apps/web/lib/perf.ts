@@ -45,6 +45,15 @@ export function memoize<T extends (...args: any[]) => any>(fn: T, maxSize = 1000
 
   const res = fn(...args);
 
+  // P2-FIX: If the return value is a Promise, register a rejection handler so
+  // that when it rejects the stale entry is evicted immediately.  Without this,
+  // memoize would permanently cache a rejected Promise, causing every subsequent
+  // call with the same args to receive an already-rejected Promise — effectively
+  // making the function permanently broken for those arguments after one failure.
+  if (res instanceof Promise) {
+    res.then(undefined, () => { cache.delete(key); });
+  }
+
   // P1-FIX: Evict oldest entry if at capacity (LRU eviction)
   if (cache.size >= maxSize) {
     let oldestKey: string | undefined;

@@ -243,6 +243,10 @@ export class AnalyticsPipeline {
   this.isFlushing.social = true;
   const items = this.buffer.social.splice(0, this.batchSize);
   try {
+    // P2-FIX: Added ON CONFLICT DO NOTHING to match flushKeywords behaviour.
+    // Without this, if items are unshifted back to the buffer on error and then
+    // retried after a partial success, the batch INSERT would fail with a unique
+    // constraint violation, causing permanent data loss for the entire batch.
     await this.db.query(
     `INSERT INTO social_metrics (
     platform, content_id, post_id, impressions, clicks,
@@ -252,7 +256,8 @@ export class AnalyticsPipeline {
     $1::text[], $2::text[], $3::text[],
     $4::int[], $5::int[], $6::int[],
     $7::int[], $8::int[], $9::numeric[], $10::timestamp[]
-    )`,
+    )
+    ON CONFLICT (content_id, platform, post_id, timestamp) DO NOTHING`,
     [
     items.map(i => i.platform),
     items.map(i => i.contentId),
@@ -284,6 +289,8 @@ export class AnalyticsPipeline {
   this.isFlushing.content = true;
   const items = this.buffer.content.splice(0, this.batchSize);
   try {
+    // P2-FIX: Added ON CONFLICT DO NOTHING to match flushKeywords behaviour.
+    // Prevents unique constraint failures on retry after partial flush failure.
     await this.db.query(
     `INSERT INTO content_performance (
     content_id, domain_id, page_views, unique_visitors,
@@ -292,7 +299,8 @@ export class AnalyticsPipeline {
     SELECT * FROM UNNEST(
     $1::text[], $2::text[], $3::int[], $4::int[],
     $5::int[], $6::numeric[], $7::int[], $8::numeric[], $9::timestamp[]
-    )`,
+    )
+    ON CONFLICT (content_id, domain_id, timestamp) DO NOTHING`,
     [
     items.map(i => i.contentId),
     items.map(i => i.domainId),

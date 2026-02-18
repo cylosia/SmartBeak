@@ -108,8 +108,16 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
       }
       // Generate idempotency key if not provided
       const idempotencyKey = validated.idempotencyKey || crypto.randomUUID();
+      // P1-FIX: Validate orgId is present before using it for tenant isolation.
+      // The previous `as string` cast would silently pass undefined when an API
+      // token has no org scope, causing idempotency records to be inserted with
+      // org_id=undefined (stored as NULL), breaking tenant isolation entirely.
+      const rawOrgId = req.authContext['orgId'];
+      if (!rawOrgId || typeof rawOrgId !== 'string') {
+        return errors.badRequest(res, 'Organization ID is required', ErrorCodes.REQUIRED_FIELD);
+      }
+      const orgId: string = rawOrgId;
       // Check idempotency — pass orgId for tenant scoping (P0-FIX: IDOR prevention)
-      const orgId = req.authContext['orgId'] as string;
       const { isNew, existingResult } = await idempotencyService.checkOrCreate(idempotencyKey, 'publish_intent', validated, orgId);
       if (!isNew) {
         // Return cached result
@@ -156,7 +164,12 @@ export async function publishRoutes(app: FastifyInstance, pool: Pool) {
     try {
       const params = req.params as { id: string };
       const { id } = params;
-      const reqOrgId = req.authContext['orgId'] as string;
+      // P1-FIX: Validate orgId before using it as a query parameter.
+      const rawReqOrgId = req.authContext['orgId'];
+      if (!rawReqOrgId || typeof rawReqOrgId !== 'string') {
+        return errors.badRequest(res, 'Organization ID is required', ErrorCodes.REQUIRED_FIELD);
+      }
+      const reqOrgId: string = rawReqOrgId;
       // P0-FIX: Scope by org_id to prevent IDOR — without this any authenticated
       // user could read any organisation's publish intent by knowing its key.
       const { rows } = await pool.query(`SELECT key, status, result, error, created_at, completed_at

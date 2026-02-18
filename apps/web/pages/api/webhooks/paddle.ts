@@ -362,8 +362,11 @@ async function handleSubscriptionCancelled(
   try {
     await client.query('BEGIN');
 
+    // P2-FIX: Replace SELECT * with explicit column list to avoid fetching
+    // unnecessary data (including any future sensitive columns) and to make
+    // the query's intent clear to the optimizer and code reviewers.
     const { rows } = await client.query(
-      `SELECT * FROM paddle_subscriptions
+      `SELECT subscription_id, status FROM paddle_subscriptions
        WHERE org_id = $1
        AND status = 'active'
        AND subscription_id != $2
