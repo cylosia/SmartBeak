@@ -3,11 +3,20 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { ValidationError, NotFoundError, ForbiddenError, ErrorCodes } from '@errors';
 
 const logger = getLogger('membership-service');
 
 const VALID_ROLES = ['owner', 'admin', 'editor', 'viewer'] as const;
 export type Role = typeof VALID_ROLES[number];
+
+// P1-19 FIX: Role hierarchy for permission checks
+const ROLE_HIERARCHY: Record<Role, number> = {
+  owner: 4,
+  admin: 3,
+  editor: 2,
+  viewer: 1,
+};
 
 // Email validation — split into parts to avoid ReDoS from nested quantifiers
 const EMAIL_LOCAL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
@@ -35,174 +44,207 @@ export class MembershipService {
   constructor(private pool: Pool) {}
 
   /**
-  * Validate role is allowed
-  */
+   * Validate role is allowed
+   */
   private validateRole(role: string): asserts role is Role {
-  if (!VALID_ROLES.includes(role as Role)) {
-    throw new Error(`Invalid role: ${role}. Must be one of: ${VALID_ROLES.join(', ')}`);
-  }
+    if (!VALID_ROLES.includes(role as Role)) {
+      throw new ValidationError(`Invalid role: ${role}. Must be one of: ${VALID_ROLES.join(', ')}`, ErrorCodes['VALIDATION_ERROR']);
+    }
   }
 
   /**
-  * Validate email format
-  */
+   * Validate email format
+   */
   private validateEmail(email: string): void {
-  if (!email || typeof email !== 'string') {
-    throw new Error('Email is required');
-  }
-  if (!isValidEmailFormat(email)) {
-    throw new Error('Invalid email format');
-  }
+    if (!email || typeof email !== 'string') {
+      throw new ValidationError('Email is required', ErrorCodes['VALIDATION_ERROR']);
+    }
+    if (!isValidEmailFormat(email)) {
+      throw new ValidationError('Invalid email format', ErrorCodes['VALIDATION_ERROR']);
+    }
   }
 
   /**
-  * Check if member already exists in org
-  * Must be called within a transaction to prevent race conditions
-  */
+   * P2-20 FIX: Validate input strings at method entry
+   */
+  private validateId(value: string, name: string): void {
+    if (!value || typeof value !== 'string') {
+      throw new ValidationError(`Valid ${name} is required`, ErrorCodes['VALIDATION_ERROR']);
+    }
+  }
+
+  /**
+   * Check if member already exists in org
+   * Must be called within a transaction to prevent race conditions
+   */
   private async checkDuplicateMember(client: PoolClient, orgId: string, userId: string): Promise<void> {
-  // Use FOR UPDATE to lock the row and prevent concurrent inserts
-  const { rows } = await client.query(
-    'SELECT 1 FROM memberships WHERE user_id = $1 AND org_id = $2 FOR UPDATE',
-    [userId, orgId]
-  );
-  if (rows.length > 0) {
-    throw new Error('User is already a member of this organization');
-  }
-  }
-
-  async addMember(orgId: string, userId: string, role: Role): Promise<void> {
-  // Validate inputs
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('Valid userId is required');
-  }
-
-  const client = await this.pool.connect();
-
-  try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
-
-    // Check for duplicates inside transaction with row locking
-    // This prevents race conditions where two concurrent requests
-    // Could add the same member simultaneously
-    await this.checkDuplicateMember(client, orgId, userId);
-
-    await client.query(
-    'INSERT INTO memberships (user_id, org_id, role) VALUES ($1,$2,$3)',
-    [userId, orgId, role]
+    // Use FOR UPDATE to lock the row and prevent concurrent inserts
+    const { rows } = await client.query(
+      'SELECT 1 FROM memberships WHERE user_id = $1 AND org_id = $2 FOR UPDATE',
+      [userId, orgId]
     );
-
-    await client.query('COMMIT');
-    // P3-5 FIX: Call audit log after successful mutations
-    await this.auditLog('addMember', orgId, userId, { role });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+    if (rows.length > 0) {
+      throw new ValidationError('User is already a member of this organization', ErrorCodes['VALIDATION_ERROR']);
+    }
   }
 
-  async updateRole(orgId: string, userId: string, role: Role): Promise<void> {
-  // Validate inputs
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('Valid userId is required');
-  }
-
-  const client = await this.pool.connect();
-
-  try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
-
-    const result = await client.query(
-    'UPDATE memberships SET role=$3 WHERE user_id=$1 AND org_id=$2',
-    [userId, orgId, role]
+  /**
+   * P1-19 FIX: Check that the acting user has sufficient role to perform the action.
+   * An actor can only assign/modify roles at or below their own level.
+   */
+  private async checkActorPermission(client: PoolClient, orgId: string, actorUserId: string, targetRole: Role): Promise<void> {
+    const { rows } = await client.query(
+      'SELECT role FROM memberships WHERE user_id = $1 AND org_id = $2',
+      [actorUserId, orgId]
     );
+    if (rows.length === 0) {
+      throw new ForbiddenError('Actor is not a member of this organization');
+    }
+    const actorRole = rows[0]?.['role'] as Role;
+    const actorLevel = ROLE_HIERARCHY[actorRole] ?? 0;
+    const targetLevel = ROLE_HIERARCHY[targetRole] ?? 0;
+    if (targetLevel > actorLevel) {
+      throw new ForbiddenError(`Cannot assign role '${targetRole}' - insufficient permissions`);
+    }
+  }
 
-    if (result.rowCount === 0) {
-    throw new Error('Membership not found');
+  async addMember(orgId: string, userId: string, role: Role, actorUserId?: string): Promise<void> {
+    // P2-20 FIX: Validate inputs at method entry
+    this.validateId(orgId, 'orgId');
+    this.validateId(userId, 'userId');
+    this.validateRole(role);
+
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL statement_timeout = $1', [30000]);
+
+      // P1-19 FIX: Check actor has permission to assign this role
+      if (actorUserId) {
+        await this.checkActorPermission(client, orgId, actorUserId, role);
+      }
+
+      // Check for duplicates inside transaction with row locking
+      await this.checkDuplicateMember(client, orgId, userId);
+
+      await client.query(
+        'INSERT INTO memberships (user_id, org_id, role) VALUES ($1,$2,$3)',
+        [userId, orgId, role]
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
 
-    await client.query('COMMIT');
-    // P3-5 FIX: Call audit log after successful mutations
-    await this.auditLog('updateRole', orgId, userId, { role });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+    // P3-5 FIX: Audit log OUTSIDE transaction to prevent audit failure blocking mutation
+    await this.auditLog('addMember', orgId, userId, { role });
   }
+
+  async updateRole(orgId: string, userId: string, role: Role, actorUserId?: string): Promise<void> {
+    // P2-20 FIX: Validate inputs at method entry
+    this.validateId(orgId, 'orgId');
+    this.validateId(userId, 'userId');
+    this.validateRole(role);
+
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL statement_timeout = $1', [30000]);
+
+      // P1-19 FIX: Check actor has permission to assign this role
+      if (actorUserId) {
+        await this.checkActorPermission(client, orgId, actorUserId, role);
+      }
+
+      const result = await client.query(
+        'UPDATE memberships SET role=$3 WHERE user_id=$1 AND org_id=$2',
+        [userId, orgId, role]
+      );
+
+      if (result.rowCount === 0) {
+        throw new NotFoundError('Membership not found');
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    // P3-5 FIX: Audit log outside transaction
+    await this.auditLog('updateRole', orgId, userId, { role });
   }
 
   async removeMember(orgId: string, userId: string): Promise<void> {
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
-  if (!userId || typeof userId !== 'string') {
-    throw new Error('Valid userId is required');
-  }
+    this.validateId(orgId, 'orgId');
+    this.validateId(userId, 'userId');
 
-  const client = await this.pool.connect();
+    const client = await this.pool.connect();
 
-  try {
-    await client.query('BEGIN');
-    await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-    // Prevent removing the last owner
-    const { rows } = await client.query(
-    'SELECT role FROM memberships WHERE user_id = $1 AND org_id = $2',
-    [userId, orgId]
-    );
+      // P1-4 FIX: Lock the row with FOR UPDATE to prevent TOCTOU race
+      const { rows } = await client.query(
+        'SELECT role FROM memberships WHERE user_id = $1 AND org_id = $2 FOR UPDATE',
+        [userId, orgId]
+      );
 
-    if (rows.length === 0) {
-    throw new Error('Membership not found');
+      if (rows.length === 0) {
+        throw new NotFoundError('Membership not found');
+      }
+
+      // P2-21 FIX: Use bracket notation for indexed access
+      if (rows[0]?.['role'] === 'owner') {
+        const { rows: ownerRows } = await client.query(
+          'SELECT COUNT(*)::int as count FROM memberships WHERE org_id = $1 AND role = $2 FOR UPDATE',
+          [orgId, 'owner']
+        );
+        if (Number(ownerRows[0]?.['count'] ?? 0) <= 1) {
+          throw new ForbiddenError('Cannot remove the last owner of the organization');
+        }
+      }
+
+      await client.query(
+        'DELETE FROM memberships WHERE user_id=$1 AND org_id=$2',
+        [userId, orgId]
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
 
-    if (rows[0].role === 'owner') {
-    // P1-8 FIX: Lock ALL owner rows with FOR UPDATE to prevent concurrent
-    // removal of different owners from racing past this check.
-    const { rows: ownerRows } = await client.query(
-    'SELECT COUNT(*) as count FROM memberships WHERE org_id = $1 AND role = $2 FOR UPDATE',
-    [orgId, 'owner']
-    );
-    if (parseInt(ownerRows[0].count, 10) <= 1) {
-    throw new Error('Cannot remove the last owner of the organization');
-    }
-    }
-
-    await client.query(
-    'DELETE FROM memberships WHERE user_id=$1 AND org_id=$2',
-    [userId, orgId]
-    );
-
-    await client.query('COMMIT');
-    // P3-5 FIX: Call audit log after successful mutations
+    // P3-5 FIX: Audit log outside transaction
     await this.auditLog('removeMember', orgId, userId, {});
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
   }
 
   /**
-  * Audit logging for membership mutations
-  */
+   * Audit logging for membership mutations
+   */
   private async auditLog(action: string, orgId: string, userId: string, details: Record<string, unknown>): Promise<void> {
-  logger.info(`[AUDIT][membership] ${action}`, {
-    orgId,
-    userId,
-    ...details,
-    timestamp: new Date().toISOString(),
-  });
-  // In production, this would write to an audit log table
+    try {
+      logger.info(`[AUDIT][membership] ${action}`, {
+        orgId,
+        userId,
+        ...details,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      // P2-25 FIX: Never let audit log failures propagate to callers
+      logger.error('Audit log write failed', error instanceof Error ? error : new Error(String(error)));
+    }
   }
 }

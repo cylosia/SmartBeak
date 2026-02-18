@@ -1,7 +1,31 @@
 
 import { Pool } from 'pg';
+import { getLogger } from '@kernel/logger';
 
-// P2-11 FIX: Removed unused UUID_REGEX constant (was duplicated inline at getStorageUsed)
+const logger = getLogger('MediaLifecycleService');
+
+// P2-2 FIX: Use DEFAULT_QUERY_LIMIT to prevent unbounded result sets
+const DEFAULT_QUERY_LIMIT = 10000;
+
+// P2-5 FIX: Validate org_id format
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateOrgId(orgId: string): void {
+  if (!orgId || typeof orgId !== 'string' || !UUID_REGEX.test(orgId)) {
+    throw new Error('Invalid orgId format: must be a valid UUID');
+  }
+}
+
+/**
+ * P2-4 FIX: Validate inputs as positive numbers
+ */
+function validatePositiveNumber(val: unknown, name: string): number {
+  const num = Number(val);
+  if (!Number.isFinite(num) || num < 0) {
+    throw new Error(`${name} must be a non-negative number`);
+  }
+  return num;
+}
 
 export interface MediaAsset {
   id: string;
@@ -9,161 +33,185 @@ export interface MediaAsset {
   size_bytes: number;
   created_at: Date;
   last_accessed_at: Date | null;
+  storage_class: string;
+  status: string;
 }
 
-/** Default query limit to prevent unbounded result sets (P2-2 FIX) */
-const DEFAULT_QUERY_LIMIT = 10000;
-
+/**
+ * Media lifecycle service
+ * Manages storage class transitions, orphan detection, and storage usage.
+ *
+ * P1-17 FIX: All mutation queries now require and scope by org_id.
+ * P1-18 FIX: Use soft-delete (status='deleted') instead of hard DELETE.
+ * P2-4 FIX: Check rowCount on mutations to detect missing rows.
+ * P2-5 FIX: Add ORDER BY to all queries returning multiple rows.
+ * P2-6 FIX: Use Number() instead of parseInt() for numeric conversion.
+ */
 export class MediaLifecycleService {
   constructor(private pool: Pool) {}
 
-  async markAccessed(mediaId: string): Promise<void> {
-  if (!mediaId || typeof mediaId !== 'string') {
-    throw new Error('Valid mediaId is required');
-  }
+  /**
+   * Mark a media asset as recently accessed (resets cold-storage timer).
+   * P1-17 FIX: Requires org_id for tenant scoping.
+   * P2-4 FIX: Check rowCount and return boolean.
+   */
+  async markAccessed(id: string, orgId: string): Promise<boolean> {
+    validateOrgId(orgId);
+    if (!id || typeof id !== 'string') throw new Error('Valid mediaId is required');
 
-  await this.pool.query(
-    `UPDATE media_assets SET last_accessed_at = NOW() WHERE id = $1`,
-    [mediaId]
-  );
+    const result = await this.pool.query(
+      `UPDATE media_assets SET last_accessed_at = NOW()
+       WHERE id = $1 AND org_id = $2 AND status != 'deleted'`,
+      [id, orgId]
+    );
+    const changed = (result.rowCount ?? 0) > 0;
+    if (!changed) {
+      logger.warn('markAccessed: no rows updated', { id, orgId });
+    }
+    return changed;
   }
 
   /**
-  * P0-2 FIX: Added getHotCount() method.
-  * Previously missing, causing runtime crash when called via
-  * the media-lifecycle route's IMediaLifecycleService cast.
-  */
+   * Get count of "hot" (recently-accessed) media assets.
+   */
   async getHotCount(): Promise<number> {
-  const { rows } = await this.pool.query(
-    `SELECT COUNT(*)::int as count FROM media_assets WHERE storage_class = 'hot'`
-  );
-  return rows[0]?.count ?? 0;
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(*)::int AS count FROM media_assets
+       WHERE storage_class = 'hot' AND status != 'deleted'`
+    );
+    return Number(rows[0]?.['count'] ?? 0);
   }
 
   /**
-  * P2-1 FIX: Count cold candidates without loading all IDs into memory.
-  */
+   * Count cold candidates without loading all IDs into memory.
+   * P2-6 FIX: Use Number() instead of parseInt().
+   */
   async countColdCandidates(days: number): Promise<number> {
-  if (typeof days !== 'number' || days < 0) {
-    throw new Error('Days must be a non-negative number');
-  }
+    const safeDays = validatePositiveNumber(days, 'days');
 
-  const { rows } = await this.pool.query(
-    `SELECT COUNT(*)::int as count FROM media_assets
-    WHERE storage_class = 'hot'
-    AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)`,
-    [days]
-  );
-  return rows[0]?.count ?? 0;
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(*)::int AS count FROM media_assets
+       WHERE storage_class = 'hot'
+         AND status != 'deleted'
+         AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)`,
+      [safeDays]
+    );
+    return Number(rows[0]?.['count'] ?? 0);
   }
 
   /**
-  * Find cold media candidates
-  * Uses parameterized queries with proper interval syntax
-  * P2-2 FIX: Added LIMIT parameter to prevent unbounded result sets
-  */
+   * Find cold media candidates.
+   * P2-5 FIX: Add deterministic ORDER BY.
+   */
   async findColdCandidates(days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
-  if (typeof days !== 'number' || days < 0) {
-    throw new Error('Days must be a non-negative number');
-  }
+    const safeDays = validatePositiveNumber(days, 'days');
+    const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
-  const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
-
-  const { rows } = await this.pool.query(
-    `SELECT id FROM media_assets
-    WHERE storage_class = 'hot'
-    AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)
-    LIMIT $2`,
-    [days, safeLimit]
-  );
-  return rows.map((r: { id: string }) => r["id"]);
-  }
-
-  async markCold(mediaId: string): Promise<void> {
-  if (!mediaId || typeof mediaId !== 'string') {
-    throw new Error('Valid mediaId is required');
-  }
-
-  await this.pool.query(
-    `UPDATE media_assets SET storage_class = 'cold' WHERE id = $1`,
-    [mediaId]
-  );
+    const { rows } = await this.pool.query(
+      `SELECT id FROM media_assets
+       WHERE storage_class = 'hot'
+         AND status != 'deleted'
+         AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)
+       ORDER BY COALESCE(last_accessed_at, created_at) ASC
+       LIMIT $2`,
+      [safeDays, safeLimit]
+    );
+    return rows.map((r: Record<string, unknown>) => r['id'] as string);
   }
 
   /**
-  * Find orphaned media assets
-  * P2-2 FIX: Added LIMIT parameter to prevent unbounded result sets
-  */
+   * Transition media assets to cold storage.
+   * P1-17 FIX: Requires org_id for tenant scoping.
+   * P2-4 FIX: Return count of rows updated.
+   */
+  async markCold(ids: string[], orgId: string): Promise<number> {
+    validateOrgId(orgId);
+    if (!Array.isArray(ids) || ids.length === 0) return 0;
+
+    const result = await this.pool.query(
+      `UPDATE media_assets
+       SET storage_class = 'cold', last_accessed_at = NOW()
+       WHERE id = ANY($1) AND org_id = $2 AND status != 'deleted'`,
+      [ids, orgId]
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
+   * Find orphaned media assets (not linked to any content).
+   * P2-5 FIX: Add deterministic ORDER BY.
+   */
   async findOrphaned(days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
-  if (typeof days !== 'number' || days < 0) {
-    throw new Error('Days must be a non-negative number');
-  }
+    const safeDays = validatePositiveNumber(days, 'days');
+    const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
-  const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
-
-  const { rows } = await this.pool.query(
-    `SELECT ma.id FROM media_assets ma
-    WHERE ma.status = 'uploaded'
-    AND ma.created_at < NOW() - make_interval(days => $1::int)
-    AND NOT EXISTS (
-    SELECT 1 FROM content_media_links cml
-    WHERE cml.media_id = ma.id
-    )
-    LIMIT $2`,
-    [days, safeLimit]
-  );
-  return rows.map((r: { id: string }) => r["id"]);
-  }
-
-  async delete(mediaId: string): Promise<void> {
-  if (!mediaId || typeof mediaId !== 'string') {
-    throw new Error('Valid mediaId is required');
-  }
-
-  await this.pool.query(
-    `DELETE FROM media_assets WHERE id = $1`,
-    [mediaId]
-  );
+    const { rows } = await this.pool.query(
+      `SELECT ma.id FROM media_assets ma
+       WHERE ma.status = 'uploaded'
+         AND ma.created_at < NOW() - make_interval(days => $1::int)
+         AND NOT EXISTS (
+           SELECT 1 FROM content_media_links cml
+           WHERE cml.media_id = ma.id
+         )
+       ORDER BY ma.created_at ASC
+       LIMIT $2`,
+      [safeDays, safeLimit]
+    );
+    return rows.map((r: Record<string, unknown>) => r['id'] as string);
   }
 
   /**
-  * Find media assets by storage class
-  * P2-2 FIX: Added LIMIT parameter to prevent unbounded result sets
-  */
-  async findByStorageClass(storageClass: 'hot' | 'cold' | 'frozen', limit: number = DEFAULT_QUERY_LIMIT): Promise<MediaAsset[]> {
-  const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
+   * Soft-delete media assets.
+   * P1-17 FIX: Requires org_id for tenant scoping.
+   * P1-18 FIX: Use soft-delete instead of hard DELETE.
+   */
+  async delete(ids: string[], orgId: string): Promise<number> {
+    validateOrgId(orgId);
+    if (!Array.isArray(ids) || ids.length === 0) return 0;
 
-  const { rows } = await this.pool.query(
-    `SELECT id, org_id, size_bytes, created_at, last_accessed_at
-    FROM media_assets
-    WHERE storage_class = $1
-    LIMIT $2`,
-    [storageClass, safeLimit]
-  );
-  return rows;
+    const result = await this.pool.query(
+      `UPDATE media_assets
+       SET status = 'deleted', updated_at = NOW()
+       WHERE id = ANY($1) AND org_id = $2 AND status != 'deleted'`,
+      [ids, orgId]
+    );
+    return result.rowCount ?? 0;
   }
 
   /**
-  * Get total storage used by organization
-  */
+   * Find media assets by storage class.
+   * P2-5 FIX: Add ORDER BY clause.
+   */
+  async findByStorageClass(
+    storageClass: 'hot' | 'cold' | 'frozen',
+    limit: number = DEFAULT_QUERY_LIMIT
+  ): Promise<MediaAsset[]> {
+    const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
+
+    const { rows } = await this.pool.query(
+      `SELECT id, org_id, size_bytes, created_at, last_accessed_at, storage_class, status
+       FROM media_assets
+       WHERE storage_class = $1 AND status != 'deleted'
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [storageClass, safeLimit]
+    );
+    return rows as MediaAsset[];
+  }
+
+  /**
+   * Get total storage used by organization.
+   * P2-6 FIX: Use Number() instead of parseInt().
+   */
   async getStorageUsed(orgId: string): Promise<number> {
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
+    validateOrgId(orgId);
 
-  // Validate UUID format
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(orgId)) {
-    throw new Error('Invalid orgId format: must be a valid UUID');
-  }
-
-  const { rows } = await this.pool.query(
-    `SELECT COALESCE(SUM(size_bytes), 0) as total
-    FROM media_assets
-    WHERE org_id = $1 AND status != 'deleted'`,
-    [orgId]
-  );
-  // P2-4 FIX: Added null check for rows[0]
-  return parseInt(rows[0]?.total ?? '0', 10);
+    const { rows } = await this.pool.query(
+      `SELECT COALESCE(SUM(size_bytes), 0)::bigint AS total
+       FROM media_assets
+       WHERE org_id = $1 AND status != 'deleted'`,
+      [orgId]
+    );
+    return Number(rows[0]?.['total'] ?? 0);
   }
 }

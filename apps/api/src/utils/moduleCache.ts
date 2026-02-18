@@ -13,7 +13,6 @@ const logger = getLogger('ModuleCache');
 */
 export class ModuleCache<T> {
   private promise: Promise<T> | null = null;
-  private isLoading = false;
   private loader: () => Promise<T>;
 
   constructor(loader: () => Promise<T>) {
@@ -27,54 +26,48 @@ export class ModuleCache<T> {
     return this.promise;
   }
 
-  // P2-10 FIX: Replaced busy-wait polling loop with shared Promise pattern.
-  // The old while(isLoading) { await setTimeout(10) } loop burned CPU and
-  // could stack overflow via recursive this.get() calls.
-  if (this.isLoading && this.promise) {
-    return this.promise;
-  }
+  // P2-19 FIX: Removed dead code branch — the previous `if (this.isLoading && this.promise)`
+  // check was unreachable because `this.promise` being truthy is already handled above.
+  // P1-10 FIX: The `isLoading` flag is also removed; the promise itself is the
+  // synchronization primitive. No busy-wait loops are needed.
 
-  // P1-FIX: Atomic initialization - set flag BEFORE creating promise
-  this.isLoading = true;
-
-  try {
-    // Create the promise - this is now protected by the isLoading flag
-    this.promise = this.loader().catch((err) => {
+  // Create the promise — this is the single synchronization point
+  this.promise = this.loader().catch((err) => {
     // P1-FIX: Log the error instead of silently suppressing
     logger.error('Loader failed', err instanceof Error ? err : new Error(String(err)));
     // Clear cache on error to allow retry
     this.promise = null;
-    this.isLoading = false;
     throw err;
-    });
+  });
 
-    return this.promise;
-  } catch (err) {
-    // P1-FIX: Ensure flag is cleared on synchronous errors
-    this.isLoading = false;
-    throw err;
-  }
+  return this.promise;
   }
 
   clear(): void {
   this.promise = null;
-  this.isLoading = false;
   }
 }
 
 /**
-* FIX: Thread-safe module cache with locking mechanism
-* Prevents race conditions in multi-threaded environments
-* 
-* P1-FIX: Added circuit breaker to prevent cascading failures when loader fails
+* Thread-safe module cache using promise-based memoization.
+*
+* P1-12 FIX: Removed the ineffective boolean `locks` LRUCache. A simple boolean
+* flag in single-threaded JS provides no mutual exclusion — between the check
+* and the set, other microtasks can interleave. Instead, the cached Promise
+* itself acts as the deduplication mechanism: the first caller creates and
+* stores the promise, and subsequent callers receive the same promise.
+*
+* P1-10 FIX: Removed the busy-wait polling loop (`for` with `setTimeout`
+* backoff). Callers now always get the in-flight promise directly, with no
+* polling delay.
+*
+* P1-FIX: Added circuit breaker to prevent cascading failures when loader fails.
 */
 export class ThreadSafeModuleCache<T> {
   private cache = new LRUCache<string, Promise<T>>({ max: 1000, ttl: 600000 });
-  private locks = new LRUCache<string, boolean>({ max: 1000, ttl: 60000 });
   private circuitBreaker: CircuitBreaker;
 
   constructor(private loader: (key: string) => Promise<T>) {
-    // P1-FIX: Initialize circuit breaker to protect against cascading failures
     this.circuitBreaker = new CircuitBreaker('ThreadSafeModuleCache', {
       failureThreshold: 5,
       resetTimeoutMs: 30000,
@@ -83,52 +76,30 @@ export class ThreadSafeModuleCache<T> {
   }
 
   async get(key: string): Promise<T> {
-  // Check if already cached
+  // Return the cached promise if it exists (whether resolved or still pending)
   const cached = this.cache.get(key);
   if (cached) {
     return cached;
   }
 
-  if (this.locks.get(key)) {
-    // Wait for the existing promise with exponential backoff
-    for (let attempts = 0; attempts < 10; attempts++) {
-    const existing = this.cache.get(key);
-    if (existing) return existing;
-    // Exponential backoff: 10ms, 20ms, 40ms...
-    await new Promise(resolve => setTimeout(resolve, 10 * Math.pow(2, attempts)));
-    }
-    // If still not available after retries, proceed with new load
-  }
+  // P1-12 FIX: No lock needed — store the promise synchronously so that any
+  // subsequent call within the same microtask tick will see it in the cache.
+  const promise = this.circuitBreaker.execute(() => this.loader(key)).catch((err) => {
+    // Clear on error so the next call retries
+    this.cache.delete(key);
+    logger.error(`Module cache load failed for key: ${key}`, err instanceof Error ? err : new Error(String(err)));
+    throw err;
+  });
 
-  // Acquire lock
-  this.locks.set(key, true);
-
-  // P0-FIX: Use try-finally to ensure lock is always released
-  // P1-FIX: Wrap loader with circuit breaker for failure protection
-  try {
-    const promise = this.circuitBreaker.execute(() => this.loader(key)).catch((err) => {
-      // Clear on error
-      this.cache.delete(key);
-      // P1-FIX: Log circuit breaker failures
-      logger.error(`Module cache load failed for key: ${key}`, err instanceof Error ? err : new Error(String(err)));
-      throw err;
-    });
-
-    this.cache.set(key, promise);
-    return promise;
-  } finally {
-    // P0-FIX: Always release lock, even if loader throws
-    this.locks.delete(key);
-  }
+  this.cache.set(key, promise);
+  return promise;
   }
 
   clear(key?: string): void {
   if (key) {
     this.cache.delete(key);
-    this.locks.delete(key);
   } else {
     this.cache.clear();
-    this.locks.clear();
   }
   }
 }

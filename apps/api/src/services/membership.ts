@@ -1,22 +1,57 @@
 /**
  * P2-FIX (P2-8): Extracted verifyOrgMembership into a shared service.
  *
- * Previously, four billing route files (billingStripe.ts, billingPaddle.ts,
- * billingInvoiceExport.ts, billingInvoices.ts) each contained an identical
- * local copy of this function. Any change to org membership logic (e.g. role-
- * based access, multi-tenancy) must be applied exactly once here.
+ * Previously, four billing route files each contained an identical
+ * local copy of this function. Any change to org membership logic
+ * must be applied exactly once here.
+ *
+ * P0-1 FIX: Table name corrected from 'org_memberships' to 'memberships'
+ *           to match the actual schema defined in migrations.
+ * P1-2 FIX: Added optional requiredRole parameter for role-based access control.
  */
 
 import { getDb } from '../db';
 
+const VALID_ROLES = ['owner', 'admin', 'editor', 'viewer'] as const;
+type Role = typeof VALID_ROLES[number];
+
+// P1-2 FIX: Role hierarchy for minimum-role checks
+const ROLE_HIERARCHY: Record<Role, number> = {
+  owner: 4,
+  admin: 3,
+  editor: 2,
+  viewer: 1,
+};
+
 /**
- * Verify that a user is an active member of an organization.
- * @returns true if a membership row exists, false otherwise.
+ * Verify that a user is an active member of an organization,
+ * optionally requiring a minimum role level.
+ *
+ * @param userId - The user ID to check
+ * @param orgId - The organization ID to check
+ * @param requiredRole - Optional minimum role required (e.g. 'admin' means admin or owner)
+ * @returns true if membership exists and meets role requirements, false otherwise.
  */
-export async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
+export async function verifyOrgMembership(
+  userId: string,
+  orgId: string,
+  requiredRole?: Role
+): Promise<boolean> {
   const db = await getDb();
-  const membership = await db('org_memberships')
+  // P0-1 FIX: Use correct table name 'memberships' (not 'org_memberships')
+  const membership = await db('memberships')
     .where({ user_id: userId, org_id: orgId })
     .first();
-  return !!membership;
+
+  if (!membership) return false;
+
+  // P1-2 FIX: Check role level if a minimum role is required
+  if (requiredRole) {
+    const memberRole = membership['role'] as Role;
+    const memberLevel = ROLE_HIERARCHY[memberRole] ?? 0;
+    const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 0;
+    return memberLevel >= requiredLevel;
+  }
+
+  return true;
 }

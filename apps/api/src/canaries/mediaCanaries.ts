@@ -14,21 +14,34 @@ import { emitMetric } from '../ops/metrics';
 /** Logger for media canary operations */
 const logger = getLogger('media-canary');
 
+/** P2-18 FIX: Default timeout for canary checks (30 seconds) */
+const CANARY_TIMEOUT_MS = 30000;
+
 /**
 * Run a media adapter canary health check
 *
 * @param name - Name of the media adapter being checked
 * @param fn - Health check function to execute
-* @throws Error if the health check fails
+* @param timeoutMs - Timeout in milliseconds (default: 30000)
+* @throws Error if the health check fails or times out
 */
-export async function runMediaCanary(name: string, fn: () => Promise<void>): Promise<void> {
-  // P3-4 FIX: Corrected indentation to match project conventions
+export async function runMediaCanary(name: string, fn: () => Promise<void>, timeoutMs: number = CANARY_TIMEOUT_MS): Promise<void> {
   try {
-    await fn();
+    // P2-18 FIX: Add timeout to prevent canary checks from hanging indefinitely
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Canary check '${name}' timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    await Promise.race([fn(), timeoutPromise]);
     emitMetric({ name: 'media_canary_success', labels: { name } });
   } catch (error) {
-    logger.error(`[MediaCanary] ${name} failed:`, error as Error);
+    // P1-9 FIX: Safe error handling for unknown error type instead of unsafe cast
+    const safeError = error instanceof Error ? error : new Error(String(error));
+    // P3-4 FIX: Use error level, not warn — canary failures indicate service degradation
+    logger.error(`[MediaCanary] ${name} failed:`, safeError);
     emitMetric({ name: 'media_canary_failure', labels: { name } });
-    throw error;
+    throw safeError;
   }
 }

@@ -17,6 +17,24 @@ const SQL_DIR = join(ROOT, 'migrations', 'sql');
  *   baseline           Mark all existing migrations as applied (batch 0)
  */
 
+/**
+ * P3-12 FIX: Sanitize a connection string for safe inclusion in log/error messages.
+ * Replaces the userinfo (user:password@) portion of the URL with `***:***@`.
+ */
+function sanitizeConnectionString(connStr: string): string {
+  try {
+    const url = new URL(connStr);
+    if (url.username || url.password) {
+      url.username = '***';
+      url.password = '***';
+    }
+    return url.toString();
+  } catch {
+    // Not a valid URL — redact everything after "://" up to the first "@"
+    return connStr.replace(/:\/\/[^@]*@/, '://***:***@');
+  }
+}
+
 function createKnexInstance(): Knex {
   const connectionString = process.env['CONTROL_PLANE_DB'];
   if (!connectionString) {
@@ -26,6 +44,20 @@ function createKnexInstance(): Knex {
   }
 
   const isProduction = process.env['NODE_ENV'] === 'production';
+
+  // P3-11 FIX: Warn if connecting to a production database without SSL.
+  // This guards against accidentally running migrations over an unencrypted
+  // connection where credentials and data could be intercepted.
+  if (isProduction) {
+    const hasSSLParam = connectionString.includes('sslmode=') || connectionString.includes('ssl=');
+    if (!hasSSLParam) {
+      console.warn(
+        'WARNING: Connecting to a production database. SSL is enforced via config, ' +
+        'but the connection string does not contain an explicit sslmode parameter. ' +
+        `Connection: ${sanitizeConnectionString(connectionString)}`
+      );
+    }
+  }
 
   return knex({
     client: 'postgresql',
@@ -150,21 +182,26 @@ async function runBaseline(db: Knex) {
     await db('schema_migrations_lock').insert({ is_locked: 0 });
   }
 
-  // Check which migrations are already recorded
-  const existing = await db('schema_migrations').select('name');
-  const existingNames = new Set(existing.map((r: { name: string }) => r.name));
+  // P1-8 FIX: Wrap all inserts in a transaction for atomicity.
+  // If any insert fails, all are rolled back to avoid a partially-baselined state.
+  const count = await db.transaction(async (trx) => {
+    // Check which migrations are already recorded
+    const existing = await trx('schema_migrations').select('name');
+    const existingNames = new Set(existing.map((r: { name: string }) => r.name));
 
-  let count = 0;
-  for (const migration of migrations) {
-    if (!existingNames.has(migration)) {
-      await db('schema_migrations').insert({
-        name: migration,
-        batch: 0,
-        migration_time: new Date(),
-      });
-      count++;
+    let inserted = 0;
+    for (const migration of migrations) {
+      if (!existingNames.has(migration)) {
+        await trx('schema_migrations').insert({
+          name: migration,
+          batch: 0,
+          migration_time: new Date(),
+        });
+        inserted++;
+      }
     }
-  }
+    return inserted;
+  });
 
   console.log(`Baselined ${count} migration(s) (batch 0).`);
   console.log(`Total tracked: ${migrations.length}`);
@@ -227,7 +264,10 @@ async function main() {
         break;
     }
   } catch (error) {
-    console.error('Migration failed:', error instanceof Error ? error.message : error);
+    // P3-12 FIX: Sanitize error messages to avoid leaking database credentials
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const safeMessage = sanitizeConnectionString(rawMessage);
+    console.error('Migration failed:', safeMessage);
     process.exit(1);
   } finally {
     if (db) {
@@ -236,4 +276,10 @@ async function main() {
   }
 }
 
-main();
+// P2-33 FIX: Await the main() promise so that unhandled rejections are
+// surfaced and the process exits with the correct code.
+main().catch((error: unknown) => {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  console.error('Unhandled migration error:', sanitizeConnectionString(rawMessage));
+  process.exit(1);
+});

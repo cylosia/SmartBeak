@@ -39,18 +39,36 @@ interface MigrationResult {
   after: string;
 }
 
+/** P3-2 FIX: Proper type for pattern replacement functions (removes `as any` cast). */
+type ReplacementFn = (match: string, ...groups: string[]) => string;
+
+interface MigrationPattern {
+  name: string;
+  regex: RegExp;
+  replacement: ReplacementFn;
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================
 
 const LOGGER_IMPORT = `import { getLogger } from '@kernel/logger';\n`;
 
-const MIGRATION_PATTERNS = [
+/**
+ * P1-29 FIX: Escape single quotes inside a string that will be placed
+ * inside single-quoted output. Without this, messages like "can't connect"
+ * become `logger.error('can't connect')` which is broken syntax.
+ */
+function escapeSingleQuotes(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+const MIGRATION_PATTERNS: MigrationPattern[] = [
   // Pattern: console.error('message', error) with service prefix
   {
     name: 'error-with-service-prefix',
     regex: /console\.error\(\s*\[([^\]]+)\]\s+(['"`][^'"`]*['"`]),\s*(\w+)\s*\)/g,
-    replacement: (match: string, service: string, message: string, errorVar: string) => {
+    replacement: (_match: string, _service: string, message: string, errorVar: string) => {
       return `logger.error(${message}, ${errorVar})`;
     },
   },
@@ -58,40 +76,40 @@ const MIGRATION_PATTERNS = [
   {
     name: 'error-with-error',
     regex: /console\.error\(\s*['"`]([^'"]*)['"`],\s*(\w+)\s*\)/g,
-    replacement: (match: string, message: string, errorVar: string) => {
-      return `logger.error('${message}', ${errorVar})`;
+    replacement: (_match: string, message: string, errorVar: string) => {
+      return `logger.error('${escapeSingleQuotes(message)}', ${errorVar})`;
     },
   },
   // Pattern: console.error('[Service] message:', var)
   {
     name: 'error-with-prefix',
     regex: /console\.error\(\s*\[([^\]]+)\]\s+(['"`][^'"`]*['"`]\s*:\s*),\s*(.+)\s*\)/g,
-    replacement: (match: string, service: string, message: string, data: string) => {
+    replacement: (_match: string, _service: string, message: string, data: string) => {
       const cleanMessage = message.replace(/[:\s]*$/, '').replace(/['"`]/g, '');
-      return `logger.error('${cleanMessage}', { data: ${data} })`;
+      return `logger.error('${escapeSingleQuotes(cleanMessage)}', { data: ${data} })`;
     },
   },
   // Pattern: console.error(`[Service] message ${var}`)
   {
     name: 'error-template-literal',
     regex: /console\.error\(\s*`\[([^\]]+)\]\s+([^`]+)`\s*\)/g,
-    replacement: (match: string, service: string, template: string) => {
+    replacement: (_match: string, _service: string, template: string) => {
       // Extract variables from template
       const vars = template.match(/\$\{([^}]+)\}/g) || [];
       if (vars.length === 0) {
-        return `logger.error('${template}')`;
+        return `logger.error('${escapeSingleQuotes(template)}')`;
       }
-      
+
       const message = template.replace(/\$\{([^}]+)\}/g, '${$1}');
       const metadata = vars.map((v, i) => `var${i}: ${v.slice(2, -1)}`).join(', ');
-      return `logger.error('${message}', { ${metadata} })`;
+      return `logger.error('${escapeSingleQuotes(message)}', { ${metadata} })`;
     },
   },
   // Pattern: console.warn('[Service] message')
   {
     name: 'warn-with-service-prefix',
     regex: /console\.warn\(\s*\[([^\]]+)\]\s+(['"`][^'"`]*['"`])\s*\)/g,
-    replacement: (match: string, service: string, message: string) => {
+    replacement: (_match: string, _service: string, message: string) => {
       return `logger.warn(${message})`;
     },
   },
@@ -99,24 +117,24 @@ const MIGRATION_PATTERNS = [
   {
     name: 'warn-simple',
     regex: /console\.warn\(\s*['"`]([^'"]*)['"`]\s*\)/g,
-    replacement: (match: string, message: string) => {
-      return `logger.warn('${message}')`;
+    replacement: (_match: string, message: string) => {
+      return `logger.warn('${escapeSingleQuotes(message)}')`;
     },
   },
   // Pattern: console.warn('[Service] message:', data)
   {
     name: 'warn-with-data',
     regex: /console\.warn\(\s*\[([^\]]+)\]\s+(['"`][^'"`]*['"`]\s*:\s*),\s*(.+)\s*\)/g,
-    replacement: (match: string, service: string, message: string, data: string) => {
+    replacement: (_match: string, _service: string, message: string, data: string) => {
       const cleanMessage = message.replace(/[:\s]*$/, '').replace(/['"`]/g, '');
-      return `logger.warn('${cleanMessage}', { data: ${data} })`;
+      return `logger.warn('${escapeSingleQuotes(cleanMessage)}', { data: ${data} })`;
     },
   },
   // Pattern: console.log('[Service] message')
   {
     name: 'log-with-service-prefix',
     regex: /console\.log\(\s*\[([^\]]+)\]\s+(['"`][^'"`]*['"`])\s*\)/g,
-    replacement: (match: string, service: string, message: string) => {
+    replacement: (_match: string, _service: string, message: string) => {
       return `logger.info(${message})`;
     },
   },
@@ -124,42 +142,42 @@ const MIGRATION_PATTERNS = [
   {
     name: 'log-with-data',
     regex: /console\.log\(\s*['"`]([^'"]*)['"`],\s*(.+)\s*\)/g,
-    replacement: (match: string, message: string, data: string) => {
-      return `logger.info('${message}', { data: ${data} })`;
+    replacement: (_match: string, message: string, data: string) => {
+      return `logger.info('${escapeSingleQuotes(message)}', { data: ${data} })`;
     },
   },
   // Pattern: console.log('message')
   {
     name: 'log-simple',
     regex: /console\.log\(\s*['"`]([^'"]*)['"`]\s*\)/g,
-    replacement: (match: string, message: string) => {
-      return `logger.info('${message}')`;
+    replacement: (_match: string, message: string) => {
+      return `logger.info('${escapeSingleQuotes(message)}')`;
     },
   },
   // Pattern: console.log(`[Service] message ${var}`)
   {
     name: 'log-template-literal',
     regex: /console\.log\(\s*`\[([^\]]+)\]\s+([^`]+)`\s*\)/g,
-    replacement: (match: string, service: string, template: string) => {
+    replacement: (_match: string, _service: string, template: string) => {
       const vars = template.match(/\$\{([^}]+)\}/g) || [];
       if (vars.length === 0) {
-        return `logger.info('${template}')`;
+        return `logger.info('${escapeSingleQuotes(template)}')`;
       }
-      
-      const message = template.replace(/\$\{([^}]+)\}/g, (m, v) => `{${v}}`);
-      const metadata = vars.map((v, i) => {
+
+      const message = template.replace(/\$\{([^}]+)\}/g, (_m: string, v: string) => `{${v}}`);
+      const metadata = vars.map((v, _i) => {
         const varName = v.slice(2, -1).replace(/\..+$/, ''); // Remove property access
         return `${varName}: ${v.slice(2, -1)}`;
       }).join(', ');
-      return `logger.info('${message}', { ${metadata} })`;
+      return `logger.info('${escapeSingleQuotes(message)}', { ${metadata} })`;
     },
   },
   // Pattern: console.info('message')
   {
     name: 'info-simple',
     regex: /console\.info\(\s*['"`]([^'"]*)['"`]\s*\)/g,
-    replacement: (match: string, message: string) => {
-      return `logger.info('${message}')`;
+    replacement: (_match: string, message: string) => {
+      return `logger.info('${escapeSingleQuotes(message)}')`;
     },
   },
 ];
@@ -241,9 +259,20 @@ async function migrateFile(filePath: string, options: MigrationOptions): Promise
     
     // Apply migration patterns
     for (const pattern of MIGRATION_PATTERNS) {
+      // P2-34 FIX: Reset lastIndex before .match() to avoid stale state
+      // from a previous iteration or usage. RegExp objects with the /g flag
+      // maintain lastIndex across calls — .match() consumes it, so a
+      // subsequent .replace() could start from the wrong position.
+      pattern.regex.lastIndex = 0;
       const matches = modified.match(pattern.regex);
       if (matches) {
-        modified = modified.replace(pattern.regex, pattern.replacement as any);
+        // P2-34 FIX: Reset lastIndex again before .replace() because
+        // .match() with /g leaves lastIndex in an undefined state.
+        pattern.regex.lastIndex = 0;
+        // P3-2 FIX: The replacement function is now properly typed as
+        // ReplacementFn via the MigrationPattern interface, eliminating
+        // the need for the previous `as any` cast.
+        modified = modified.replace(pattern.regex, pattern.replacement);
         result.changes += matches.length;
       }
     }

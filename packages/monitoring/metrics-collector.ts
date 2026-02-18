@@ -170,7 +170,10 @@ export class MetricsCollector extends EventEmitter {
     db?: Pool
   ) {
     super();
-    
+    // P1-30 FIX: Increase max listeners to prevent EventEmitter warnings
+    // when multiple consumers attach metric/aggregation/keysEvicted listeners
+    this.setMaxListeners(50);
+
     this.config = {
       intervalMs: config.intervalMs || 60000,
       retentionMs: config.retentionMs || 3600000, // 1 hour
@@ -479,6 +482,7 @@ export class MetricsCollector extends EventEmitter {
 
   /**
    * Record API call
+   * P0-14 FIX: Normalizes endpoint paths to prevent high-cardinality metric explosion
    */
   recordApiCall(
     endpoint: string,
@@ -486,15 +490,51 @@ export class MetricsCollector extends EventEmitter {
     statusCode: number,
     durationMs: number
   ): void {
+    const normalizedEndpoint = this.normalizeEndpoint(endpoint);
     this.counter('business.api_calls', 1, {
-      endpoint,
+      endpoint: normalizedEndpoint,
       method,
       status: `${statusCode}`,
     });
     this.timing('business.api_duration', durationMs, {
-      endpoint,
+      endpoint: normalizedEndpoint,
       method,
     });
+  }
+
+  /**
+   * P0-14 FIX: Normalize endpoint paths by replacing dynamic segments
+   * (UUIDs, numeric IDs, etc.) with placeholders to prevent high-cardinality labels.
+   *
+   * Examples:
+   *   /api/users/abc-123-def        -> /api/users/:id
+   *   /api/orgs/42/members/99       -> /api/orgs/:id/members/:id
+   *   /api/content/550e8400-e29b... -> /api/content/:id
+   */
+  private normalizeEndpoint(endpoint: string): string {
+    return endpoint
+      .split('/')
+      .map(segment => {
+        if (segment === '') return segment;
+        // UUID pattern (with or without hyphens)
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment)) {
+          return ':id';
+        }
+        // Hex string IDs (24+ chars, e.g. MongoDB ObjectIds)
+        if (/^[0-9a-f]{24,}$/i.test(segment)) {
+          return ':id';
+        }
+        // Pure numeric IDs
+        if (/^\d+$/.test(segment)) {
+          return ':id';
+        }
+        // UUID-like slugs (alphanumeric with hyphens, containing digits)
+        if (/^[a-zA-Z0-9]+-[a-zA-Z0-9-]+$/.test(segment) && /\d/.test(segment) && segment.length > 8) {
+          return ':id';
+        }
+        return segment;
+      })
+      .join('/');
   }
 
   // ============================================================================
@@ -712,21 +752,40 @@ export class MetricsCollector extends EventEmitter {
   /**
    * P1-FIX: QuickSelect algorithm for O(n) percentile calculation
    * Finds the k-th smallest element without full sort
+   * P1-7 FIX: Uses in-place partitioning with swaps instead of filter/splice
+   * which created new arrays on each recursive call
    */
-  private quickSelect(arr: number[], k: number): number {
-    if (arr.length === 1) return arr[0]!;
-    
-    const pivot = arr[Math.floor(Math.random() * arr.length)]!;
-    const lows = arr.filter(x => x < pivot);
-    const highs = arr.filter(x => x > pivot);
-    const pivots = arr.filter(x => x === pivot);
-    
-    if (k < lows.length) {
-      return this.quickSelect(lows, k);
-    } else if (k < lows.length + pivots.length) {
-      return pivot;
+  private quickSelect(arr: number[], k: number, left = 0, right = arr.length - 1): number {
+    if (left === right) return arr[left]!;
+
+    // Choose a random pivot and move it to the end
+    const pivotIndex = left + Math.floor(Math.random() * (right - left + 1));
+    const pivotValue = arr[pivotIndex]!;
+    // Swap pivot to end
+    arr[pivotIndex] = arr[right]!;
+    arr[right] = pivotValue;
+
+    // Partition in-place
+    let storeIndex = left;
+    for (let i = left; i < right; i++) {
+      if (arr[i]! < pivotValue) {
+        // Swap arr[i] and arr[storeIndex]
+        const tmp = arr[i]!;
+        arr[i] = arr[storeIndex]!;
+        arr[storeIndex] = tmp;
+        storeIndex++;
+      }
+    }
+    // Move pivot to its final position
+    arr[right] = arr[storeIndex]!;
+    arr[storeIndex] = pivotValue;
+
+    if (k === storeIndex) {
+      return pivotValue;
+    } else if (k < storeIndex) {
+      return this.quickSelect(arr, k, left, storeIndex - 1);
     } else {
-      return this.quickSelect(highs, k - lows.length - pivots.length);
+      return this.quickSelect(arr, k, storeIndex + 1, right);
     }
   }
 
@@ -836,28 +895,39 @@ export class MetricsCollector extends EventEmitter {
 
       if (batch.length === 0) return;
 
-      // Insert metrics in batch
-      const values = batch.map((m, i) => 
-        `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`
-      ).join(',');
+      // P0-4 FIX: Batch inserts to prevent exceeding PostgreSQL's 65535 parameter limit.
+      // Each metric uses 5 parameters, so 500 metrics = 2500 params per batch (well under limit).
+      const BATCH_SIZE = 500;
+      let totalPersisted = 0;
 
-      const params = batch.flatMap(m => [
-        m.name,
-        m.type,
-        String(m.value),
-        JSON.stringify(m.labels || {}),
-        new Date(m.timestamp),
-      ]);
+      for (let batchStart = 0; batchStart < batch.length; batchStart += BATCH_SIZE) {
+        const chunk = batch.slice(batchStart, batchStart + BATCH_SIZE);
 
-      await this.db.query(
-        `INSERT INTO metrics (name, type, value, labels, timestamp) 
-         VALUES ${values}`,
-        params
-      );
+        const values = chunk.map((_, i) =>
+          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`
+        ).join(',');
 
-      logger.debug('Metrics persisted', { count: batch.length });
+        const params = chunk.flatMap(m => [
+          m.name,
+          m.type,
+          String(m.value),
+          JSON.stringify(m.labels || {}),
+          new Date(m.timestamp),
+        ]);
+
+        await this.db.query(
+          `INSERT INTO metrics (name, type, value, labels, timestamp)
+           VALUES ${values}`,
+          params
+        );
+
+        totalPersisted += chunk.length;
+      }
+
+      logger.debug('Metrics persisted', { count: totalPersisted });
     } catch (error) {
-      logger.error('Failed to persist metrics', error as Error);
+      // P1-9 FIX: Safely handle unknown error type instead of unsafe cast
+      logger.error('Failed to persist metrics', error instanceof Error ? error : new Error(String(error)));
     }
   }
 

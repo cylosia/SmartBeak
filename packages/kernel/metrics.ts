@@ -35,6 +35,9 @@ export type MetricHandler = (metric: Metric) => void;
 // Internal State
 // ============================================================================
 
+// P2-35 FIX: Maximum number of handlers to prevent unbounded handler growth
+const MAX_HANDLERS = 10;
+
 const handlersStore = {
   handlers: [] as MetricHandler[]
 };
@@ -74,17 +77,26 @@ function structuredLoggerHandler(metric: Metric): void {
 
 /**
 * Add a metric handler
+* P2-35 FIX: Enforces a maximum handler limit to prevent unbounded growth
 * @param handler - Handler function to add
+* @throws Error if maximum handler limit is reached
 */
 export function addMetricHandler(handler: MetricHandler): void {
+  if (getHandlers().length >= MAX_HANDLERS) {
+    const logger = getLogger({ service: 'metrics' });
+    logger['error']('Cannot add metric handler: maximum limit reached', new Error(`Max handlers (${MAX_HANDLERS}) exceeded`));
+    return;
+  }
   getMutableHandlers().push(handler);
 }
 
 /**
 * Remove all metric handlers
+* P2-36 FIX: Replace the array entirely instead of setting length = 0
+* to avoid dangling references from code holding the old array
 */
 export function clearMetricHandlers(): void {
-  getMutableHandlers().length = 0;
+  handlersStore.handlers = [];
 }
 
 // Add default handler using structured logger (only if none exist)
@@ -107,9 +119,17 @@ export function emitMetric(metric: Metric): void {
   };
 
   // P2-FIX: Error isolation - one handler failure should not affect others
+  // P3-3 FIX: Catch async handler rejections to prevent unhandled promise rejections
   getHandlers().forEach(h => {
     try {
-      h(metricWithTimestamp);
+      const result = h(metricWithTimestamp);
+      // If handler returns a Promise, catch its rejection
+      if (result != null && typeof (result as Promise<void>).catch === 'function') {
+        (result as Promise<void>).catch((error: unknown) => {
+          const logger = getLogger({ service: 'metrics' });
+          logger['error']('Async metric handler failed', error instanceof Error ? error : new Error(String(error)));
+        });
+      }
     } catch (error) {
       const logger = getLogger({ service: 'metrics' });
       logger["error"]('Metric handler failed', error instanceof Error ? error : new Error(String(error)));

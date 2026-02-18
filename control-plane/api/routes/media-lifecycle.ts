@@ -7,10 +7,10 @@ import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { MediaLifecycleService } from '../../services/media-lifecycle';
-import { requireRole, AuthContext } from '../../services/auth';
+import { requireRole, RoleAccessError, AuthContext } from '../../services/auth';
+import { rateLimit } from '../../services/rate-limit';
 import { errors } from '@errors/responses';
 
-// P1-10 FIX: Use structured logger instead of console["error"]
 const logger = getLogger('media-lifecycle');
 
 export interface LifecycleStats {
@@ -18,12 +18,11 @@ export interface LifecycleStats {
   coldCandidates: number;
 }
 
-// P3-7 FIX: Include page and limit in Zod schema instead of manual parseInt
+// P2-1 FIX: Add .strict() to reject extra properties
+// P2-3 FIX: Removed unused pagination params from GET endpoint that doesn't paginate
 const QuerySchema = z.object({
   days: z.coerce.number().min(0).max(365).optional().default(30),
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-});
+}).strict();
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -31,63 +30,56 @@ export type AuthenticatedRequest = FastifyRequest & {
 
 /**
 * Media lifecycle routes
-* P0-2 FIX: Removed unsafe `as unknown as IMediaLifecycleService` cast.
-* P1-11 FIX: Use MediaLifecycleService directly (now has getHotCount).
-* P2-1 FIX: Use countColdCandidates() instead of loading all IDs to count.
+* P0-3 FIX: Catch RoleAccessError and return 403 instead of 500.
+* P2-22 FIX: Add rate limiting to admin endpoints.
 */
 export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new MediaLifecycleService(pool);
 
   app.get('/admin/media/lifecycle', async (
-  req: FastifyRequest,
-  res: FastifyReply
+    req: FastifyRequest,
+    res: FastifyReply
   ): Promise<void> => {
-  try {
-    const { auth: ctx } = req as AuthenticatedRequest;
-    if (!ctx) {
-    return errors.unauthorized(res);
-    }
-    requireRole(ctx, ['owner', 'admin']);
-
-    // Validate query params (P3-7 FIX: pagination now in Zod schema)
-    const queryResult = QuerySchema.safeParse(req.query);
-    if (!queryResult.success) {
-    return errors.validationFailed(res, queryResult["error"].issues);
-    }
-
-    const { days, page, limit } = queryResult.data;
-
-    let hot: number;
-    let coldCandidates: number;
-
     try {
-    // P0-2 FIX: Call getHotCount() directly (now exists on service)
-    // P2-1 FIX: Use countColdCandidates() instead of loading all IDs
-    hot = await svc.getHotCount();
-    coldCandidates = await svc.countColdCandidates(days);
-    } catch (serviceError) {
-    // P1-10 FIX: Use structured logger
-    logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
-    return errors.serviceUnavailable(res);
-    }
+      const { auth: ctx } = req as AuthenticatedRequest;
+      if (!ctx) {
+        return errors.unauthorized(res);
+      }
+      requireRole(ctx, ['owner', 'admin']);
+      // P2-22 FIX: Add rate limiting to admin endpoint
+      await rateLimit(`admin:media:${ctx.userId}`, 30, req, res);
 
-    const result: LifecycleStats = {
-      hot,
-      coldCandidates
-    };
+      const queryResult = QuerySchema.safeParse(req.query);
+      if (!queryResult.success) {
+        return errors.validationFailed(res, queryResult['error'].issues);
+      }
 
-    return res.send({
-    ...result,
-    pagination: {
-    page,
-    limit,
+      const { days } = queryResult.data;
+
+      let hot: number;
+      let coldCandidates: number;
+
+      try {
+        hot = await svc.getHotCount();
+        coldCandidates = await svc.countColdCandidates(days);
+      } catch (serviceError) {
+        logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
+        return errors.serviceUnavailable(res);
+      }
+
+      const result: LifecycleStats = {
+        hot,
+        coldCandidates
+      };
+
+      return res.send(result);
+    } catch (error) {
+      // P0-3 FIX: Surface RoleAccessError as 403 instead of masking as 500
+      if (error instanceof RoleAccessError) {
+        return errors.forbidden(res, error.message);
+      }
+      logger.error('[media-lifecycle] Unexpected error:', error instanceof Error ? error : new Error(String(error)));
+      return errors.internal(res);
     }
-    });
-  } catch (error) {
-    // P1-10 FIX: Use structured logger
-    logger.error('[media-lifecycle] Unexpected error:', error instanceof Error ? error : new Error(String(error)));
-    // P1-1 FIX: Do not leak internal error details to clients
-    return errors.internal(res);
-  }
   });
 }
