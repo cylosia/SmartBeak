@@ -45,21 +45,18 @@ export async function canAccessDomain(
   domainId: string,
   orgId: string
 ): Promise<boolean> {
-  try {
-    const db = await getDb();
-    const row = await db('domain_registry')
+  // P1-2 FIX: Remove try/catch — let DB errors propagate as 5xx, not silent 403.
+  // Previously a transient DB failure returned false → HTTP 403, masking the real outage.
+  // P1-SQL FIX: Add .timeout(10000) — without a timeout, a slow or hung join holds the
+  // connection indefinitely, exhausting the pool and cascading to all email routes.
+  const db = getDb();
+  const row = await db('domain_registry')
     .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
     .where('domain_registry.domain_id', domainId)
     .where('memberships.user_id', userId)
     .where('domain_registry.org_id', orgId)
     .select('memberships.role')
+    .timeout(10000)
     .first();
-
-    return !!row;
-  } catch (error) {
-    // P2-MEDIUM FIX: error: unknown with proper type guard
-    const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
-    logger.error(`Error checking domain access: ${errorMessage}`);
-    return false;
-  }
+  return !!row;
 }

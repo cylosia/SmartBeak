@@ -59,7 +59,11 @@ export const EmailMessageSchema = z.object({
   // An attacker supplying "\r\nBcc: victim@example.com" in the subject would inject
   // additional SMTP headers and send copies to arbitrary recipients.
   subject: z.string().min(1).max(998).transform(s => s.replace(/[\r\n]/g, '')),
-  preview_text: z.string().max(200).optional(),
+  // P1-SECURITY FIX: Strip CRLF from preview_text to prevent SMTP header injection.
+  // If preview_text is written to an X-Preview-Text (or similar) SMTP header, a
+  // payload like "\r\nBcc: attacker@evil.com" injects additional headers. `subject`
+  // already had this fix; preview_text was an identical unpatched gap.
+  preview_text: z.string().max(200).transform(s => s.replace(/[\r\n]/g, '')).optional(),
   // P2-10 FIX: Add .min(1) — an email with zero blocks is nonsensical and should fail
   // validation rather than silently produce an empty-body message.
   blocks: z.array(EmailBlockSchema).min(1).max(100),

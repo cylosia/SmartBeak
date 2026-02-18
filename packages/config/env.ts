@@ -89,9 +89,12 @@ export function parseBoolEnv(name: string, defaultValue: boolean): boolean {
   // P1-SECURITY FIX: Only recognize explicit true/false values.
   // Previously, ANY non-"true"/non-"1" string (including typos like "ture", "yes", "on")
   // silently returned false, potentially disabling security features.
-  const normalized = value.toLowerCase();
-  if (normalized === 'true' || value === '1') return true;
-  if (normalized === 'false' || value === '0') return false;
+  // P1-FIX: Normalize ALL comparisons consistently — previously '1' and '0' were compared
+  // against the raw (non-lowercased) value while 'true'/'false' used normalized. The
+  // inconsistency created a confusing dual-standard pattern. Now all branches trim+lowercase.
+  const normalized = value.toLowerCase().trim();
+  if (normalized === 'true' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === '0') return false;
   logger.warn('Unrecognized boolean value, using default', { name, value, defaultValue });
   return defaultValue;
 }

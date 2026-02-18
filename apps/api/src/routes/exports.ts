@@ -64,7 +64,12 @@ async function canAccessDomain(
     .first();
 
   // P1-1 FIX: Check role, not just membership existence.
-  return !!row && EXPORT_ALLOWED_ROLES.has(row['role'] as string);
+  // P1-TYPE FIX: Guard the role field before casting — if the DB returns a NULL role
+  // (schema drift, missing data), `null as string` still passes the `has()` call
+  // but evaluates to false (Set.has(null) === false), producing silent denial.
+  // Explicit string-type check makes the intent unambiguous and catches schema drift.
+  const role = row?.['role'];
+  return typeof role === 'string' && EXPORT_ALLOWED_ROLES.has(role);
 }
 
 // P2-7 FIX: recordAuditEvent now throws on failure.

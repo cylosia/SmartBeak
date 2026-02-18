@@ -186,10 +186,15 @@ export class EventBus {
     );
 
     // Log any failures
+    // P2-TYPE FIX: Use optional access instead of non-null assertion.
+    // handlers was snapshotted so handlers[index] is always defined, but the
+    // non-null assertion suppresses a legitimate TypeScript type-safety check.
+    // Defensive optional access makes the intent explicit without runtime cost.
     results.forEach((result, index) => {
     if (result.status === 'rejected') {
+    const plugin = handlers[index]?.plugin ?? 'unknown';
     this.logger.error(
-        `[EventBus] Handler ${handlers[index]!.plugin} failed for ${event.name}:`,
+        `[EventBus] Handler ${plugin} failed for ${event.name}:`,
         result.reason
     );
     }

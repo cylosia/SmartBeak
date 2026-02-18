@@ -8,6 +8,11 @@ import {
 import { getOptionalEnv, getEnvWithDefault, API_BASE_URLS, API_VERSIONS } from '../../packages/config';
 
 import { ErrorCodes, ExternalAPIError } from '../../packages/kernel/validation';
+// P1-PERFORMANCE FIX: Static import instead of dynamic import inside the send() hot path.
+// Previously `await import('@kernel/validation')` was called on every email send, adding
+// unnecessary async overhead on every invocation (even though Node caches modules after
+// the first load, the await/microtask scheduling still adds latency per call).
+import { EmailSchema } from '../../packages/kernel/validation';
 import { getLogger } from '../../packages/kernel/logger';
 
 // Alias for backward compatibility
@@ -332,7 +337,7 @@ export class EmailAdapter implements DeliveryAdapter {
     
     try {
       // Validate email format - MEDIUM FIX I6: Add format validation
-      const { EmailSchema } = await import('@kernel/validation');
+      // P1-PERFORMANCE FIX: Use statically imported EmailSchema (no dynamic import)
       const emailValidation = EmailSchema.safeParse(to);
       if (!emailValidation.success) {
         // P1-PII FIX: Do not include email address in error details
@@ -815,8 +820,8 @@ export class EmailAdapter implements DeliveryAdapter {
   * @param email - Email to validate
   * @returns True if valid
   */
-  static async isValidEmail(email: string): Promise<boolean> {
-    const { EmailSchema } = await import('@kernel/validation');
+  // P1-PERFORMANCE FIX: Use statically imported EmailSchema — no dynamic import needed.
+  static isValidEmail(email: string): boolean {
     const result = EmailSchema.safeParse(email);
     return result.success;
   }

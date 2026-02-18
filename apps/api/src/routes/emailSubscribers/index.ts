@@ -1,7 +1,10 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 import { z } from 'zod';
 import { getDb } from '../../db';
 import { getLogger } from '@kernel/logger';
+import { getErrorMessage } from '@errors';
+import { csrfProtection } from '../../middleware/csrf';
+import { apiRateLimit } from '../../middleware/rateLimiter';
 import { authenticate } from './auth';
 import { hashEmail, validateEmailFormat, sanitizeString, escapeLikePattern } from './utils';
 
@@ -80,6 +83,13 @@ async function canAccessDomain(userId: string, domainId: string, orgId: string):
  * Email subscriber routes
  */
 export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void> {
+  // P0-SECURITY FIX: Add CSRF protection for all state-changing routes in this scope.
+  // Previously missing; POST/PATCH/DELETE subscriber endpoints were CSRF-vulnerable.
+  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  // P0-SECURITY FIX: Add rate limiting to prevent subscriber endpoint abuse.
+  // Previously missing; POST /subscribers had no request rate cap.
+  app.addHook('onRequest', apiRateLimit() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+
   // GET /api/v1/domains/:domainId/subscribers - List subscribers for a domain
   app.get('/api/v1/domains/:domainId/subscribers', async (req, reply) => {
     try {
@@ -173,7 +183,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         },
       });
     } catch (error) {
-      logger.error('Error listing subscribers: ' + (error instanceof Error ? error.message : String(error)));
+      // P1-LOGGING FIX: Use structured logging to prevent log injection via error.message
+      logger.error('Error listing subscribers', { message: getErrorMessage(error) });
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -250,7 +261,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         message: doubleOptIn ? 'Confirmation email sent' : 'Subscriber created',
       });
     } catch (error) {
-      logger.error('Error creating subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      // P1-LOGGING FIX: Use structured logging to prevent log injection via error.message
+      logger.error('Error creating subscriber', { message: getErrorMessage(error) });
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -288,7 +300,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
 
       return reply.send({ data: subscriber });
     } catch (error) {
-      logger.error('Error fetching subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      // P1-LOGGING FIX: Use structured logging to prevent log injection via error.message
+      logger.error('Error fetching subscriber', { message: getErrorMessage(error) });
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -360,7 +373,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
 
       return reply.send({ data: result });
     } catch (error) {
-      logger.error('Error updating subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      // P1-LOGGING FIX: Use structured logging to prevent log injection via error.message
+      logger.error('Error updating subscriber', { message: getErrorMessage(error) });
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -400,7 +414,8 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
 
       return reply.status(204).send();
     } catch (error) {
-      logger.error('Error deleting subscriber: ' + (error instanceof Error ? error.message : String(error)));
+      // P1-LOGGING FIX: Use structured logging to prevent log injection via error.message
+      logger.error('Error deleting subscriber', { message: getErrorMessage(error) });
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
