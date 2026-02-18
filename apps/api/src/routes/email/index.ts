@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 import { getLogger } from '@kernel/logger';
 import { csrfProtection } from '../../middleware/csrf';
@@ -24,8 +24,11 @@ import { recordAuditEvent } from './audit';
 import { verifyAuth, canAccessDomain } from './auth';
 
 export async function emailRoutes(app: FastifyInstance): Promise<void> {
-  // P2-SECURITY FIX: Add CSRF protection for state-changing POST endpoints
-  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  // Register CSRF protection for the entire plugin scope.
+  // csrfProtection() is method-aware: it returns immediately for safe
+  // GET/HEAD/OPTIONS methods (see csrf.ts:137-139), so GET list endpoints
+  // are never affected. Mutation endpoints (POST) are protected.
+  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply) => Promise<void>);
 
   // POST /email/lead-magnets - Create lead magnet
   app.post('/email/lead-magnets', async (req, reply) => {
