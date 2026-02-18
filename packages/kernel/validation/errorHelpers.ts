@@ -28,12 +28,12 @@ export interface FormattedValidationError {
 /**
  * Check if a value is a ValidationError
  */
+// P2-5 FIX: Remove duck-type fallback — only accept real ValidationError instances.
+// The duck-type branch ({ name: 'ValidationError' }) could be satisfied by any
+// attacker-controlled plain object, mapping arbitrary errors to HTTP 400 instead
+// of their correct status code (e.g., 401 for an auth error).
 export function isValidationError(error: unknown): error is ValidationError {
-  return error instanceof ValidationError || 
-    (typeof error === 'object' && 
-     error !== null && 
-     'name' in error && 
-     error.name === 'ValidationError');
+  return error instanceof ValidationError;
 }
 
 // ============================================================================
@@ -262,7 +262,12 @@ export async function attemptRecovery<T>(
       return config.fallback;
     
     case 'retry':
-      // Retry logic is handled at a higher level
+      // P1-8 FIX: Document that 'retry' re-throws immediately — it cannot retry here
+      // because attemptRecovery does not have a reference to the original operation.
+      // Callers that want retry behaviour should use `withRetry()` from `@kernel/retry`
+      // directly instead of passing strategy: 'retry' to this function.
+      // `maxRetries` and `retryDelayMs` on ErrorRecoveryConfig are intentionally unused
+      // for this strategy; the config fields exist for forward-compatibility only.
       config.onRecovery?.(error, 'retry');
       throw error;
     
@@ -351,36 +356,15 @@ export function classifyError(error: unknown): ErrorClass {
     }
   }
 
+  // P2-6 FIX: Remove error message-string classification for plain Error instances.
+  // Classifying by error.message content is unsafe because:
+  //  - An AWS SES error like "401 Unauthorized: invalid key" would be classified as
+  //    'authentication', suggesting a credentials issue rather than misconfiguration.
+  //  - Attacker-controlled values embedded in error messages can influence classification,
+  //    mapping errors to wrong HTTP status codes.
+  // Plain Error instances that are not ValidationError are always 'unknown'.
   if (error instanceof Error) {
-    const message = error.message.toLowerCase();
-    
-    if (message.includes('network') || message.includes('connection') || message.includes('timeout')) {
-      return 'network';
-    }
-    
-    if (message.includes('not found') || message.includes('404')) {
-      return 'not_found';
-    }
-    
-    if (message.includes('unauthorized') || message.includes('401')) {
-      return 'authentication';
-    }
-    
-    if (message.includes('forbidden') || message.includes('403')) {
-      return 'authorization';
-    }
-    
-    if (message.includes('conflict') || message.includes('409')) {
-      return 'conflict';
-    }
-    
-    if (message.includes('rate limit') || message.includes('429')) {
-      return 'rate_limit';
-    }
-    
-    if (message.includes('service unavailable') || message.includes('503')) {
-      return 'service_unavailable';
-    }
+    return 'unknown';
   }
 
   return 'unknown';

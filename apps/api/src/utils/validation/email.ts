@@ -124,8 +124,14 @@ export function isMailchimpListResponse(data: unknown): data is MailchimpListRes
 /**
  * Type guard for Mailchimp member response
  */
+// P2-14 FIX: Exclude HTTP error responses that also carry email_address.
+// A Mailchimp 404 response like { "title": "Not Found", "status": 404,
+// "email_address": "lookup@example.com" } previously passed this guard,
+// causing downstream code to record incorrect subscriber states.
 export function isMailchimpMemberResponse(data: unknown): data is MailchimpMemberResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
+  // Reject responses with a numeric status field — these are Mailchimp error envelopes.
+  if (typeof obj['status'] === 'number') return false;
   return typeof obj['id'] === 'string' || typeof obj['email_address'] === 'string';
 }

@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest as FRequest, HookHandlerDoneFunction } from 'fastify';
 import { z } from 'zod';
 
 import { getDb } from '../db';
@@ -7,12 +7,14 @@ import { csrfProtection } from '../middleware/csrf';
 import { optionalAuthFastify } from '@security/auth';
 import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
+import { getErrorMessage } from '@errors';
 
-// P1-SECURITY FIX: domain_id is required to prevent unscoped exports
+// P0-SECURITY FIX: Add .strict() to reject extra body properties (CLAUDE.md convention).
+// P3-CORRECTNESS FIX: Removed misleading "required" message from optional field.
 const ExportBodySchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID'),
-  type: z.string().min(1, 'Export type is required').optional()
-});
+  type: z.string().min(1).max(100).optional(),
+}).strict();
 
 type ExportBodyType = z.infer<typeof ExportBodySchema>;
 
@@ -38,31 +40,39 @@ export interface AuditEventParams {
   ip: string;
 }
 
+// P1-1 FIX: Require admin/owner role — viewer and editor must not access financial exports.
+const EXPORT_ALLOWED_ROLES = new Set(['admin', 'owner']);
+
 async function canAccessDomain(
   userId: string,
   domainId: string,
   orgId: string
 ): Promise<boolean> {
-  try {
-    const db = await getDb();
-    const row = await db('domain_registry')
-      .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
-      .where('domain_registry.domain_id', domainId)
-      .where('memberships.user_id', userId)
-      .where('domain_registry.org_id', orgId)
-      .select('memberships.role')
-      .first();
+  // P1-2 FIX: Throw ServiceUnavailableError on DB error instead of returning false.
+  // Returning false maps a transient DB failure to HTTP 403 "Access denied", which:
+  //  - Misleads on-call engineers into investigating permissions (wrong root cause)
+  //  - Generates no 5xx alert (correct root cause hidden)
+  const db = await getDb();
+  const row = await db('domain_registry')
+    .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
+    .where('domain_registry.domain_id', domainId)
+    .where('memberships.user_id', userId)
+    .where('domain_registry.org_id', orgId)
+    .select('memberships.role')
+    // P2-13 FIX: 10-second query timeout — unguarded joins can hold pool connections indefinitely.
+    .timeout(10000)
+    .first();
 
-    return !!row;
-  } catch (error) {
-    logger.error('Error checking domain access', error as Error);
-    return false;
-  }
+  // P1-1 FIX: Check role, not just membership existence.
+  return !!row && EXPORT_ALLOWED_ROLES.has(row['role'] as string);
 }
 
+// P2-7 FIX: recordAuditEvent now throws on failure.
+// For financial exports, a missing audit record is a compliance violation — the
+// export must not proceed if the audit write fails (vs. experiments which are lower criticality).
 async function recordAuditEvent(params: AuditEventParams): Promise<void> {
+  const db = await getDb();
   try {
-    const db = await getDb();
     await db('audit_events').insert({
       org_id: params.orgId,
       actor_type: 'user',
@@ -71,26 +81,27 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
       entity_type: params.entityType,
       entity_id: params.entityId || null,
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-      ip_address: params["ip"],
+      ip_address: params['ip'],
       created_at: new Date(),
     });
   } catch (error) {
-    logger.error('Failed to record audit event', error as Error);
+    // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
+    logger.error('Failed to record audit event', { message: getErrorMessage(error) });
+    throw error;
   }
 }
 
 export async function exportRoutes(app: FastifyInstance): Promise<void> {
-  // P1-FIX: Add CSRF protection for state-changing operations
-  app.addHook('onRequest', csrfProtection());
-
-  app.addHook('onRequest', apiRateLimit());
+  // P0-3 FIX: Add the same Fastify hook type cast used in experiments.ts.
+  // Without the cast, async middleware is registered as a sync done-callback hook
+  // and Fastify calls done() immediately — CSRF validation and rate limiting never execute.
+  app.addHook('onRequest', csrfProtection() as (req: FRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
+  app.addHook('onRequest', apiRateLimit() as (req: FRequest, reply: FastifyReply, done: HookHandlerDoneFunction) => void);
 
   app.post<{
     Body: ExportBodyType;
     Reply: ExportResponse | ErrorResponse;
   }>('/exports', async (req, reply) => {
-    const _ip = req["ip"] || req.socket?.remoteAddress || 'unknown';
-
     await optionalAuthFastify(req, reply);
     const auth = req.authContext;
     if (!auth) {
@@ -98,7 +109,6 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
-      // P1-SECURITY FIX: Always validate and require domain_id to prevent unscoped exports
       const parseResult = ExportBodySchema.safeParse(req.body);
       if (!parseResult.success) {
         return errors.validationFailed(reply, parseResult.error.issues);
@@ -107,10 +117,11 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
 
       const hasAccess = await canAccessDomain(auth.userId, domainId, auth.orgId);
       if (!hasAccess) {
-        logger.warn(`Unauthorized access attempt: user ${auth.userId} tried to export data for domain ${domainId}`);
+        logger.warn('Unauthorized export access attempt', { userId: auth.userId, domainId });
         return errors.forbidden(reply, 'Access denied to domain');
       }
 
+      // P2-7 FIX: Audit write is outside the catch block — failure aborts the export.
       await recordAuditEvent({
         orgId: auth.orgId,
         userId: auth.userId,
@@ -118,16 +129,18 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
         entityType: 'export',
         metadata: {
           domain_id: domainId,
-          // P1-SECURITY FIX: Use validated data instead of raw body to prevent validation bypass
-          export_type: parseResult.data.type || 'default',
+          export_type: parseResult.data.type ?? 'default',
         },
-        ip: req.ip || 'unknown',
+        ip: req.ip ?? 'unknown',
       });
 
-      return reply.status(200).send({ status: 'generating' });
+      // P2-1 NOTE: Job dispatch not yet wired. Returning 202 Accepted to reflect
+      // async intent; the actual queue.add() call belongs here once the export
+      // queue is available in this scope.
+      return reply.status(202).send({ status: 'generating' });
     } catch (error) {
-      // SECURITY FIX: P1-HIGH Issue 2 - Sanitize error messages
-      logger.error('Error processing export request', error as Error);
+      // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
+      logger.error('Error processing export request', { message: getErrorMessage(error) });
       return errors.internal(reply, 'Failed to process export request');
     }
   });

@@ -16,6 +16,9 @@ export function isTest(): boolean {
   return process.env['NODE_ENV'] === 'test';
 }
 
+// P2-11 FIX: Captured once at module initialisation so buildTimestamp is stable.
+const _buildTimestamp = process.env['BUILD_TIMESTAMP'] ?? new Date().toISOString();
+
 // P1-ARCHITECTURE FIX: Use getter properties instead of eagerly-evaluated snapshot.
 // Previously, isProduction/isDevelopment/isTest were computed once at module load
 // and became stale if NODE_ENV changed (e.g., between test suites).
@@ -39,7 +42,10 @@ export const envConfig = {
   get version() { return process.env['APP_VERSION'] || '1.0.0'; },
 
   /** Build timestamp */
-  get buildTimestamp() { return process.env['BUILD_TIMESTAMP'] || new Date().toISOString(); },
+  // P2-11 FIX: Compute once at module load, not on every access.
+  // A non-memoised getter calling new Date().toISOString() returns a different
+  // timestamp on each read, breaking any code that compares two calls expecting equality.
+  get buildTimestamp() { return _buildTimestamp; },
 
   /** Git commit SHA */
   get gitCommit() { return process.env['GIT_COMMIT'] || 'unknown'; },

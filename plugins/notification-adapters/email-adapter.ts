@@ -57,6 +57,53 @@ function sanitizeHref(url: string): string {
   return trimmed;
 }
 
+// ─── Attachment Validation ────────────────────────────────────────────────────
+// P0-SECURITY FIX: Validate attachments to block executable MIME types, size
+// exhaustion, and path-traversal filenames forwarded to recipient mail clients.
+const ALLOWED_ATTACHMENT_MIME = new Set([
+  'application/pdf',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'text/plain', 'text/csv',
+  'application/zip',
+]);
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_ATTACHMENTS = 5;
+
+function sanitizeAttachments(
+  attachments: EmailPayload['attachments']
+): EmailPayload['attachments'] {
+  if (!attachments) return undefined;
+  if (attachments.length > MAX_ATTACHMENTS) {
+    throw new ExternalAPIError(
+      `Too many attachments: max ${MAX_ATTACHMENTS}, got ${attachments.length}`,
+      ErrorCodes.PAYLOAD_TOO_LARGE,
+      { maxAttachments: MAX_ATTACHMENTS }
+    );
+  }
+  return attachments.map(a => {
+    // Strip path separators and control characters from filename
+    const filename = a.filename.replace(/[^a-zA-Z0-9._\- ]/g, '_');
+    if (a.contentType && !ALLOWED_ATTACHMENT_MIME.has(a.contentType)) {
+      throw new ExternalAPIError(
+        `Disallowed attachment MIME type: ${a.contentType}`,
+        ErrorCodes.INVALID_FORMAT,
+        { allowedTypes: [...ALLOWED_ATTACHMENT_MIME] }
+      );
+    }
+    const size = Buffer.isBuffer(a.content)
+      ? a.content.length
+      : Buffer.byteLength(a.content as string);
+    if (size > MAX_ATTACHMENT_BYTES) {
+      throw new ExternalAPIError(
+        `Attachment too large: max ${MAX_ATTACHMENT_BYTES} bytes`,
+        ErrorCodes.PAYLOAD_TOO_LARGE,
+        { maxBytes: MAX_ATTACHMENT_BYTES }
+      );
+    }
+    return { ...a, filename };
+  });
+}
+
 /** Email provider types - MEDIUM FIX I8: Add enum validation */
 export type EmailProvider = 'ses' | 'smtp' | 'sendgrid' | 'postmark';
 
@@ -331,16 +378,17 @@ export class EmailAdapter implements DeliveryAdapter {
       return {
         success: true,
         attemptedAt,
-        // P1-SECURITY FIX: Use the full UUID (128-bit) as the delivery ID.
-        // The previous `.slice(0, 8)` truncated to 32 bits of entropy, making
-        // delivery IDs easily guessable and prone to collision under load.
-        deliveryId: `email_${Date.now()}_${crypto.randomUUID()}`
+        // P3-CORRECTNESS FIX: Use only a UUID for delivery ID.
+        // Date.now() adds no entropy and leaks send timing to callers who log the ID.
+        deliveryId: `email_${crypto.randomUUID()}`
       };
     } catch (error) {
       return {
         success: false,
         attemptedAt,
-        error: error instanceof Error ? error.message : String(error),
+        // P2-SECURITY FIX: Never surface raw internal error messages.
+        // AWS SDK errors contain IAM ARNs; SMTP errors contain server hostnames.
+        error: error instanceof DeliveryAdapterError ? error.message : 'Email delivery failed',
         errorCode: error instanceof DeliveryAdapterError ? error.code : 'UNKNOWN_ERROR'
       };
     }
@@ -431,7 +479,18 @@ export class EmailAdapter implements DeliveryAdapter {
       'weekly-summary': () => {
         const publishedCount = getNumber('publishedCount', 0);
         const newKeywords = getNumber('newKeywords', 0);
-        const revenue = getNumber('revenue', 0);
+        const rawRevenue = getNumber('revenue', 0);
+        // P2-CORRECTNESS FIX: Reject non-finite revenue values (Infinity, -Infinity, NaN).
+        // Rendering them verbatim produces "$Infinity" or "$NaN" in financial emails.
+        if (!isFinite(rawRevenue)) {
+          throw new ExternalAPIError(
+            'Invalid revenue value in weekly-summary template',
+            ErrorCodes.INVALID_FORMAT,
+            {}
+          );
+        }
+        const revenue = rawRevenue.toLocaleString('en-US',
+          { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return {
           subject: `Your Weekly SmartBeak Summary`,
           html: `
@@ -600,7 +659,10 @@ export class EmailAdapter implements DeliveryAdapter {
         html: payload.html,
         text: payload.text,
         replyTo: this.config.replyTo ? stripCrlf(this.config.replyTo) : undefined,
-        attachments: payload.attachments,
+        // P0-SECURITY FIX: Validate attachments before forwarding.
+        // Unvalidated attachments allow executable MIME types, unbounded sizes, and
+        // path-traversal filenames that are forwarded verbatim to recipient mail clients.
+        attachments: sanitizeAttachments(payload.attachments),
       });
 
       // P1-PII FIX: Redact email addresses from logs
@@ -703,13 +765,16 @@ export class EmailAdapter implements DeliveryAdapter {
         'Content-Type': 'application/json',
         'X-Postmark-Server-Token': token,
       },
+      // P0-SECURITY FIX: Strip CRLF from all header-injectable fields.
+      // The SES and SMTP paths already applied stripCrlf; Postmark was missing it,
+      // allowing "\r\nBcc: attacker@evil.com" injection via fromName / replyTo / subject.
       body: JSON.stringify({
-        From: `${this.config.fromName} <${this.config.fromEmail}>`,
-        To: Array.isArray(payload.to) ? payload.to.join(',') : payload.to,
-        Subject: payload.subject,
+        From: `${stripCrlf(this.config.fromName ?? '')} <${this.config.fromEmail}>`,
+        To: (Array.isArray(payload.to) ? payload.to : [payload.to]).map(stripCrlf).join(','),
+        Subject: stripCrlf(payload.subject),
         HtmlBody: payload.html,
         TextBody: payload.text,
-        ReplyTo: this.config.replyTo,
+        ReplyTo: this.config.replyTo ? stripCrlf(this.config.replyTo) : undefined,
       }),
     });
 

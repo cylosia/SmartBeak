@@ -161,12 +161,23 @@ export async function runSafely(
 
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
   try {
-    // Add timeout to prevent hanging
+    // P2-12 FIX: Clear the timeout after handler resolves/rejects to prevent timer leaks.
+    // Previously the setTimeout handle was never stored, so the 60-second timer remained
+    // active even after handler() resolved. Under sustained load, thousands of live timers
+    // accumulate, increasing memory pressure and preventing clean process shutdown.
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`Handler timed out after ${HANDLER_TIMEOUT_MS}ms`)), HANDLER_TIMEOUT_MS);
+      timeoutId = setTimeout(
+        () => reject(new Error(`Handler timed out after ${HANDLER_TIMEOUT_MS}ms`)),
+        HANDLER_TIMEOUT_MS
+      );
     });
 
-    await Promise.race([handler(), timeoutPromise]);
+    try {
+      await Promise.race([handler(), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     // Success - exit function
     return;

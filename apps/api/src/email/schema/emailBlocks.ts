@@ -60,7 +60,9 @@ export const EmailMessageSchema = z.object({
   // additional SMTP headers and send copies to arbitrary recipients.
   subject: z.string().min(1).max(998).transform(s => s.replace(/[\r\n]/g, '')),
   preview_text: z.string().max(200).optional(),
-  blocks: z.array(EmailBlockSchema).max(100),
+  // P2-10 FIX: Add .min(1) — an email with zero blocks is nonsensical and should fail
+  // validation rather than silently produce an empty-body message.
+  blocks: z.array(EmailBlockSchema).min(1).max(100),
   footer: ComplianceFooterSchema,
 }).strict();
 

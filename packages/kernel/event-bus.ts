@@ -119,7 +119,12 @@ export class EventBus {
   * @returns Promise that resolves when all handlers have executed
   */
   async publish<T>(event: DomainEventEnvelope<T>): Promise<void> {
-  const handlers = this.handlers.get(event.name) ?? [];
+  // P2-2 FIX: Snapshot the handler array before iterating.
+  // Using the live reference means a subscribe() or unsubscribe() call from within
+  // a handler mutates the array in place (via push/filter), causing:
+  //  - handlers[index] to reference a different plugin than the one that failed
+  //  - potential out-of-bounds access if the array shrinks mid-dispatch
+  const handlers = [...(this.handlers.get(event.name) ?? [])];
 
   if (handlers.length === 0) {
     this.logger.warn(`[EventBus] No handlers for event: ${event.name}`);
@@ -190,10 +195,13 @@ export class EventBus {
     }
     });
 
-    // If all handlers failed, throw to trigger circuit breaker
-    const allFailed = results.every(r => r.status === 'rejected');
-    if (allFailed && results.length > 0) {
-    throw new Error(`All handlers failed for event: ${event.name}`);
+    // P2-3 FIX: Use a ratio threshold instead of requiring 100% failure.
+    // Previously 9/10 handlers failing (billing, audit, notifications all down)
+    // would NOT trip the circuit breaker if one handler succeeded.
+    const failedCount = results.filter(r => r.status === 'rejected').length;
+    const FAILURE_RATIO_THRESHOLD = 0.5;
+    if (results.length > 0 && failedCount / results.length >= FAILURE_RATIO_THRESHOLD) {
+    throw new Error(`${failedCount}/${results.length} handlers failed for event: ${event.name}`);
     }
     });
 
