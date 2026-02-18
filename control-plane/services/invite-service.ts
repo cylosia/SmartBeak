@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
+import { ValidationError, ConflictError, NotFoundError, ErrorCodes } from '@errors';
 
 const logger = getLogger('invite-service');
 
@@ -41,7 +42,7 @@ export class InviteService {
   */
   private validateRole(role: string): asserts role is Role {
   if (!VALID_ROLES.includes(role as Role)) {
-    throw new Error(`Invalid role: ${role}. Must be one of: ${VALID_ROLES.join(', ')}`);
+    throw new ValidationError('Invalid role provided', undefined, undefined);
   }
   }
 
@@ -50,13 +51,13 @@ export class InviteService {
   */
   private validateEmail(email: string): void {
   if (!email || typeof email !== 'string') {
-    throw new Error('Email is required');
+    throw new ValidationError('Email is required');
   }
   if (email.length > 254) {
-    throw new Error('Email is too long');
+    throw new ValidationError('Email is too long');
   }
   if (!isValidEmailFormat(email)) {
-    throw new Error('Invalid email format');
+    throw new ValidationError('Invalid email format');
   }
   }
 
@@ -71,7 +72,7 @@ export class InviteService {
     [orgId, normalizedEmail, 'pending']
   );
   if (rows.length > 0) {
-    throw new Error('An active invite already exists for this email');
+    throw new ConflictError('An active invite already exists for this email');
   }
   }
 
@@ -88,15 +89,18 @@ export class InviteService {
     [orgId, normalizedEmail]
   );
   if (rows.length > 0) {
-    throw new Error('User is already a member of this organization');
+    throw new ConflictError('User is already a member of this organization');
   }
   }
 
   async invite(orgId: string, email: string, role: Role) {
   // Validate inputs
   if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
+    throw new ValidationError('Valid orgId is required');
   }
+  // Runtime role validation (defense-in-depth: the type system enforces Role at
+  // compile time, but callers may bypass types via `as unknown as Role` casts).
+  this.validateRole(role as string);
   this.validateEmail(email);
 
   const id = randomUUID();
@@ -113,7 +117,7 @@ export class InviteService {
     await this.checkExistingMembership(orgId, normalizedEmail, client);
 
     await client.query(
-    'INSERT INTO invites (id, org_id, email, role, status, created_at) VALUES ($1,$2,$3,$4,$5,NOW())',
+    'INSERT INTO invites (id, org_id, email, role, status, created_at, expires_at) VALUES ($1,$2,$3,$4,$5,NOW(),NOW() + INTERVAL \'7 days\')',
     [id, orgId, normalizedEmail, role, 'pending']
     );
 
@@ -136,10 +140,10 @@ export class InviteService {
   */
   async revokeInvite(orgId: string, inviteId: string): Promise<void> {
   if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
+    throw new ValidationError('Valid orgId is required');
   }
   if (!inviteId || typeof inviteId !== 'string') {
-    throw new Error('Valid inviteId is required');
+    throw new ValidationError('Valid inviteId is required');
   }
 
   const client = await this.pool.connect();
@@ -154,7 +158,7 @@ export class InviteService {
     );
 
     if (result.rowCount === 0) {
-    throw new Error('Invite not found or already processed');
+    throw new NotFoundError('Invite not found or already processed', ErrorCodes.NOT_FOUND);
     }
 
     await this.auditLog('invite_revoked', orgId, { inviteId });

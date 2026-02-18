@@ -84,17 +84,39 @@ export function truncateJSONB<T extends Record<string, unknown>>(
     }
   }
 
-  // Sort by length descending and truncate
+  // Sort by length descending and truncate.
+  // The previous fixed-overhead approach (10 bytes per field) underestimated
+  // overhead for long key names, allowing the result to still exceed maxSize.
+  // Instead, greedily fill fields and measure actual remaining budget each time.
   stringFields.sort((a, b) => b.length - a.length);
-  const availableForStrings = maxSize - currentSize - (stringFields.length * 10); // 10 chars per key:'',
 
   for (const field of stringFields) {
-    const maxFieldSize = Math.floor(availableForStrings / stringFields.length);
-    if (field.length > maxFieldSize) {
-      result[field.key] = field.value.substring(0, Math.floor(maxFieldSize / 2)) + '... [truncated]';
+    // Measure how many bytes the partial result already occupies.
+    const serializedSoFar = Buffer.byteLength(JSON.stringify(result), 'utf8');
+    // Exact overhead for `,"key":""` (subtract 2 for the surrounding `{}` in JSON.stringify).
+    const keyOverheadBytes = Buffer.byteLength(JSON.stringify({ [field.key]: '' }), 'utf8') - 2;
+    const remainingBudget = maxSize - serializedSoFar - keyOverheadBytes;
+    if (remainingBudget <= 0) {
+      break; // No budget left for any more string fields
+    }
+    if (field.length > remainingBudget) {
+      // Leave room for the `... [truncated]` suffix (15 bytes)
+      const keepBytes = Math.max(0, remainingBudget - 15);
+      result[field.key] = field.value.substring(0, keepBytes) + '... [truncated]';
     } else {
       result[field.key] = field.value;
     }
+  }
+
+  // Final safety guard: if estimation is still off, hard-truncate by removing
+  // the largest remaining string field until the object fits.
+  let finalJson = JSON.stringify(result);
+  while (Buffer.byteLength(finalJson, 'utf8') > maxSize && Object.keys(result).length > 0) {
+    const longestKey = Object.keys(result).reduce((a, b) =>
+      Buffer.byteLength(String(result[a]), 'utf8') > Buffer.byteLength(String(result[b]), 'utf8') ? a : b
+    );
+    delete result[longestKey];
+    finalJson = JSON.stringify(result);
   }
 
   return result as T;

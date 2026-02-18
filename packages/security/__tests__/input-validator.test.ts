@@ -263,9 +263,11 @@ describe('Input Validation Utilities', () => {
       expect(validateQueryParam('hi', { minLength: 5 })).toBeNull();
     });
 
-    it('should enforce maxLength by truncating', () => {
+    it('should reject values exceeding maxLength (not silently truncate)', () => {
+      // Silent truncation corrupts structured data (UUIDs, emails, etc.).
+      // Oversized values are rejected so the caller can handle them explicitly.
       const result = validateQueryParam('hello world', { maxLength: 5 });
-      expect(result).toBe('hello');
+      expect(result).toBeNull();
     });
 
     it('should return null for null/undefined without allowEmpty', () => {

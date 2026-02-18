@@ -86,8 +86,10 @@ export class UnsupportedAlgorithmError extends IdempotencyError {
 
 const DEFAULT_ALGORITHM = 'sha256';
 const DEFAULT_ENCODING: BinaryToTextEncoding = 'hex';
-// P3-4 FIX: Pre-compiled regex for hex validation (avoids creating RegExp per call)
+// Pre-compiled regex patterns for key format validation (per-encoding, not always hex)
 const HEX_PATTERN = /^[a-f0-9]+$/i;
+const BASE64_PATTERN = /^[A-Za-z0-9+/]+=*$/;
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+=*$/;
 
 // ============================================================================
 // Hash Algorithm Utilities
@@ -258,22 +260,37 @@ export function generateRequestKey(params: {
 *
 * @param key - Key to validate
 * @param algorithm - Hash algorithm used (defaults to 'sha256')
+* @param encoding - Encoding used for the key (defaults to 'hex')
 * @returns Whether the key is valid
 */
-export function isValidIdempotencyKey(key: string, algorithm: string = 'sha256'): boolean {
+export function isValidIdempotencyKey(key: string, algorithm: string = 'sha256', encoding: string = 'hex'): boolean {
   if (typeof key !== 'string') return false;
 
-  const lengths: Record<string, number> = {
-  md5: 32,
-  sha256: 64,
-  sha512: 128
+  // Expected character lengths for hex-encoded digests
+  const hexLengths: Record<string, number> = {
+    md5: 32,
+    sha256: 64,
+    sha512: 128,
   };
 
-  const expectedLength = lengths[algorithm];
-  if (!expectedLength) return false;
-  if (key.length !== expectedLength) return false;
+  // For hex encoding, validate exact length and character set
+  if (encoding === 'hex') {
+    const expectedLength = hexLengths[algorithm];
+    if (!expectedLength) return false;
+    if (key.length !== expectedLength) return false;
+    return HEX_PATTERN.test(key);
+  }
 
-  return HEX_PATTERN.test(key);
+  // For base64/base64url, validate character set only (length varies due to padding)
+  if (encoding === 'base64') {
+    return BASE64_PATTERN.test(key);
+  }
+
+  if (encoding === 'base64url') {
+    return BASE64URL_PATTERN.test(key);
+  }
+
+  return false;
 }
 
 // ============================================================================
@@ -339,10 +356,13 @@ export function hashPayload<T extends Record<string, unknown>>(payload: T): stri
   const sortedPayload = sortKeysDeep(payload);
   const serialized = JSON.stringify(sortedPayload);
 
-  const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024; // 10MB
-  if (serialized.length > MAX_PAYLOAD_SIZE) {
+  // Use byte length (not character count) to correctly bound multi-byte Unicode payloads.
+  // A payload of 5M multi-byte chars can exceed 10MB in UTF-8 bytes.
+  const MAX_PAYLOAD_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+  const sizeInBytes = Buffer.byteLength(serialized, 'utf8');
+  if (sizeInBytes > MAX_PAYLOAD_SIZE_BYTES) {
   throw new IdempotencyError(
-    `Payload size ${serialized.length} exceeds maximum ${MAX_PAYLOAD_SIZE}`,
+    `Payload size ${sizeInBytes} bytes exceeds maximum ${MAX_PAYLOAD_SIZE_BYTES} bytes`,
     'PAYLOAD_TOO_LARGE'
   );
   }
