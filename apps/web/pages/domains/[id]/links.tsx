@@ -1,5 +1,6 @@
 
 import { GetServerSideProps } from 'next';
+import { requireDomainAccess } from '../../../lib/auth';
 
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
@@ -57,18 +58,26 @@ export default function Links({ domainId, internal, external }: LinksProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const getServerSideProps: GetServerSideProps = async ({ params, req }) => {
   const rawId = params?.['id'];
   const domainId = Array.isArray(rawId) ? rawId[0] : rawId;
-  if (typeof domainId !== 'string') {
+  if (!domainId || typeof domainId !== 'string' || !UUID_RE.test(domainId)) {
     return { notFound: true };
   }
+
+  const authCheck = await requireDomainAccess(req, domainId);
+  if (!authCheck.authorized) {
+    return authCheck.result;
+  }
+
   // Placeholder aggregates; wire to read models
   return {
   props: {
     domainId,
-    internal: { orphans: 3, hubs: 5, broken: 2 },
-    external: { editorial: 42, affiliate: 18, broken: 4 }
+    internal: { orphans: 0, hubs: 0, broken: 0 },
+    external: { editorial: 0, affiliate: 0, broken: 0 }
   }
   };
 };

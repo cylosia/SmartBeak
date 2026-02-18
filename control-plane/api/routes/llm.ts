@@ -41,18 +41,28 @@ export interface LlmPreferences {
   };
 }
 
+const ALLOWED_LLM_MODELS = [
+  'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-3.5-turbo',
+  'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku',
+  'claude-opus-4-6', 'claude-sonnet-4-5-20250929',
+] as const;
+
+const ALLOWED_IMAGE_PROVIDERS = ['dall-e-3', 'dall-e-2', 'stable-diffusion'] as const;
+const ALLOWED_IMAGE_SIZES = ['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'] as const;
+const ALLOWED_IMAGE_QUALITIES = ['standard', 'hd'] as const;
+
 const UpdatePreferencesSchema = z.object({
-  defaultModel: z.string().optional(),
-  fallbackModel: z.string().optional(),
+  defaultModel: z.enum(ALLOWED_LLM_MODELS).optional(),
+  fallbackModel: z.enum(ALLOWED_LLM_MODELS).optional(),
   contentGeneration: z.object({
-  model: z.string().optional(),
+  model: z.enum(ALLOWED_LLM_MODELS).optional(),
   temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().min(1).max(8000).optional(),
+  maxTokens: z.number().int().min(1).max(8000).optional(),
   }).strict().optional(),
   imageGeneration: z.object({
-  provider: z.string().optional(),
-  size: z.string().optional(),
-  quality: z.string().optional(),
+  provider: z.enum(ALLOWED_IMAGE_PROVIDERS).optional(),
+  size: z.enum(ALLOWED_IMAGE_SIZES).optional(),
+  quality: z.enum(ALLOWED_IMAGE_QUALITIES).optional(),
   }).strict().optional(),
   costLimits: z.object({
   monthly: z.number().min(0).optional(),
@@ -91,8 +101,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
 
     // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
-    let models: LlmModel[] = [];
-    try {
     const result = await pool.query(
       `SELECT id, name, provider, capabilities, cost_per_1k_tokens as "costPer1kTokens",
           max_tokens as "maxTokens", available
@@ -101,12 +109,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       ORDER BY provider, name`,
       [ctx.orgId]
     );
-    models = result.rows;
-    } catch (dbError) {
-    logger.error('[llm/models] Database error', dbError instanceof Error ? dbError : new Error(String(dbError)));
-    // Return empty array if table doesn't exist or other DB error
-    models = [];
-    }
+    const models: LlmModel[] = result.rows;
 
     return res.send({ models });
   } catch (error) {
