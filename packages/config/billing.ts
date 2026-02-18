@@ -23,6 +23,15 @@ export const billingConfig = {
     return key;
   },
 
+  /**
+   * Stripe API version used when constructing the Stripe client.
+   * P3-FIX: Centralise here so all Stripe client instances use the same version
+   * and upgrades require a single config change rather than a code search.
+   */
+  get stripeApiVersion(): '2023-10-16' {
+    return '2023-10-16';
+  },
+
   /** Paddle API key (validated at startup) */
   // P1-FIX: Throw on missing key instead of returning empty string
   // (was silently sending empty API key to Paddle, causing confusing auth errors)

@@ -490,6 +490,124 @@ export function unsafeAsDomainId(id: string): DomainId {
 // Additional Factory Functions (consolidated from kernel/branded.ts)
 // ============================================================================
 
+// P2-FIX: Add factory functions for branded types that were defined but had no
+// corresponding createXxx() function. Without these, call sites were forced to
+// use unsafe `id as MembershipId` casts, bypassing UUID validation entirely.
+// Financial IDs (AffiliateId, CommissionId) and auth IDs (MembershipId) are
+// highest priority — invalid values in those paths corrupt audit/billing records.
+
+/** Factory function for MembershipId */
+export function createMembershipId(id: string): MembershipId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid MembershipId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as MembershipId;
+}
+
+/** Factory function for DomainRegistryId */
+export function createDomainRegistryId(id: string): DomainRegistryId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid DomainRegistryId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as DomainRegistryId;
+}
+
+/** Factory function for ContentVersionId */
+export function createContentVersionId(id: string): ContentVersionId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid ContentVersionId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as ContentVersionId;
+}
+
+/** Factory function for ContentIdeaId */
+export function createContentIdeaId(id: string): ContentIdeaId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid ContentIdeaId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as ContentIdeaId;
+}
+
+/** Factory function for MediaCollectionId */
+export function createMediaCollectionId(id: string): MediaCollectionId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid MediaCollectionId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as MediaCollectionId;
+}
+
+/** Factory function for EmailCampaignId */
+export function createEmailCampaignId(id: string): EmailCampaignId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid EmailCampaignId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as EmailCampaignId;
+}
+
+/** Factory function for EmailTemplateId */
+export function createEmailTemplateId(id: string): EmailTemplateId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid EmailTemplateId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as EmailTemplateId;
+}
+
+/** Factory function for TaskId */
+export function createTaskId(id: string): TaskId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid TaskId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as TaskId;
+}
+
+/** Factory function for ExportId */
+export function createExportId(id: string): ExportId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid ExportId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as ExportId;
+}
+
+/** Factory function for AnalyticsEventId */
+export function createAnalyticsEventId(id: string): AnalyticsEventId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid AnalyticsEventId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as AnalyticsEventId;
+}
+
+/** Factory function for MetricId */
+export function createMetricId(id: string): MetricId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid MetricId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as MetricId;
+}
+
+/** Factory function for ReportId */
+export function createReportId(id: string): ReportId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid ReportId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as ReportId;
+}
+
+/** Factory function for AffiliateId */
+export function createAffiliateId(id: string): AffiliateId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid AffiliateId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as AffiliateId;
+}
+
+/** Factory function for CommissionId */
+export function createCommissionId(id: string): CommissionId {
+  if (!isUUID(id)) {
+    throw new ValidationError(`Invalid CommissionId format: ${id}. Expected valid UUID.`, 'id', ErrorCodes.INVALID_UUID);
+  }
+  return id as CommissionId;
+}
+
 /** Factory function for EmailSubscriberId */
 export function createEmailSubscriberId(id: string): EmailSubscriberId {
   if (!isUUID(id)) {
@@ -519,7 +637,19 @@ export function isValidId(value: unknown): value is string {
   return typeof value === 'string' && isUUID(value);
 }
 
-/** Unsafe brand cast for cases where validation is already done */
+/**
+ * UNSAFE: Cast any value to any branded type without validation.
+ *
+ * @internal Only for use within ORM/database mapping layers inside
+ * `packages/kernel` where the underlying value is already guaranteed to be a
+ * validated UUID (e.g. rows returned from a DB column with a UUID check
+ * constraint). Do NOT use this in application code — use the specific
+ * `createXxx()` factory functions which enforce UUID validation.
+ *
+ * P2-FIX: Added @internal marker to prevent accidental use as a general-purpose
+ * escape hatch. The generic signature `<T, B>` lets callers bypass the entire
+ * branded type system for any type with no runtime guard.
+ */
 export function unsafeBrand<T, B>(value: T): Brand<T, B> {
   return value as Brand<T, B>;
 }

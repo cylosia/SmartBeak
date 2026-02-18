@@ -14,9 +14,11 @@ import { errors } from '@errors/responses';
 const billingInvoiceExportLogger = getLogger('billingInvoiceExport');
 
 // MEDIUM FIX C2: Replace direct process.env with validated config
+// P3-FIX: Read apiVersion from config rather than hardcoding it here, so all
+// Stripe client instances in the codebase stay in sync via a single change.
 const billingConfig = getBillingConfig();
 const stripe = new Stripe(billingConfig.stripeSecretKey, {
-  apiVersion: '2023-10-16'
+  apiVersion: billingConfig.stripeApiVersion,
 });
 
 /**
@@ -117,17 +119,20 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
   }
   });
 
-  // P1-FIX: Add membership verification hook
+  // P1-FIX: Add membership verification hook.
+  // P1-FIX (security): The previous guard used `if (!orgId || !userId) return` which
+  // allowed a JWT containing orgId but no `sub` claim (userId) to skip membership
+  // verification entirely. Both fields are now required; absence of either is treated
+  // as an authentication failure, not a "user-level billing" path.
   app.addHook('onRequest', async (req, reply) => {
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.user?.id;
     const orgId = authReq.user?.orgId;
-    
-    // If no org context, skip membership check (may be user-level billing)
+
     if (!orgId || !userId) {
-      return;
+      return errors.unauthorized(reply, 'Authentication required');
     }
-    
+
     // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {

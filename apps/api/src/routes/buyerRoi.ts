@@ -14,10 +14,16 @@ const RoleRowSchema = z.object({
   role: z.string(),
 });
 
+// P0-FIX: Schema now matches the columns selected from the DB and the fields
+// expected by generateBuyerRoiSummary (production_cost_usd, monthly_revenue_estimate).
+// The previous schema defined `roi_value` which is neither selected nor consumed
+// by the summary function, causing every row to have undefined financials and
+// an empty portfolio ROI on every buyer summary response.
 const RoiRowSchema = z.object({
   id: z.string(),
   content_id: z.string().optional(),
-  roi_value: z.number().optional(),
+  production_cost_usd: z.number().optional(),
+  monthly_revenue_estimate: z.number().optional(),
   created_at: z.coerce.date().optional(),
 });
 
@@ -26,7 +32,9 @@ export type RoiRow = z.infer<typeof RoiRowSchema>;
 function validateRoleRow(row: unknown): { role: string } {
   const result = RoleRowSchema.safeParse(row);
   if (!result.success) {
-  throw new Error(`Invalid role row: ${result.error["message"]}`);
+  // P3-FIX: ZodError.message is a verbose multi-line concatenation of all
+  // issues. Use errors[0].message for a concise, actionable single message.
+  throw new Error(`Invalid role row: ${result.error.errors[0]?.message ?? 'validation failed'}`);
   }
   return result.data;
 }
@@ -34,7 +42,8 @@ function validateRoleRow(row: unknown): { role: string } {
 function validateRoiRow(row: unknown): RoiRow {
   const result = RoiRowSchema.safeParse(row);
   if (!result.success) {
-  throw new Error(`Invalid ROI row: ${result.error["message"]}`);
+  // P3-FIX: Same ZodError.message issue as validateRoleRow above.
+  throw new Error(`Invalid ROI row: ${result.error.errors[0]?.message ?? 'validation failed'}`);
   }
   return result.data;
 }
@@ -173,10 +182,15 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
       .where('content.domain_id', domain)
       .orderBy('content_roi_models.id', 'asc')
       .limit(limit + 1)
+      // P0-FIX: Select the financial columns that generateBuyerRoiSummary actually
+      // consumes. The previous query fetched `roi_value` which is not part of the
+      // RoiRow interface used by the summary function — resulting in undefined
+      // production_cost_usd / monthly_revenue_estimate and an empty portfolio ROI.
       .select(
         'content_roi_models.id',
         'content_roi_models.content_id',
-        'content_roi_models.roi_value',
+        'content_roi_models.production_cost_usd',
+        'content_roi_models.monthly_revenue_estimate',
         'content_roi_models.created_at',
       );
 
@@ -198,7 +212,9 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     entityId: domain,
     metadata: {
     domain_id: domain,
-    result_count: rows.length,
+    // P0-FIX: `rows` was never declared in this scope; the correct variable is
+    // `validatedRows` (the paginated, schema-validated slice of rawRows).
+    result_count: validatedRows.length,
     },
     ip,
     });

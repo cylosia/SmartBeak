@@ -67,7 +67,12 @@ export const eventQueue = new Queue('events', {
     // state forever, blocking the worker slot and preventing other jobs from
     // running. BullMQ's default is no timeout (unlimited).
     timeout: 30_000, // 30 seconds
-    removeOnComplete: { count: 1_000 },
+    // P3-FIX: Retain completed jobs for 24 h in addition to capping by count.
+    // Count-only retention means high-throughput periods evict jobs in minutes,
+    // destroying the ability to correlate queue job IDs with audit_events rows
+    // during incident postmortems. The 24 h age limit bounds Redis memory while
+    // keeping a useful window for investigations.
+    removeOnComplete: { count: 1_000, age: 86_400 },
     // P1-FIX: Bound failed-job retention. removeOnFail: false kept all failed jobs
     // in Redis permanently — under sustained downstream failures this exhausts Redis
     // memory, eventually making the queue unavailable. Retain the 5 000 most recent
@@ -97,5 +102,11 @@ eventQueue.on('stalled', (jobId) => {
 });
 
 export async function enqueueEvent(event: DomainEventEnvelope<unknown>) {
-  await eventQueue.add(event.name, event);
+  // P1-FIX: Derive a deterministic job ID from the event envelope's identity fields
+  // so that BullMQ deduplicates retries. Without a jobId, every call to enqueueEvent
+  // created a new random job — duplicate enqueues (HTTP retries, at-least-once
+  // delivery) produced duplicate jobs, each processed independently, double-counting
+  // financial KPIs and publish intents.
+  const jobId = `${event.meta.domainId}:${event.meta.correlationId}`;
+  await eventQueue.add(event.name, event, { jobId });
 }
