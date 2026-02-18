@@ -54,8 +54,12 @@ function withErrorBoundary(
 
     // Send standardized error response
         if (error instanceof ExternalAPIError) {
+        // P1-7 FIX: Only forward error.details in non-production environments.
+        // In production, error.details may contain internal state (DB schema,
+        // service topology, stack traces) that must not reach API consumers.
+        const safeDetails = process.env['NODE_ENV'] !== 'production' ? error.details : undefined;
         return sendError(res, getStatusCodeForError(error.code as ErrorCode), error.code as ErrorCode, error.message, {
-        details: error.details,
+        details: safeDetails,
         });
     }
 
@@ -192,9 +196,11 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
   * MEDIUM FIX E2: Add error boundaries
   */
   app.get('/admin/dlq', withErrorBoundary(async (req, res) => {
+    // P1-3 FIX: Rate limit before auth — prevents unauthenticated callers from
+    // spamming auth failures without consuming any rate-limit quota.
+    await rateLimit(`admin:dlq:${req.ip}`, 40);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
-    await rateLimit('admin:dlq', 40);
 
     // Validate orgId is present
     if (!ctx["orgId"]) {
@@ -237,9 +243,9 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
   * MEDIUM FIX E2: Add error boundaries
   */
   app.post('/admin/dlq/:id/retry', withErrorBoundary(async (req, res) => {
+    await rateLimit(`admin:dlq:retry:${req.ip}`, 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
-    await rateLimit('admin:dlq:retry', 20);
 
     // Validate orgId is present
     if (!ctx["orgId"]) {
@@ -250,8 +256,14 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
     );
     }
 
-    // Validate DLQ item ID - MEDIUM FIX I2: Standardize UUID validation
-    const { id } = req.params as { id: string };
+    // P2-13 FIX: Use a typed accessor instead of `as` cast on req.params.
+    // Fastify types req.params as unknown without a schema declaration; the
+    // cast previously hid the fact that `id` could be undefined at runtime.
+    const params = req.params as Record<string, string | undefined>;
+    const id = params['id'];
+    if (!id) {
+      throw new ExternalAPIError('Missing route parameter: id', ErrorCodes.VALIDATION_ERROR, { field: 'id' });
+    }
     validateUUID(id, 'id');
 
     // SECURITY FIX P0-3: Pass orgId for tenant isolation
@@ -266,9 +278,9 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
   * MEDIUM FIX E2: Add error boundaries
   */
   app.delete('/admin/dlq/:id', withErrorBoundary(async (req, res) => {
+    await rateLimit(`admin:dlq:delete:${req.ip}`, 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
-    await rateLimit('admin:dlq:delete', 20);
 
     // Validate orgId is present
     if (!ctx["orgId"]) {
@@ -279,8 +291,12 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
     );
     }
 
-    // Validate DLQ item ID - MEDIUM FIX I2: Standardize UUID validation
-    const { id } = req.params as { id: string };
+    // P2-13 FIX: Safe accessor instead of `as` cast.
+    const deleteParams = req.params as Record<string, string | undefined>;
+    const id = deleteParams['id'];
+    if (!id) {
+      throw new ExternalAPIError('Missing route parameter: id', ErrorCodes.VALIDATION_ERROR, { field: 'id' });
+    }
     validateUUID(id, 'id');
 
     // SECURITY FIX P0-4: Use proper delete instead of retry to prevent accidental re-execution

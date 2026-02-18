@@ -15,7 +15,6 @@ import { MultiTierCache } from './multiTierCache';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('QueryCache');
-const queryCacheLogger = getLogger('QueryCache');
 
 // ============================================================================
 // Constants for Memory Leak Prevention
@@ -134,13 +133,14 @@ export class QueryCache {
    * Generate cache key for a query
    */
   generateKey(query: string, params: unknown[] = []): string {
-    // Normalize query (remove extra whitespace)
-    const normalizedQuery = query.replace(/\s+/g, ' ').trim().toLowerCase();
-    
+    // Normalize query (remove extra whitespace only — do NOT lowercase because
+    // SQL string literals are case-sensitive: WHERE status='Active' ≠ WHERE status='active').
+    const normalizedQuery = query.replace(/\s+/g, ' ').trim();
+
     // Create deterministic key
     const queryHash = this.simpleHash(normalizedQuery);
     const paramsHash = this.simpleHash(JSON.stringify(params));
-    
+
     return `query:${queryHash}:${paramsHash}`;
   }
 
@@ -349,12 +349,11 @@ export class QueryCache {
     if (cleaned > 0) {
       this.versionsCleaned += cleaned;
       logger.info('Periodic cleanup removed stale version keys', { cleaned });
-      queryCacheLogger.info(`Periodic cleanup removed ${cleaned} stale version keys`);
     }
 
     // Check if we're approaching the limit
     const utilization = this.queryVersions.size / MAX_VERSION_KEYS;
-    if (utilization >= VERSION_ALERT_THRESHOLD && 
+    if (utilization >= VERSION_ALERT_THRESHOLD &&
         (now - this.lastAlertTime) > VERSION_ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
       logger.error('Version keys approaching limit', undefined, {
@@ -362,37 +361,73 @@ export class QueryCache {
         max: MAX_VERSION_KEYS,
         utilization: `${(utilization * 100).toFixed(1)}%`,
       });
-      queryCacheLogger.warn(`ALERT: Version keys approaching limit - current: ${this.queryVersions.size}, max: ${MAX_VERSION_KEYS}, utilization: ${(utilization * 100).toFixed(1)}%`);
     }
   }
 
   /**
-   * Invalidate queries by table
-   * Memory leak fix: Reset version if it exceeds MAX_VERSION_NUMBER
+   * Invalidate queries by table.
+   *
+   * P0-2 FIX: Previously, invalidateTable('table_a') only updated the
+   * single-table version key "table_a". Queries registered with
+   * dependsOn: ['table_a', 'table_b'] use the composite key "table_a:table_b"
+   * (built by getVersionKey), which was never updated — those cache entries
+   * were served stale indefinitely.
+   *
+   * This implementation increments the version for every key in queryVersions
+   * whose parts include tableName. Single-table keys ("table_a") and all
+   * composite keys containing that table ("table_a:table_b", "c:table_a") are
+   * all bumped in a single pass.
    */
   async invalidateTable(tableName: string): Promise<void> {
-    // Increment version for queries depending on this table
-    const currentEntry = this.queryVersions.get(tableName);
-    const newVersion = (currentEntry?.version ?? 1) + 1;
-    
-    // Reset if approaching integer overflow
-    const safeVersion = newVersion > MAX_VERSION_NUMBER ? 1 : newVersion;
-    
-    this.queryVersions.set(tableName, {
-      version: safeVersion,
-      lastAccessed: Date.now(),
-      tableCount: 1,
-    });
-    
-    logger.info('Invalidated table', { tableName, newVersion: safeVersion });
+    const now = Date.now();
+    let count = 0;
+
+    for (const [key, entry] of this.queryVersions) {
+      // Match single-table key OR any part of a composite "a:b:c" key.
+      // getVersionKey() always sorts parts, so a colon-delimited exact match
+      // is sufficient (no partial-name false positives).
+      const parts = key.split(':');
+      if (!parts.includes(tableName)) continue;
+
+      const newVersion = entry.version >= MAX_VERSION_NUMBER ? 1 : entry.version + 1;
+      this.queryVersions.set(key, {
+        version: newVersion,
+        lastAccessed: now,
+        tableCount: parts.length,
+      });
+      count++;
+    }
+
+    // If no entry existed yet, create one so the first query after this
+    // invalidation starts from a fresh version number.
+    if (count === 0) {
+      this.queryVersions.set(tableName, {
+        version: 2,   // start at 2 so any cached :v1 entry is immediately stale
+        lastAccessed: now,
+        tableCount: 1,
+      });
+    }
+
+    logger.info('Invalidated table', { tableName, keysInvalidated: count || 1 });
   }
 
   /**
-   * Invalidate specific query
+   * Invalidate a specific cached query.
+   *
+   * P1-8 FIX: Entries are stored under versioned keys ("query:h1:h2:vN").
+   * The previous implementation deleted the base key ("query:h1:h2"), which
+   * was never stored — making this method a silent no-op. We now reconstruct
+   * the current versioned key and delete that entry.
    */
   async invalidateQuery(query: string, params: unknown[] = []): Promise<void> {
-    const cacheKey = this.generateKey(query, params);
-    await this.cache.delete(cacheKey);
+    const baseKey = this.generateKey(query, params);
+    // The version key for a query with no dependsOn is 'default'.
+    // For queries cached via execute() with dependsOn, the caller should
+    // use invalidateTable() instead. This method handles the 'default' version
+    // (queries without declared table dependencies).
+    const version = this.getQueryVersion('default');
+    const versionedKey = `${baseKey}:v${version}`;
+    await this.cache.delete(versionedKey);
   }
 
   /**

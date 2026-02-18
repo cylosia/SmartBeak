@@ -73,8 +73,18 @@ const defaultQueryFn = async ({ queryKey, signal }: QueryFunctionContext) => {
   }, signal);
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
+    // P2-15 FIX: response.json() returns any. If the server returns null, a
+    // plain string, or an array, accessing `.message` throws TypeError at runtime.
+    // Validate the shape before accessing the property.
+    const body: unknown = await response.json().catch(() => null);
+    const message =
+      body !== null &&
+      typeof body === 'object' &&
+      'message' in body &&
+      typeof (body as Record<string, unknown>)['message'] === 'string'
+        ? (body as Record<string, unknown>)['message'] as string
+        : `HTTP ${response.status}`;
+    throw new Error(message);
   }
   
   return response.json();

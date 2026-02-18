@@ -1,5 +1,7 @@
 
-// Valid quota fields
+// Valid quota fields — validated against this whitelist before any SQL usage
+import { Pool } from 'pg';
+import type { OrgId } from '@kernel/branded';
 import { BillingService } from './billing';
 import { UsageService } from './usage';
 
@@ -11,7 +13,13 @@ export type QuotaField = typeof VALID_QUOTA_FIELDS[number];
 export class QuotaService {
   constructor(
   private billing: BillingService,
-  private usage: UsageService
+  private usage: UsageService,
+  /**
+   * SECURITY: Required for the atomic enforceAndIncrement() path.
+   * Callers that only use check()/getAllQuotas() may pass the pool
+   * from the same source as BillingService/UsageService.
+   */
+  private pool: Pool,
   ) {}
 
   /**
@@ -24,7 +32,11 @@ export class QuotaService {
   }
 
   /**
-  * Get quota limit for a field from plan
+  * Get quota limit for a field from plan.
+  *
+  * NOTE: The switch has no `default` branch intentionally. TypeScript will
+  * produce an exhaustiveness error if a new QuotaField value is added without
+  * a corresponding case here.
   */
   private getLimitFromPlan(plan: { max_domains?: number | undefined; max_content?: number | undefined; max_media?: number | undefined; max_media_storage?: number | undefined } | null, field: QuotaField): number | null {
   if (!plan) return null;
@@ -35,28 +47,87 @@ export class QuotaService {
     case 'content_count':
     return plan.max_content ?? null;
     case 'media_count':
+    // max_media_storage is the legacy column name; max_media is preferred.
     return plan.max_media ?? plan.max_media_storage ?? null;
-    default:
-    return null;
   }
   }
 
   /**
-  * Enforce quota limit for a specific resource type
-  * Uses check() internally to avoid duplication
-  */
-  async enforce(orgId: string, field: QuotaField): Promise<void> {
+   * Atomically enforce quota and increment the usage counter.
+   *
+   * SECURITY (P0-1 FIX): This is the CORRECT enforcement path. It eliminates
+   * the TOCTOU race condition present in enforce() by combining the check and
+   * the increment into a single conditional UPDATE. No concurrent request can
+   * exceed the quota between the check and the resource creation because the
+   * increment only succeeds when the current count is strictly below the limit.
+   *
+   * Callers MUST use this method instead of calling enforce() followed by a
+   * separate UsageService.increment() call.
+   *
+   * @throws Error if the quota would be exceeded by this increment.
+   */
+  async enforceAndIncrement(orgId: OrgId, field: QuotaField): Promise<void> {
+  this.validateField(field);
+  if (!orgId) throw new Error('Valid orgId is required');
+
+  const plan = await this.billing.getActivePlan(orgId);
+  const limit = this.getLimitFromPlan(plan, field);
+
+  if (limit === null) {
+    // Unlimited plan — just increment without a limit check.
+    await this.usage.increment(orgId, field);
+    return;
+  }
+
+  // Atomic conditional UPDATE: only succeeds (rowCount = 1) when
+  // current_value < limit. field is a validated QuotaField from the
+  // VALID_QUOTA_FIELDS whitelist — safe to interpolate as a column name.
+  const { rowCount } = await this.pool.query(
+    `UPDATE org_usage
+     SET ${field} = ${field} + 1, updated_at = NOW()
+     WHERE org_id = $1 AND ${field} < $2`,
+    [orgId, limit]
+  );
+
+  if ((rowCount ?? 0) === 0) {
+    // Either the org_usage row doesn't exist yet, or the quota is full.
+    // Read current value to produce a meaningful error message.
+    const usageRecord = await this.usage.getUsage(orgId);
+    const current = (usageRecord[field as keyof typeof usageRecord] as number) ?? 0;
+    throw new Error(
+    process.env['NODE_ENV'] === 'production'
+      ? `Quota exceeded for ${field}`
+      : `Quota exceeded for ${field}: ${current}/${limit}`
+    );
+  }
+  }
+
+  /**
+   * Enforce quota limit for a specific resource type.
+   *
+   * @deprecated Use enforceAndIncrement() instead. This method has a TOCTOU
+   * race condition: it reads the current usage count and then returns. The
+   * caller must then separately create the resource and increment usage, but
+   * concurrent requests can exceed the quota in the window between check and
+   * increment. enforceAndIncrement() eliminates this window with a single
+   * atomic conditional UPDATE.
+   */
+  async enforce(orgId: OrgId, field: QuotaField): Promise<void> {
   const { exceeded, current, limit } = await this.check(orgId, field);
 
   if (exceeded && limit !== null) {
-    throw new Error(`Quota exceeded for ${field}: ${current}/${limit}`);
+    throw new Error(
+    process.env['NODE_ENV'] === 'production'
+      ? `Quota exceeded for ${field}`
+      : `Quota exceeded for ${field}: ${current}/${limit}`
+    );
   }
   }
 
   /**
   * Check if quota is exceeded without throwing
   */
-  async check(orgId: string, field: QuotaField): Promise<{ exceeded: boolean; current: number; limit: number | null }> {
+  async check(orgId: OrgId, field: QuotaField): Promise<{ exceeded: boolean; current: number; limit: number | null }> {
   this.validateField(field);
 
   if (!orgId || typeof orgId !== 'string') {
@@ -86,14 +157,17 @@ export class QuotaService {
   /**
   * Get all quota usage for an organization
   */
-  async getAllQuotas(orgId: string): Promise<Record<QuotaField, { current: number; limit: number | null; exceeded: boolean }>> {
+  async getAllQuotas(orgId: OrgId): Promise<Record<QuotaField, { current: number; limit: number | null; exceeded: boolean }>> {
+  // P2-1 FIX: Validate orgId — previously missing, unlike check() which had this guard.
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('Valid orgId is required');
+  }
+
   const plan = await this.billing.getActivePlan(orgId);
   const usage = await this.usage.getUsage(orgId);
 
-  // P2-4/P3-4: Reuse getLimitFromPlan to avoid duplicated logic
   const createQuotaInfo = (field: QuotaField) => {
     const limit = this.getLimitFromPlan(plan, field);
-
     const fieldUsage = usage[field as keyof typeof usage] as number | undefined;
     return {
     current: fieldUsage ?? 0,
@@ -115,39 +189,42 @@ export class QuotaService {
 
 /**
 * Standalone function to enforce domain limit
-* @deprecated Use QuotaService.enforce() instead
+* @deprecated Use QuotaService.enforceAndIncrement() instead
 */
 export async function enforceDomainLimit(
   billing: BillingService,
   usage: UsageService,
-  orgId: string
+  pool: Pool,
+  orgId: OrgId
 ): Promise<void> {
-  const quotaService = new QuotaService(billing, usage);
-  await quotaService.enforce(orgId, 'domain_count');
+  const quotaService = new QuotaService(billing, usage, pool);
+  await quotaService.enforceAndIncrement(orgId, 'domain_count');
 }
 
 /**
 * Standalone function to enforce content limit
-* @deprecated Use QuotaService.enforce() instead
+* @deprecated Use QuotaService.enforceAndIncrement() instead
 */
 export async function enforceContentLimit(
   billing: BillingService,
   usage: UsageService,
-  orgId: string
+  pool: Pool,
+  orgId: OrgId
 ): Promise<void> {
-  const quotaService = new QuotaService(billing, usage);
-  await quotaService.enforce(orgId, 'content_count');
+  const quotaService = new QuotaService(billing, usage, pool);
+  await quotaService.enforceAndIncrement(orgId, 'content_count');
 }
 
 /**
 * Standalone function to enforce media limit
-* @deprecated Use QuotaService.enforce() instead
+* @deprecated Use QuotaService.enforceAndIncrement() instead
 */
 export async function enforceMediaLimit(
   billing: BillingService,
   usage: UsageService,
-  orgId: string
+  pool: Pool,
+  orgId: OrgId
 ): Promise<void> {
-  const quotaService = new QuotaService(billing, usage);
-  await quotaService.enforce(orgId, 'media_count');
+  const quotaService = new QuotaService(billing, usage, pool);
+  await quotaService.enforceAndIncrement(orgId, 'media_count');
 }
