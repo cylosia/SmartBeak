@@ -21,7 +21,6 @@ import { PublishContent } from '../../../domains/content/application/handlers/Pu
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
-import { UpdateDraft } from '../../../domains/content/application/handlers/UpdateDraft';
 
 const CreateContentSchema = z.object({
   id: z.string().uuid().default(() => crypto.randomUUID()),

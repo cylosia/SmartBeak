@@ -6,7 +6,7 @@
  * Required coverage: ≥90% branches / lines (billing path mandate).
  */
 
-import { describe, it, expect, beforeEach, vi, type MockedFunction } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Pool, PoolClient, QueryResult } from 'pg';
 
 import { BillingService } from '../billing';
