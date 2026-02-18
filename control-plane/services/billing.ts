@@ -85,34 +85,52 @@ export class BillingService {
     return `${operation}:${orgId}`;
   }
 
-  private async checkIdempotency(key: string): Promise<{ exists: boolean; result?: unknown; error?: string }> {
+  /**
+   * P0-FIX: Atomically claim the idempotency key for processing via Redis SET NX.
+   *
+   * The previous two-call sequence (GET to check + SETEX to mark 'processing') had a
+   * TOCTOU window: two concurrent requests could both observe `exists: false` and both
+   * proceed to create Stripe resources, resulting in double-charges.
+   *
+   * SET NX is a single atomic Redis operation. Either this process owns the key, or it
+   * does not — there is no observable intermediate state between the read and the write.
+   */
+  private async tryClaimProcessing(key: string): Promise<{
+    claimed: boolean;
+    existingEntry?: IdempotencyEntry;
+  }> {
     const redis = await getRedis();
-    const data = await redis.get(`${IDEMPOTENCY_PREFIX}${key}`);
+    const fullKey = `${IDEMPOTENCY_PREFIX}${key}`;
+    const processingEntry: IdempotencyEntry = { status: 'processing', startedAt: Date.now() };
+
+    // Atomic: set key to 'processing' ONLY if the key does not already exist.
+    // Returns 'OK' on success, null when the key already existed.
+    const setResult = await redis.set(
+      fullKey,
+      JSON.stringify(processingEntry),
+      'EX',
+      IDEMPOTENCY_TTL_SECONDS,
+      'NX'
+    );
+
+    if (setResult === 'OK') {
+      return { claimed: true };
+    }
+
+    // Key already exists — read and return the existing entry so callers can react.
+    const data = await redis.get(fullKey);
     if (!data) {
-    return { exists: false };
+      // The key expired between SET NX failure and GET (rare race with TTL).
+      // Signal unclaimed so the caller retries; the next SET NX will succeed.
+      return { claimed: false };
     }
-    let entry: IdempotencyEntry;
     try {
-      entry = JSON.parse(data);
+      const entry = JSON.parse(data) as IdempotencyEntry;
+      return { claimed: false, existingEntry: entry };
     } catch {
-      logger.warn('Corrupted idempotency record, deleting and allowing retry', { key });
-      await redis.del(`${IDEMPOTENCY_PREFIX}${key}`).catch(() => {});
-      return { exists: false };
+      logger.warn('Corrupted idempotency record during claim check, allowing retry', { key });
+      return { claimed: false };
     }
-    if (entry.status === 'processing') {
-      const elapsed = Date.now() - (entry.startedAt ?? 0);
-      if (elapsed < IDEMPOTENCY_PROCESSING_TIMEOUT_MS) {
-        return { exists: true, error: 'Operation still in progress' };
-      }
-      logger.warn('Idempotency processing timeout exceeded, allowing retry', { key, elapsed });
-      await redis.del(`${IDEMPOTENCY_PREFIX}${key}`);
-      return { exists: false };
-    }
-    return {
-      exists: true,
-      ...(entry.result !== undefined ? { result: entry.result } : {}),
-      ...(entry.error !== undefined ? { error: entry.error } : {}),
-    };
   }
 
   private async setIdempotencyStatus(key: string, status: string, result?: unknown, error?: string): Promise<void> {
@@ -162,16 +180,33 @@ export class BillingService {
 
     const key = idempotencyKey || this.generateIdempotencyKey(orgId, `assignPlan:${planId}`);
 
-    const idempotencyCheck = await this.checkIdempotency(key);
-    if (idempotencyCheck.exists) {
-    if (idempotencyCheck["error"]) {
-        throw new Error(idempotencyCheck["error"]);
-    }
-    logger.info('Idempotent retry detected', { orgId });
-    return;
+    // P0-FIX: Atomic claim replaces the previous two-call GET+SETEX sequence.
+    const { claimed, existingEntry } = await this.tryClaimProcessing(key);
+    if (!claimed) {
+      if (!existingEntry) {
+        // Key expired between SET NX fail and GET — caller should retry.
+        throw new Error('Concurrent operation in progress — please retry in a moment');
+      }
+      if (existingEntry.status === 'processing') {
+        const elapsed = Date.now() - (existingEntry.startedAt ?? 0);
+        if (elapsed < IDEMPOTENCY_PROCESSING_TIMEOUT_MS) {
+          throw new Error('Operation still in progress');
+        }
+        // Timeout exceeded: allow retry but don't attempt to re-claim here —
+        // the TTL will expire naturally and the next SET NX will succeed.
+        logger.warn('Idempotency processing timeout exceeded', { key, elapsed });
+        throw new Error('Previous operation timed out — please retry');
+      }
+      if (existingEntry['error']) {
+        throw new Error(existingEntry['error']);
+      }
+      // Status is 'completed' — idempotent retry.
+      logger.info('Idempotent retry detected', { orgId });
+      return;
     }
 
-    await this.setIdempotencyStatus(key, 'processing');
+    // Key claimed as 'processing'. All subsequent error paths must call
+    // setIdempotencyStatus('failed') so the next retry sees a terminal state.
 
     // P0-FIX: Validate plan and check for a pre-existing subscription BEFORE opening
     // a DB transaction or calling Stripe. This keeps external HTTP calls out of any
@@ -223,18 +258,38 @@ export class BillingService {
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = $1', [10000]);
 
-    // TOCTOU guard: re-check inside the transaction so a concurrent request that
-    // raced past the pre-flight check above does not create a duplicate subscription.
+    // P0-FIX (DB layer): Acquire a PostgreSQL advisory lock scoped to this org before
+    // the existence re-check. pg_try_advisory_xact_lock() is released automatically
+    // on COMMIT or ROLLBACK, so no explicit unlock is needed.
+    //
+    // Without this lock, two concurrent transactions could both execute the SELECT
+    // below under READ COMMITTED isolation, both read zero active subscriptions, and
+    // both proceed to INSERT — resulting in duplicate subscriptions. The advisory lock
+    // serialises concurrent assignPlan calls for the same org at the DB level.
+    const { rows: lockRows } = await client.query<{ acquired: boolean }>(
+      `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired`,
+      [orgId]
+    );
+    const lockAcquired = lockRows[0]?.['acquired'];
+    if (!lockAcquired) {
+      await client.query('ROLLBACK');
+      const errorMessage = 'Concurrent plan assignment in progress for this organization';
+      await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    // TOCTOU guard: re-check inside the transaction (now holding the advisory lock)
+    // so a concurrent request that raced past the pre-flight check above cannot
+    // create a duplicate subscription — it will be blocked on the advisory lock.
     const { rows: recheckRows } = await client.query(
       `SELECT id FROM subscriptions WHERE org_id = $1 AND status = $2 LIMIT 1`,
       [orgId, 'active']
     );
     if (recheckRows.length > 0) {
       // P1-FIX: Do NOT call compensateStripe here. This throw is caught by the
-      // outer catch block at line 253 which already calls compensateStripe — calling
-      // it here too results in two Stripe cancellation requests for the same
-      // subscription/customer (double compensation). ROLLBACK is still needed to
-      // release the transaction; compensation is handled once in the catch.
+      // outer catch block which already calls compensateStripe — calling it here
+      // too results in double Stripe cancellation requests. ROLLBACK releases the
+      // advisory lock; compensation is handled once in the catch.
       await client.query('ROLLBACK');
       const errorMessage = 'Organization already has an active subscription';
       await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);

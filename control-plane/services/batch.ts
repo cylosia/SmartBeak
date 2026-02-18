@@ -10,6 +10,9 @@ const logger = getLogger('BatchService');
 
 // P2-FIX: Enforce maximum concurrency ceiling to prevent unbounded parallel operations
 const MAX_BATCH_CONCURRENCY = 100;
+// P1-FIX (P1-3): Cap the number of captured errors to prevent OOM under sustained failure.
+// At 100k items / 90% failure rate, unbounded Error[] retention is 180–450 MB of stack traces.
+const MAX_CAPTURED_ERRORS = 100;
 
 /**
 * Result of batch processing
@@ -19,8 +22,10 @@ export interface BatchResult {
   successCount: number;
   /** Number of failed operations */
   failureCount: number;
-  /** Array of errors */
-  errors: Error[];
+  /** First N errors captured for diagnostics (capped at MAX_CAPTURED_ERRORS) */
+  firstErrors: Error[];
+  /** Authoritative total error count (may exceed firstErrors.length) */
+  errorCount: number;
 }
 
 // ============================================================================
@@ -39,7 +44,7 @@ export interface BatchResult {
 export async function processInBatches<T>(
   items: T[],
   batchSize: number,
-  fn: (item: T) => Promise<void>,
+  fn: (item: T, signal?: AbortSignal) => Promise<void>,
   signal?: AbortSignal
 ): Promise<BatchResult> {
   // Input validation
@@ -60,7 +65,8 @@ export async function processInBatches<T>(
   const result: BatchResult = {
   successCount: 0,
   failureCount: 0,
-  errors: []
+  firstErrors: [],
+  errorCount: 0,
   };
 
   for (let i = 0; i < items.length; i += batchSize) {
@@ -76,24 +82,30 @@ export async function processInBatches<T>(
 
   logger.info(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} items)`);
 
-  const batchResults = await Promise.allSettled(batch.map(fn));
+  // P2-FIX (P2-5): Pass signal into each item's fn so long-running items
+  // (DB calls, Stripe calls) can honour cancellation within a batch.
+  const batchResults = await Promise.allSettled(batch.map(item => fn(item, signal)));
 
   for (const [index, batchResult] of batchResults.entries()) {
     if (batchResult.status === 'fulfilled') {
     result.successCount++;
     } else {
     result.failureCount++;
+    result.errorCount++;
     const error = batchResult.reason instanceof Error
     ? batchResult.reason
     : new Error(String(batchResult.reason));
-    result.errors.push(error);
+    // P1-FIX (P1-3): Cap retained errors to avoid OOM under sustained failures.
+    if (result.firstErrors.length < MAX_CAPTURED_ERRORS) {
+      result.firstErrors.push(error);
+    }
 
     logger.error(`Error processing item at index ${i + index}`, error);
     }
   }
   }
 
-  logger.info(`Completed: ${result.successCount} succeeded, ${result.failureCount} failed`);
+  logger.info(`Completed: ${result.successCount} succeeded, ${result.failureCount} failed (${result.errorCount} total errors)`);
 
   return result;
 }
@@ -110,7 +122,7 @@ export async function processInBatches<T>(
 export async function processInBatchesStrict<T>(
   items: T[],
   batchSize: number,
-  fn: (item: T) => Promise<void>,
+  fn: (item: T, signal?: AbortSignal) => Promise<void>,
   signal?: AbortSignal
 ): Promise<number> {
   // Input validation
@@ -143,7 +155,8 @@ export async function processInBatchesStrict<T>(
   logger.info(`[batch-strict] Processing batch ${batchNumber}/${totalBatches} (${batch.length} items)`);
 
   // P1-FIX: Use Promise.allSettled instead of Promise.all for error isolation
-  const batchResults = await Promise.allSettled(batch.map(fn));
+  // P2-FIX (P2-5): Pass signal into each item's fn.
+  const batchResults = await Promise.allSettled(batch.map(item => fn(item, signal)));
 
   // P1-FIX: Collect all errors, not just the first one
   const batchErrors: Array<{ index: number; error: Error }> = [];
@@ -190,7 +203,7 @@ export async function processInBatchesStrict<T>(
 export async function mapInBatches<T, R>(
   items: T[],
   batchSize: number,
-  fn: (item: T) => Promise<R>,
+  fn: (item: T, signal?: AbortSignal) => Promise<R>,
   signal?: AbortSignal
 ): Promise<{ results: R[]; errors: Array<{ item: T; error: Error }> }> {
   // Input validation
@@ -223,7 +236,8 @@ export async function mapInBatches<T, R>(
 
   logger.info(`[map-batch] Processing batch ${batchNumber}/${totalBatches} (${batch.length} items)`);
 
-  const batchResults = await Promise.allSettled(batch.map(fn));
+  // P2-FIX (P2-5): Pass signal into each item's fn.
+  const batchResults = await Promise.allSettled(batch.map(item => fn(item, signal)));
 
   for (const [index, batchResult] of batchResults.entries()) {
     if (batchResult.status === 'fulfilled') {

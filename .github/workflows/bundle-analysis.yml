@@ -79,11 +79,13 @@ jobs:
             }
 
             // Format sizes
+            // P3-FIX (P3-3): Guard against NaN/Infinity and out-of-bounds index.
+            // sizes[i] returned 'undefined' when bytes > 1 GB (i = 3, out of array).
             const formatBytes = (bytes) => {
-              if (bytes === 0) return '0 B';
+              if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
               const k = 1024;
               const sizes = ['B', 'KB', 'MB'];
-              const i = Math.floor(Math.log(bytes) / Math.log(k));
+              const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
               return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
             };
 

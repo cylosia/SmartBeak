@@ -9,6 +9,7 @@ import { extractAndVerifyToken } from '@security/jwt';
 import { getLogger } from '@kernel/logger';
 import { getBillingConfig } from '@config';
 import { getDb } from '../db';
+import { verifyOrgMembership } from '../services/membership';
 import { errors } from '@errors/responses';
 
 const billingInvoiceExportLogger = getLogger('billingInvoiceExport');
@@ -73,22 +74,8 @@ function extractBearerToken(req: FastifyRequest): string | null {
   if (!authHeader?.startsWith('Bearer ')) {
   return null;
   }
-  // P1-FIX: Timing Attack - Use constant-time comparison for token extraction
-  // Extract token without early returns that could leak timing information
   const token = authHeader.slice(7);
   return token || null;
-}
-
-/**
- * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
- */
-async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
-  const db = await getDb();
-  const membership = await db('org_memberships')
-    .where({ user_id: userId, org_id: orgId })
-    .first();
-  return !!membership;
 }
 
 export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<void> {
@@ -107,12 +94,25 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     if (!result.valid || !result.claims) {
       return errors.unauthorized(reply, 'Invalid token');
     }
-    const claims = result.claims as { stripeCustomerId?: string; sub?: string; orgId?: string };
+    // P1-FIX (P1-1): Validate JWT claims with Zod instead of unsafe `as` cast.
+    // A JWT whose `sub` is a number (spec allows it) or lacks `orgId` would have
+    // passed the old cast silently, setting user.id to a non-string and potentially
+    // bypassing downstream string-equality membership checks.
+    const ExportClaimsSchema = z.object({
+      sub: z.string().min(1),
+      orgId: z.string().min(1),
+      stripeCustomerId: z.string().optional(),
+    });
+    const claimsResult = ExportClaimsSchema.safeParse(result.claims);
+    if (!claimsResult.success) {
+      return errors.unauthorized(reply, 'Invalid token claims');
+    }
+    const { sub, orgId, stripeCustomerId } = claimsResult.data;
 
     (req as AuthenticatedRequest).user = {
-      id: claims.sub,
-      orgId: claims.orgId,
-      stripeCustomerId: claims.stripeCustomerId
+      id: sub,
+      orgId,
+      stripeCustomerId,
     };
   } catch {
     return errors.unauthorized(reply, 'Invalid token');
@@ -186,9 +186,10 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     });
 
     if (format === 'pdf') {
-    return reply
-    .header('Content-Type', 'application/pdf')
-    .send('PDF generation not implemented yet');
+    // P2-FIX (P2-4): Return 501 Not Implemented instead of 200 with a string body.
+    // Sending 200 with Content-Type: application/pdf but a UTF-8 string body causes
+    // PDF clients to crash or silently produce a corrupt file.
+    return reply.status(501).send({ error: 'PDF export not yet supported', code: 'NOT_IMPLEMENTED' });
     }
 
     const headers = ['id', 'number', 'amount_paid', 'created'];
