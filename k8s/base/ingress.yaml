@@ -9,12 +9,21 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # Enforce TLS 1.2+ only. ELBSecurityPolicy-TLS13-1-2-2021-06 disables
+    # TLS 1.0 and TLS 1.1. Must be explicitly set; the ALB default allows older
+    # cipher suites.
+    alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-TLS13-1-2-2021-06"
     alb.ingress.kubernetes.io/healthcheck-path: /readyz
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
     alb.ingress.kubernetes.io/healthy-threshold-count: "2"
     alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
-    # Set per environment via overlay:
-    # alb.ingress.kubernetes.io/certificate-arn: <ACM_CERT_ARN>
+    # REQUIRED: Each environment overlay MUST patch this with its ACM certificate
+    # ARN. Without a valid certificate-arn the AWS ALB Ingress Controller cannot
+    # provision an HTTPS listener and will fail to create the load balancer.
+    # The placeholder below is intentionally invalid so a missing overlay patch
+    # produces an immediate provisioning error rather than silently serving HTTP.
+    # Example (patch via Kustomize): arn:aws:acm:<region>:<account>:certificate/<id>
+    alb.ingress.kubernetes.io/certificate-arn: REPLACE-VIA-OVERLAY-REQUIRED
   # NOTE: Hostnames below are PLACEHOLDERS that will fail DNS resolution on
   # purpose. Each environment overlay (staging, production) MUST patch these
   # via Kustomize to use the correct hostnames.

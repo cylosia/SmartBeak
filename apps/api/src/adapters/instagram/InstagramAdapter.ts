@@ -128,11 +128,16 @@ export class InstagramAdapter {
     input: InstagramPublishInput,
     _context: ReturnType<typeof createRequestContext>
   ): Promise<string> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-      const containerRes = await withRetry(async () => {
+    // CORRECTNESS FIX: AbortController is created inside the retry lambda so
+    // each attempt gets its own fresh controller and timeout. The previous
+    // implementation created a single controller outside withRetry: once that
+    // controller's timeout fired and aborted the signal, every subsequent retry
+    // attempt immediately received an already-aborted signal, causing instant
+    // AbortError on all retries rather than a fresh per-attempt timeout window.
+    const containerRes = await withRetry(async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
         const res = await fetch(
           `${this.baseUrl}/${this.igUserId}/media`,
           {
@@ -159,27 +164,27 @@ export class InstagramAdapter {
         }
 
         return res;
-      }, { maxRetries: 3 });
-
-      const rawData = await containerRes.json() as unknown;
-      if (!rawData || typeof rawData !== 'object' || !isInstagramPostResponse(rawData)) {
-        throw new ApiError('Invalid response format from Instagram API', 500);
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Instagram media container creation timed out');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
       }
-      const data: InstagramMediaContainerResponse = rawData;
+    }, { maxRetries: 3 });
 
-      if (!data.id) {
-        throw new Error('Instagram API response missing container ID');
-      }
-
-      return data.id;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Instagram media container creation timed out');
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
+    const rawData = await containerRes.json() as unknown;
+    if (!rawData || typeof rawData !== 'object' || !isInstagramPostResponse(rawData)) {
+      throw new ApiError('Invalid response format from Instagram API', 500);
     }
+    const data: InstagramMediaContainerResponse = rawData;
+
+    if (!data.id) {
+      throw new Error('Instagram API response missing container ID');
+    }
+
+    return data.id;
   }
 
   /**
@@ -189,11 +194,12 @@ export class InstagramAdapter {
     containerId: string,
     _context: ReturnType<typeof createRequestContext>
   ): Promise<InstagramMediaContainerResponse> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-      const publishRes = await withRetry(async () => {
+    // CORRECTNESS FIX: same as createMediaContainer — AbortController created
+    // per retry attempt so a timeout on one attempt does not kill subsequent ones.
+    const publishRes = await withRetry(async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
         const res = await fetch(
           `${this.baseUrl}/${this.igUserId}/media_publish`,
           {
@@ -217,21 +223,21 @@ export class InstagramAdapter {
         }
 
         return res;
-      }, { maxRetries: 3 });
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Instagram publish timed out');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }, { maxRetries: 3 });
 
-      const publishRawData = await publishRes.json() as unknown;
-      if (!publishRawData || typeof publishRawData !== 'object' || !isInstagramPostResponse(publishRawData)) {
-        throw new ApiError('Invalid response format from Instagram API', 500);
-      }
-      return publishRawData as InstagramMediaContainerResponse;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Instagram publish timed out');
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
+    const publishRawData = await publishRes.json() as unknown;
+    if (!publishRawData || typeof publishRawData !== 'object' || !isInstagramPostResponse(publishRawData)) {
+      throw new ApiError('Invalid response format from Instagram API', 500);
     }
+    return publishRawData as InstagramMediaContainerResponse;
   }
 
   /**

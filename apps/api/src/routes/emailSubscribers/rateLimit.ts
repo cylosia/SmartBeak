@@ -35,28 +35,19 @@ export class LRURateLimitStore {
 * @param ip - Client IP address
 * @returns Rate limit check result
 */
-export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
-  // Synchronous wrapper: kick off the async check but return a synchronous result.
-  // Since this function was always synchronous, we maintain the interface by
-  // using the kernel's in-memory fallback path synchronously.
+export function checkRateLimit(_ip: string): { allowed: boolean; retryAfter?: number } {
+  // SECURITY FIX: The previous implementation fired a fire-and-forget Redis
+  // check and unconditionally returned { allowed: true }, meaning this wrapper
+  // provided zero rate-limit enforcement. A synchronous wrapper cannot safely
+  // await the async Redis result.
   //
-  // For callers that can go async, use checkRateLimitRedis() directly.
-  const windowMs = securityConfig.rateLimitWindowMs;
-  const maxRequests = securityConfig.rateLimitMaxRequests;
-
-  // Fire-and-forget the Redis check for future accuracy,
-  // but use a synchronous in-memory approximation for this call.
-  // The kernel's checkRateLimit handles Redis + in-memory fallback.
-  void checkRateLimitRedis(`emailsub:${ip}`, {
-    maxRequests,
-    windowMs,
-    keyPrefix: 'ratelimit:emailsub',
-  });
-
-  // Return a synchronous result using a simple check.
-  // The kernel's in-memory fallback will enforce distributed limits
-  // on subsequent async callers.
-  return { allowed: true };
+  // This export is @deprecated. Use rateLimitMiddleware (below) or call
+  // checkRateLimitRedis() directly for all async callers.
+  //
+  // Fail closed: deny all calls to this deprecated synchronous path so that
+  // any remaining callers are forced to migrate to the async middleware.
+  logger.warn('checkRateLimit (sync, deprecated) called — failing closed. Migrate to rateLimitMiddleware.');
+  return { allowed: false, retryAfter: 60 };
 }
 
 /**

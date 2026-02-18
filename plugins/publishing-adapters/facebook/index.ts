@@ -32,11 +32,17 @@ export class FacebookPublishAdapter implements PublishAdapter {
     const endpoint = `${getFacebookGraphUrl()}/${targetConfig.pageId}/feed`;
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // SECURITY FIX: access_token moved from JSON body to Authorization header.
+      // Placing the token in the body causes it to be serialised into request
+      // payloads captured by proxies, APM tools, and error loggers. The Graph
+      // API accepts Bearer tokens in the Authorization header.
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${targetConfig.accessToken}`,
+      },
       body: JSON.stringify({
         message: post.message,
         link: post.link,
-        access_token: targetConfig.accessToken
       })
     });
 

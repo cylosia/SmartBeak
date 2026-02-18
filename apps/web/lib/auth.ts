@@ -539,7 +539,7 @@ export async function canAccessDomain(userId: string, domainId: string, db: Pool
   }
   try {
     // SECURITY FIX: Check role level in addition to membership
-    const { rows } = await db.query(`SELECT m["role"] FROM domain_registry dr
+    const { rows } = await db.query(`SELECT m.role FROM domain_registry dr
     JOIN memberships m ON m.org_id = dr.org_id
     WHERE dr.domain_id = $1 AND m.user_id = $2
     LIMIT 1`, [domainId, userId]);

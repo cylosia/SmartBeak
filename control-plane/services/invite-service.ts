@@ -76,6 +76,26 @@ export class InviteService {
   }
 
   /**
+  * Verify that callerId holds admin or owner role within orgId.
+  * Must be called inside an open transaction so the check is serialised with
+  * any subsequent write (defense-in-depth against IDOR — the route layer also
+  * enforces this, but the service must not rely solely on its callers).
+  */
+  private async verifyCallerIsAdminOrOwner(orgId: string, callerId: string, client: import('pg').PoolClient): Promise<void> {
+  const { rows } = await client.query(
+    `SELECT role FROM memberships WHERE org_id = $1 AND user_id = $2 LIMIT 1`,
+    [orgId, callerId]
+  );
+  if (rows.length === 0) {
+    throw new Error('Caller is not a member of this organization');
+  }
+  const callerRole = rows[0]['role'] as string;
+  if (callerRole !== 'admin' && callerRole !== 'owner') {
+    throw new Error('Caller does not have permission to manage invites in this organization');
+  }
+  }
+
+  /**
   * Check if user is already a member
   */
   private async checkExistingMembership(orgId: string, email: string, client?: import('pg').PoolClient): Promise<void> {
@@ -92,10 +112,13 @@ export class InviteService {
   }
   }
 
-  async invite(orgId: string, email: string, role: Role) {
+  async invite(orgId: string, email: string, role: Role, callerId: string) {
   // Validate inputs
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
+  }
+  if (!callerId || typeof callerId !== 'string') {
+    throw new Error('Valid callerId is required');
   }
   this.validateEmail(email);
 
@@ -107,6 +130,10 @@ export class InviteService {
   try {
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
+
+    // SECURITY FIX (defense-in-depth): Verify caller has admin/owner role in
+    // this org at the service layer, independently of any route-level auth checks.
+    await this.verifyCallerIsAdminOrOwner(orgId, callerId, client);
 
     // Check for duplicates within the transaction to prevent TOCTOU races
     await this.checkDuplicateInvite(orgId, normalizedEmail, client);
@@ -134,12 +161,15 @@ export class InviteService {
   /**
   * Revoke a pending invite
   */
-  async revokeInvite(orgId: string, inviteId: string): Promise<void> {
+  async revokeInvite(orgId: string, inviteId: string, callerId: string): Promise<void> {
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
   if (!inviteId || typeof inviteId !== 'string') {
     throw new Error('Valid inviteId is required');
+  }
+  if (!callerId || typeof callerId !== 'string') {
+    throw new Error('Valid callerId is required');
   }
 
   const client = await this.pool.connect();
@@ -147,6 +177,9 @@ export class InviteService {
   try {
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
+
+    // SECURITY FIX (defense-in-depth): Verify caller has admin/owner role.
+    await this.verifyCallerIsAdminOrOwner(orgId, callerId, client);
 
     const result = await client.query(
     'UPDATE invites SET status = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3 AND status = $4',

@@ -740,6 +740,13 @@ let globalCache: MultiTierCache | null = null;
 export function getGlobalCache(options?: MultiTierCacheOptions): MultiTierCache {
   if (!globalCache) {
     globalCache = new MultiTierCache(options);
+  } else if (options !== undefined) {
+    // CORRECTNESS FIX: Warn when options are passed to an already-initialised
+    // singleton so callers are alerted rather than silently receiving the first
+    // caller's configuration. The options argument is intentionally ignored here
+    // to preserve singleton semantics; callers that need different options must
+    // call resetGlobalCache() first or use a separate MultiTierCache instance.
+    logger.warn('getGlobalCache: options argument ignored — cache already initialised. Call resetGlobalCache() first if reconfiguration is required.');
   }
   return globalCache;
 }

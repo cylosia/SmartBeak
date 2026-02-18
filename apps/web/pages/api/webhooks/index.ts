@@ -13,8 +13,12 @@ const logger = getLogger('webhook');
 * based on provider-specific requirements.
 */
 
-// Webhook handler registry - lazy loaded
-const handlerCache: Record<string, (req: NextApiRequest, res: NextApiResponse) => Promise<void>> = {};
+// Webhook handler registry - lazy loaded.
+// Object.create(null) produces a prototype-free object, preventing prototype
+// pollution if a crafted provider string like "__proto__" or "constructor" is
+// passed — such keys would otherwise access Object.prototype properties instead
+// of stored handlers, causing crashes or unexpected behaviour.
+const handlerCache = Object.create(null) as Record<string, (req: NextApiRequest, res: NextApiResponse) => Promise<void>>;
 
 async function loadHandler(provider: string): Promise<((req: NextApiRequest, res: NextApiResponse) => Promise<void>) | null> {
   if (handlerCache[provider]) {

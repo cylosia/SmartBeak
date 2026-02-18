@@ -135,7 +135,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return errors.validationFailed(res, bodyResult.error.issues);
     }
     const { email, role } = bodyResult.data;
-    return await invites.invite(id, email, role);
+    return await invites.invite(id, email, role, ctx.userId);
   } catch (error) {
     logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
     // FIX: Added return before reply.send()

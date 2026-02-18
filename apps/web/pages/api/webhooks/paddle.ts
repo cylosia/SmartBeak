@@ -98,11 +98,16 @@ async function isDuplicateEvent(eventId: string): Promise<boolean> {
   try {
     const redis = await getRedis();
     const key = `webhook:paddle:event:${eventId}`;
-    const exists = await redis.get(key);
-    if (exists) return true;
-
-    await redis.setex(key, EVENT_ID_TTL_SECONDS, '1');
-    return false;
+    // SECURITY FIX: Use atomic SET NX EX instead of separate GET + SETEX.
+    // The previous GET-then-SETEX pattern had a race window: two concurrent
+    // deliveries of the same eventId could both read null, both proceed past the
+    // duplicate check, and both process the event. SET NX is atomic at the Redis
+    // level — only one caller gets 'OK'; the other gets null, indicating the key
+    // already exists. This eliminates the race entirely.
+    const result = await redis.set(key, '1', 'NX', 'EX', EVENT_ID_TTL_SECONDS);
+    // 'OK' means we just set the key (first occurrence) → not a duplicate
+    // null  means the key already existed                → duplicate
+    return result === null;
   } catch (error) {
     logger.error('Redis unavailable for deduplication - failing closed', error instanceof Error ? error : undefined, { eventId });
     throw new Error('Deduplication service unavailable');
