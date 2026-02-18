@@ -159,6 +159,13 @@ export class OpenAIImageAdapter {
       );
     }
 
+    // FIX (P2-n): Validate n before sending to the API.  n=0 or negative is
+    // meaningless and would cause a confusing OpenAI 400 error; n>10 exceeds
+    // the API maximum and wastes quota.
+    if (!Number.isInteger(n) || n < 1 || n > 10) {
+      throw new Error('n must be an integer between 1 and 10');
+    }
+
     // Validate model-specific constraints
     if (model === 'dall-e-3' && n > 1) {
       throw new Error('DALL-E 3 only supports n=1');
