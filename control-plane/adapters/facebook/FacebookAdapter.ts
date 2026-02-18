@@ -50,7 +50,14 @@ export class FacebookAdapter implements PublishAdapter {
   const targetUrl = `${this.baseUrl}/${pageId}/feed`;
   const ssrfCheck = await validateUrlWithDns(targetUrl);
   if (!ssrfCheck.allowed) {
-  throw new Error(`SSRF check failed for Facebook API URL: ${ssrfCheck.reason}`);
+    // P1 FIX: Do NOT include ssrfCheck.reason in the thrown error. The reason
+    // string describes WHY the URL was blocked (e.g., "DNS resolved to private IP
+    // 192.168.1.1") which gives an attacker actionable feedback for iterative
+    // bypass attempts. Log the detail internally; throw a generic message.
+    this.logger.error('SSRF check failed for Facebook API URL', context, {
+      reason: ssrfCheck.reason,
+    });
+    throw new Error('Facebook API request blocked by security policy');
   }
 
   const startTime = Date.now();
@@ -126,7 +133,9 @@ export class FacebookAdapter implements PublishAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('publishPagePost', latency, false);
     this.metrics.recordError('publishPagePost', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to publish to Facebook', context, error as Error);
+    // P2 FIX: `error as Error` is an unsafe cast — catch blocks receive `unknown`.
+    // Use instanceof guard so we only pass a real Error to the logger.
+    this.logger.error('Failed to publish to Facebook', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
   }

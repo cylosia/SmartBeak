@@ -382,12 +382,19 @@ export class FallbackEmailSender {
 
       // P2-8 FIX: Strip attachment content to prevent memory amplification
       // (Buffer serialization via JSON.stringify causes 4-5x expansion)
-      // P0-3 FIX: Mask PII before storing in Redis. The previous code stored raw
-      // email addresses in the Redis failed-queue, confirmed by the test at
-      // fallback.test.ts:146. A Redis breach or debug access would expose all
-      // customer addresses that ever had a delivery failure.
+      //
+      // P1 FIX: Store the ORIGINAL recipient address (not masked) so that a
+      // retry worker can actually re-deliver the email. The previous code stored
+      // maskEmail(message.to) = "t***@e***.com", which is undeliverable and makes
+      // the "retry queue" non-functional. PII masking belongs only in log output
+      // (done below via logger.info), not in the retry payload itself.
+      //
+      // Data-at-rest risk: The Redis list 'email:failed' contains recipient
+      // addresses. Ensure Redis is authenticated, encrypted at rest, and access
+      // is restricted to the email worker process. Rotate/expire keys per your
+      // data-retention policy.
       const failedMessage = {
-        to: maskEmail(message.to),
+        to: message.to,             // Original address required for retry delivery
         from: message.from,
         subject: message.subject,
         text: message.text,
@@ -404,10 +411,10 @@ export class FallbackEmailSender {
       await redis.lpush('email:failed', JSON.stringify(failedMessage));
       // P1-3 FIX: Cap the queue size to prevent unbounded growth
       await redis.ltrim('email:failed', 0, FallbackEmailSender.MAX_FAILED_QUEUE_SIZE - 1);
-      // SECURITY FIX (Finding 14): Mask PII in logs
+      // SECURITY FIX (Finding 14): Mask PII in log output only (not in the retry payload)
       logger.info('Email queued for manual retry', { to: maskEmail(message.to) });
     } catch (error) {
-      logger.error('Failed to queue email for retry', error as Error);
+      logger.error('Failed to queue email for retry', error instanceof Error ? error : new Error(String(error)));
     }
   }
 

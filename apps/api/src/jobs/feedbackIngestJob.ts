@@ -19,16 +19,19 @@ export type WindowSize = typeof WINDOWS[number];
 const MAX_ENTITIES = 100;
 
 // Zod validation schema
+// P2 FIX: Added .strict() on both the outer and inner objects per CLAUDE.md.
+// Without .strict(), a malicious payload could inject arbitrary extra properties
+// (e.g., { "__proto__": ... }) that bypass validation and flow into business logic.
 const FeedbackIngestInputSchema = z.object({
   source: z.enum(['api', 'webhook', 'import', 'sync']),
   entities: z.array(z.object({
-  id: z.string().min(1),
-  type: z.enum(['content', 'user', 'system']),
-  data: z.record(z.string(), z.unknown()).optional(),
-  })).max(MAX_ENTITIES),
+    id: z.string().min(1),
+    type: z.enum(['content', 'user', 'system']),
+    data: z.record(z.string(), z.unknown()).optional(),
+  }).strict()).max(MAX_ENTITIES),
   orgId: z.string().uuid(),
   timestamp: z.string().datetime().optional(),
-});
+}).strict();
 
 export type FeedbackIngestInput = z.infer<typeof FeedbackIngestInputSchema>;
 
@@ -164,11 +167,18 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   });
 
   // Call storeFeedbackMetrics to persist the data
-  if (result.windows.length > 0) {
+  // P2 FIX: Filter out the __probe__ sentinel entity before persisting.
+  // The probe at the top of this function calls fetchFeedbackMetrics('__probe__', ...)
+  // purely as a capability check. If fetchFeedbackMetrics is later implemented, the
+  // probe entity would flow into storeFeedbackMetrics and create a spurious
+  // '__probe__' row with org_id='00000000-0000-0000-0000-000000000000', polluting
+  // all aggregate queries (e.g., "top entities by feedback volume").
+  const windowsToStore = result.windows.filter(w => w.entityId !== '__probe__');
+  if (windowsToStore.length > 0) {
   try {
-    await storeFeedbackMetrics(result.windows, orgId);
+    await storeFeedbackMetrics(windowsToStore, orgId);
     logger.info('Feedback metrics stored successfully', {
-    windowCount: result.windows.length,
+    windowCount: windowsToStore.length,
     });
   } catch (error) {
     if (error instanceof Error) {

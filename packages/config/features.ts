@@ -73,18 +73,22 @@ export function validateFeatureFlags(): void {
   const enabled = getEnabledFeatures();
   
   if (enabled.length > 0) {
-    logger.info(`[Feature Flags] Enabled features: ${enabled.join(', ')}`);
-    
+    // P2 FIX: Use structured logging with a separate `enabled` field instead of
+    // template-literal concatenation. This makes the list machine-parseable by
+    // log aggregators and avoids comma-separated strings that are ambiguous when
+    // feature names themselves contain commas (unlikely, but prevented by schema).
+    logger.info('Feature flags initialized', { enabled });
+
     // Warn about experimental features in production
     if (process.env['NODE_ENV'] === 'production') {
       if (featureFlags.enableExperimental) {
-        logger.warn('[SECURITY WARNING] Experimental features are enabled in production');
+        logger.warn('SECURITY WARNING: experimental features are enabled in production', { flag: 'enableExperimental' });
       }
       if (featureFlags.enableAI) {
-        logger.info('[Feature Flags] AI features are enabled');
+        logger.info('AI features are enabled in production', { flag: 'enableAI' });
       }
     }
   } else {
-    logger.info('[Feature Flags] All features are disabled (secure default)');
+    logger.info('Feature flags initialized: all features are disabled (secure default)');
   }
 }

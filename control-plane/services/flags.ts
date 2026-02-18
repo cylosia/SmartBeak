@@ -28,21 +28,56 @@ function validateFlagValue(value: unknown): boolean {
   return result.data;
 }
 
+/**
+ * Race a DB query against a timeout, clearing the timer when the query wins.
+ *
+ * P1 FIX: The previous pattern created a bare `new Promise(...setTimeout(...))` and
+ * passed it directly to Promise.race(). When the query resolved first the setTimeout
+ * callback remained scheduled for up to 5 seconds. Under load (e.g. isEnabled() called
+ * per-request at 1 000 rps) this produced 5 000 concurrent dangling timers, causing:
+ *   - Timer pressure increasing GC pause times
+ *   - Node.js refusing to exit cleanly on SIGTERM (open handles)
+ *   - In extreme cases, ~5 000 extra reject() calls per second on settled promises
+ *
+ * Fix: store the timer ID and call clearTimeout() in a finally block so the timer is
+ * always cancelled regardless of whether the query or the timeout wins.
+ */
+async function withQueryTimeout<T>(
+  queryPromise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`${label} query timeout after ${timeoutMs}ms`)),
+      timeoutMs
+    );
+  });
+  try {
+    return await Promise.race([queryPromise, timeoutPromise]);
+  } finally {
+    // Always clear the timer, whether the query won or the timeout fired.
+    clearTimeout(timeoutId);
+  }
+}
+
+const FLAG_QUERY_TIMEOUT_MS = 5000;
+
 export class FlagService {
   constructor(private pool: Pool) {}
 
   async isEnabled(key: string): Promise<boolean> {
     const validatedKey = validateFlagKey(key);
 
-    // P1-4 FIX: A hung DB would block the event loop indefinitely without this timeout.
-    const queryPromise = this.pool.query(
-      'SELECT value FROM system_flags WHERE key=$1',
-      [validatedKey]
+    const { rows } = await withQueryTimeout(
+      this.pool.query(
+        'SELECT value FROM system_flags WHERE key=$1',
+        [validatedKey]
+      ),
+      FLAG_QUERY_TIMEOUT_MS,
+      'Flag isEnabled()'
     );
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Flag query timeout after 5000ms')), 5000)
-    );
-    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
     return rows[0]?.value ?? false;
   }
 
@@ -50,35 +85,32 @@ export class FlagService {
     const validatedKey = validateFlagKey(key);
     const validatedValue = validateFlagValue(value);
 
-    // F-4 FIX: Add timeout to prevent indefinitely held pool connections.
-    // Without this, a hung DB during a flag write blocks a pool connection forever,
-    // eventually causing connection pool exhaustion under moderate traffic.
     // P2-13 FIX: Include updated_at in the INSERT so new records don't have
     // NULL updated_at when the table column lacks a DEFAULT.
-    const queryPromise = this.pool.query(
-      `INSERT INTO system_flags (key, value, updated_at)
-      VALUES ($1, $2, now())
-      ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=now()`,
-      [validatedKey, validatedValue]
+    await withQueryTimeout(
+      this.pool.query(
+        `INSERT INTO system_flags (key, value, updated_at)
+        VALUES ($1, $2, now())
+        ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=now()`,
+        [validatedKey, validatedValue]
+      ),
+      FLAG_QUERY_TIMEOUT_MS,
+      'Flag set()'
     );
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Flag set() query timeout after 5000ms')), 5000)
-    );
-    await Promise.race([queryPromise, timeoutPromise]);
   }
 
   async getAll(): Promise<Array<{ key: string; value: boolean; updatedAt: Date | null }>> {
     // F-3 FIX: Add timeout matching isEnabled() so a hung DB during flag enumeration
-    // doesn't hold a pool connection indefinitely.  The admin UI calls getAll() on
+    // doesn't hold a pool connection indefinitely. The admin UI calls getAll() on
     // every page load; without a timeout, a single slow query could cascade into
     // pool exhaustion across the entire service.
-    const queryPromise = this.pool.query(
-      'SELECT key, value, updated_at FROM system_flags ORDER BY key'
+    const { rows } = await withQueryTimeout(
+      this.pool.query(
+        'SELECT key, value, updated_at FROM system_flags ORDER BY key'
+      ),
+      FLAG_QUERY_TIMEOUT_MS,
+      'Flag getAll()'
     );
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Flag getAll() query timeout after 5000ms')), 5000)
-    );
-    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
     return rows.map((r: { key: string; value: boolean; updated_at: Date | null }) => ({
       key: r['key'],
       value: r['value'],

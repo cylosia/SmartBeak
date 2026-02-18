@@ -1,6 +1,9 @@
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
 import { validateUrlWithDns } from '@security/ssrf';
 import { apiConfig, timeoutConfig } from '@config';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('FacebookAdapter');
 
 /**
  * Facebook Publishing Adapter
@@ -11,6 +14,10 @@ import { apiConfig, timeoutConfig } from '@config';
  * MEDIUM FIX M7: Added health check
  * AUDIT FIX (Finding 4.1): Token redaction in error paths
  * AUDIT FIX (Finding 4.2): Pagination support for Graph API
+ * P1 FIX: Added per-attempt retry with fresh AbortControllers
+ * P1 FIX: Changed Content-Type to application/x-www-form-urlencoded
+ * P2 FIX: Added numeric-only validation to getPageInfo
+ * P2 FIX: Capped fetchAllPages total timeout
  */
 
 /**
@@ -23,6 +30,27 @@ function redactToken(text: string): string {
 
 /** Maximum pages to fetch to prevent infinite loops on malformed paging data */
 const MAX_PAGINATION_PAGES = 100;
+
+/**
+ * Maximum total timeout for fetchAllPages: 5 minutes.
+ * P2 FIX: The previous limit was timeoutMs * MAX_PAGINATION_PAGES = 30s * 100 = 50 min.
+ * A 50-minute timeout is operationally unacceptable. Cap at 5 minutes (300 000 ms) so
+ * callers get a timely error and can retry with smaller page sizes.
+ */
+const MAX_PAGINATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Maximum retry attempts for transient failures */
+const MAX_PUBLISH_RETRIES = 3;
+
+/** Retryable HTTP status codes */
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+/**
+ * Sleep for a given number of milliseconds.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 /**
  * API Error with status code and retry information
@@ -182,7 +210,17 @@ export class FacebookAdapter {
   /**
    * Publish a post to a Facebook page
    *
-   * @param pageId - Facebook page ID
+   * P1 FIX: Added per-attempt retry with fresh AbortControllers.
+   * The previous code had no retry logic: a single transient 429/5xx caused
+   * permanent failure. Each retry now gets its own AbortController so a
+   * timeout on attempt N doesn't abort the signal for attempt N+1.
+   *
+   * P1 FIX: Changed Content-Type from application/json to
+   * application/x-www-form-urlencoded. The Facebook Graph API /feed endpoint
+   * does not accept JSON bodies; sending JSON produces a silent 200 with no post
+   * created or an API-level error wrapped in a 200 response.
+   *
+   * @param pageId - Facebook page ID (numeric string)
    * @param message - Post message content
    * @returns Facebook post response with ID
    * @throws Error if publish fails or input is invalid
@@ -192,71 +230,112 @@ export class FacebookAdapter {
     const validatedInput = validatePublishInput(pageId, message);
 
     // P0-6 FIX: SSRF protection — validate the constructed URL against internal
-    // network ranges and DNS before making the request. The control-plane adapter
-    // had this; the apps/api copy did not.
+    // network ranges and DNS before making the request.
     const targetUrl = `${this.baseUrl}/${validatedInput.pageId}/feed`;
     const ssrfCheck = await validateUrlWithDns(targetUrl);
     if (!ssrfCheck.allowed) {
-      throw new Error(`SSRF protection: request to ${targetUrl} blocked — ${ssrfCheck.reason}`);
+      // P1 FIX: Do not include ssrfCheck.reason in the thrown error. The reason
+      // describes exactly why the URL was blocked (e.g., "DNS resolved to private IP
+      // 192.168.1.1"), giving an attacker iterative feedback for bypass attempts.
+      // Log internally; throw a generic message that reveals nothing about the policy.
+      // (The logger auto-redacts sensitive fields per @kernel/logger configuration.)
+      logger.error('SSRF check blocked Facebook API request', new Error(`SSRF: ${ssrfCheck.reason}`));
+      throw new Error('Facebook API request blocked by security policy');
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const res = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: validatedInput["message"] }),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const errorBody = await res.text();
-        let errorMessage = `Facebook publish failed: ${res.status}`;
-        try {
-          const errorData = JSON.parse(errorBody);
-          if (isFacebookErrorResponse(errorData)) {
-            errorMessage = `Facebook publish failed: ${errorData.error["message"]} (code: ${errorData.error.code})`;
+    let lastError: Error = new Error('Facebook publish: no attempts made');
+
+    for (let attempt = 0; attempt <= MAX_PUBLISH_RETRIES; attempt++) {
+      // P1 FIX: Fresh AbortController per attempt so a prior timeout cannot
+      // abort subsequent retries.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      try {
+        // P1 FIX: Use application/x-www-form-urlencoded — the correct encoding
+        // for Facebook Graph API /feed POST requests.
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ message: validatedInput['message'] }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const errorBody = await res.text();
+
+          // Respect Retry-After on 429
+          if (res.status === 429 && attempt < MAX_PUBLISH_RETRIES) {
+            const retryAfter = res.headers.get('retry-after');
+            const delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 1000 * Math.pow(2, attempt);
+            lastError = new ApiError(`Facebook rate limited: ${res.status}`, res.status, retryAfter ?? undefined);
+            clearTimeout(timeout);
+            await sleep(delayMs);
+            continue;
           }
+
+          // Retry on transient server errors
+          if (RETRYABLE_STATUSES.has(res.status) && attempt < MAX_PUBLISH_RETRIES) {
+            const delayMs = 1000 * Math.pow(2, attempt);
+            lastError = new Error(`Facebook publish failed: ${res.status}`);
+            clearTimeout(timeout);
+            await sleep(delayMs);
+            continue;
+          }
+
+          let errorMessage = `Facebook publish failed: ${res.status}`;
+          try {
+            const errorData = JSON.parse(errorBody) as unknown;
+            if (isFacebookErrorResponse(errorData)) {
+              errorMessage = `Facebook publish failed: ${errorData.error['message']} (code: ${errorData.error.code})`;
+            }
+          } catch {
+            // AUDIT FIX (Finding 4.1): Redact tokens from error body before including in message
+            errorMessage = `Facebook publish failed: ${res.status} - ${redactToken(errorBody)}`;
+          }
+          throw new Error(redactToken(errorMessage));
         }
-        catch {
-          // AUDIT FIX (Finding 4.1): Redact tokens from error body before including in message
-          errorMessage = `Facebook publish failed: ${res.status} - ${redactToken(errorBody)}`;
+
+        const rawData = await res.json() as unknown;
+        if (!rawData || typeof rawData !== 'object' || !isFacebookPostResponse(rawData)) {
+          throw new ApiError('Invalid response format from Facebook API', 500);
         }
-        throw new Error(redactToken(errorMessage));
+        const data: FacebookPostResponse = {
+          id: rawData.id,
+          post_id: (rawData as Record<string, unknown>)['post_id'] as string | undefined,
+        };
+        if (!data.id) {
+          throw new Error('Facebook API response missing post ID');
+        }
+        return data;
+      } catch (error) {
+        clearTimeout(timeout);
+        if (error instanceof Error) {
+          // Timeout — retry unless we've exhausted attempts
+          if (error.name === 'AbortError') {
+            lastError = new Error('Facebook publish request timed out');
+            if (attempt < MAX_PUBLISH_RETRIES) {
+              await sleep(1000 * Math.pow(2, attempt));
+              continue;
+            }
+            throw lastError;
+          }
+          // AUDIT FIX (Finding 4.1): Ensure no token leakage in re-thrown errors
+          if (error.message.includes('access_token')) {
+            throw new Error(redactToken(error.message));
+          }
+          throw error;
+        }
+        throw new Error('Unknown error during Facebook publish');
+      } finally {
+        clearTimeout(timeout);
       }
-      const rawData = await res.json() as unknown;
-      if (!rawData || typeof rawData !== 'object' || !isFacebookPostResponse(rawData)) {
-        throw new ApiError('Invalid response format from Facebook API', 500);
-      }
-      const data: FacebookPostResponse = {
-        id: rawData.id,
-        post_id: (rawData as Record<string, unknown>)['post_id'] as string | undefined,
-      };
-      if (!data.id) {
-        throw new Error('Facebook API response missing post ID');
-      }
-      return data;
     }
-    catch (error) {
-      if (error instanceof Error) {
-        // Re-throw abort error as timeout error
-        if (error.name === 'AbortError') {
-          throw new Error('Facebook publish request timed out');
-        }
-        // AUDIT FIX (Finding 4.1): Ensure no token leakage in re-thrown errors
-        if (error.message.includes('access_token')) {
-          throw new Error(redactToken(error.message));
-        }
-        throw error;
-      }
-      throw new Error('Unknown error during Facebook publish');
-    }
-    finally {
-      clearTimeout(timeout);
-    }
+
+    throw lastError;
   }
 
   /**
@@ -302,18 +381,26 @@ export class FacebookAdapter {
 
   /**
    * Get page information
-   * @param pageId - Facebook page ID
+   * @param pageId - Facebook page ID (numeric string)
    * @returns Page information
    * @throws Error if request fails
+   *
+   * P2 FIX: Added numeric-only validation for pageId. Without this guard,
+   * pageId='../me/accounts' would construct a URL traversing to a different
+   * Graph API endpoint, allowing callers to probe arbitrary endpoints.
    */
   async getPageInfo(pageId: string): Promise<{ id: string; name: string | undefined }> {
     if (!pageId || typeof pageId !== 'string') {
       throw new Error('Page ID is required and must be a string');
     }
+    // P2 FIX: Enforce numeric-only pageId (matches validatePublishInput constraint)
+    if (!/^\d+$/.test(pageId.trim())) {
+      throw new Error('Page ID must be a numeric string (Facebook page ID format)');
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(`${this.baseUrl}/${pageId}?fields=id,name`, {
+      const res = await fetch(`${this.baseUrl}/${pageId.trim()}?fields=id,name`, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
@@ -353,6 +440,10 @@ export class FacebookAdapter {
    * @param fields - Comma-separated fields to request
    * @param limit - Per-page limit (max 100 per Facebook docs)
    * @returns All items across all pages
+   *
+   * P2 FIX: Total timeout capped at MAX_PAGINATION_TIMEOUT_MS (5 min) rather than
+   * timeoutMs * MAX_PAGINATION_PAGES (= 50 min). A 50-minute timeout is operationally
+   * unacceptable and delays error detection significantly.
    */
   async fetchAllPages<T>(
     endpoint: string,
@@ -364,12 +455,8 @@ export class FacebookAdapter {
       `${this.baseUrl}/${endpoint}?limit=${limit}${fields ? `&fields=${fields}` : ''}`;
     let pageCount = 0;
 
-    // P1-2 FIX: Single AbortController and timeout outside the loop.
-    // The previous code created one controller+timer per page; if an exception
-    // was thrown before clearTimeout, all prior pages' timers remained live,
-    // preventing process shutdown under high page counts.
     const controller = new AbortController();
-    const loopTimeout = setTimeout(() => controller.abort(), this.timeoutMs * MAX_PAGINATION_PAGES);
+    const loopTimeout = setTimeout(() => controller.abort(), MAX_PAGINATION_TIMEOUT_MS);
 
     try {
       while (url && pageCount < MAX_PAGINATION_PAGES) {

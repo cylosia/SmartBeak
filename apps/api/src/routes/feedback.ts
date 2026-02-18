@@ -9,11 +9,19 @@ import { emitCounter } from '@kernel/metrics';
 
 const logger = getLogger('FeedbackService');
 
+// P2 FIX: Added .strict() per CLAUDE.md conventions. Without it, extra query
+// parameters are silently accepted and ignored. An attacker could add bogus
+// fields (e.g., ?__proto__=...) without any validation error.
 const FeedbackQuerySchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID').optional(),
-  limit: z.coerce.number().min(1).max(100).optional(),
-  offset: z.coerce.number().min(0).max(10000).optional()
-});
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  // P1 FIX: Reduced from max(10000) to max(1000). OFFSET pagination causes
+  // PostgreSQL to scan and discard all preceding rows on every request. At
+  // offset=10000 with limit=100, Postgres scans ~10,100 rows per request.
+  // Fetching 1M rows via offset pagination produces O(n²) total row scans
+  // (1M+2M+...+1M ≈ 5B comparisons). Use cursor-based pagination for deep pages.
+  offset: z.coerce.number().int().min(0).max(1000).optional()
+}).strict();
 
 /**
  * P0-1 FIX: Use centralized JWT verification from @security/jwt.
@@ -67,7 +75,7 @@ async function canAccessDomain(userId: string, domainId: string, orgId: string):
     return !!row;
   }
   catch (error) {
-    logger.error('Error checking domain access', error as Error);
+    logger.error('Error checking domain access', error instanceof Error ? error : new Error(String(error)));
     return false;
   }
 }
@@ -87,7 +95,7 @@ async function recordAuditEvent(params: AuditEventParams) {
     });
   }
   catch (error) {
-    logger.error('Failed to record audit event', error as Error);
+    logger.error('Failed to record audit event', error instanceof Error ? error : new Error(String(error)));
   }
 }
 export async function feedbackRoutes(app: FastifyInstance) {
@@ -146,7 +154,7 @@ export async function feedbackRoutes(app: FastifyInstance) {
       return { data: [] };
     }
     catch (error) {
-      logger.error('Error processing feedback request', error as Error);
+      logger.error('Error processing feedback request', error instanceof Error ? error : new Error(String(error)));
       return errors.internal(reply);
     }
   });

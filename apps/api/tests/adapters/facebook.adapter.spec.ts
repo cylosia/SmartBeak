@@ -19,6 +19,8 @@ afterEach(() => {
 
 test('Facebook adapter publishes a post', async () => {
   const adapter = new FacebookAdapter('token');
-  const res = await adapter.publishPagePost('page1', 'hello') as { id: string };
+  // P0 FIX: Use a numeric-only pageId. validatePublishInput() enforces /^\d+$/
+  // so 'page1' would throw "Page ID must be a numeric string". Use '123456'.
+  const res = await adapter.publishPagePost('123456', 'hello') as { id: string };
   expect(res.id).toBe('fb_post_1');
 });
