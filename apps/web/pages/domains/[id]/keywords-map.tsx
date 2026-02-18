@@ -16,17 +16,53 @@ export default function KeywordContentMap({ domainId }: KeywordContentMapProps) 
         Explicitly map accepted keywords to content. This is advisory and
         does not change rankings automatically.
       </p>
-      <form>
-        <label>Keyword<br /><input type='text' placeholder='accepted keyword' /></label><br /><br />
-        <label>Content<br /><input type='text' placeholder='content title or ID' /></label><br /><br />
-        <label>Role<br />
-          <select>
-            <option>primary</option>
-            <option>secondary</option>
-            <option>supporting</option>
+      {/*
+        FIX P2-10: Form had no action, no onSubmit, no name attributes, and no CSRF
+        token — clicking "Map" silently did nothing. The form is disabled pending a
+        full implementation with API integration and CSRF middleware.
+        FIX P2-12: Added id/htmlFor association and aria-label for accessibility.
+        TODO: Wire up to POST /api/keywords/map with CSRF token and domainId in body.
+      */}
+      <form
+        aria-label='Map keyword to content'
+        onSubmit={(e) => { e.preventDefault(); }}
+      >
+        <label htmlFor='kw-keyword'>
+          Keyword
+          <br />
+          <input
+            id='kw-keyword'
+            type='text'
+            name='keyword'
+            placeholder='accepted keyword'
+            required
+          />
+        </label>
+        <br /><br />
+        <label htmlFor='kw-content'>
+          Content
+          <br />
+          <input
+            id='kw-content'
+            type='text'
+            name='content'
+            placeholder='content title or ID'
+            required
+          />
+        </label>
+        <br /><br />
+        <label htmlFor='kw-role'>
+          Role
+          <br />
+          <select id='kw-role' name='role' aria-label='Keyword role' required>
+            <option value='primary'>primary</option>
+            <option value='secondary'>secondary</option>
+            <option value='supporting'>supporting</option>
           </select>
-        </label><br /><br />
-        <button type='submit'>Map</button>
+        </label>
+        <br /><br />
+        {/* Button is disabled until API endpoint is implemented */}
+        <button type='submit' disabled title='API integration pending'>Map</button>
       </form>
     </AppShell>
   );
@@ -35,13 +71,18 @@ export default function KeywordContentMap({ domainId }: KeywordContentMapProps) 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
-  const id = params?.['id'];
-  if (typeof id !== 'string' || !UUID_RE.test(id)) {
+  // FIX P2-13: Wrap in try/catch so auth errors return 404 rather than 500.
+  try {
+    const id = params?.['id'];
+    if (typeof id !== 'string' || !UUID_RE.test(id)) {
+      return { notFound: true };
+    }
+    const authCheck = await requireDomainAccess(req, id);
+    if (!authCheck.authorized) {
+      return authCheck.result;
+    }
+    return { props: { domainId: id } };
+  } catch {
     return { notFound: true };
   }
-  const authCheck = await requireDomainAccess(req, id);
-  if (!authCheck.authorized) {
-    return authCheck.result;
-  }
-  return { props: { domainId: id } };
 }
