@@ -14,13 +14,18 @@ patches:
   - path: patches/replicas.yaml
   - path: configmap-env.yaml
 
+# FIX: Replace ACCOUNT_ID with the numeric AWS account ID before applying.
+# FIX: Replace CI_IMAGE_TAG with an immutable tag or digest (sha256:...) injected
+#      by CI at deploy time. Never use 'latest' in production — it makes rollbacks
+#      impossible and enables supply-chain substitution via mutable tags.
+#      CI command: kustomize edit set image smartbeak/api=REPO:$(git rev-parse --short HEAD)
 images:
   - name: smartbeak/api
     newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/api
-    newTag: latest
+    newTag: CI_IMAGE_TAG
   - name: smartbeak/web
     newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/web
-    newTag: latest
+    newTag: CI_IMAGE_TAG
   - name: smartbeak/worker
     newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/worker
-    newTag: latest
+    newTag: CI_IMAGE_TAG

@@ -14,13 +14,21 @@ patches:
   - path: patches/replicas.yaml
   - path: configmap-env.yaml
 
+# FIX: Replace ACCOUNT_ID with the numeric AWS account ID before applying.
+# FIX: Staging must track a DIFFERENT tag than production so it acts as a real
+#      pre-production gate. The CI pipeline should:
+#        1. Build image → push as CI_STAGING_TAG (e.g. branch-sha or a semver RC)
+#        2. Deploy staging with this tag and run smoke/integration tests
+#        3. On success, promote: deploy production with the same immutable digest
+#      Never use 'latest' — it makes staging and production identical images,
+#      defeating the entire purpose of a staging environment.
 images:
   - name: smartbeak/api
     newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/api
-    newTag: latest
+    newTag: CI_STAGING_TAG
   - name: smartbeak/web
     newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/web
-    newTag: latest
+    newTag: CI_STAGING_TAG
   - name: smartbeak/worker
     newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/smartbeak/worker
-    newTag: latest
+    newTag: CI_STAGING_TAG
