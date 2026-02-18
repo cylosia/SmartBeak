@@ -30,6 +30,53 @@ const MONITOR_CONFIG = {
 // Alert Handlers
 // ============================================================================
 
+/**
+ * Validate that a webhook URL is safe to send alerts to.
+ * P1-FIX: ALERT_WEBHOOK_URL was previously used in fetch() with no validation.
+ * An operator who misconfigures this variable with an internal address (e.g.
+ * AWS IMDS 169.254.169.254, internal DB host) would cause the monitoring
+ * script to exfiltrate alert payloads to those services (SSRF).
+ * Allow only https:// URLs to non-private, non-loopback hosts.
+ */
+function validateWebhookUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`ALERT_WEBHOOK_URL is not a valid URL: ${url}`);
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`ALERT_WEBHOOK_URL must use HTTPS, got: ${parsed.protocol}`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  // Strip IPv6 brackets so "[::1]" becomes "::1" for comparison.
+  const bare = hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
+
+  const blockedHosts = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', '169.254.170.2'];
+  if (
+    blockedHosts.includes(bare) ||
+    /^10\./.test(bare) ||
+    /^192\.168\./.test(bare) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(bare) ||
+    /^169\.254\./.test(bare) ||
+    /^::1$/.test(bare) ||
+    /^fe[89ab][0-9a-f]:/i.test(bare) ||
+    /^fc[0-9a-f]{2}:/i.test(bare) ||
+    /^fd[0-9a-f]{2}:/i.test(bare)
+  ) {
+    throw new Error(`ALERT_WEBHOOK_URL points to a private/reserved address: ${bare}`);
+  }
+}
+
+// Validate alert webhook URL at startup (fail fast before monitoring begins).
+if (MONITOR_CONFIG.alertWebhook) {
+  validateWebhookUrl(MONITOR_CONFIG.alertWebhook);
+}
+
 async function sendWebhookAlert(alert: {
   type: string;
   severity: string;
@@ -39,9 +86,9 @@ async function sendWebhookAlert(alert: {
   threshold: number;
 }): Promise<void> {
   if (!MONITOR_CONFIG.alertWebhook) {
-    logger.info('Alert triggered', { 
-      severity: alert.severity, 
-      type: alert.type, 
+    logger.info('Alert triggered', {
+      severity: alert.severity,
+      type: alert.type,
       message: alert.message,
       metric: alert.metric,
       value: alert.value,

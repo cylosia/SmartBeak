@@ -451,9 +451,13 @@ export function getPaaAdapter(): PaaAdapter {
 }
 
 /**
- * @deprecated Use getPaaAdapter() to avoid process crash on missing SERP_API_KEY.
- * This export is kept for backward compatibility but will throw if SERP_API_KEY
- * is not set at module load time.
+ * @deprecated Use getPaaAdapter() instead.
+ * P3-FIX: Corrected the deprecation note — this Proxy does NOT crash at module
+ * load time (the Proxy itself is always constructible). It will throw on the
+ * FIRST METHOD CALL if SERP_API_KEY is absent, because the Proxy delegates to
+ * getPaaAdapter() which calls `new PaaAdapter()` lazily. Callers relying on the
+ * old (incorrect) note that "it crashes at import" may have written workarounds
+ * that are now unnecessary. Prefer getPaaAdapter() for explicit lazy behaviour.
  */
 export const paaAdapter: PaaAdapter = new Proxy({} as PaaAdapter, {
   get(_target, prop) {

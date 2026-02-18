@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 
+import { NotFoundError } from '@errors';
 import { renderFacebookPost } from '../../plugins/publishing-adapters/facebook/render';
 
 
@@ -19,37 +20,37 @@ export interface FacebookPreviewResult {
 export class PublishingPreviewService {
   constructor(private pool: Pool) {}
 
-  async verifyContentOwnership(contentId: string, orgId: string): Promise<void> {
-  const result = await this.pool.query(
-    `SELECT c.id
+  /**
+  * Generate Facebook preview for content, verifying org ownership in the
+  * same query that loads content data.
+  *
+  * P1-FIX: The previous implementation made two separate queries to
+  * content_items — once in verifyContentOwnership (which threw a generic
+  * `Error` causing the route to return HTTP 500) and again in facebookPreview.
+  * This merged query:
+  *   1. Returns NotFoundError (→ 404) with correct HTTP semantics when the
+  *      content does not exist or belongs to a different org.
+  *   2. Eliminates the redundant second round-trip to content_items, halving
+  *      DB queries for this endpoint.
+  *
+  * @param contentId - Content ID
+  * @param orgId - Organization ID
+  * @returns Promise resolving to Facebook preview result
+  */
+  async facebookPreview(contentId: string, orgId: string): Promise<FacebookPreviewResult> {
+  // Single query: load content AND verify org ownership atomically.
+  // Joining through domains ensures the content belongs to the calling org.
+  const content = await this.pool.query(
+    `SELECT c.id, c.title
     FROM content_items c
     JOIN domains d ON c.domain_id = d.id
     WHERE c.id = $1 AND d.org_id = $2`,
     [contentId, orgId]
   );
 
-  if (result.rows.length === 0) {
-    throw new Error('Content not found or access denied');
-  }
-  }
-
-  /**
-  * Generate Facebook preview for content
-  * @param contentId - Content ID
-  * @param orgId - Organization ID
-  * @returns Promise resolving to Facebook preview result
-  */
-  async facebookPreview(contentId: string, orgId: string): Promise<FacebookPreviewResult> {
-  await this.verifyContentOwnership(contentId, orgId);
-
-  // Load minimal fields; pure read-only projection
-  const content = await this.pool.query(
-    'SELECT id, title FROM content_items WHERE id=$1',
-    [contentId]
-  );
-
   if (!content.rows[0]) {
-    throw new Error('Content not found');
+    // 404 (not 403) to avoid disclosing whether the ID exists in another org.
+    throw new NotFoundError('Content not found or access denied');
   }
 
   const seo = await this.pool.query(

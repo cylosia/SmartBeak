@@ -192,9 +192,23 @@ async function handleContentPublished(
   'createJobsForContent',
   );
 
-  for (const job of created as PublishingJob[]) {
-  await processPublishingJob(job, jobs, attempts, eventBus, dlq, pool);
+  // P2-FIX: Process jobs with bounded concurrency instead of sequentially.
+  // The previous `for...of await` ran jobs one-by-one, so a single slow job
+  // (e.g. a remote API with a 30 s timeout) blocked all remaining jobs.
+  // Using bounded concurrency (CONCURRENCY=4) allows multiple jobs to proceed
+  // in parallel while capping the number of simultaneous DB connections taken
+  // from the pool, preventing pool exhaustion when content has many targets.
+  const CONCURRENCY = 4;
+  const queue = (created as PublishingJob[]).slice();
+  const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+  while (queue.length > 0) {
+    const job = queue.shift();
+    if (job) {
+    await processPublishingJob(job, jobs, attempts, eventBus, dlq, pool);
+    }
   }
+  });
+  await Promise.all(workers);
 }
 
 export function registerPublishingDomain(eventBus: EventBus, pool: Pool) {

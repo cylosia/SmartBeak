@@ -13,26 +13,30 @@ import { errors, sendError } from '@errors/responses';
 
 const logger = getLogger('publishing-create-job');
 
-export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool) {
-  const svc = new PublishingCreateJobService(pool);
-
-  const CreateJobSchema = z.object({
+// P3-FIX: Moved schema and interface to module level.
+// Previously both were redefined inside `publishingCreateJobRoutes` on every
+// invocation, rebuilding the Zod schema object on each call (wasteful) and
+// making the interface inaccessible to tests and other modules.
+const CreateJobSchema = z.object({
   contentId: z.string().uuid(),
   targetId: z.string().min(1).max(255),
   scheduleAt: z.string().datetime().optional(),
-  });
+});
 
-  /**
-  * Authenticated request interface
-  */
-  interface AuthenticatedRequest extends FastifyRequest {
+/**
+* Authenticated request interface
+*/
+interface AuthenticatedRequest extends FastifyRequest {
   auth: {
-    userId: string;
-    orgId: string;
-    domainId?: string;
-    roles: Role[];
+  userId: string;
+  orgId: string;
+  domainId?: string;
+  roles: Role[];
   };
-  }
+}
+
+export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool) {
+  const svc = new PublishingCreateJobService(pool);
 
   app.post('/publishing/jobs', async (req, res) => {
   try {
