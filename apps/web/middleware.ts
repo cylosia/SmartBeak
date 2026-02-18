@@ -52,7 +52,16 @@ const STATIC_SECURITY_HEADERS: Record<string, string> = {
 function generateCspNonce(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array));
+  // FIX(A-09): Use Base64url encoding (RFC 4648 §5) instead of standard
+  // Base64. btoa() produces '+', '/', and '=' characters which are not
+  // valid in a CSP nonce-source token per the CSP3 spec (the spec requires
+  // the nonce value to match the base64-value grammar, and browsers differ
+  // in whether they accept standard vs URL-safe variants). Stripping '='
+  // padding also avoids unquoted '=' in the CSP header value.
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 // P1-11 FIX: Hardcode origin to prevent open redirect via Host header injection
