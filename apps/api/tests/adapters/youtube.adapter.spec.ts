@@ -401,9 +401,16 @@ describe('YouTubeAdapter', () => {
 
     // P3-5 FIX: Token-per-retry test now uses a faithful multi-attempt mock
     // instead of a hand-rolled loop that diverged from real withRetry semantics.
+    //
+    // Audit fix: The previous version spied on '../../src/utils/retry', but
+    // YouTubeAdapter imports withRetry directly from '@kernel/retry'. Jest
+    // resolves module mocks by module ID, so a spy on the re-export shim had
+    // zero effect on the adapter's withRetry calls — the test never actually
+    // verified retry behaviour. The spy is now correctly targeted at
+    // '@kernel/retry', the module the adapter binds to at import time.
     test('calls token factory on each retry attempt (P3-5)', async () => {
-      const retryModule = await import('../../src/utils/retry');
-      const withRetrySpy = jest.spyOn(retryModule, 'withRetry');
+      const kernelRetry = await import('@kernel/retry');
+      const withRetrySpy = jest.spyOn(kernelRetry, 'withRetry');
 
       // Faithful mock: calls fn up to maxRetries+1 times (matching real withRetry)
       withRetrySpy.mockImplementationOnce(async (fn: () => Promise<unknown>, opts?: { maxRetries?: number }) => {

@@ -23,7 +23,12 @@ export class ApiError extends AppError {
   ) {
     // Map HTTP status to the closest internal ErrorCode so the global
     // error handler can produce structured responses.
+    // Audit fix: 400 and 401 were previously falling through to INTERNAL_ERROR,
+    // causing auth failures and bad-request errors from external APIs to be
+    // classified as internal infrastructure errors in monitoring/alerting.
     const code =
+      status === 400 ? ErrorCodes.VALIDATION_ERROR :
+      status === 401 ? ErrorCodes.UNAUTHORIZED :
       status === 422 ? ErrorCodes.VALIDATION_ERROR :
       status === 429 ? ErrorCodes.RATE_LIMIT_EXCEEDED :
       status === 403 ? ErrorCodes.FORBIDDEN :

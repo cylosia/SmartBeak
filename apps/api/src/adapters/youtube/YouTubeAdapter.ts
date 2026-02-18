@@ -258,6 +258,15 @@ export class YouTubeAdapter implements CanaryAdapter {
             // mutation that already succeeded on the server. The finally below
             // is still needed as a safety net for error paths that skip this line.
             clearTimeout(timeoutId);
+            // Audit fix: detach the outer-signal listener before reading the
+            // body. The timeout is now cleared, but the outer AbortSignal
+            // listener is still attached until the finally block runs. If the
+            // outer signal fires during response.json(), it aborts the inner
+            // controller, throws AbortError, and withRetry could re-execute a
+            // PUT that already committed server-side. Removing it here — on the
+            // success path, before json() — closes this window entirely. The
+            // finally block's removeEventListener call becomes a no-op (safe).
+            signal?.removeEventListener('abort', onOuterAbort);
             const rawData: unknown = await response.json();
             const parsed = YouTubeVideoResponseSchema.safeParse(rawData);
             if (!parsed.success) {
@@ -277,7 +286,11 @@ export class YouTubeAdapter implements CanaryAdapter {
       const latencyMs = Date.now() - startTime;
       logger.info('Successfully updated YouTube metadata', {
         operation: 'updateMetadata',
-        videoId: data.id,
+        // Audit fix: sanitize response id just as error paths sanitize caller
+        // input — the YouTube API response is an untrusted string that has not
+        // been validated against YOUTUBE_VIDEO_ID_REGEX and must not reach
+        // structured logs raw (log-injection / PII consistency).
+        videoId: sanitizeVideoIdForLog(data.id),
         latencyMs,
       });
       return data;
@@ -420,7 +433,8 @@ export class YouTubeAdapter implements CanaryAdapter {
       const latencyMs = Date.now() - startTime;
       logger.info('Successfully retrieved YouTube video', {
         operation: 'getVideo',
-        videoId: firstItem.id,
+        // Audit fix: sanitize API-response id for log-injection consistency.
+        videoId: sanitizeVideoIdForLog(firstItem.id),
         latencyMs,
       });
       return firstItem;
