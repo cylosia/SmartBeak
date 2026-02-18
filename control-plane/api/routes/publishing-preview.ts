@@ -63,8 +63,12 @@ export async function publishingPreviewRoutes(app: FastifyInstance, pool: Pool) 
     requireRole(ctx, ['owner','admin','editor','viewer']);
 
     const content_id = query.content_id;
-    if (!content_id || typeof content_id !== 'string') {
-    return errors.badRequest(res, 'Missing required parameter: content_id', ErrorCodes.MISSING_PARAMETER);
+    // P2-FIX: The OpenAPI schema declares format:uuid but the route only checked
+    // `typeof !== 'string'`, accepting arbitrary strings. Enforce UUID format
+    // so downstream parameterized queries receive valid IDs only.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!content_id || typeof content_id !== 'string' || !UUID_RE.test(content_id)) {
+    return errors.badRequest(res, 'Missing or invalid content_id: must be a UUID', ErrorCodes.MISSING_PARAMETER);
     }
 
     const result = await svc.facebookPreview(content_id, ctx["orgId"]);

@@ -408,6 +408,17 @@ export function buildKeysetWhereClause(
   sortColumns: Array<{ column: string; order: 'asc' | 'desc' }>,
   direction: 'next' | 'prev'
 ): { clause: string; params: string[] } {
+  // P1-FIX: Validate column names before interpolating into SQL.
+  // buildKeysetWhereClause interpolates `column` directly (`${column} ${op} $N`)
+  // with no validation. A caller-supplied column like `1; DROP TABLE users; --`
+  // would be injected verbatim. Apply the same identifier regex used in buildQuery.
+  const VALID_COLUMN_RE = /^[a-zA-Z_][a-zA-Z0-9_.]*$/;
+  for (const col of sortColumns) {
+    if (!VALID_COLUMN_RE.test(col.column)) {
+      throw new Error(`Invalid keyset column name: "${col.column}". Only alphanumeric identifiers are allowed.`);
+    }
+  }
+
   const _conditions: string[] = [];
   const params: string[] = [];
 

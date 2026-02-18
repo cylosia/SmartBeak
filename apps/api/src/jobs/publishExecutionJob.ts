@@ -93,9 +93,23 @@ export async function publishExecutionJob(payload: unknown): Promise<void> {
     recordSpanException(error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
-    // Always release lock
+    // P1-FIX: releaseLock throwing in finally overrides the job result and
+    // causes the BullMQ runner to mark a successful job as failed, triggering
+    // an unnecessary retry (and potentially a duplicate publish).
+    // Log the error but do not let it propagate.
+    try {
     const released = await releaseLock(lock);
-    logger.info('Released distributed lock', { intentId, released });
+    if (!released) {
+      // Lock expired before we released it — another worker may have acquired
+      // it during our execution window. Log at warn so ops can investigate
+      // potential duplicate-publish scenarios.
+      logger.warn('Distributed lock expired before release — duplicate publish possible', { intentId });
+    } else {
+      logger.info('Released distributed lock', { intentId });
+    }
+    } catch (lockError) {
+    logger.error('Failed to release distributed lock', lockError instanceof Error ? lockError : new Error(String(lockError)), { intentId });
+    }
   }
   });
 }
@@ -174,10 +188,24 @@ async function executePublishJob(
   let recoveredResult: PublishResult | null = null;
   if (typeof attempt === 'object' && attempt.skipExternalCall) {
   skipExternalCall = true;
+  // P1-FIX: JSON.parse without error handling would make a corrupted
+  // metadata field permanently unrecoverable — the saga recovery path
+  // would always throw, blocking all retry attempts for the job.
+  let parsedMetadata: Record<string, unknown> | undefined;
+  if (attempt.existingResult.metadata) {
+    try {
+    const raw: unknown = JSON.parse(attempt.existingResult.metadata);
+    parsedMetadata = (typeof raw === 'object' && raw !== null && !Array.isArray(raw))
+      ? (raw as Record<string, unknown>)
+      : undefined;
+    } catch {
+    logger.warn('Saga recovery: metadata is not valid JSON, using undefined', { intentId });
+    }
+  }
   recoveredResult = {
     externalId: attempt.existingResult.external_id,
     url: attempt.existingResult.external_url,
-    metadata: attempt.existingResult.metadata ? JSON.parse(attempt.existingResult.metadata) : null,
+    ...(parsedMetadata !== undefined && { metadata: parsedMetadata }),
   };
   }
 

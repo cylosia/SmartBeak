@@ -44,23 +44,27 @@ export class PublishingCreateJobService {
     await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
-    // Validate content exists
+    // P0-FIX: Scope content lookup to the caller's domain to prevent IDOR.
+    // The previous `WHERE id=$1` let any authenticated user create a publishing
+    // job for content belonging to another org by guessing its UUID.
+    // The domain_id constraint enforces ownership at the DB layer.
     const content = await client.query(
-    'SELECT id FROM content_items WHERE id=$1',
-    [input.contentId]
+    'SELECT id FROM content_items WHERE id=$1 AND domain_id=$2',
+    [input.contentId, input.domainId]
     );
     if (!content.rows[0]) {
-    await client.query('ROLLBACK');
     throw NotFoundError.content();
     }
 
+    // P2-FIX: Remove redundant pre-catch ROLLBACK calls. The catch block
+    // unconditionally rolls back, so explicit ROLLBACKs before each throw
+    // caused a double-rollback (harmless in pg but structurally wrong).
     // Validate target exists
     const target = await client.query(
     'SELECT id, type, config, region FROM publish_targets WHERE id=$1 AND domain_id=$2',
     [input.targetId, input.domainId]
     );
     if (!target.rows[0]) {
-    await client.query('ROLLBACK');
     throw new NotFoundError('Publish target');
     }
 

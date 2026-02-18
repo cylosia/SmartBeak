@@ -94,51 +94,64 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   }
   });
 
+  // P1-FIX: Add try-catch — without it any throw (requireRole, rateLimit,
+  // getJobWithOwnership) propagates unhandled, skips structured logging,
+  // and may leak stack traces.
   app.get('/publishing/jobs/:id', async (req, res) => {
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin', 'editor']);
-  await rateLimit('publishing', 50);
+  try {
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin', 'editor']);
+    await rateLimit('publishing', 50);
 
-  const paramsResult = IdParamSchema.safeParse(req.params);
-  if (!paramsResult.success) {
+    const paramsResult = IdParamSchema.safeParse(req.params);
+    if (!paramsResult.success) {
     return errors.badRequest(res, 'Invalid job ID', ErrorCodes.INVALID_PARAMS);
-  }
+    }
 
-  const { id } = paramsResult.data;
+    const { id } = paramsResult.data;
 
-  const job = await getJobWithOwnership(pool, svc, id, ctx["orgId"]);
-  if (!job) {
+    const job = await getJobWithOwnership(pool, svc, id, ctx["orgId"]);
+    if (!job) {
     return errors.notFound(res, 'Job');
-  }
+    }
 
-  if (!job.hasAccess) {
+    if (!job.hasAccess) {
     return errors.forbidden(res, 'Access denied', ErrorCodes.ACCESS_DENIED);
-  }
+    }
 
-  // Return job without the internal hasAccess flag
-  const { hasAccess: _, ...jobData } = job;
-  return jobData;
+    // Return job without the internal hasAccess flag
+    const { hasAccess: _, ...jobData } = job;
+    return jobData;
+  } catch (error) {
+    logger.error('[publishing/jobs/:id] Error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
+  }
   });
 
+  // P1-FIX: Add try-catch — same issue as GET handler above.
   app.post('/publishing/jobs/:id/retry', async (req, res) => {
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin']);
-  await rateLimit('publishing', 30);
+  try {
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin']);
+    await rateLimit('publishing', 30);
 
-  const paramsResult = IdParamSchema.safeParse(req.params);
-  if (!paramsResult.success) {
+    const paramsResult = IdParamSchema.safeParse(req.params);
+    if (!paramsResult.success) {
     return errors.badRequest(res, 'Invalid job ID', ErrorCodes.INVALID_PARAMS);
-  }
+    }
 
-  const { id } = paramsResult.data;
+    const { id } = paramsResult.data;
 
-  const hasAccess = await verifyJobOwnership(pool, id, ctx["orgId"]);
-  if (!hasAccess) {
+    const hasAccess = await verifyJobOwnership(pool, id, ctx["orgId"]);
+    if (!hasAccess) {
     return errors.forbidden(res, 'Access denied', ErrorCodes.ACCESS_DENIED);
-  }
+    }
 
-  // P1-FIX: await so that Fastify propagates the rejection correctly
-  return await svc.retryJob(id);
+    return await svc.retryJob(id);
+  } catch (error) {
+    logger.error('[publishing/jobs/:id/retry] Error', error instanceof Error ? error : new Error(String(error)));
+    return errors.internal(res);
+  }
   });
 }
 

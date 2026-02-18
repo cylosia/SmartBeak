@@ -4,12 +4,36 @@ export interface CacheEntry<V> {
   timestamp: number;
 }
 
+/**
+ * P1-FIX: Produce a stable, collision-free cache key.
+ * - JSON.stringify([undefined]) === JSON.stringify([null]) === '[null]',
+ *   causing null/undefined arg collisions that return wrong cached values.
+ * - JSON.stringify throws on circular references, crashing the memoized fn.
+ * Fix: replace undefined/symbol/function with unambiguous sentinel strings,
+ * and fall back to a unique random key on circular-reference errors so the
+ * call always proceeds (cache miss) rather than throwing.
+ */
+function buildCacheKey(args: unknown[]): string {
+  try {
+    return JSON.stringify(args, (_k, v) => {
+      if (v === undefined) return '__undefined__';
+      if (typeof v === 'symbol') return `__symbol_${v.toString()}__`;
+      if (typeof v === 'function') return `__fn_${(v as { name?: string }).name ?? 'anonymous'}__`;
+      return v;
+    });
+  } catch {
+    // Circular reference or other non-serializable input — return a unique
+    // key so the call proceeds without caching (correct behaviour, not a throw).
+    return `__non_serializable_${Math.random()}__`;
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function memoize<T extends (...args: any[]) => any>(fn: T, maxSize = 1000): T {
   const cache = new Map<string, CacheEntry<ReturnType<T>>>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ((...args: any[]) => {
-  const key = JSON.stringify(args);
+  const key = buildCacheKey(args);
   const now = Date.now();
 
   const entry = cache.get(key);

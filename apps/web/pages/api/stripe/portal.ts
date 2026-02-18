@@ -166,7 +166,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // and the user is redirected there after interacting with the Stripe portal.
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
     const validOrigins = [appUrl, origin].filter((o): o is string => Boolean(o));
-    const safeReturnUrl = returnUrl && validOrigins.some(o => (returnUrl as string).startsWith(o))
+    // P0-FIX: startsWith("https://example.com") allows bypass via
+    // "https://example.com.evil.com". Require the prefix to be followed by
+    // /, ?, # or be an exact match so subdomain spoofing is impossible.
+    const safeReturnUrl = returnUrl && validOrigins.some(o => {
+      const url = returnUrl as string;
+      return url === o || url.startsWith(o + '/') || url.startsWith(o + '?') || url.startsWith(o + '#');
+    })
       ? (returnUrl as string)
       : `${origin}/billing`;
 

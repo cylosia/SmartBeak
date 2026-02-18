@@ -284,8 +284,10 @@ export class MLPredictionEngine extends EventEmitter {
   );
 
   // Get high-volume keywords not ranking well
-  // P0-FIX: Added missing SELECT keyword inside the CTE and added keyword column
-  // to SELECT list so GROUP BY keyword is valid and rows have a keyword field.
+  // P0-FIX: domainId was previously passed as $1 but never referenced in the SQL,
+  // so the phantom parameter caused a cross-tenant data leakage concern.
+  // This is an intentionally global competitor pool; the current-domain filter
+  // is applied in-memory via `rankedKeywords`. Remove the phantom $1 param.
   const { rows: opportunities } = await this.db.query(
     `WITH competitor_keywords AS (
     SELECT
@@ -303,8 +305,8 @@ export class MLPredictionEngine extends EventEmitter {
     SELECT * FROM competitor_keywords
     WHERE competitor_count < 10  -- Low competition
     ORDER BY avg_volume DESC
-    LIMIT $2`,
-    [domainId, limit * 2]
+    LIMIT $1`,
+    [limit * 2]
   );
 
   return opportunities
@@ -426,6 +428,10 @@ export class MLPredictionEngine extends EventEmitter {
     ORDER BY date
     `;
     break;
+    // P3-FIX: Guard against unknown metric values. Without a default, `query`
+    // stays '' and `this.db.query('')` throws a cryptic PostgreSQL syntax error.
+    default:
+    throw new Error(`Unknown metric type: "${metric}". Expected: traffic, rankings, engagement`);
   }
 
   const { rows } = await this.db.query(query, [domainId]);
@@ -436,6 +442,9 @@ export class MLPredictionEngine extends EventEmitter {
   * Calculate variance
   */
   private calculateVariance(values: number[]): number {
+  // P3-FIX: Guard against empty array; division by 0 produces NaN that
+  // propagates silently through all downstream arithmetic.
+  if (values.length === 0) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
   return squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
