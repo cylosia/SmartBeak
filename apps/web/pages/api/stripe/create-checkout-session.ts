@@ -1,4 +1,4 @@
-import { stripe, validateStripeConfig } from '../../../lib/stripe';
+import { getStripe, validateStripeConfig } from '../../../lib/stripe';
 import { requireAuth, validateMethod } from '../../../lib/auth';
 import { getLogger } from '@kernel/logger';
 
@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (cancelUrl && !String(cancelUrl).startsWith(origin)) {
       return res.status(400).json({ error: 'Invalid cancelUrl: must be a relative or same-origin URL' });
     }
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
