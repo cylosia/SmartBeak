@@ -1,5 +1,5 @@
 import { getRequestContext } from './request-context';
-import { sanitizeForLogging as redact, isSensitiveField as _isSensitiveField } from './redaction';
+import { sanitizeForLogging as redact } from './redaction';
 
 /**
 * Structured Logger
@@ -129,9 +129,6 @@ function shouldLog(level: LogLevel): boolean {
 // Sensitive Data Redaction — delegated to @kernel/redaction
 // ============================================================================
 
-// Re-export the comprehensive isSensitiveField for external use
-const _isSensitiveFieldAlias = _isSensitiveField;
-
 /**
 * Redact sensitive data from an object using the consolidated redaction engine.
 * Uses comprehensive field-name and value-pattern matching (Stripe keys, JWTs,
@@ -158,17 +155,15 @@ function redactSensitiveData(obj: Record<string, unknown> | undefined): Record<s
 * @param entry - Log entry to output
 */
 function consoleHandler(entry: LogEntry): void {
-  const { timestamp: _timestamp, level, message: _message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
+  const { timestamp: _timestamp, level, message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
 
-  // P0-FIX: Use stderr for all log levels to ensure structured logs don't pollute stdout
-  // This is important for CLI tools and proper log aggregation
-  const logFn = level === 'error' || level === 'fatal' || level === 'warn' 
-    ? console["error"] 
-    : console["error"]; // All logs to stderr for structured logging
+  // All logs go to stderr for structured logging; prevents stdout pollution for CLI tools
+  const logFn = console["error"];
 
   // Build structured log output
   const logOutput: Record<string, unknown> = {
   level: level.toUpperCase(),
+  message,
   };
 
   if (service) logOutput["service"] = service;
@@ -215,8 +210,12 @@ export function addLogHandler(handler: LogHandler): () => void {
   return cleanup;
 }
 
-/** P1-7 FIX: Auto-clean all registered handlers on process shutdown */
-process.once('beforeExit', () => {
+/** Auto-clean all registered handlers on process shutdown.
+ * Registers on both beforeExit (event-loop drain) and SIGTERM/SIGINT
+ * because beforeExit never fires when process.exit() or a signal terminates
+ * the process in containerised environments.
+ */
+function runHandlerCleanups(): void {
   for (const cleanup of handlerCleanups) {
     try {
       cleanup();
@@ -225,7 +224,10 @@ process.once('beforeExit', () => {
     }
   }
   handlerCleanups.length = 0;
-});
+}
+process.once('beforeExit', runHandlerCleanups);
+process.once('SIGTERM', runHandlerCleanups);
+process.once('SIGINT', runHandlerCleanups);
 
 /**
 * Remove all log handlers
@@ -319,11 +321,11 @@ export function warn(message: string, metadata?: Record<string, unknown>): void 
 * @param metadata - Additional metadata
 */
 export function error(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
-  const entry = createLogEntry('error', message, {
-  ...metadata,
-  error: err?.["message"],
-  stack: err?.["stack"],
-  });
+  const entry = createLogEntry('error', message, metadata);
+  if (err) {
+    entry.errorMessage = err["message"];
+    entry.errorStack = err["stack"];
+  }
   getHandlers().forEach(h => h(entry));
 }
 
@@ -334,11 +336,11 @@ export function error(message: string, err?: Error | undefined, metadata?: Recor
 * @param metadata - Additional metadata
 */
 export function fatal(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
-  const entry = createLogEntry('fatal', message, {
-  ...metadata,
-  error: err?.["message"],
-  stack: err?.["stack"],
-  });
+  const entry = createLogEntry('fatal', message, metadata);
+  if (err) {
+    entry.errorMessage = err["message"];
+    entry.errorStack = err["stack"];
+  }
   getHandlers().forEach(h => h(entry));
 }
 

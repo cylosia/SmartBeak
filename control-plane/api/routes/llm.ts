@@ -41,7 +41,6 @@ export interface LlmPreferences {
   };
 }
 
-// P1-FIX: Add .strict() to reject unknown properties
 const UpdatePreferencesSchema = z.object({
   defaultModel: z.string().optional(),
   fallbackModel: z.string().optional(),
@@ -50,11 +49,19 @@ const UpdatePreferencesSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().min(1).max(8000).optional(),
   }).strict().optional(),
+  imageGeneration: z.object({
+  provider: z.string().optional(),
+  size: z.string().optional(),
+  quality: z.string().optional(),
+  }).strict().optional(),
   costLimits: z.object({
   monthly: z.number().min(0).optional(),
   alertThreshold: z.number().min(0).max(100).optional(),
   }).strict().optional(),
 }).strict();
+
+/** Schema used to validate stored JSONB preferences before merging with defaults */
+const StoredPreferencesSchema = UpdatePreferencesSchema.partial();
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -153,16 +160,23 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       [ctx.orgId]
     );
     if (rows.length > 0 && rows[0].preferences) {
-      const stored = rows[0].preferences;
-      preferences = { ...defaults, ...stored };
-      if (stored.contentGeneration) {
-      preferences.contentGeneration = { ...defaults.contentGeneration, ...stored.contentGeneration };
-      }
-      if (stored.imageGeneration) {
-      preferences.imageGeneration = { ...defaults.imageGeneration, ...stored.imageGeneration };
-      }
-      if (stored.costLimits) {
-      preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits };
+      const parseResult = StoredPreferencesSchema.safeParse(rows[0].preferences);
+      if (!parseResult.success) {
+        logger.warn('[llm/preferences] Stored preferences failed validation, using defaults', {
+          issues: parseResult.error.issues.map(i => i.message),
+        });
+      } else {
+        const stored = parseResult.data;
+        preferences = { ...defaults, ...stored };
+        if (stored.contentGeneration) {
+        preferences.contentGeneration = { ...defaults.contentGeneration, ...stored.contentGeneration };
+        }
+        if (stored.imageGeneration) {
+        preferences.imageGeneration = { ...defaults.imageGeneration, ...stored.imageGeneration };
+        }
+        if (stored.costLimits) {
+        preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits };
+        }
       }
     }
     } catch (dbError) {

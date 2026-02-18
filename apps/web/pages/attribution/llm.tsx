@@ -21,7 +21,14 @@ export default function LlmAttribution({ rows }: { rows: LlmAttributionRow[] }) 
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const res = await authFetch(apiUrl('attribution/llm'), { ctx });
-  const rows = await res.json();
-  return { props: { rows } };
+  try {
+    const res = await authFetch(apiUrl('attribution/llm'), { ctx });
+    if (!res.ok) {
+      return { props: { rows: [] } };
+    }
+    const rows = (await res.json()) as LlmAttributionRow[];
+    return { props: { rows } };
+  } catch {
+    return { props: { rows: [] } };
+  }
 };

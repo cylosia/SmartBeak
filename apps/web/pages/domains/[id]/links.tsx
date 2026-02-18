@@ -58,7 +58,11 @@ export default function Links({ domainId, internal, external }: LinksProps) {
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ params }) => {
-  const domainId = params?.['id'];
+  const rawId = params?.['id'];
+  const domainId = Array.isArray(rawId) ? rawId[0] : rawId;
+  if (typeof domainId !== 'string') {
+    return { notFound: true };
+  }
   // Placeholder aggregates; wire to read models
   return {
   props: {

@@ -20,13 +20,12 @@ function validateState(state: string): boolean {
 function validateOAuthParams(clientId: string, redirectUri: string, state: string) {
   if (!/^[a-zA-Z0-9_-]+$/.test(clientId)) throw new Error('Invalid clientId');
   if (!redirectUri.startsWith('https://')) throw new Error('Invalid redirectUri');
-  // P1-FIX: Validate redirect URI is to an allowed domain
+  // Validate redirect URI against the allowlist. The env var is required in production;
+  // an empty/missing value rejects all redirects rather than allowing any.
   const allowedDomains = (process.env['OAUTH_ALLOWED_REDIRECT_DOMAINS'] || '').split(',').filter(Boolean);
-  if (allowedDomains.length > 0) {
   const redirectHost = new URL(redirectUri).hostname;
-  if (!allowedDomains.some(d => redirectHost === d.trim() || redirectHost.endsWith('.' + d.trim()))) {
+  if (allowedDomains.length === 0 || !allowedDomains.some(d => redirectHost === d.trim() || redirectHost.endsWith('.' + d.trim()))) {
     throw new Error('Redirect URI domain not in allowlist');
-  }
   }
   // P1-FIX: Use strengthened state validation
   if (!validateState(state)) throw new Error('Invalid state');
