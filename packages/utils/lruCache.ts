@@ -10,7 +10,7 @@ export interface LRUCacheOptions {
 
 export interface CacheEntry<V> {
   value: V;
-  timestamp: number;
+  createdAt: number;
 }
 
 export class LRUCache<K, V> {
@@ -19,7 +19,6 @@ export class LRUCache<K, V> {
   private readonly ttlMs: number | undefined;
 
   constructor(options: LRUCacheOptions) {
-  // P2-FIX: Validate maxSize > 0 to prevent unbounded growth
   if (options.maxSize <= 0) {
     throw new Error(`LRUCache maxSize must be > 0, got ${options.maxSize}`);
   }
@@ -40,25 +39,18 @@ export class LRUCache<K, V> {
     return undefined;
   }
 
-  // P1-FIX: Thread-safe TTL check with single timestamp read to prevent race condition
+  // Absolute TTL check — uses createdAt, not a sliding window
   const now = Date.now();
-  if (this.ttlMs && now - entry.timestamp > this.ttlMs) {
+  if (this.ttlMs !== undefined && now - entry.createdAt > this.ttlMs) {
     this.cache.delete(key);
     return undefined;
   }
 
-  // P1-FIX: Update timestamp atomically when accessing to prevent race conditions
-  const updatedEntry: CacheEntry<V> = {
-    value: entry.value,
-    timestamp: now, // Update timestamp on access
-  };
-
-  // Move to end (most recently used)
+  // Move to end (most recently used) — preserve original createdAt for absolute TTL
   this.cache.delete(key);
-  this.cache.set(key, updatedEntry);
+  this.cache.set(key, entry);
 
-  // P2-FIX: Return updatedEntry.value to avoid stale reference
-  return updatedEntry.value;
+  return entry.value;
   }
 
   /**
@@ -82,7 +74,7 @@ export class LRUCache<K, V> {
 
   this.cache.set(key, {
     value,
-    timestamp: Date.now(),
+    createdAt: Date.now(),
   });
   }
 
@@ -91,11 +83,10 @@ export class LRUCache<K, V> {
   * @param key - Cache key
   * @returns True if exists and not expired
   */
-  // P2-FIX: Implement has() without side effects (don't call get() which mutates LRU order)
   has(key: K): boolean {
   const entry = this.cache.get(key);
   if (!entry) return false;
-  if (this.ttlMs && Date.now() - entry.timestamp > this.ttlMs) {
+  if (this.ttlMs !== undefined && Date.now() - entry.createdAt > this.ttlMs) {
     this.cache.delete(key);
     return false;
   }
@@ -119,9 +110,12 @@ export class LRUCache<K, V> {
   }
 
   /**
-  * Get current cache size
+  * Get current cache size (excludes expired entries via cleanup)
   */
   get size(): number {
+  if (this.ttlMs !== undefined) {
+    this.cleanup();
+  }
   return this.cache.size;
   }
 
@@ -152,24 +146,20 @@ export class LRUCache<K, V> {
 
   /**
   * Clean up expired entries
-  * P1-FIX: Use batch deletion to reduce time complexity from O(n) to amortized O(k)
-  * where k is the number of expired entries
   * @returns Number of entries removed
   */
   cleanup(): number {
-  if (!this.ttlMs) return 0;
+  if (this.ttlMs === undefined) return 0;
 
   const now = Date.now();
   const keysToDelete: K[] = [];
 
-  // P1-FIX: First pass - collect keys to delete (avoids modifying during iteration)
   for (const [key, entry] of this.cache.entries()) {
-    if (now - entry.timestamp > this.ttlMs) {
+    if (now - entry.createdAt > this.ttlMs) {
     keysToDelete.push(key);
     }
   }
 
-  // P1-FIX: Second pass - batch delete collected keys
   for (const key of keysToDelete) {
     this.cache.delete(key);
   }
@@ -186,8 +176,14 @@ export class BoundedMap<K, V> extends Map<K, V> {
   private readonly maxSize: number;
 
   constructor(maxSize: number, entries?: readonly (readonly [K, V])[] | null) {
-  super(entries);
+  super();
   this.maxSize = maxSize;
+  // Validate entries through overridden set() to enforce size limit
+  if (entries) {
+    for (const [k, v] of entries) {
+    this.set(k, v);
+    }
+  }
   }
 
   override set(key: K, value: V): this {
@@ -202,7 +198,6 @@ export class BoundedMap<K, V> extends Map<K, V> {
 * Create a bounded Array with size limit
 * Automatically evicts oldest items when limit is exceeded
 */
-// P2-FIX: Use composition instead of inheritance to prevent bounds bypass via splice/index
 export class BoundedArray<T> {
   private readonly items: T[];
   private readonly maxSize: number;

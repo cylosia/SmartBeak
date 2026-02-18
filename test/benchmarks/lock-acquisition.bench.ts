@@ -38,8 +38,18 @@ vi.mock('@kernel/redis', () => ({
         const lockKey = args[0]!;
         const fencingKey = args[1]!;
         const lockValue = args[2]!;
+        const ttlMs = parseInt(args[3] || '5000', 10);
+        // Simulate NX semantics: only set if key doesn't exist
         if (mockRedisStore.has(lockKey)) return -1;
         mockRedisStore.set(lockKey, lockValue);
+        // Simulate PX TTL expiration
+        if (ttlMs > 0) {
+          setTimeout(() => {
+            if (mockRedisStore.get(lockKey) === lockValue) {
+              mockRedisStore.delete(lockKey);
+            }
+          }, ttlMs);
+        }
         const fenceVal = parseInt(mockRedisStore.get(fencingKey) || '0', 10) + 1;
         mockRedisStore.set(fencingKey, String(fenceVal));
         return fenceVal;
@@ -47,6 +57,7 @@ vi.mock('@kernel/redis', () => ({
       // Release lock: KEYS=[lockKey], ARGV=[lockValue]
       const lockKey = args[0]!;
       const lockValue = args[1]!;
+      // Atomic check-and-delete (simulates Lua script atomicity)
       if (mockRedisStore.get(lockKey) === lockValue) {
         mockRedisStore.delete(lockKey);
         return 1;

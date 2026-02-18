@@ -6,11 +6,13 @@ import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, AuthContext } from '../../services/auth';
+import { requireRole, AuthContext, RoleAccessError } from '../../services/auth';
 import { errors } from '@errors/responses';
 import { getContainer } from '../../services/container';
 
 const logger = getLogger('LLM');
+
+const MODEL_NAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 export interface LlmModel {
   id: string;
@@ -41,14 +43,18 @@ export interface LlmPreferences {
   };
 }
 
-// P1-FIX: Add .strict() to reject unknown properties
 const UpdatePreferencesSchema = z.object({
-  defaultModel: z.string().optional(),
-  fallbackModel: z.string().optional(),
+  defaultModel: z.string().regex(MODEL_NAME_PATTERN).max(100).optional(),
+  fallbackModel: z.string().regex(MODEL_NAME_PATTERN).max(100).optional(),
   contentGeneration: z.object({
-  model: z.string().optional(),
+  model: z.string().regex(MODEL_NAME_PATTERN).max(100).optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().min(1).max(8000).optional(),
+  }).strict().optional(),
+  imageGeneration: z.object({
+  provider: z.string().regex(MODEL_NAME_PATTERN).max(100).optional(),
+  size: z.enum(['256x256', '512x512', '1024x1024', '1024x1792', '1792x1024']).optional(),
+  quality: z.enum(['standard', 'hd']).optional(),
   }).strict().optional(),
   costLimits: z.object({
   monthly: z.number().min(0).optional(),
@@ -75,7 +81,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-    // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
     try {
       await rateLimit('llm', 30, req, res);
     } catch (_e) {
@@ -83,9 +88,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       return;
     }
 
-    // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
-    let models: LlmModel[] = [];
-    try {
     const result = await pool.query(
       `SELECT id, name, provider, capabilities, cost_per_1k_tokens as "costPer1kTokens",
           max_tokens as "maxTokens", available
@@ -94,17 +96,14 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       ORDER BY provider, name`,
       [ctx.orgId]
     );
-    models = result.rows;
-    } catch (dbError) {
-    logger.error('[llm/models] Database error', dbError instanceof Error ? dbError : new Error(String(dbError)));
-    // Return empty array if table doesn't exist or other DB error
-    models = [];
-    }
+    const models: LlmModel[] = result.rows;
 
     return res.send({ models });
   } catch (error) {
+    if (error instanceof RoleAccessError) {
+      return errors.forbidden(res, error.message);
+    }
     logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch LLM models');
   }
   });
@@ -146,12 +145,11 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     },
     };
 
-    let preferences = defaults;
-    try {
     const { rows } = await pool.query(
       `SELECT preferences FROM org_llm_prefs WHERE org_id = $1`,
       [ctx.orgId]
     );
+    let preferences = defaults;
     if (rows.length > 0 && rows[0].preferences) {
       const stored = rows[0].preferences;
       preferences = { ...defaults, ...stored };
@@ -165,14 +163,13 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits };
       }
     }
-    } catch (dbError) {
-    logger.error('[llm/preferences] Database error, using defaults', dbError instanceof Error ? dbError : new Error(String(dbError)));
-    }
 
     return res.send(preferences);
   } catch (error) {
+    if (error instanceof RoleAccessError) {
+      return errors.forbidden(res, error.message);
+    }
     logger.error('[llm/preferences] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to fetch LLM preferences');
   }
   });
@@ -198,17 +195,18 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // Validate input
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);
     if (!parseResult.success) {
-    // P3-FIX: Sanitize validation error details
     return errors.validationFailed(res, parseResult["error"].issues.map(i => ({ path: i.path, message: i.message })));
     }
 
     const updates = parseResult.data;
 
-    // P1-FIX: Actually persist preferences to database
+    // Merge with existing preferences instead of overwriting
     await pool.query(
     `INSERT INTO org_llm_prefs (org_id, preferences, updated_at)
-    VALUES ($1, $2, NOW())
-    ON CONFLICT (org_id) DO UPDATE SET preferences = $2, updated_at = NOW()`,
+    VALUES ($1, $2::jsonb, NOW())
+    ON CONFLICT (org_id) DO UPDATE SET
+      preferences = org_llm_prefs.preferences || $2::jsonb,
+      updated_at = NOW()`,
     [ctx.orgId, JSON.stringify(updates)]
     );
 
@@ -228,8 +226,10 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send({ updated: true, preferences: updates });
   } catch (error) {
+    if (error instanceof RoleAccessError) {
+      return errors.forbidden(res, error.message);
+    }
     logger.error('[llm/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to update LLM preferences');
   }
   });

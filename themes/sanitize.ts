@@ -15,6 +15,13 @@ interface SanitizeOptions {
 const DEFAULT_ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre'];
 const DEFAULT_ALLOWED_ATTR = ['href', 'title', 'target'];
 
+// Register hook once at module level to prevent accumulation across calls
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
 /**
  * Sanitize HTML content to prevent XSS attacks
  * P0-FIX: Uses DOMPurify for robust XSS protection instead of regex-based sanitization
@@ -50,19 +57,7 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
     FORBID_DATA_URI: true,
   };
 
-  // P0-FIX (P0-7): Add rel="noopener noreferrer" to all target="_blank" links
-  // to prevent tabnabbing attacks where the opened page gains window.opener
-  // access and can redirect the original tab to a phishing page.
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
-      node.setAttribute('rel', 'noopener noreferrer');
-    }
-  });
-
   const result = DOMPurify.sanitize(html, config);
-
-  // Remove the hook after use to prevent accumulation across calls
-  DOMPurify.removeAllHooks();
 
   return result;
 }

@@ -167,9 +167,9 @@ export class MockLogger {
    * Print all captured logs (for debugging)
    */
   printLogs(): void {
-    console.log('Captured logs:');
+    process.stderr.write('Captured logs:\n');
     this.entries.forEach(e => {
-      console.log(`  [${e.level}] ${e.message}`, e.metadata || '');
+      process.stderr.write(`  [${e.level}] ${e.message} ${e.metadata ? JSON.stringify(e.metadata) : ''}\n`);
     });
   }
 }

@@ -104,11 +104,11 @@ export function freezeHandlers(): void {
 * Defaults to 'info' in production, 'debug' in development
 */
 function getConfiguredLogLevel(): LogLevel {
-  const envLevel = process.env['LOG_LEVEL']?.toLowerCase() as LogLevel;
+  const raw = process.env['LOG_LEVEL']?.toLowerCase();
   const validLevels: LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
 
-  if (validLevels.includes(envLevel)) {
-  return envLevel;
+  if (raw && validLevels.includes(raw as LogLevel)) {
+  return raw as LogLevel;
   }
 
   // Default based on environment
@@ -158,17 +158,16 @@ function redactSensitiveData(obj: Record<string, unknown> | undefined): Record<s
 * @param entry - Log entry to output
 */
 function consoleHandler(entry: LogEntry): void {
-  const { timestamp: _timestamp, level, message: _message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
+  const { timestamp, level, message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
 
-  // P0-FIX: Use stderr for all log levels to ensure structured logs don't pollute stdout
-  // This is important for CLI tools and proper log aggregation
-  const logFn = level === 'error' || level === 'fatal' || level === 'warn' 
-    ? console["error"] 
-    : console["error"]; // All logs to stderr for structured logging
+  // All logs to stderr for structured logging / CLI tool compatibility
+  const logFn = console["error"];
 
   // Build structured log output
   const logOutput: Record<string, unknown> = {
+  timestamp,
   level: level.toUpperCase(),
+  message,
   };
 
   if (service) logOutput["service"] = service;
@@ -183,7 +182,11 @@ function consoleHandler(entry: LogEntry): void {
   logOutput["metadata"] = redactSensitiveData(metadata);
   }
 
-  logFn(JSON.stringify(logOutput));
+  try {
+    logFn(JSON.stringify(logOutput));
+  } catch {
+    logFn(JSON.stringify({ timestamp: logOutput["timestamp"], level: logOutput["level"], message: '[LOG_SERIALIZATION_ERROR]' }));
+  }
 }
 
 // ============================================================================
@@ -215,8 +218,8 @@ export function addLogHandler(handler: LogHandler): () => void {
   return cleanup;
 }
 
-/** P1-7 FIX: Auto-clean all registered handlers on process shutdown */
-process.once('beforeExit', () => {
+/** Auto-clean all registered handlers on process shutdown */
+function runHandlerCleanup(): void {
   for (const cleanup of handlerCleanups) {
     try {
       cleanup();
@@ -225,7 +228,11 @@ process.once('beforeExit', () => {
     }
   }
   handlerCleanups.length = 0;
-});
+}
+
+process.once('beforeExit', runHandlerCleanup);
+process.once('SIGTERM', runHandlerCleanup);
+process.once('SIGINT', runHandlerCleanup);
 
 /**
 * Remove all log handlers
@@ -298,8 +305,10 @@ export function debug(message: string, metadata?: Record<string, unknown>): void
 * @param metadata - Additional metadata
 */
 export function info(message: string, metadata?: Record<string, unknown>): void {
+  if (shouldLog('info')) {
   const entry = createLogEntry('info', message, metadata);
   getHandlers().forEach(h => h(entry));
+  }
 }
 
 /**
@@ -308,8 +317,10 @@ export function info(message: string, metadata?: Record<string, unknown>): void 
 * @param metadata - Additional metadata
 */
 export function warn(message: string, metadata?: Record<string, unknown>): void {
+  if (shouldLog('warn')) {
   const entry = createLogEntry('warn', message, metadata);
   getHandlers().forEach(h => h(entry));
+  }
 }
 
 /**

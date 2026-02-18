@@ -108,6 +108,10 @@ export class SecureLogger {
       case 'error':
         internalLogger.error(message, undefined, entry);
         break;
+      default: {
+        const _exhaustive: never = level;
+        internalLogger.warn(`Unknown log level: ${String(_exhaustive)}`, entry);
+      }
     }
   }
 

@@ -4,16 +4,14 @@ import {
   TokenExpiredError as KernelTokenExpiredError,
   TokenRevokedError as KernelTokenRevokedError,
 } from '@kernel/auth';
+import type { UserId, OrgId } from '@kernel/branded';
+import { createUserId, createOrgId } from '@kernel/branded';
 
 export type Role = 'admin' | 'editor' | 'viewer' | 'owner';
 
-// P1-AUDIT-FIX: Removed dual role/roles fields. Previously had both `role?: Role` and
-// `roles?: string[]`, but authFromHeader only set `roles`. Functions like requireRole
-// checked both, creating confusion and potential privilege escalation if they disagreed.
-// Unified on `roles: Role[]` with proper Role type (not string[]).
 export interface AuthContext {
-  userId: string;
-  orgId: string;
+  userId: UserId;
+  orgId: OrgId;
   domainId?: string | undefined;
   roles: Role[];
 }
@@ -183,8 +181,8 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
   }
 
   return {
-  userId: claims.sub,
-  orgId: claims.orgId,
+  userId: createUserId(claims.sub),
+  orgId: createOrgId(claims.orgId),
   roles: [claims.role as Role],
   };
 }
