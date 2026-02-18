@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from '@jest/globals';
 
 import { computeYouTubeThumbnailCtr, YouTubeCtrInputSchema } from '../../src/analytics/images/youtubeImageAnalytics';
 
@@ -49,7 +49,7 @@ describe('YouTubeCtrInputSchema', () => {
     expect(() => YouTubeCtrInputSchema.parse({ impressions: 100 })).toThrow();
   });
 
-  // P3-2 FIX (audit 2): MAX_SAFE_INTEGER boundary tests
+  // P3-2 FIX: MAX_SAFE_INTEGER boundary tests
   test('accepts MAX_SAFE_INTEGER values', () => {
     const result = computeYouTubeThumbnailCtr({
       impressions: Number.MAX_SAFE_INTEGER,
@@ -65,8 +65,8 @@ describe('YouTubeCtrInputSchema', () => {
     })).toThrow();
   });
 
-  // P3-3 FIX (audit 2): .strict() rejects extra properties
-  test('rejects extra properties with .strict() (P2-1)', () => {
+  // P3-3 FIX: .strict() rejects extra properties
+  test('rejects extra properties with .strict()', () => {
     expect(() => YouTubeCtrInputSchema.parse({
       impressions: 100,
       views: 50,

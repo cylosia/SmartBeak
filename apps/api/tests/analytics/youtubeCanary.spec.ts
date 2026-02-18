@@ -1,23 +1,26 @@
 /**
  * P1-4 FIX (audit 2): This test file previously tested runMediaCanary from
  * mediaCanaries.ts instead of the youtubeCanary function. Rewritten to test
- * the actual youtubeCanary function with all 4 code paths.
+ * the actual youtubeCanary function with all 5 code paths (including timeout).
+ *
+ * P3-1 FIX (audit 4): Migrated from Vitest to Jest per CLAUDE.md convention
+ * (Jest: unit + integration; Vitest: load, chaos, benchmarks).
  */
-import { vi, describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
-vi.mock('@kernel/logger', () => ({
-  getLogger: vi.fn().mockReturnValue({
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
+jest.mock('@kernel/logger', () => ({
+  getLogger: jest.fn().mockReturnValue({
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
   }),
 }));
 
-vi.mock('../../src/ops/metrics', () => ({
-  emitMetric: vi.fn(),
+jest.mock('../../src/ops/metrics', () => ({
+  emitMetric: jest.fn(),
 }));
 
-vi.mock('@config', () => ({
+jest.mock('@config', () => ({
   DEFAULT_TIMEOUTS: { short: 5000, medium: 15000, long: 30000 },
 }));
 
@@ -25,17 +28,17 @@ import { youtubeCanary } from '../../src/canaries/youtubeCanary';
 import type { YouTubeAdapter } from '../../src/canaries/types';
 import { emitMetric } from '../../src/ops/metrics';
 
-const emitMetricMock = emitMetric as ReturnType<typeof vi.fn>;
+const emitMetricMock = emitMetric as jest.Mock;
 
 function createMockAdapter(overrides: Partial<YouTubeAdapter> = {}): YouTubeAdapter {
   return {
-    healthCheck: vi.fn().mockResolvedValue({ healthy: true, latency: 42 }),
+    healthCheck: jest.fn().mockResolvedValue({ healthy: true, latency: 42 }),
     ...overrides,
   };
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
 });
 
 describe('youtubeCanary', () => {
@@ -56,7 +59,7 @@ describe('youtubeCanary', () => {
 
   test('returns unhealthy result when healthCheck reports unhealthy', async () => {
     const adapter = createMockAdapter({
-      healthCheck: vi.fn().mockResolvedValue({
+      healthCheck: jest.fn().mockResolvedValue({
         healthy: false,
         latency: 100,
         error: 'quota exceeded',
@@ -75,7 +78,7 @@ describe('youtubeCanary', () => {
 
   test('returns unhealthy result when healthCheck throws Error', async () => {
     const adapter = createMockAdapter({
-      healthCheck: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
+      healthCheck: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')),
     });
     const result = await youtubeCanary(adapter);
 
@@ -87,7 +90,7 @@ describe('youtubeCanary', () => {
 
   test('returns unhealthy with "Unknown error" on non-Error throw', async () => {
     const adapter = createMockAdapter({
-      healthCheck: vi.fn().mockRejectedValue('string error'),
+      healthCheck: jest.fn().mockRejectedValue('string error'),
     });
     const result = await youtubeCanary(adapter);
 
@@ -98,7 +101,7 @@ describe('youtubeCanary', () => {
 
   test('uses default error message when healthCheck returns unhealthy without error string', async () => {
     const adapter = createMockAdapter({
-      healthCheck: vi.fn().mockResolvedValue({
+      healthCheck: jest.fn().mockResolvedValue({
         healthy: false,
         latency: 50,
         // error property omitted
@@ -110,21 +113,25 @@ describe('youtubeCanary', () => {
     expect(result.error).toContain('YouTube health check returned unhealthy');
   });
 
-  // P1-4 FIX (audit 3): Test the canary timeout path — previously untested.
-  // This exercises the Promise.race timeout when healthCheck hangs indefinitely.
-  test('returns unhealthy with timeout error when healthCheck hangs (P1-4 audit 3)', async () => {
-    vi.useFakeTimers();
+  // P1-4 FIX (audit 3) / P3-1 FIX (audit 4): Test the canary timeout path.
+  // Migrated from vi.useFakeTimers() / vi.advanceTimersByTimeAsync() to Jest
+  // equivalents. jest.advanceTimersByTime() fires the setTimeout synchronously;
+  // `await resultPromise` then flushes the microtask queue so the catch block
+  // in youtubeCanary processes the rejection and returns the unhealthy result.
+  test('returns unhealthy with timeout error when healthCheck hangs', async () => {
+    jest.useFakeTimers();
     try {
       const adapter = createMockAdapter({
         // healthCheck never resolves — simulates a hanging adapter
-        healthCheck: vi.fn().mockImplementation(() => new Promise(() => {})),
+        healthCheck: jest.fn().mockImplementation(() => new Promise(() => {})),
       });
 
       const resultPromise = youtubeCanary(adapter);
 
-      // Advance past the CANARY_TIMEOUT_MS (mocked to 15000)
-      await vi.advanceTimersByTimeAsync(15001);
+      // Advance past CANARY_TIMEOUT_MS (mocked to 15000 ms)
+      jest.advanceTimersByTime(15001);
 
+      // Awaiting flushes the microtask queue so the catch block runs
       const result = await resultPromise;
 
       expect(result.name).toBe('youtube');
@@ -132,7 +139,22 @@ describe('youtubeCanary', () => {
       expect(result.error).toBe('YouTube canary timed out');
       expect(result.latency).toBeGreaterThanOrEqual(0);
     } finally {
-      vi.useRealTimers();
+      jest.useRealTimers();
     }
+  });
+
+  // P2-7 FIX (audit 4): When the canary timeout fires, the AbortController
+  // is aborted before the race rejects. Verify that healthCheck was called
+  // with an AbortSignal (the adapter now receives the signal from youtubeCanary).
+  test('passes AbortSignal to healthCheck so it can be cancelled on timeout', async () => {
+    const healthCheckMock = jest.fn().mockResolvedValue({ healthy: true, latency: 10 });
+    const adapter = createMockAdapter({ healthCheck: healthCheckMock });
+
+    await youtubeCanary(adapter);
+
+    // healthCheck must be called with an AbortSignal argument
+    expect(healthCheckMock).toHaveBeenCalledTimes(1);
+    const [signal] = healthCheckMock.mock.calls[0] as [AbortSignal | undefined];
+    expect(signal).toBeInstanceOf(AbortSignal);
   });
 });

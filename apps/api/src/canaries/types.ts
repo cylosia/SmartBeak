@@ -23,7 +23,14 @@ export interface CanaryAdapter {
   // P1-2 FIX: error uses `string | undefined` to match HealthCheckResult
   // under exactOptionalPropertyTypes. Implementations may omit the property
   // or explicitly set it to undefined when healthy.
-  healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }>;
+  //
+  // P2-7 FIX: Optional signal lets canary runners cancel an in-progress
+  // healthCheck when an outer timeout fires, preventing orphaned HTTP
+  // connections from accumulating under high-frequency polling.
+  // The parameter is optional so existing implementations that do not yet
+  // accept a signal remain type-compatible (a () => T function satisfies
+  // (signal?: AbortSignal) => T in TypeScript's structural type system).
+  healthCheck(signal?: AbortSignal): Promise<{ healthy: boolean; latency: number; error?: string | undefined }>;
 }
 
 /**
