@@ -242,11 +242,15 @@ export class PaaAdapter implements KeywordIngestionAdapter {
     'Authorization': `Basic ${auth}`,
     'Content-Type': 'application/json',
     },
+    // P1-FIX: Use this.depth (capped at 3 in the constructor) instead of the
+    // hardcoded 100. The hardcoded value requested 100 results per call from
+    // DataForSEO regardless of the configured depth, consuming excess API quota
+    // and incurring unbounded cost proportional to attacker-controlled keywords.
     body: JSON.stringify([{
     keyword,
     location_code: this.getLocationCode(this.country),
     language_code: this.language,
-    depth: 100,
+    depth: this.depth,
     }]),
     signal: controller.signal,
     });

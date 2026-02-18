@@ -159,13 +159,34 @@ export async function checkPgBouncerHealth(pool: Pool): Promise<{
   totalConnections: number;
   queueDepth: number;
 }> {
+  // P1-FIX: SHOW STATS is a PgBouncer-specific command that returns a syntax
+  // error on a direct PostgreSQL connection. When this pool is NOT connected to
+  // PgBouncer, fall back to a simple SELECT 1 health check so callers always
+  // get a meaningful result rather than a permanent healthy:false.
+  const connectionString = (pool as unknown as { options?: { connectionString?: string } }).options?.connectionString ?? '';
+  const isBouncer = isPgBouncerConnection(connectionString);
+
+  if (!isBouncer) {
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query('SELECT 1');
+        return { healthy: true, availableConnections: 0, totalConnections: 0, queueDepth: 0 };
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      logger.error('Database health check failed (non-PgBouncer)', error as Error);
+      return { healthy: false, availableConnections: 0, totalConnections: 0, queueDepth: 0 };
+    }
+  }
+
   try {
     const client = await pool.connect();
     try {
-      // P1-FIX: PgBouncer provides stats via SHOW command
       const result = await client.query('SHOW STATS');
       const stats = result.rows[0];
-      
+
       return {
         healthy: true,
         availableConnections: parseInt(stats?.cl_active, 10) || 0,

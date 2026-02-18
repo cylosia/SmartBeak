@@ -42,7 +42,8 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
-    return svc.listTargets(queryResult.data.domainId);
+    // P1-FIX: await so rejections are caught by the try-catch above
+    return await svc.listTargets(queryResult.data.domainId);
   } catch (error) {
     logger.error('[publishing/targets] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
@@ -66,7 +67,8 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
     }
 
     const { type, config } = bodyResult.data;
-    return svc.createTarget(queryResult.data.domainId, type, config);
+    // P1-FIX: await so rejections are caught by the try-catch above
+    return await svc.createTarget(queryResult.data.domainId, type, config);
   } catch (error) {
     logger.error('[publishing/targets] Create error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
@@ -84,7 +86,8 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
-    return svc.listJobs(queryResult.data.domainId);
+    // P1-FIX: await so rejections are caught by the try-catch above
+    return await svc.listJobs(queryResult.data.domainId);
   } catch (error) {
     logger.error('[publishing/jobs] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
@@ -134,7 +137,8 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
     return errors.forbidden(res, 'Access denied', ErrorCodes.ACCESS_DENIED);
   }
 
-  return svc.retryJob(id);
+  // P1-FIX: await so that Fastify propagates the rejection correctly
+  return await svc.retryJob(id);
   });
 }
 

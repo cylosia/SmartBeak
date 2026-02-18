@@ -179,14 +179,25 @@ export class PostgresPublishingJobRepository implements PublishingJobRepository 
 
   */
   async listPending(limit = 100, client?: PoolClient): Promise<PublishingJob[]> {
+  // P1-FIX: Enforce that a transaction client is provided when using
+  // FOR UPDATE SKIP LOCKED. Without a transaction, PostgreSQL releases the row
+  // locks immediately after the query completes, before the caller has had a chance
+  // to process the rows. This defeats the purpose of the lock and allows multiple
+  // workers to fetch and process the same jobs concurrently, causing duplicate
+  // publishes to external targets.
+  if (!client) {
+    throw new Error(
+      'listPending() requires a transaction client. ' +
+      'Open a transaction via pool.connect() + BEGIN and pass the client here.'
+    );
+  }
+
   const MAX_LIMIT = 1000;
   const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
   try {
     const queryable = this.getQueryable(client);
-    // P0-FIX: FOR UPDATE SKIP LOCKED prevents multiple workers from fetching
-    // the same rows simultaneously, which would cause duplicate publishes.
-    // Requires a transaction context (client parameter) to be meaningful.
+    // FOR UPDATE SKIP LOCKED prevents multiple workers from claiming the same rows.
     const { rows } = await queryable.query(
     `SELECT
     id, domain_id, content_id, target_id, status,

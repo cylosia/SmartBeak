@@ -83,7 +83,13 @@ export class AnalyticsPipeline {
   */
   private startFlushTimer(): void {
   this.flushTimer = setInterval(() => {
-    void this.flush();
+    // P0-FIX: Attach a rejection handler so that an unexpected throw from
+    // flush() (e.g. an uncaught exception escaping a finally block) surfaces
+    // as an error log rather than crashing the process or being silently lost.
+    this.flush().catch((error: unknown) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[${new Date().toISOString()}] [AnalyticsPipeline] Periodic flush failed: ${msg}\n`);
+    });
   }, this.flushIntervalMs).unref();
   }
 

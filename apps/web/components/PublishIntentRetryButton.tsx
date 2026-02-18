@@ -48,8 +48,11 @@ export function PublishIntentRetryButton({ intentId, onRetry }: PublishIntentRet
     <button type='button' onClick={() => void handleRetry()} disabled={loading}>
     {loading ? 'Retrying…' : 'Retry'}
     </button>
-    {success && <div style={{ color: 'green' }}>Retry queued</div>}
-    {error && <div style={{ color: 'red' }}>{error}</div>}
+    {/* P2-FIX: aria-live regions ensure screen readers announce state changes
+        without requiring the user to move focus. role="status" (polite) for
+        success and role="alert" (assertive) for errors match ARIA best practice. */}
+    {success && <div role='status' aria-live='polite' style={{ color: 'green' }}>Retry queued</div>}
+    {error && <div role='alert' aria-live='assertive' style={{ color: 'red' }}>{error}</div>}
   </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { GetServerSidePropsContext } from 'next';
+import { requireDomainAccess } from '../../../lib/auth';
 import { AppShell } from '../../../components/AppShell';
 import { DomainTabs } from '../../../components/DomainTabs';
 
@@ -20,10 +21,19 @@ export default function DomainPending({ domainId }: DomainPendingProps) {
   );
 }
 
-export async function getServerSideProps({ params }: GetServerSidePropsContext) {
+// P1-FIX: Validate UUID format and verify domain ownership (requireDomainAccess)
+// before rendering. Without this check any authenticated user could view any
+// domain's pending queue by guessing UUIDs in the URL (IDOR).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function getServerSideProps({ params, req }: GetServerSidePropsContext) {
   const id = params?.['id'];
-  if (typeof id !== 'string') {
+  if (typeof id !== 'string' || !UUID_RE.test(id)) {
     return { notFound: true };
+  }
+  const authCheck = await requireDomainAccess(req, id);
+  if (!authCheck.authorized) {
+    return authCheck.result;
   }
   return { props: { domainId: id } };
 }

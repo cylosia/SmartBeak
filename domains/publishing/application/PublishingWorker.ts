@@ -138,7 +138,11 @@ export class PublishingWorker {
     await outcomeClient.query('SET LOCAL statement_timeout = $1', [30000]);
 
     if (!publishError) {
-        await this.attempts.record(job["id"], attempt, 'success');
+        // P0-FIX: Pass outcomeClient so the attempt INSERT and job status UPDATE
+        // are committed atomically. Without this, a crash between record() and
+        // COMMIT leaves the attempt recorded as success but the job still in
+        // 'publishing' state, causing the worker to re-publish to the external target.
+        await this.attempts.record(job["id"], attempt, 'success', undefined, outcomeClient);
         const succeededJob = updatedJob.succeed();
         await this.jobs.save(succeededJob, outcomeClient);
         await writeToOutbox(outcomeClient, new PublishingSucceeded().toEnvelope(job["id"]));
@@ -154,7 +158,8 @@ export class PublishingWorker {
         return { success: true };
     } else {
         const errorMessage = publishError instanceof Error ? publishError.message : String(publishError);
-        await this.attempts.record(job["id"], attempt, 'failure', errorMessage);
+        // P0-FIX: Pass outcomeClient so failure attempt and job state update are atomic.
+        await this.attempts.record(job["id"], attempt, 'failure', errorMessage, outcomeClient);
         const failedJob = updatedJob.fail(errorMessage);
         await this.jobs.save(failedJob, outcomeClient);
         await writeToOutbox(outcomeClient, new PublishingFailed().toEnvelope(job["id"], errorMessage));

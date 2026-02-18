@@ -31,7 +31,10 @@ export function PricingOverview({ plan = 'free', wordpressSites = 0 }: PricingOv
     </p>
 
     {wordpressSites >= siteLimit && (
-    <div style={{ color: 'orange' }}>
+    // P2-FIX: Add role="alert" + aria-live so screen readers announce the
+    // limit warning without requiring focus. Color alone is insufficient for
+    // users who cannot perceive orange (WCAG 2.1 SC 1.4.1).
+    <div role='alert' aria-live='polite' style={{ color: 'orange' }}>
       Upgrade to add more WordPress sites
     </div>
     )}

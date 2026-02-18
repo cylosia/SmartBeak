@@ -228,8 +228,10 @@ export class CursorPaginator<T extends Record<string, unknown>> {
       ? encodeCursor(String(lastRow[cursorColumn]))
       : null;
 
-    const prevCursor = hasPrev && data.length > 0
-      ? encodeCursor(String(data[0]![cursorColumn]))
+    // P1-FIX: Guard against empty data and missing cursor column before access
+    const firstRow = data.length > 0 ? data[0] : undefined;
+    const prevCursor = hasPrev && firstRow !== undefined && cursorColumn in firstRow
+      ? encodeCursor(String(firstRow[cursorColumn]))
       : null;
 
     return {
@@ -274,9 +276,10 @@ export class CursorPaginator<T extends Record<string, unknown>> {
     }
 
     // P0-SECURITY FIX: Validate the where string only contains safe characters.
-    // Reject any string containing SQL string delimiters or semicolons to prevent
-    // injection via the caller-supplied where predicate.
-    if (where && /['"`;]/.test(where)) {
+    // Reject strings containing SQL delimiters, semicolons, or comment sequences
+    // to prevent injection via the caller-supplied where predicate.
+    // The previous regex /['"`;]/ missed SQL comment attacks (-- and /* */).
+    if (where && /['"`;]|--|\/\*|\*\//.test(where)) {
       throw new Error('Invalid characters in where clause. Use parameterized $N placeholders only.');
     }
 
@@ -357,6 +360,13 @@ export class CursorPaginator<T extends Record<string, unknown>> {
     // Validate table name before using in SQL
     validateTableName(table);
 
+    // P0-SECURITY FIX: Apply the same where-clause validation used in buildQuery.
+    // Previously getTotalCount skipped this check, allowing SQL injection via
+    // comment sequences (--) or delimiters that bypass the regex used in buildQuery.
+    if (where && /['"`;]|--|\/\*|\*\//.test(where)) {
+      throw new Error('Invalid characters in where clause. Use parameterized $N placeholders only.');
+    }
+
     const whereClause = where ? `WHERE ${where}` : '';
     const result = await this.pool.query(
       `SELECT COUNT(*) as count FROM ${table} ${whereClause}`,
@@ -422,16 +432,33 @@ export function buildKeysetWhereClause(
       comparisons.push(`${column} ${operator} $${params.length + 1}`);
       params.push(value);
     } else {
-      // For subsequent columns, add equality checks for previous columns
+      // P0-FIX: Use a stable index map instead of params.indexOf().
+      // params.indexOf(val) returns -1 when the value is not found (which then
+      // produces the invalid placeholder $0), and also returns the wrong index
+      // when two columns share the same cursor value (first-occurrence semantics).
+      // Build a per-column index map as params are added so lookups are O(1) and correct.
+      const columnParamIndex = new Map<string, number>();
+      // Rebuild map from the params already pushed for previous columns
+      for (let k = 0; k < i; k++) {
+        const prevCol = sortColumns[k];
+        if (!prevCol) continue;
+        const prevVal = cursor[prevCol.column];
+        if (prevVal !== undefined) {
+          columnParamIndex.set(prevCol.column, k + 1); // 1-based
+        }
+      }
+
       const equalities = sortColumns
         .slice(0, i)
         .map(c => {
           const col = c!.column;
-          const val = cursor[col];
-          return `${col} = $${val !== undefined ? params.indexOf(val) + 1 : 0}`;
+          const idx = columnParamIndex.get(col);
+          if (idx === undefined) return null;
+          return `${col} = $${idx}`;
         })
+        .filter((e): e is string => e !== null)
         .join(' AND ');
-      
+
       comparisons.push(`(${equalities} AND ${column} ${operator} $${params.length + 1})`);
       params.push(value);
     }
