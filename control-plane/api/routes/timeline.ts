@@ -101,21 +101,28 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex}`;
     params.push(limit);
 
-    // Fetch recent activity across all domains
-    const { rows } = await pool.query(`SELECT ${query}`, params);
+    // FIXED (TIMELINE-ROUTE-2): Wrap DB query in try/catch to prevent raw pg errors leaking
+    try {
+      const { rows } = await pool.query(`SELECT ${query}`, params);
 
-    return {
-      events: rows.map(row => ({
-        id: row["id"],
-        action: row.action,
-        entityType: row.entity_type,
-        entityId: row.entity_id,
-        domainName: row.domain_name,
-        createdAt: row.created_at,
-      })),
-      total: rows.length,
-      filters: { startDate, endDate, action, entityType },
-    };
+      return {
+        events: rows.map(row => ({
+          id: row['id'],
+          action: row['action'],
+          entityType: row['entity_type'],
+          entityId: row['entity_id'],
+          domainName: row['domain_name'],
+          createdAt: row['created_at'],
+        })),
+        // NOTE: `returned` is the count of rows in this page (capped by `limit`).
+        // This is NOT the total record count. Use cursor-based pagination for full counts.
+        returned: rows.length,
+        filters: { startDate, endDate, action, entityType },
+      };
+    } catch (dbErr) {
+      _logger.error('Timeline org query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+      return errors.internal(res, 'Failed to fetch timeline');
+    }
   });
 
   // GET /timeline/domain/:domainId - Get domain-specific timeline
@@ -159,14 +166,18 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     const { limit, startDate, endDate, action, entityType } = queryResult.data;
 
     // Build query with optional filters
+    // FIXED (TIMELINE-ROUTE-8): Add org_id constraint for defence-in-depth.
+    // The pre-check at line 144 is the primary guard, but SQL must also enforce the boundary
+    // so that a future refactoring that removes the pre-check doesn't silently open an IDOR.
     let query = `
       al.id, al.action, al.entity_type, al.entity_id,
-      al.metadata, al.created_at
+      al.created_at
       FROM activity_log al
       WHERE al.domain_id = $1
+        AND al.org_id = $2
     `;
-    const params: unknown[] = [domainId];
-    let paramIndex = 2;
+    const params: unknown[] = [domainId, ctx.orgId];
+    let paramIndex = 3;
 
     if (startDate) {
       query += ` AND al.created_at >= $${paramIndex++}`;
@@ -191,20 +202,26 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex}`;
     params.push(limit);
 
-    // Fetch domain-specific activity
-    const { rows } = await pool.query(`SELECT ${query}`, params);
+    // FIXED (TIMELINE-ROUTE-2): Wrap DB query in try/catch to prevent raw pg errors leaking
+    // FIXED (TIMELINE-ROUTE-4): metadata column removed from SELECT — raw JSONB must not be
+    //   returned to API consumers without schema validation (XSS and info-disclosure risk).
+    try {
+      const { rows } = await pool.query(`SELECT ${query}`, params);
 
-    return {
-      events: rows.map(row => ({
-        id: row["id"],
-        action: row.action,
-        entityType: row.entity_type,
-        entityId: row.entity_id,
-        metadata: row.metadata,
-        createdAt: row.created_at,
-      })),
-      total: rows.length,
-      filters: { startDate, endDate, action, entityType },
-    };
+      return {
+        events: rows.map(row => ({
+          id: row['id'],
+          action: row['action'],
+          entityType: row['entity_type'],
+          entityId: row['entity_id'],
+          createdAt: row['created_at'],
+        })),
+        returned: rows.length,
+        filters: { startDate, endDate, action, entityType },
+      };
+    } catch (dbErr) {
+      _logger.error('Timeline domain query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+      return errors.internal(res, 'Failed to fetch timeline');
+    }
   });
 }

@@ -88,12 +88,25 @@ export const EmailSendSchema = z.object({
     z.array(EmailSchema).min(1).max(100)
   ]),
   subject: z.string().min(1, 'Subject is required').max(200),
+  /**
+   * FIXED (ET-2): Added `contentType` discriminator. Service layer MUST sanitize HTML bodies
+   * (strip <script>, unsafe attrs) when contentType is 'text/html'. Default is 'text/plain'.
+   */
+  contentType: z.enum(['text/plain', 'text/html']).default('text/plain'),
   body: z.string().min(1, 'Body is required').max(100000),
   from: EmailSchema.optional(),
   reply_to: EmailSchema.optional(),
   cc: z.array(EmailSchema).max(100).optional(),
   bcc: z.array(EmailSchema).max(100).optional(),
-}).strict();
+}).strict().superRefine((data, ctx) => {
+  // FIXED (ET-3): Enforce total recipient cap across to + cc + bcc
+  const toCount = Array.isArray(data.to) ? data.to.length : 1;
+  const ccCount = data.cc?.length ?? 0;
+  const bccCount = data.bcc?.length ?? 0;
+  if (toCount + ccCount + bccCount > 100) {
+    ctx.addIssue({ code: 'custom', message: 'Total recipients (to + cc + bcc) must not exceed 100' });
+  }
+});
 
 /**
 * ID params schema

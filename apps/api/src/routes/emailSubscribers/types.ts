@@ -24,7 +24,8 @@ export const EmailSubscriberSchema = z.object({
   domain_id: z.string().uuid('Domain ID must be a valid UUID'),
   email: EmailSchema,
   consent_source: z.enum(['optin_form', 'manual_import', 'api']),
-  consent_form_id: z.string().max(100).optional(),
+  // FIXED (ES-1): Enforce UUID format — prevents arbitrary string injection if used as FK
+  consent_form_id: z.string().uuid('consent_form_id must be a valid UUID').optional(),
   experiment_variant_id: z.string().uuid().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 }).strict();

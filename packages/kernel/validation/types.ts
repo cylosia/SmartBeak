@@ -5,7 +5,7 @@
  * for type-safe development throughout the application.
  */
 
-import {} from './types-base';
+// FIXED (11.1): Removed empty phantom import that served no purpose
 import { getLogger } from '../logger';
 
 const logger = getLogger('kernel:validation');
@@ -256,9 +256,9 @@ export function err<E>(error: E): Result<never, E> {
  */
 export function unwrap<T, E>(result: Result<T, E>): T {
   if (!result.ok) {
-    throw (result as { ok: false; error: E }).error instanceof Error 
-      ? (result as { ok: false; error: E }).error 
-      : new Error(String((result as { ok: false; error: E }).error));
+    // TypeScript narrows result to { ok: false; error: E } after this check
+    const { error } = result;
+    throw error instanceof Error ? error : new Error(String(error));
   }
   return result.value;
 }
@@ -361,14 +361,17 @@ export type NotificationState =
   | 'bounced'
   | 'suppressed';
 
-/** User roles */
+/**
+ * FIXED (11.4): User roles — aligned with CLAUDE.md specification.
+ * Previous definition was missing 'owner' and had three non-spec roles
+ * ('author', 'billing_admin', 'security_admin') that caused auth gaps
+ * (owner tokens were not representable as UserRole, causing role check failures).
+ */
 export type UserRole =
+  | 'owner'
   | 'admin'
   | 'editor'
-  | 'author'
-  | 'viewer'
-  | 'billing_admin'
-  | 'security_admin';
+  | 'viewer';
 
 // ============================================================================
 // Type-Level Utilities

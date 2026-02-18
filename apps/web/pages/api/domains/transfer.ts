@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { z } from 'zod';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 import { requireAuth, validateMethod, requireOrgAdmin, sendError } from '../../../lib/auth';
@@ -9,14 +10,21 @@ import { getLogger } from '@kernel/logger';
 const logger = getLogger('DomainTransfer');
 
 /**
-* POST /api/domains/transfer
-* Initiate domain ownership transfer
-* SECURITY FIX: P1-HIGH Issue 4 - IDOR in Content Access
-* Verifies org_id matches for all domain access
-*/
+ * POST /api/domains/transfer
+ * Initiate domain ownership transfer
+ * SECURITY FIX: P1-HIGH Issue 4 - IDOR in Content Access
+ * Verifies org_id matches for all domain access
+ */
 
-// UUID validation regex
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Zod schema — .strict() blocks prototype-poisoned extra keys, .uuid() enforces format
+const TransferBodySchema = z.object({
+  domainId: z.string().uuid('domainId must be a valid UUID'),
+  targetUserId: z.string().uuid('targetUserId must be a valid UUID').optional(),
+  targetOrgId: z.string().uuid('targetOrgId must be a valid UUID').optional(),
+}).strict().refine(
+  (d) => d.targetUserId !== undefined || d.targetOrgId !== undefined,
+  { message: 'targetUserId or targetOrgId is required' }
+);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!validateMethod(req, res, ['POST'])) return;
@@ -37,66 +45,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
 
-    const { domainId, targetUserId, targetOrgId } = req.body;
-
-    if (!domainId) {
-      return sendError(res, 400, 'domainId is required');
+    // SECURITY FIX T-8: Enforce Content-Type before body parse
+    if (!req.headers['content-type']?.includes('application/json')) {
+      return sendError(res, 415, 'Content-Type must be application/json');
     }
 
-    // Validate UUID format
-    if (!UUID_REGEX.test(domainId)) {
-      return sendError(res, 400, 'Invalid domainId format. Expected UUID.');
+    // SECURITY FIX T-1: Validate request body with Zod schema
+    const bodyResult = TransferBodySchema.safeParse(req.body);
+    if (!bodyResult.success) {
+      return sendError(res, 400, bodyResult.error.errors[0]?.message ?? 'Invalid request body');
     }
 
-    if (targetUserId && !UUID_REGEX.test(targetUserId)) {
-      return sendError(res, 400, 'Invalid targetUserId format. Expected UUID.');
-    }
+    const { domainId, targetUserId, targetOrgId } = bodyResult.data;
 
-    if (targetOrgId && !UUID_REGEX.test(targetOrgId)) {
-      return sendError(res, 400, 'Invalid targetOrgId format. Expected UUID.');
-    }
-
-    if (!targetUserId && !targetOrgId) {
-      return sendError(res, 400, 'targetUserId or targetOrgId is required');
-    }
-
-    // SECURITY FIX: P1-HIGH Issue 4 - Verify domain belongs to user's org
-    // P0-3 FIX: Wrap verification + insert in a transaction to prevent TOCTOU race
-    const pool = await getPoolInstance();
-    const { rows } = await pool.query(
-      `SELECT domain_id, org_id FROM domain_registry
-       WHERE domain_id = $1
-       AND org_id = $2`,
-      [domainId, auth["orgId"]]
-    );
-
-    if (rows.length === 0) {
-      // SECURITY: Return 404 (not 403) to prevent ID enumeration
-      logger.warn('User attempted to transfer non-existent or unauthorized domain', { userId: auth.userId, domainId });
-      return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    const domain = rows[0];
-
-    // Double-check org_id matches
-    if (domain.org_id !== auth["orgId"]) {
-      logger.warn('Domain org_id does not match user org_id', { domainOrgId: domain.org_id, userOrgId: auth["orgId"] });
-      return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    // Generate transfer receipt
+    // Generate transfer receipt and ID before acquiring DB connection
     const receipt = crypto.randomBytes(32).toString('hex');
     const transferId = crypto.randomUUID();
 
-    // Record transfer initiation
-    await pool.query(
-      `INSERT INTO domain_transfers (id, domain_id, from_user_id, to_user_id, to_org_id, receipt, status, created_at, from_org_id)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), $7)`,
-      [transferId, domainId, auth.userId, targetUserId || null, targetOrgId || null, receipt, auth["orgId"]]
-    );
+    // SECURITY FIX T-2: Wrap SELECT + INSERT in a transaction to eliminate TOCTOU race.
+    // SELECT ... FOR UPDATE locks the domain row, preventing concurrent conflicting transfers.
+    const pool = await getPoolInstance();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Security audit log
-    logger.info('Domain transfer initiated', { domainId, userId: auth.userId, orgId: auth["orgId"], transferId });
+      const { rows } = await client.query(
+        `SELECT domain_id FROM domain_registry
+         WHERE domain_id = $1
+         AND org_id = $2
+         FOR UPDATE`,
+        [domainId, auth['orgId']]
+      );
+
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        // SECURITY: Return 404 (not 403) to prevent ID enumeration
+        logger.warn('User attempted to transfer non-existent or unauthorized domain', { userId: auth.userId, domainId });
+        return res.status(404).json({ error: 'Domain not found' });
+      }
+
+      // Record transfer initiation inside the same transaction
+      await client.query(
+        `INSERT INTO domain_transfers (id, domain_id, from_user_id, to_user_id, to_org_id, receipt, status, created_at, from_org_id)
+        VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW(), $7)`,
+        [transferId, domainId, auth.userId, targetUserId ?? null, targetOrgId ?? null, receipt, auth['orgId']]
+      );
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK').catch((rollbackErr: unknown) => {
+        logger.error('Failed to rollback domain transfer transaction', rollbackErr instanceof Error ? rollbackErr : new Error(String(rollbackErr)));
+      });
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    // Security audit log — receipt is NOT logged (bearer-token equivalent)
+    logger.info('Domain transfer initiated', { domainId, userId: auth.userId, orgId: auth['orgId'], transferId });
 
     res.json({
       transferred: true,
