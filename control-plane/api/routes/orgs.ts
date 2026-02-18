@@ -11,6 +11,9 @@ import { OrgService } from '../../services/org-service';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole, AuthError } from '../../services/auth';
 import { errors } from '@errors/responses';
+// FIX (OG-03/OG-04): Import error types so ConflictError and ValidationError
+// produce the correct HTTP status codes rather than falling through to 500.
+import { ConflictError, ValidationError } from '@errors';
 import type { AuthenticatedRequest } from '../types';
 
 const logger = getLogger('Orgs');
@@ -87,6 +90,14 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
     if (error instanceof Error && error.message === 'Rate limit exceeded') {
       return errors.rateLimited(res, 60);
+    }
+    // FIX (OG-03): ConflictError (e.g. duplicate org name) and ValidationError
+    // must return 409/400 rather than falling through to 500.
+    if (error instanceof ConflictError) {
+      return errors.conflict(res, error.message);
+    }
+    if (error instanceof ValidationError) {
+      return errors.badRequest(res, error.message);
     }
     logger.error('[orgs] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to create organization');
@@ -178,6 +189,11 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     if (error instanceof Error && error.message === 'Rate limit exceeded') {
       return errors.rateLimited(res, 60);
     }
+    // FIX (OG-04): ConflictError from duplicate invite must return 409,
+    // not fall through to 500.
+    if (error instanceof ConflictError) {
+      return errors.conflict(res, error.message);
+    }
     logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to send invite');
   }
@@ -212,7 +228,11 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return errors.validationFailed(res, bodyResult.error.issues);
     }
     const { userId, role } = bodyResult.data;
-    await members.addMember(id, userId, role);
+    // SECURITY FIX (OG-01): Pass ctx.userId as actorUserId so MembershipService
+    // enforces the permission hierarchy (actors cannot grant roles above their own).
+    // Previously this was called without actorUserId, which bypassed all permission
+    // checks inside addMember() entirely.
+    await members.addMember(id, userId, role, ctx.userId);
     return res.send({ ok: true });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -222,6 +242,9 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
     if (error instanceof Error && error.message === 'Rate limit exceeded') {
       return errors.rateLimited(res, 60);
+    }
+    if (error instanceof ConflictError) {
+      return errors.conflict(res, error.message);
     }
     logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to add member');

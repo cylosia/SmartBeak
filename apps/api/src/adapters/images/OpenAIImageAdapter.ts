@@ -4,7 +4,7 @@ import FormData from 'form-data';
 import { API_BASE_URLS, DEFAULT_TIMEOUTS } from '../../utils/config';
 import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '../../utils/validation';
-import { withRetry } from '../../utils/retry';
+import { withRetry, parseRetryAfter, sleep } from '../../utils/retry';
 
 // AbortController is a Node.js global since Node 18 (LTS). No polyfill needed.
 
@@ -34,6 +34,63 @@ const MAX_PROMPT_LENGTH: Record<string, number> = {
  * details from propagating up the call stack and into logs or client responses.
  */
 const MAX_ERROR_BODY_LENGTH = 200;
+
+/**
+ * Trusted hostname suffixes for OpenAI-returned image URLs.
+ * SECURITY FIX (OAI-01 / SSRF): OpenAI returns image URLs in API responses.
+ * Without validation a compromised or spoofed response could point callers at
+ * internal services (e.g. EC2 metadata at 169.254.169.254).  We verify every
+ * URL's hostname ends with one of these known OpenAI CDN suffixes before
+ * returning it to callers.
+ */
+const TRUSTED_IMAGE_HOST_SUFFIXES: readonly string[] = [
+  '.openai.com',
+  '.oaiusercontent.com',
+  '.blob.core.windows.net', // Azure Blob — OpenAI's backend storage for DALL-E
+];
+
+/**
+ * Validate that a URL returned by the OpenAI image API is safe to use.
+ * - Scheme must be https (rejects http and non-URL strings)
+ * - Hostname must end with a known OpenAI CDN suffix
+ *
+ * Throws if the URL is invalid or not from a trusted origin.
+ */
+function assertTrustedImageUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`SSRF guard: OpenAI returned an unparseable image URL: "${url.slice(0, 100)}"`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`SSRF guard: OpenAI image URL must use HTTPS, got "${parsed.protocol}"`);
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  const trusted = TRUSTED_IMAGE_HOST_SUFFIXES.some(
+    (suffix) => hostname === suffix.slice(1) || hostname.endsWith(suffix)
+  );
+  if (!trusted) {
+    throw new Error(
+      `SSRF guard: OpenAI image URL hostname "${hostname}" is not in the trusted allowlist`
+    );
+  }
+}
+
+/**
+ * onRetry callback shared by all withRetry() calls.
+ * SECURITY FIX (OAI-03): Respect the Retry-After header on 429 responses.
+ * Previously the adapter always used exponential back-off regardless of what
+ * OpenAI indicated, risking immediate re-requests that drain quota faster.
+ */
+async function onRetryRespectRetryAfter(error: Error, _attempt: number): Promise<void> {
+  if (error instanceof ApiError && error.retryAfter) {
+    const delayMs = parseRetryAfter(error.retryAfter);
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+  }
+}
 
 /**
  * API Error with status code and retry information
@@ -185,6 +242,7 @@ export class OpenAIImageAdapter {
       // FIX (H05): Create AbortController per retry attempt, not shared across retries.
       // A shared controller causes later retries to be prematurely aborted by the original timeout.
       // FIX (M09): Move JSON parsing inside retry block so corrupt response bodies are retried.
+      // FIX (OAI-03): onRetry respects Retry-After header from 429 responses.
       const data = await withRetry(async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -231,7 +289,7 @@ export class OpenAIImageAdapter {
         } finally {
           clearTimeout(timeoutId);
         }
-      }, { maxRetries: 3 });
+      }, { maxRetries: 3, onRetry: onRetryRespectRetryAfter });
 
       // Validate each item in the data array has required fields
       if (!data.data.every((item: unknown) => {
@@ -239,6 +297,12 @@ export class OpenAIImageAdapter {
         return img && typeof img === 'object' && typeof img.url === 'string';
       })) {
         throw new ApiError('Invalid response data structure from OpenAI API', 500);
+      }
+
+      // FIX (OAI-01 / SSRF): Validate every URL is from a trusted OpenAI CDN before
+      // returning.  A compromised response could point callers at internal services.
+      for (const img of data.data) {
+        assertTrustedImageUrl(img["url"]);
       }
 
       const images = data.data.map((img): GeneratedImage => ({
@@ -354,7 +418,12 @@ export class OpenAIImageAdapter {
         } finally {
           clearTimeout(timeoutId);
         }
-      }, { maxRetries: 3 });
+      }, { maxRetries: 3, onRetry: onRetryRespectRetryAfter });
+
+      // FIX (OAI-01 / SSRF): Validate URLs before returning.
+      for (const img of data.data) {
+        assertTrustedImageUrl(img["url"]);
+      }
 
       const images = data.data.map((img): GeneratedImage => ({
         url: img["url"],
@@ -453,7 +522,12 @@ export class OpenAIImageAdapter {
         } finally {
           clearTimeout(timeoutId);
         }
-      }, { maxRetries: 3 });
+      }, { maxRetries: 3, onRetry: onRetryRespectRetryAfter });
+
+      // FIX (OAI-01 / SSRF): Validate URLs before returning.
+      for (const img of data.data) {
+        assertTrustedImageUrl(img["url"]);
+      }
 
       const images = data.data.map((img): GeneratedImage => ({
         url: img["url"],

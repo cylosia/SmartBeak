@@ -11,6 +11,29 @@ function createMockPool() {
       queryCalls.push({ text, values: values ?? [] });
       return queryResults.shift() ?? { rows: [], rowCount: 0 };
     }),
+    // FIX (test-update for ON-1): get() now uses pool.connect() + a client so that
+    // ensure + SELECT + conditional UPDATE run inside a single transaction.
+    // The mock client shares the same result queue as pool.query so existing test
+    // setups that enqueue results via pool._setResults() continue to work.
+    //
+    // BEGIN / COMMIT / ROLLBACK are intercepted and treated as no-ops (they do NOT
+    // consume from the result queue and are NOT recorded in queryCalls).  This
+    // preserves all existing assertions on call counts and indices.
+    connect: jest.fn(async () => {
+      const client = {
+        query: jest.fn(async (text: string, values?: unknown[]) => {
+          const trimmed = (text as string).trim().toUpperCase();
+          if (trimmed === 'BEGIN' || trimmed === 'COMMIT' || trimmed === 'ROLLBACK') {
+            return { rows: [], rowCount: 0 };
+          }
+          // Route through the shared result queue + call tracker
+          queryCalls.push({ text, values: values ?? [] });
+          return queryResults.shift() ?? { rows: [], rowCount: 0 };
+        }),
+        release: jest.fn(),
+      };
+      return client;
+    }),
     _setResults(results: Array<{ rows: unknown[]; rowCount: number }>) {
       queryResults.length = 0;
       queryResults.push(...results);
@@ -22,6 +45,7 @@ function createMockPool() {
       queryResults.length = 0;
       queryCalls.length = 0;
       pool.query.mockClear();
+      pool.connect.mockClear();
     },
   };
 
@@ -143,9 +167,13 @@ describe('OnboardingService', () => {
   });
 
   describe('get', () => {
+    // Note: get() runs inside a transaction (pool.connect → BEGIN/INSERT/SELECT/[UPDATE]/COMMIT).
+    // BEGIN, COMMIT, ROLLBACK are intercepted by the mock and do not consume result queue entries.
+    // Calls tracked in pool._getCalls() are: INSERT (ensure), SELECT, [UPDATE if auto-complete].
+
     test('returns onboarding state for existing org', async () => {
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
+        { rows: [], rowCount: 1 }, // INSERT (ensure)
         { rows: [{ org_id: 'org-123', profile: true, billing: false, team: false, completed: false }], rowCount: 1 },
       ]);
       const result = await service.get('org-123');
@@ -160,7 +188,7 @@ describe('OnboardingService', () => {
 
     test('returns null when row is missing (H06 fix)', async () => {
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
+        { rows: [], rowCount: 1 }, // INSERT (ensure)
         { rows: [], rowCount: 0 }, // SELECT returns nothing
       ]);
       const result = await service.get('org-123');
@@ -169,7 +197,7 @@ describe('OnboardingService', () => {
 
     test('auto-completes when all steps are true', async () => {
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
+        { rows: [], rowCount: 1 }, // INSERT (ensure)
         { rows: [{ org_id: 'org-123', profile: true, billing: true, team: true, completed: false }], rowCount: 1 },
         { rows: [], rowCount: 1 }, // UPDATE completed=true
       ]);
@@ -184,19 +212,19 @@ describe('OnboardingService', () => {
 
     test('does not update when already completed', async () => {
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
+        { rows: [], rowCount: 1 }, // INSERT (ensure)
         { rows: [{ org_id: 'org-123', profile: true, billing: true, team: true, completed: true }], rowCount: 1 },
       ]);
       const result = await service.get('org-123');
       expect(result?.completed).toBe(true);
       const calls = pool._getCalls();
-      // Should only have 2 calls (ensure + select), no update
+      // Should only have 2 tracked calls (ensure + select), no update
       expect(calls).toHaveLength(2);
     });
 
     test('does not auto-complete when not all steps are done', async () => {
       pool._setResults([
-        { rows: [], rowCount: 1 }, // ensure
+        { rows: [], rowCount: 1 }, // INSERT (ensure)
         { rows: [{ org_id: 'org-123', profile: true, billing: true, team: false, completed: false }], rowCount: 1 },
       ]);
       const result = await service.get('org-123');

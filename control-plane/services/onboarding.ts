@@ -1,6 +1,6 @@
 
 // Valid onboarding steps
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { ValidationError, ErrorCodes } from '@errors';
 
 const VALID_STEPS = ['profile', 'billing', 'team'] as const;
@@ -26,6 +26,18 @@ export interface OnboardingState {
   updated_at?: Date;
 }
 
+/**
+ * Assert that orgId is a non-empty string.
+ * FIX (OB-02 / ON-4): Use ValidationError (AppError subclass) rather than
+ * plain Error so the route-layer error handler maps it to a 400 response
+ * instead of an opaque 500.
+ */
+function assertOrgId(orgId: string): void {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new ValidationError('Valid orgId is required', ErrorCodes.VALIDATION_ERROR);
+  }
+}
+
 export class OnboardingService {
   constructor(private pool: Pool) {}
 
@@ -42,9 +54,7 @@ export class OnboardingService {
   }
 
   async ensure(orgId: string): Promise<void> {
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
+  assertOrgId(orgId);
 
   await this.pool.query(
     `INSERT INTO org_onboarding (org_id)
@@ -57,10 +67,7 @@ export class OnboardingService {
   async mark(orgId: string, step: OnboardingStep): Promise<number> {
   // Validate step against whitelist to prevent SQL injection
   this.validateStep(step);
-
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
+  assertOrgId(orgId);
 
   // SECURITY FIX (H03): Use column map instead of direct string interpolation
   const column = STEP_COLUMNS[step];
@@ -78,39 +85,68 @@ export class OnboardingService {
   }
 
   async get(orgId: string): Promise<OnboardingState | null> {
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
+  assertOrgId(orgId);
 
-  await this.ensure(orgId);
-  // FIX (M01): Select specific columns instead of SELECT *
-  const { rows } = await this.pool.query(
-    'SELECT org_id, profile, billing, team, completed, created_at, updated_at FROM org_onboarding WHERE org_id=$1',
-    [orgId]
-  );
+  // FIX (ON-1 / OB-01): Wrap ensure + SELECT + conditional UPDATE in a single
+  // transaction so the sequence is atomic.  Previously ensure() and the SELECT
+  // ran on separate pool connections with no ordering guarantee, and the
+  // auto-complete UPDATE ran outside any transaction, making the read-modify-write
+  // sequence vulnerable to TOCTOU races under concurrent requests.
+  const client: PoolClient = await this.pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  // SECURITY FIX (H06): Guard against undefined row
-  const row = rows[0];
-  if (!row) {
-    return null;
-  }
-
-  const completed =
-    row.profile &&
-    row.billing &&
-    row.team;
-
-  if (completed && !row.completed) {
-    // FIX (M03): Include updated_at in auto-completion update
-    // FIX (M12): Add WHERE completed=false for idempotent concurrent access
-    await this.pool.query(
-    'UPDATE org_onboarding SET completed=true, updated_at=now() WHERE org_id=$1 AND completed=false',
-    [orgId]
+    // Ensure the row exists (idempotent)
+    await client.query(
+      `INSERT INTO org_onboarding (org_id)
+      VALUES ($1)
+      ON CONFLICT (org_id) DO NOTHING`,
+      [orgId]
     );
-    row.completed = true;
-  }
 
-  return row;
+    // FIX (M01): Select specific columns instead of SELECT *
+    const { rows } = await client.query<OnboardingState>(
+      'SELECT org_id, profile, billing, team, completed, created_at, updated_at FROM org_onboarding WHERE org_id=$1',
+      [orgId]
+    );
+
+    // SECURITY FIX (H06): Guard against undefined row
+    const row = rows[0];
+    if (!row) {
+      await client.query('COMMIT');
+      return null;
+    }
+
+    const allStepsDone = row.profile && row.billing && row.team;
+
+    if (allStepsDone && !row.completed) {
+      // FIX (M03): Include updated_at in auto-completion update
+      // FIX (M12): Add WHERE completed=false for idempotent concurrent access
+      await client.query(
+        'UPDATE org_onboarding SET completed=true, updated_at=now() WHERE org_id=$1 AND completed=false',
+        [orgId]
+      );
+      // FIX (ON-2): Return a new object rather than mutating the pg result row
+      // in place.  Mutating the result object is a code smell: if the result were
+      // ever shared or cached the mutation would produce incorrect state.
+      await client.query('COMMIT');
+      return { ...row, completed: true };
+    }
+
+    await client.query('COMMIT');
+    return row;
+  } catch (err) {
+    await client.query('ROLLBACK').catch((rbErr: unknown) => {
+      // Log rollback failures but re-throw the original error so callers see
+      // the root cause, not the rollback error.
+      const msg = rbErr instanceof Error ? rbErr.message : String(rbErr);
+      // eslint-disable-next-line no-console -- fallback before logger is available
+      console.error('OnboardingService.get ROLLBACK failed:', msg);
+    });
+    throw err;
+  } finally {
+    client.release();
+  }
   }
 
   /**
@@ -139,9 +175,7 @@ export class OnboardingService {
   * WARNING: This method resets all onboarding progress. Guard usage appropriately.
   */
   async reset(orgId: string): Promise<void> {
-  if (!orgId || typeof orgId !== 'string') {
-    throw new Error('Valid orgId is required');
-  }
+  assertOrgId(orgId);
 
   await this.pool.query(
     `UPDATE org_onboarding
