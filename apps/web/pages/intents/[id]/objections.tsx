@@ -51,12 +51,17 @@ export default function Objections() {
 
     try {
       const token = await getToken();
+      // FIX (OBJ-5): Only send Authorization header when a token is actually
+      // present.  `token ?? ''` would send `Bearer ` (empty token) when
+      // getToken() returns null, causing the API to reject with 401 while
+      // unnecessarily consuming rate-limit quota for the invalid attempt.
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const res = await fetch(`/api/intents/${encodeURIComponent(id)}/objections`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token ?? ''}`,
-        },
+        headers,
         body: JSON.stringify({ text: text.trim() }),
       });
 
@@ -85,8 +90,12 @@ export default function Objections() {
   return (
     <AppShell>
       <h1>Decision Objections</h1>
-      {success && <p style={{ color: 'green' }}>Objection submitted successfully.</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {/* FIX (OBJ-6): role="status" and role="alert" create aria-live regions so
+          screen readers announce state changes on SPA navigations.  role="status"
+          (polite) is appropriate for success messages; role="alert" (assertive) is
+          appropriate for errors that require immediate attention. */}
+      {success && <p role="status" style={{ color: 'green' }}>Objection submitted successfully.</p>}
+      {error && <p role="alert" style={{ color: 'red' }}>{error}</p>}
       <form onSubmit={handleSubmit}>
         {/* ACCESSIBILITY FIX (OBJ-4): Associate label with textarea via htmlFor/id. */}
         <label htmlFor="objection-text">

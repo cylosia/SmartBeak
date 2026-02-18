@@ -23,7 +23,19 @@ function createMockPool() {
       const client = {
         query: jest.fn(async (text: string, values?: unknown[]) => {
           const trimmed = (text as string).trim().toUpperCase();
-          if (trimmed === 'BEGIN' || trimmed === 'COMMIT' || trimmed === 'ROLLBACK') {
+          // Intercept transaction control and session-configuration statements as
+          // no-ops so they do NOT consume from the result queue and are NOT
+          // recorded in queryCalls.  The list covers:
+          //   • BEGIN variants (plain BEGIN, BEGIN ISOLATION LEVEL ...)
+          //   • COMMIT and ROLLBACK
+          //   • SET LOCAL ... (statement_timeout, lock_timeout, etc.)
+          if (
+            trimmed === 'BEGIN' ||
+            trimmed.startsWith('BEGIN ') ||
+            trimmed === 'COMMIT' ||
+            trimmed === 'ROLLBACK' ||
+            trimmed.startsWith('SET LOCAL ')
+          ) {
             return { rows: [], rowCount: 0 };
           }
           // Route through the shared result queue + call tracker

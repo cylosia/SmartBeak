@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 import { getLogger } from '@kernel/logger';
 import { ValidationError, ErrorCodes } from '@errors';
+import type { Role } from './auth';
 
 const logger = getLogger('OrgService');
 
@@ -14,7 +15,12 @@ const MAX_ORG_NAME_LENGTH = 100;
 
 interface MemberRow {
   user_id: string;
-  role: string;
+  // FIX (OS-02): Use a narrowed union instead of plain `string` to match the
+  // memberships table CHECK constraint (role IN ('owner','admin','editor','viewer')).
+  // `Exclude<Role, 'buyer'>` derives this automatically from the canonical Role
+  // type in auth.ts, so any future additions to Role are reflected here.
+  // The 'buyer' role is not assignable to membership rows per the DB constraint.
+  role: Exclude<Role, 'buyer'>;
 }
 
 interface OrgRecord {
