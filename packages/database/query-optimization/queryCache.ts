@@ -313,7 +313,8 @@ export class DbQueryCache {
         }
       }
     } catch (error) {
-      logger.error('[DbQueryCache] Background refresh failed:', error as Error);
+      // P1-7 FIX: error is unknown; casting as Error is unsafe. Use instanceof guard.
+      logger.error('[DbQueryCache] Background refresh failed:', error instanceof Error ? error : new Error(String(error)));
     }
   }
 

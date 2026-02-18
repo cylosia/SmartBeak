@@ -31,11 +31,19 @@ export interface QueueMetrics {
 // P1-4 FIX: Added statement_timeout (5 s) to prevent connection-pool exhaustion if
 //           the DB is degraded — without it a single slow admin request can hold a
 //           connection indefinitely and cascade to full-pool starvation.
+// P0-4 FIX: SET LOCAL is transaction-scoped. Outside a transaction it behaves like
+//           plain SET — the 5 s timeout persisted on the pooled connection after
+//           release, causing subsequent unrelated queries to time out at 5 s.
+//           We now wrap the work in an explicit BEGIN/COMMIT so SET LOCAL is
+//           correctly scoped and automatically reset when the transaction ends.
 // P2-1 FIX: Both queries run in parallel (Promise.all) — they are independent and
 //           previously doubled latency by running sequentially.
 async function fetchQueueMetrics(pool: Pool, orgId: string): Promise<QueueMetrics> {
   const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+    // SET LOCAL is now correctly scoped to this transaction and will be reset
+    // automatically when the transaction ends, leaving the pooled connection clean.
     await client.query('SET LOCAL statement_timeout = 5000');
 
     const [publishingMetrics, searchMetrics] = await Promise.all([
@@ -70,6 +78,8 @@ async function fetchQueueMetrics(pool: Pool, orgId: string): Promise<QueueMetric
       ),
     ]);
 
+    await client.query('COMMIT');
+
     return {
       publishing: {
         backlog: parseInt(publishingMetrics.rows[0]?.backlog ?? '0', 10),
@@ -82,6 +92,10 @@ async function fetchQueueMetrics(pool: Pool, orgId: string): Promise<QueueMetric
         concurrency: 'adaptive',
       },
     };
+  } catch (err) {
+    // Rollback on any error so the transaction (and its SET LOCAL) is cleaned up.
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
   } finally {
     client.release();
   }
@@ -98,10 +112,22 @@ export async function queueMetricsRoutes(app: FastifyInstance, pool: Pool) {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
 
+    // P1-5 FIX: ctx['orgId'] can be undefined for tokens without an org scope
+    // (e.g. personal API keys, service accounts). Without this guard, undefined
+    // is passed to fetchQueueMetrics as the $1 parameter, making the WHERE clause
+    // evaluate as d.org_id = NULL (never true) — silently returning zeros instead
+    // of an error. Return 400 so the caller knows they need an org-scoped token.
+    if (!ctx['orgId']) {
+      return res.status(400).send({ error: 'VALIDATION_ERROR', message: 'Organization ID is required' });
+    }
+
     const metrics = await fetchQueueMetrics(pool, ctx['orgId']);
     return res.send(metrics);
   } catch (error) {
-    logger.error('[admin/queues/metrics] Error', { message: error instanceof Error ? error.message : String(error) });
+    // P2-2 FIX: Pass the error object directly — the logger auto-redacts sensitive
+    // fields. Previously the message string was extracted manually, which loses
+    // stack traces and structured fields needed for distributed tracing.
+    logger.error('[admin/queues/metrics] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res, 'Failed to retrieve queue metrics');
   }
   });

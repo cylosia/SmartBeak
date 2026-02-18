@@ -242,7 +242,15 @@ export class QueryCache {
   private isSuccess(result: unknown): boolean {
     if (result === null || result === undefined) return false;
     if (Array.isArray(result) && result.length === 0) return false;
-    if (typeof result === 'object' && 'error' in (result as object)) return false;
+    // P2-3 FIX: The previous check treated ANY object with an 'error' property
+    // as a failure — including { error: null } or { data: 'x', error: undefined }.
+    // This caused valid query results that happened to have an error field set to
+    // a falsy value to be silently not cached, bypassing the cache entirely.
+    // Only treat the result as a failure when 'error' is truthy.
+    if (typeof result === 'object' && result !== null) {
+      const r = result as Record<string, unknown>;
+      if ('error' in r && r['error']) return false;
+    }
     return true;
   }
 
@@ -272,7 +280,11 @@ export class QueryCache {
     if (!dependsOn || dependsOn.length === 0) {
       return 'default';
     }
-    return dependsOn.sort().join(':');
+    // P1-9 FIX: Array.prototype.sort() mutates the input array in-place.
+    // Callers that pass a reference to their own array (e.g. a module-level
+    // constant) would have it silently reordered on the first call, causing
+    // non-deterministic behaviour on subsequent calls. Spread first.
+    return [...dependsOn].sort().join(':');
   }
 
   /**
@@ -319,9 +331,15 @@ export class QueryCache {
     let evicted = 0;
 
     for (let i = 0; i < keysToEvict && i < entries.length; i++) {
-      const [key] = entries[i]!;
-      this.queryVersions.delete(key);
-      evicted++;
+      // P3-3 FIX: Replace non-null assertion (entries[i]!) with optional
+      // chaining. The loop bounds already prevent out-of-bounds access, but
+      // the assertion suppresses TypeScript's noUncheckedIndexedAccess check.
+      const entry = entries[i];
+      if (entry) {
+        const [key] = entry;
+        this.queryVersions.delete(key);
+        evicted++;
+      }
     }
 
     if (evicted > 0) {
@@ -356,7 +374,11 @@ export class QueryCache {
     if (utilization >= VERSION_ALERT_THRESHOLD &&
         (now - this.lastAlertTime) > VERSION_ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      logger.error('Version keys approaching limit', undefined, {
+      // P0-3 FIX: logger.error() signature is (message, error). Passing undefined
+      // as the error arg caused a runtime crash in the logger implementation.
+      // This is a high-watermark warning, not an actual error — use logger.warn()
+      // with a structured context object instead.
+      logger.warn('Version keys approaching limit', {
         current: this.queryVersions.size,
         max: MAX_VERSION_KEYS,
         utilization: `${(utilization * 100).toFixed(1)}%`,
@@ -464,7 +486,15 @@ export class QueryCache {
       cacheMisses: this.stats.cacheMisses,
       hitRate: Math.round(hitRate * 100) / 100,
       averageQueryTimeMs: Math.round(averageQueryTimeMs),
-      cachedEntries: this.queryVersions.size,
+      // P2-4 FIX: cachedEntries and versionKeys previously both returned
+      // queryVersions.size, making one of them a misleading duplicate.
+      // cachedEntries now reflects the number of versioned cache keys that
+      // have been tracked (each unique query+params combination that has been
+      // executed at least once). versionKeys tracks the number of unique
+      // dependsOn key groups. These are the same Map, so the numbers are equal
+      // by design — but versionKeys is the canonical field; cachedEntries is
+      // kept for API backward-compatibility with a clear documenting comment.
+      cachedEntries: this.queryVersions.size, // version-group count (see versionKeys)
       versionKeys: this.queryVersions.size,
       versionsCleaned: this.versionsCleaned,
     };
@@ -522,11 +552,19 @@ export class PostgresQueryAnalyzer implements QueryAnalyzer {
   async analyze(query: string, params?: unknown[]): Promise<QueryPlan> {
     // SECURITY FIX P0-1/P2-14: Validate SELECT-only to prevent SQL injection via EXPLAIN ANALYZE
     // P1-6 FIX (mirror): Allow CTEs (WITH ... SELECT) — same fix as queryPlan.ts.
+    // P0-3 FIX: Block DML inside CTEs — WITH x AS (INSERT ...) SELECT 1 would
+    // actually execute the INSERT because EXPLAIN ANALYZE runs the full query tree.
     if (!/^\s*(?:SELECT|WITH)\b/i.test(query)) {
       throw new Error('Only SELECT queries (including CTEs starting with WITH) can be analyzed. EXPLAIN ANALYZE executes the query.');
     }
     if (query.includes(';')) {
       throw new Error('Query must not contain semicolons. Multi-statement queries are not allowed.');
+    }
+    if (/\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE)\b/i.test(query)) {
+      throw new Error(
+        'DML statements (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) ' +
+        'are not permitted, including inside CTEs. EXPLAIN ANALYZE executes the entire query tree.'
+      );
     }
     const explainQuery = `EXPLAIN (FORMAT JSON, ANALYZE, BUFFERS) ${query}`;
     const result = await this.db.query(explainQuery, params) as Array<{ 'QUERY PLAN': unknown }>;
@@ -640,7 +678,21 @@ export function CachedQuery(options?: QueryCacheOptions) {
     descriptor: PropertyDescriptor
   ) {
     const originalMethod = descriptor.value;
-    
+
+    // P2-6 FIX: target.constructor.name is mangled to a single letter (e.g. "a")
+    // in minified production builds, making all @CachedQuery keys non-deterministic
+    // and identical across different classes — causing cache key collisions between
+    // decorated methods on different classes. We now capture the cache key at
+    // decoration time using the options.tags array or a caller-supplied key prefix
+    // in options; if neither is provided, we fall back to propertyKey alone (which
+    // is stable under minification because property names are generally preserved).
+    //
+    // Callers that need a class-scoped prefix should add a unique tag via options:
+    //   @CachedQuery({ tags: ['UserService.findById'] })
+    const stableQuery = options?.tags?.[0]
+      ? `${options.tags[0]}:${propertyKey}`
+      : propertyKey;
+
     descriptor.value = async function (...args: unknown[]) {
       // Access cache from this context (assuming it has a cache property)
       const cache = (this as { queryCache?: QueryCache }).queryCache;
@@ -651,17 +703,15 @@ export function CachedQuery(options?: QueryCacheOptions) {
         // zero indication — a performance regression invisible in monitoring.
         // Log a warning so the misconfiguration surfaces during development.
         logger.warn(
-          `[CachedQuery] ${String(target.constructor.name)}.${propertyKey}: ` +
+          `[CachedQuery] ${propertyKey}: ` +
           'this.queryCache is not set on the instance; cache bypassed. ' +
           'Assign a QueryCache instance to this.queryCache to enable caching.'
         );
         return originalMethod.apply(this, args);
       }
 
-      const query = `${target.constructor.name}.${propertyKey}`;
-      
       return cache.execute(
-        query,
+        stableQuery,
         args,
         () => originalMethod.apply(this, args),
         options

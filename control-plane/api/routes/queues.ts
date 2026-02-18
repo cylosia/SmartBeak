@@ -221,7 +221,7 @@ export async function queueRoutes(app: FastifyInstance, pool: Pool) {
     throw new ExternalAPIError(
         'Invalid query parameters',
         ErrorCodes.VALIDATION_ERROR,
-        { details: queryValidation["error"].issues }
+        { details: queryValidation['error']['issues'] }
     );
     }
 
