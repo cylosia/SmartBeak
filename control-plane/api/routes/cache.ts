@@ -70,7 +70,10 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
         const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp('^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
         allKeys = allKeys.filter(key => regex.test(key));
-      } catch {
+      } catch (patternErr: unknown) {
+        // P2-FIX: Log the pattern and error so operators can diagnose malformed
+        // patterns instead of silently swallowing the failure.
+        logger.warn('Cache key pattern compilation failed', { pattern }, patternErr instanceof Error ? patternErr : new Error(String(patternErr)));
         return res.status(400).send({
           error: 'Invalid search pattern',
           code: 'INVALID_PATTERN',

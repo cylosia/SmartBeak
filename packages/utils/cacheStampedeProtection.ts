@@ -56,7 +56,9 @@ class CacheStampedeProtector {
   }
 
   // P1-FIX: Check for in-flight request
-  const existing = this.inFlight.get(key) as InFlightRequest<T> | undefined;
+  // P2-FIX: The Map stores InFlightRequest<unknown>; use the promise as Promise<T>
+  // only when returning it — not by casting the entire container object.
+  const existing = this.inFlight.get(key);
   if (existing) {
     // Check if in-flight request is not too old
     const age = Date.now() - existing.startTime;
@@ -64,7 +66,7 @@ class CacheStampedeProtector {
     existing.requestCount++;
     logger.debug(`Deduplicating request for key: ${key} (concurrent: ${existing.requestCount})`);
     onDedupe?.();
-    return existing.promise;
+    return existing.promise as Promise<T>;
     } else {
     // Clean up stale request
     logger.warn(`Cleaning up stale in-flight request for key: ${key} (age: ${age}ms)`);
@@ -112,14 +114,14 @@ class CacheStampedeProtector {
     try {
     await cacheSetter(result);
     } catch (error) {
-    logger["error"](`Failed to cache result for key: ${key}`, error as Error);
+    logger.error(`Failed to cache result for key: ${key}`, error as Error);
     }
     }
 
     return result;
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    logger["error"](`Factory failed for key: ${key}`, err);
+    logger.error(`Factory failed for key: ${key}`, err);
     throw error;
   } finally {
     // P1-FIX: Clean up in-flight tracking
@@ -159,7 +161,9 @@ export async function getOrComputeWithStampedeProtection<T>(
   factory: () => Promise<T>,
   options?: Parameters<CacheStampedeProtector['getOrCompute']>[2]
 ): Promise<T> {
-  return globalStampedeProtector.getOrCompute(key, factory, options) as Promise<T>;
+  // P2-FIX: Pass explicit type parameter so TypeScript infers the return type
+  // correctly rather than relying on an unsafe `as Promise<T>` cast.
+  return globalStampedeProtector.getOrCompute<T>(key, factory, options);
 }
 
 /**

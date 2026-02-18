@@ -103,7 +103,7 @@ export class TTLCache<T> {
     this.hits++;
     return entry.value;
   } catch (error: unknown) {
-    logger["error"]('Error retrieving from cache', new Error(getErrorMessage(error)), { key });
+    logger.error('Error retrieving from cache', new Error(getErrorMessage(error)), { key });
     this.misses++;
     return undefined;
   }
@@ -133,7 +133,7 @@ export class TTLCache<T> {
     accessCount: 0,
     });
   } catch (error: unknown) {
-    logger["error"]('Error setting cache value', new Error(getErrorMessage(error)), { key });
+    logger.error('Error setting cache value', new Error(getErrorMessage(error)), { key });
   }
   }
 
@@ -168,7 +168,7 @@ export class TTLCache<T> {
 
     this.store.delete(key);
   } catch (error: unknown) {
-    logger["error"]('Error invalidating cache key', new Error(getErrorMessage(error)), { key });
+    logger.error('Error invalidating cache key', new Error(getErrorMessage(error)), { key });
   }
   }
 
@@ -177,12 +177,12 @@ export class TTLCache<T> {
   */
   clear(): void {
   try {
-    this.store["clear"]();
+    this.store.clear();
     this.hits = 0;
     this.misses = 0;
     this.evictions = 0;
   } catch (error: unknown) {
-    logger["error"]('Error clearing cache', new Error(getErrorMessage(error)));
+    logger.error('Error clearing cache', new Error(getErrorMessage(error)));
   }
   }
 
@@ -250,7 +250,7 @@ export class TTLCache<T> {
     clearInterval(this.cleanupTimer);
     this.cleanupTimer = undefined;
   }
-  this["clear"]();
+  this.clear();
   }
 }
 

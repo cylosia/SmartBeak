@@ -166,7 +166,10 @@ export class CacheWarmer {
       } catch (error) {
         attempts++;
         if (attempts < maxAttempts) {
-          await this.delay(this.options.retryDelayMs * attempts);
+          // P2-FIX: Exponential backoff (1×, 2×, 4×…) instead of linear (1×, 2×, 3×…).
+          // Linear retries hammer failing upstreams too aggressively; exponential
+          // backoff reduces thundering-herd pressure during sustained outages.
+          await this.delay(this.options.retryDelayMs * Math.pow(2, attempts - 1));
         }
       }
     }

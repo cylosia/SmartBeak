@@ -249,15 +249,17 @@ export class CostTracker extends EventEmitter {
     ]
     );
   } catch (error) {
-    logger["error"]('Flush failed', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Flush failed', error instanceof Error ? error : new Error(String(error)));
     // P1-7 FIX: Cap buffer size to prevent OOM during sustained DB outage.
-    // Use spread-free concat to avoid RangeError with large entry arrays.
+    // Re-prepend the failed entries so they are retried on the next flush cycle.
+    // P2-FIX: Updated misleading comment — spread IS used here (intentionally);
+    // the original note about "spread-free" was incorrect.
     const MAX_BUFFER_SIZE = 10000;
     this.buffer = [...entries, ...this.buffer];
     if (this.buffer.length > MAX_BUFFER_SIZE) {
     const dropped = this.buffer.length - MAX_BUFFER_SIZE;
     this.buffer.splice(0, dropped);
-    logger["error"](`Cost buffer overflow: dropped ${dropped} oldest entries`);
+    logger.error(`Cost buffer overflow: dropped ${dropped} oldest entries`);
     }
   }
   }
@@ -372,16 +374,10 @@ export class CostTracker extends EventEmitter {
 
   const todayCost = await this.getTodayCost(orgId);
 
-  // Get monthly cost
-  const { rows } = await this.db.query(
-    `SELECT COALESCE(SUM(cost), 0) as total
-    FROM cost_tracking
-    WHERE org_id = $1
-    AND date >= DATE_TRUNC('month', CURRENT_DATE)`,
-    [orgId]
-  );
-
-  const _monthlyCost = parseFloat(rows[0]?.total || 0);
+  // P2-FIX: Removed unused monthly-cost DB query. The query was fetching monthly
+  // spend into `_monthlyCost` but the result was never used — the method always
+  // returns the daily period. Callers that need monthly status should call
+  // checkBudget() or getMonthCost() directly.
 
   return {
     orgId,
@@ -540,6 +536,7 @@ export class CostTracker extends EventEmitter {
 
     logger.info(`Loaded budgets for ${loaded} organizations`);
   } catch (error) {
-    logger["error"]('Failed to load budgets from database', error instanceof Error ? error : new Error(String(error)));
+    logger.error('Failed to load budgets from database', error instanceof Error ? error : new Error(String(error)));
   }
   }
+}

@@ -151,15 +151,18 @@ export class CacheInvalidator {
         // Find and delete matching keys
         if (rule.keyPatterns) {
           for (const pattern of rule.keyPatterns) {
-            await this.invalidateByPattern(pattern);
-            invalidatedCount++;
+            // P1-FIX: Use the returned count of actually-deleted keys instead of
+            // always incrementing by 1 regardless of how many keys matched.
+            const deleted = await this.invalidateByPattern(pattern);
+            invalidatedCount += deleted;
           }
         }
       }
     }
 
+    // P2-FIX: Remove duplicate log — the second line was identical information
+    // redundantly logged in a different format.
     logger.info('Invalidated entries by tags', { invalidatedCount, tags });
-    logger.info(`Invalidated ${invalidatedCount} entries by tags: ${tags.join(', ')}`);
     return invalidatedCount;
   }
 
@@ -170,8 +173,10 @@ export class CacheInvalidator {
    * pattern BEFORE expanding glob wildcards.  Without escaping, a pattern like
    * `user.(123)*` would be compiled as-is into a regex, causing unexpected
    * matches and potential ReDoS with catastrophic backtracking.
+   *
+   * @returns Number of keys actually deleted.
    */
-  async invalidateByPattern(pattern: string): Promise<void> {
+  async invalidateByPattern(pattern: string): Promise<number> {
     // Step 1: split on glob wildcards to isolate literal segments
     // Step 2: escape regex metacharacters in each literal segment
     // Step 3: reassemble with .* (for *) or . (for ?)
@@ -201,6 +206,7 @@ export class CacheInvalidator {
     }
 
     logger.info(`[CacheInvalidator] Invalidated ${toDelete.length} entries matching pattern: ${pattern}`);
+    return toDelete.length;
   }
 
   /**
