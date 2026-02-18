@@ -196,7 +196,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       telemetryInitialized = true;
       logger.info('✓ Telemetry initialized');
     } catch (error) {
-      logger.error('Failed to initialize telemetry', error as Error);
+      logger.error('Failed to initialize telemetry', error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -217,7 +217,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       logger.info('✓ Metrics collector started');
     }
   } catch (error) {
-    logger.error('Failed to initialize metrics collector', error as Error);
+    logger.error('Failed to initialize metrics collector', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -280,7 +280,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       });
     }
   } catch (error) {
-    logger.error('Failed to initialize health checks', error as Error);
+    logger.error('Failed to initialize health checks', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -319,7 +319,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       logger.info('✓ Alerting rules engine started');
     }
   } catch (error) {
-    logger.error('Failed to initialize alerting', error as Error);
+    logger.error('Failed to initialize alerting', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -337,7 +337,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       logger.info('✓ Resource metrics collector started');
     }
   } catch (error) {
-    logger.error('Failed to initialize resource metrics', error as Error);
+    logger.error('Failed to initialize resource metrics', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -357,7 +357,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       logger.info('✓ SLO tracker started', { sloCount: defaultSloDefinitions.length });
     }
   } catch (error) {
-    logger.error('Failed to initialize SLO tracker', error as Error);
+    logger.error('Failed to initialize SLO tracker', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -371,7 +371,7 @@ export function initMonitoring(config: MonitoringInitConfig): MonitoringComponen
       logger.info('✓ Business KPI tracker started');
     }
   } catch (error) {
-    logger.error('Failed to initialize business KPIs', error as Error);
+    logger.error('Failed to initialize business KPIs', error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -496,18 +496,28 @@ export function createMetricsMiddleware(
     const output: string[] = [];
     const aggregations = metricsCollector.getAllAggregations();
 
+    // Sanitize metric names to prevent Prometheus line-protocol injection.
+    // Metric names must match [a-zA-Z_:][a-zA-Z0-9_:]* per the Prometheus data model.
+    // A newline in agg.name would split a single logical metric across multiple
+    // lines, silently corrupting the scrape output.
+    const sanitizeMetricName = (name: string): string =>
+      name.replace(/[^a-zA-Z0-9_:]/g, '_');
+
     for (const [_key, agg] of aggregations) {
-      output.push(`# HELP ${agg.name} Metric`);
-      output.push(`# TYPE ${agg.name} gauge`);
-      output.push(`${agg.name}{aggregation="avg"} ${agg.avg}`);
-      output.push(`${agg.name}{aggregation="sum"} ${agg.sum}`);
-      output.push(`${agg.name}{aggregation="count"} ${agg.count}`);
-      output.push(`${agg.name}{aggregation="min"} ${agg.min}`);
-      output.push(`${agg.name}{aggregation="max"} ${agg.max}`);
-      
+      const safeName = sanitizeMetricName(agg.name);
+      output.push(`# HELP ${safeName} Metric`);
+      output.push(`# TYPE ${safeName} gauge`);
+      output.push(`${safeName}{aggregation="avg"} ${agg.avg}`);
+      output.push(`${safeName}{aggregation="sum"} ${agg.sum}`);
+      output.push(`${safeName}{aggregation="count"} ${agg.count}`);
+      output.push(`${safeName}{aggregation="min"} ${agg.min}`);
+      output.push(`${safeName}{aggregation="max"} ${agg.max}`);
+
       if (agg.percentiles) {
         for (const [p, v] of Object.entries(agg.percentiles)) {
-          output.push(`${agg.name}{aggregation="${p}"} ${v}`);
+          // Sanitize percentile label value too (e.g., "p50", "p99")
+          const safeP = sanitizeMetricName(p);
+          output.push(`${safeName}{aggregation="${safeP}"} ${v}`);
         }
       }
     }

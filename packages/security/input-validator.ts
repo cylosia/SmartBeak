@@ -487,7 +487,11 @@ export function validateQueryParam(
   }
 
   if (options.maxLength !== undefined && strValue.length > options.maxLength) {
-    strValue = strValue.substring(0, options.maxLength);
+    // Reject oversized values rather than silently truncating.
+    // Silent truncation corrupts structured data (UUIDs, emails) and hides
+    // client bugs. Callers that intentionally want truncation should do it
+    // explicitly before calling validateQueryParam.
+    return null;
   }
 
   // Pattern validation (use sparingly)

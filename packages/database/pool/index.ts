@@ -42,11 +42,15 @@ export async function acquireAdvisoryLock(lockId: string, timeoutMs = 5000): Pro
   while (Date.now() - startTime < timeoutMs) {
     const client = await pool.connect();
     try {
-      // SECURITY FIX (Finding 20): Use hashtext() to convert string to bigint
-      // pg_try_advisory_lock requires bigint, not string
+      // Use the two-argument form pg_try_advisory_lock(key1 bigint, key2 bigint) to
+      // reduce collision probability. hashtext() returns a 32-bit integer; with only
+      // ~65K distinct lock IDs the birthday-paradox collision probability exceeds 50%.
+      // Two independent 32-bit hashes give an effective 64-bit key space (~4.3B× safer).
+      // key2 is derived by hashing a namespaced version of lockId so the two values
+      // are independent (same input, different prefix → different hash).
       const { rows } = await client.query(
-        'SELECT pg_try_advisory_lock(hashtext($1)) as acquired',
-        [lockId]
+        'SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) as acquired',
+        [lockId, 'sbk:' + lockId]
       );
 
       if (rows[0]?.acquired) {
@@ -73,8 +77,8 @@ export async function acquireAdvisoryLock(lockId: string, timeoutMs = 5000): Pro
  */
 export async function releaseAdvisoryLock(client: PoolClient, lockId: string): Promise<void> {
   try {
-    // SECURITY FIX (Finding 20): Must match hashtext() used in acquire
-    await client.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
+    // Must use the two-argument form to match acquireAdvisoryLock exactly
+    await client.query('SELECT pg_advisory_unlock(hashtext($1), hashtext($2))', [lockId, 'sbk:' + lockId]);
     activeAdvisoryLocks.delete(lockId);
   } finally {
     activeAdvisoryLocks.delete(lockId);
@@ -110,8 +114,8 @@ export async function releaseAllAdvisoryLocks(): Promise<void> {
 
   for (const [lockId, originalClient] of activeAdvisoryLocks) {
     try {
-      // Must use hashtext() to match the lock acquired in acquireAdvisoryLock
-      await originalClient.query('SELECT pg_advisory_unlock(hashtext($1))', [lockId]);
+      // Must use the two-argument form to match acquireAdvisoryLock
+      await originalClient.query('SELECT pg_advisory_unlock(hashtext($1), hashtext($2))', [lockId, 'sbk:' + lockId]);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       logger.error(`Failed to release advisory lock ${lockId}`, err);

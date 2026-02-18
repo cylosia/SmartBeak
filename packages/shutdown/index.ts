@@ -77,8 +77,10 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
   }, SHUTDOWN_TIMEOUT_MS);
 
   try {
-  // P1-FIX: Execute all registered handlers with error isolation
+  // Execute all registered handlers with error isolation
   const handlerTimeoutMs = 30000;
+  let failureCount = 0;
+
   const handlerPromises = [...handlers].map(async (handler, index) => {
     const handlerName = handler.name || `handler-${index}`;
     try {
@@ -87,24 +89,26 @@ export async function gracefulShutdown(signal: string, exitCode = 0): Promise<vo
     if (result && typeof result.then === 'function') {
       await Promise.race([
         result,
-        new Promise((_, reject) =>
+        new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Handler ${handlerName} timed out`)), handlerTimeoutMs)
         )
       ]);
     }
     logger.info(`Shutdown handler ${handlerName} completed successfully`);
     } catch (err) {
-    // P1-FIX: Log error but don't stop other handlers
-    logger["error"](`Shutdown handler ${handlerName} failed:`, err as Error);
-    // Continue with other handlers - don't let one failure stop shutdown
+    // Log error but don't stop other handlers; track failure count for summary log
+    failureCount++;
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger["error"](`Shutdown handler ${handlerName} failed: ${errorMsg}`);
     }
   });
 
-  // P1-FIX: Use Promise.allSettled to ensure all handlers complete
-  const results = await Promise.allSettled(handlerPromises);
-  const failures = results.filter(r => r.status === 'rejected');
-  if (failures.length > 0) {
-    logger["error"](`${failures.length} shutdown handlers failed`);
+  // Use allSettled so all handlers run regardless of individual failures.
+  // Failure tracking is done via the failureCount variable above because each
+  // handler's try/catch prevents individual promises from rejecting.
+  await Promise.allSettled(handlerPromises);
+  if (failureCount > 0) {
+    logger["error"](`${failureCount} shutdown handler(s) failed`);
   }
   } catch (error) {
   // P1-FIX: Catch any unexpected errors during shutdown

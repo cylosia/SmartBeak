@@ -105,32 +105,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // Format response - buyer-safe (no secrets, tokens, or credentials)
+  // Format response - buyer-safe (no secrets, tokens, or credentials).
+  // Return actual DB data only; hardcoded placeholder fallbacks were removed
+  // because they leaked provider names and masked data consistency issues.
   const integrations = {
-    organization: orgIntegrations.length > 0
-    ? orgIntegrations.map(i => ({
+    organization: orgIntegrations.map(i => ({
       provider: i.provider,
       status: i.status,
       connectedAt: i.connected_at?.toISOString() ?? null,
-      }))
-    : [
-      // Fallback placeholder data for development/testing
-      { provider: 'Ahrefs', status: 'disconnected', connectedAt: null },
-      { provider: 'Stripe', status: 'disconnected', connectedAt: null }
-      ],
-    domain: domainIntegrations.length > 0
-    ? domainIntegrations.map(i => ({
+    })),
+    domain: domainIntegrations.map(i => ({
       provider: i.provider,
       status: i.status,
       connectedAt: i.connected_at?.toISOString() ?? null,
-      }))
-    : domainId
-      ? [
-        // Fallback placeholder data for development/testing
-        { provider: 'Google Search Console', status: 'disconnected', connectedAt: null },
-        { provider: 'Amazon Associates', status: 'disconnected', connectedAt: null }
-      ]
-      : []
+    })),
   };
 
   res.json(integrations);
