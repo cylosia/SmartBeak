@@ -150,15 +150,26 @@ export function initTelemetry(config: TelemetryConfig): void {
       ...config.resourceAttributes,
     });
 
+    // P1-4 FIX: Validate samplingRate before use. parseFloat() of a non-numeric
+    // env var returns NaN, and Math.random() < NaN is always false — meaning 0%
+    // of traces would be sampled with zero indication of the misconfiguration.
+    const rawRate = config.samplingRate ?? 1.0;
+    const samplingRate = Number.isFinite(rawRate) && rawRate >= 0 && rawRate <= 1
+      ? rawRate
+      : (() => {
+          logger.warn('Invalid samplingRate — must be a finite number in [0, 1]. Defaulting to 1.0.', { rawRate });
+          return 1.0;
+        })();
+
     // Configure provider
     const providerConfig: ConstructorParameters<typeof NodeTracerProvider>[0] = {
       resource,
       sampler: {
         shouldSample: () => ({
-          decision: Math.random() < (config.samplingRate ?? 1.0) ? 1 : 0,
+          decision: Math.random() < samplingRate ? 1 : 0,
           attributes: {},
         }),
-        toString: () => 'ProbabilitySampler',
+        toString: () => `ProbabilitySampler(${samplingRate})`,
       },
     };
 
@@ -193,14 +204,19 @@ export function initTelemetry(config: TelemetryConfig): void {
       registerInstrumentations({
         instrumentations: [
           new HttpInstrumentation({
-            requestHook: ((span: Span, request: HttpRequest) => {
-              span.setAttribute('http.request.body.size',
-                request.headers['content-length'] || 0);
-            }) as never,
-            responseHook: ((span: Span, response: HttpResponse) => {
-              span.setAttribute('http.response.body.size',
-                response.headers['content-length'] || 0);
-            }) as never,
+            // P2-1 FIX: Removed `as never` type escape. The hooks use type inference
+            // from the OTel library's own parameter types (letting TS infer `span`
+            // and `request`/`response`), then access headers via a safe cast to the
+            // known header shape. This eliminates the `as never` assertion while
+            // keeping the header access type-safe at the boundary we control.
+            requestHook: (span, request) => {
+              const headers = (request as { headers: Record<string, string | string[] | undefined> }).headers;
+              span.setAttribute('http.request.body.size', headers['content-length'] || 0);
+            },
+            responseHook: (span, response) => {
+              const headers = (response as { headers: Record<string, string | string[] | undefined> }).headers;
+              span.setAttribute('http.response.body.size', headers['content-length'] || 0);
+            },
           }),
           new PgInstrumentation({
             enhancedDatabaseReporting: true,
@@ -475,9 +491,22 @@ export function setSpanStatus(
 // ============================================================================
 
 /**
- * Trace a class method
- * @param spanName - Optional custom span name
- * @param attributes - Static attributes
+ * Trace an **async** class method.
+ *
+ * P1-2 FIX: This decorator ONLY works correctly on methods that already return
+ * a Promise. Applying it to a synchronous method silently changes the return
+ * type from T to Promise<T>, breaking callers that expect a synchronous value.
+ * TypeScript cannot detect this mismatch through PropertyDescriptor.
+ *
+ * If you need to trace a synchronous method, wrap its body manually with
+ * withSpan() instead of using this decorator.
+ *
+ * P2-15 FIX: Removed JSON.stringify(args.map(typeof)) from the hot path.
+ * On high-throughput methods this created measurable overhead per call.
+ * Argument shape information is available in the span attributes (args.count).
+ *
+ * @param spanName - Optional custom span name (defaults to ClassName.methodName)
+ * @param attributes - Static attributes added to every span
  */
 export function Trace(
   spanName?: string,
@@ -488,8 +517,19 @@ export function Trace(
     propertyKey: string,
     descriptor: PropertyDescriptor
   ): PropertyDescriptor {
-    const originalMethod = descriptor.value;
+    const originalMethod: (...args: unknown[]) => Promise<unknown> = descriptor.value;
     const name = spanName || `${target.constructor.name}.${propertyKey}`;
+
+    // Guard: warn loudly at decoration time if the original is not async.
+    // This runs once at class-definition time, not per call.
+    if (originalMethod.constructor.name !== 'AsyncFunction') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[Trace] @Trace applied to non-async method "${String(target.constructor.name)}.${propertyKey}". ` +
+        'The decorated method will return Promise<T> instead of T. ' +
+        'Use withSpan() directly for synchronous methods.'
+      );
+    }
 
     descriptor.value = async function (...args: unknown[]) {
       return withSpan(
@@ -503,18 +543,7 @@ export function Trace(
           },
         },
         async (_span) => {
-          addSpanAnnotation({
-            name: 'method.start',
-            attributes: { args: JSON.stringify(args.map(a => typeof a)) },
-          });
-
           const result = await originalMethod.apply(this, args);
-
-          addSpanAnnotation({
-            name: 'method.end',
-            attributes: { resultType: typeof result },
-          });
-
           return result;
         }
       );

@@ -59,12 +59,14 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
     }
   });
 
-  const result = DOMPurify.sanitize(html, config);
-
-  // Remove the hook after use to prevent accumulation across calls
-  DOMPurify.removeAllHooks();
-
-  return result;
+  // P1-7 FIX: Use try/finally so the hook is always removed even if sanitize() throws.
+  // Also use removeHook (not removeAllHooks) to avoid destroying hooks registered
+  // by other libraries sharing the same DOMPurify singleton.
+  try {
+    return DOMPurify.sanitize(html, config);
+  } finally {
+    DOMPurify.removeHook('afterSanitizeAttributes');
+  }
 }
 
 /**
@@ -79,17 +81,19 @@ export function sanitizeUrl(url: string | undefined | null): string {
 
   const lowerUrl = url.toLowerCase().trim();
   
-  // Block dangerous protocols
+  // P1-8 FIX: Block ALL data: URIs, not just data:text/html.
+  // data:image/svg+xml can embed <script> elements; data:text/javascript is obvious.
+  // No legitimate use case for data: URIs in user-supplied href/src values.
   const dangerousProtocols = [
     'javascript:',
-    'data:text/html',
+    'data:',
     'vbscript:',
     'mocha:',
     'livescript:',
     'about:',
     'file:',
   ];
-  
+
   if (dangerousProtocols.some(proto => lowerUrl.startsWith(proto))) {
     return '';
   }
@@ -97,5 +101,6 @@ export function sanitizeUrl(url: string | undefined | null): string {
   return url;
 }
 
-// Re-export DOMPurify for advanced use cases
-export { DOMPurify };
+// P3 FIX: DOMPurify singleton is no longer re-exported.
+// Callers must use the sanitizeHtml() / sanitizeUrl() wrappers to ensure
+// the configured allow-list and hook lifecycle are applied consistently.

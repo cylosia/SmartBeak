@@ -7,24 +7,32 @@ export interface SequenceHealth {
   sequence_name: string;
   data_type: string;
   start_value: number;
-  current_value: number;
-  max_value: number;
+  // P2-6 FIX: PostgreSQL bigint sequences can reach 9223372036854775807 (2^63-1),
+  // which exceeds Number.MAX_SAFE_INTEGER (2^53-1). Using string preserves full
+  // precision as returned by the pg driver. Parse with BigInt() when arithmetic
+  // is needed (e.g. utilization_percent calculation).
+  current_value: string;
+  max_value: string;
   utilization_percent: number;
-  remaining_values: number;
+  remaining_values: string;
   cycle_option: string;
-  effective_max_value: number;
+  effective_max_value: string;
 }
 
-/** Sequence alert levels */
-export type AlertLevel = 'INFO' | 'WARNING' | 'CRITICAL';
+// P2-7 FIX: Unified AlertLevel type includes all states used across both
+// SequenceAlert (which needs INFO) and SequenceUtilization (which needs OK).
+// Previously AlertLevel was 'INFO'|'WARNING'|'CRITICAL' (missing 'OK') while
+// SequenceUtilization had 'OK'|'WARNING'|'CRITICAL' (missing 'INFO'), making
+// the types mutually incompatible. Now one canonical type covers all cases.
+export type AlertLevel = 'OK' | 'INFO' | 'WARNING' | 'CRITICAL';
 
 /** Sequence alert record */
 export interface SequenceAlert {
   id: number;
   sequence_name: string;
   data_type: string;
-  current_value: number;
-  max_value: number;
+  current_value: string;
+  max_value: string;
   utilization_percent: number;
   threshold_percent: number;
   alert_level: AlertLevel;
@@ -40,11 +48,11 @@ export interface SequenceAlert {
 export interface SequenceUtilization {
   sequence_name: string;
   data_type: string;
-  current_value: number;
-  max_value: number;
+  current_value: string;
+  max_value: string;
   utilization_percent: number;
-  alert_level: 'OK' | 'WARNING' | 'CRITICAL';
-  remaining: number;
+  alert_level: AlertLevel;
+  remaining: string;
 }
 
 /** Sequence exhaustion estimate */

@@ -9,7 +9,7 @@ import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
-const _logger = getLogger('timeline');
+const logger = getLogger('timeline');
 
 const DomainParamsSchema = z.object({
   domainId: z.string().uuid(),
@@ -18,6 +18,7 @@ const DomainParamsSchema = z.object({
 // Pagination schema with configurable limit
 const TimelineQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(200).optional().default(50),
+  offset: z.coerce.number().min(0).optional().default(0),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   action: z.enum(['create', 'update', 'delete', 'publish', 'archive']).optional(),
@@ -65,55 +66,64 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
       return errors.validationFailed(res, queryResult.error.issues);
     }
 
-    const { limit, startDate, endDate, action, entityType } = queryResult.data;
+    const { limit, offset, startDate, endDate, action, entityType } = queryResult.data;
 
-    // Build query with optional filters
-    let query = `
-      al.id, al.action, al.entity_type, al.entity_id,
-      al.created_at, d.name as domain_name
-      FROM activity_log al
-      LEFT JOIN domains d ON al.domain_id = d.id
-      WHERE al.org_id = $1
-    `;
+    // Build WHERE clause with optional filters
+    let whereClause = 'WHERE al.org_id = $1';
     const params: unknown[] = [orgId];
     let paramIndex = 2;
 
     if (startDate) {
-      query += ` AND al.created_at >= $${paramIndex++}`;
-      params.push(startDate.toISOString());
+      whereClause += ` AND al.created_at >= $${paramIndex++}`;
+      params.push(startDate);
     }
 
     if (endDate) {
-      query += ` AND al.created_at <= $${paramIndex++}`;
-      params.push(endDate.toISOString());
+      whereClause += ` AND al.created_at <= $${paramIndex++}`;
+      params.push(endDate);
     }
 
     if (action) {
-      query += ` AND al.action = $${paramIndex++}`;
+      whereClause += ` AND al.action = $${paramIndex++}`;
       params.push(action);
     }
 
     if (entityType) {
-      query += ` AND al.entity_type = $${paramIndex++}`;
+      whereClause += ` AND al.entity_type = $${paramIndex++}`;
       params.push(entityType);
     }
 
-    query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex}`;
-    params.push(limit);
+    // P1-1 FIX: Use COUNT(*) OVER() window function to get the true total matching
+    // rows alongside the paginated slice, without a second round-trip to the DB.
+    // P2-2 FIX: Pass Date objects directly instead of .toISOString() strings so
+    // the pg driver handles timestamptz correctly.
+    const { rows } = await pool.query(
+      `SELECT
+         al.id, al.action, al.entity_type, al.entity_id,
+         al.created_at, d.name AS domain_name,
+         COUNT(*) OVER() AS total_count
+       FROM activity_log al
+       LEFT JOIN domains d ON al.domain_id = d.id
+       ${whereClause}
+       ORDER BY al.created_at DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      [...params, limit, offset]
+    );
 
-    // Fetch recent activity across all domains
-    const { rows } = await pool.query(`SELECT ${query}`, params);
+    const total = rows.length > 0 ? Number(rows[0]?.['total_count'] ?? 0) : 0;
 
     return {
       events: rows.map(row => ({
-        id: row["id"],
-        action: row.action,
-        entityType: row.entity_type,
-        entityId: row.entity_id,
-        domainName: row.domain_name,
-        createdAt: row.created_at,
+        id: row['id'],
+        action: row['action'],
+        entityType: row['entity_type'],
+        entityId: row['entity_id'],
+        domainName: row['domain_name'],
+        createdAt: row['created_at'],
       })),
-      total: rows.length,
+      total,
+      limit,
+      offset,
       filters: { startDate, endDate, action, entityType },
     };
   });
@@ -156,54 +166,61 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
       return errors.validationFailed(res, queryResult.error.issues);
     }
 
-    const { limit, startDate, endDate, action, entityType } = queryResult.data;
+    const { limit, offset, startDate, endDate, action, entityType } = queryResult.data;
 
-    // Build query with optional filters
-    let query = `
-      al.id, al.action, al.entity_type, al.entity_id,
-      al.metadata, al.created_at
-      FROM activity_log al
-      WHERE al.domain_id = $1
-    `;
+    // Build WHERE clause with optional filters
+    let whereClause = 'WHERE al.domain_id = $1';
     const params: unknown[] = [domainId];
     let paramIndex = 2;
 
     if (startDate) {
-      query += ` AND al.created_at >= $${paramIndex++}`;
-      params.push(startDate.toISOString());
+      whereClause += ` AND al.created_at >= $${paramIndex++}`;
+      params.push(startDate);
     }
 
     if (endDate) {
-      query += ` AND al.created_at <= $${paramIndex++}`;
-      params.push(endDate.toISOString());
+      whereClause += ` AND al.created_at <= $${paramIndex++}`;
+      params.push(endDate);
     }
 
     if (action) {
-      query += ` AND al.action = $${paramIndex++}`;
+      whereClause += ` AND al.action = $${paramIndex++}`;
       params.push(action);
     }
 
     if (entityType) {
-      query += ` AND al.entity_type = $${paramIndex++}`;
+      whereClause += ` AND al.entity_type = $${paramIndex++}`;
       params.push(entityType);
     }
 
-    query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex}`;
-    params.push(limit);
+    // P1-1 FIX: COUNT(*) OVER() returns actual total; OFFSET enables cursor pagination.
+    // P2-2 FIX: Pass Date objects directly — pg handles timestamptz correctly.
+    const { rows } = await pool.query(
+      `SELECT
+         al.id, al.action, al.entity_type, al.entity_id,
+         al.metadata, al.created_at,
+         COUNT(*) OVER() AS total_count
+       FROM activity_log al
+       ${whereClause}
+       ORDER BY al.created_at DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      [...params, limit, offset]
+    );
 
-    // Fetch domain-specific activity
-    const { rows } = await pool.query(`SELECT ${query}`, params);
+    const total = rows.length > 0 ? Number(rows[0]?.['total_count'] ?? 0) : 0;
 
     return {
       events: rows.map(row => ({
-        id: row["id"],
-        action: row.action,
-        entityType: row.entity_type,
-        entityId: row.entity_id,
-        metadata: row.metadata,
-        createdAt: row.created_at,
+        id: row['id'],
+        action: row['action'],
+        entityType: row['entity_type'],
+        entityId: row['entity_id'],
+        metadata: row['metadata'],
+        createdAt: row['created_at'],
       })),
-      total: rows.length,
+      total,
+      limit,
+      offset,
       filters: { startDate, endDate, action, entityType },
     };
   });
