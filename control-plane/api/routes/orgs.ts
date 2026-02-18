@@ -64,8 +64,11 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     if (!ctx) {
     return errors.unauthorized(res);
     }
-    requireRole(ctx, ['admin','owner']);
+    // SECURITY FIX (order): Rate-limit before role check so that authenticated
+    // users with the wrong role cannot probe authorization state without
+    // consuming rate-limit quota (unlimited auth-enumeration attack vector).
     await rateLimit(`orgs:create:${ctx.userId}`, 20);
+    requireRole(ctx, ['admin','owner']);
 
     // SECURITY FIX: Validate org name with Zod
     const bodyResult = CreateOrgSchema.safeParse(req.body);
@@ -96,8 +99,9 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     if (!ctx) {
     return errors.unauthorized(res);
     }
-    requireRole(ctx, ['admin','owner']);
+    // SECURITY FIX (order): Rate-limit before role check (see POST /orgs for rationale).
     await rateLimit(`orgs:members:${ctx.userId}`, 50);
+    requireRole(ctx, ['admin','owner']);
 
     // SECURITY FIX (H08): Validate route params
     const paramsResult = OrgIdParamsSchema.safeParse(req.params);
@@ -141,8 +145,9 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     if (!ctx) {
     return errors.unauthorized(res);
     }
-    requireRole(ctx, ['admin','owner']);
+    // SECURITY FIX (order): Rate-limit before role check (see POST /orgs for rationale).
     await rateLimit(`orgs:invite:${ctx.userId}`, 30);
+    requireRole(ctx, ['admin','owner']);
 
     // SECURITY FIX (H08): Validate route params
     const paramsResult = OrgIdParamsSchema.safeParse(req.params);
@@ -184,8 +189,9 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     if (!ctx) {
     return errors.unauthorized(res);
     }
-    requireRole(ctx, ['admin','owner']);
+    // SECURITY FIX (order): Rate-limit before role check (see POST /orgs for rationale).
     await rateLimit(`orgs:members:add:${ctx.userId}`, 30);
+    requireRole(ctx, ['admin','owner']);
 
     // SECURITY FIX (H08): Validate route params
     const paramsResult = OrgIdParamsSchema.safeParse(req.params);

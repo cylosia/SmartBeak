@@ -82,8 +82,15 @@ export async function writeMultipleToOutbox(
   let paramIdx = 1;
 
   for (const event of events) {
+    // FIX (P2-paramidx): Use a local base index and explicit offsets instead of
+    // relying on post-increment side-effects inside a template literal.
+    // The previous `$${paramIdx++}` pattern is legal (ES spec guarantees
+    // left-to-right evaluation of template expressions) but is fragile: any
+    // refactor that reorders the expressions silently breaks parameter binding.
+    const base = paramIdx;
+    paramIdx += 5;
     placeholders.push(
-      `($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`
+      `($${base}, $${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`
     );
     values.push(
       event.name,

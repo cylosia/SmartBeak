@@ -297,6 +297,12 @@ export class OpenAIImageAdapter {
     if (mask && mask instanceof Buffer && mask.length > MAX_IMAGE_UPLOAD_BYTES) {
       throw new Error(`mask size ${mask.length} bytes exceeds maximum ${MAX_IMAGE_UPLOAD_BYTES} bytes (4MB)`);
     }
+    // FIX (P2-n): Validate n for editImage, matching the same guard in generate().
+    // DALL-E 2 edits accept n=1..10; sending 0 or negative produces a confusing
+    // OpenAI 400 error, and n>10 wastes quota without returning more images.
+    if (!Number.isInteger(n) || n < 1 || n > 10) {
+      throw new Error('n must be an integer between 1 and 10');
+    }
 
     this.logger.info('Editing image with OpenAI', context);
 
@@ -396,6 +402,10 @@ export class OpenAIImageAdapter {
     }
     if (image.length > MAX_IMAGE_UPLOAD_BYTES) {
       throw new Error(`image size ${image.length} bytes exceeds maximum ${MAX_IMAGE_UPLOAD_BYTES} bytes (4MB)`);
+    }
+    // FIX (P2-n): Validate n for createVariation, matching the same guard in generate().
+    if (!Number.isInteger(n) || n < 1 || n > 10) {
+      throw new Error('n must be an integer between 1 and 10');
     }
 
     this.logger.info('Creating image variation with OpenAI', context);
@@ -547,8 +557,11 @@ export class OpenAIImageAdapter {
     const size = options.size || '1024x1024';
     const n = options.n || 1;
 
+    // FIX (P2-nullish): Use ?? instead of || so that a hypothetical $0 cost
+    // entry is not incorrectly replaced with the default.  || treats 0 as
+    // falsy, silently returning 0.040 instead of 0.
     // eslint-disable-next-line security/detect-object-injection -- static lookup table with validated inputs
-    const costPerImage = costs[model]?.[quality]?.[size] || 0.040;
+    const costPerImage = costs[model]?.[quality]?.[size] ?? 0.040;
     return costPerImage * n;
   }
 }
