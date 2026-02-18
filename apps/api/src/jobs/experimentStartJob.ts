@@ -42,8 +42,12 @@ const ExperimentStartInputSchema = z.object({
   // Cap keys at 100 chars, values capped indirectly via the 50-key limit + 32KB total.
   metadata: z
     .record(z.string().max(100), z.unknown())
-    .refine((m: Record<string, unknown>) => JSON.stringify(m).length < 32_768, {
-      message: 'metadata exceeds 32 KB size limit',
+    // P2-7 AUDIT FIX: Wrap JSON.stringify in try/catch. Circular references would
+    // cause Zod to throw a TypeError instead of a clean validation failure.
+    .refine((m: Record<string, unknown>) => {
+      try { return JSON.stringify(m).length < 32_768; } catch { return false; }
+    }, {
+      message: 'metadata exceeds 32 KB size limit or is not serializable',
     })
     .optional(),
 });

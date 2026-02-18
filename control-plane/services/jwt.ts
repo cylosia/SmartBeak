@@ -5,7 +5,16 @@ import { z } from 'zod';
 import { getLogger } from '../../packages/kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
-import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken } from '../../packages/security/jwt';
+import {
+  rejectDisallowedAlgorithm,
+  verifyToken as securityVerifyToken,
+  // P1-2 AUDIT FIX: Import canonical type definitions from packages/security/jwt.ts
+  // instead of maintaining duplicate definitions. Previously, UserRole, JwtClaims,
+  // and UserRoleSchema were independently defined in both files. If a role was added
+  // to one but not the other, tokens would fail Zod validation with opaque 401 errors.
+  UserRoleSchema,
+} from '../../packages/security/jwt';
+import type { UserRole, JwtClaims } from '../../packages/security/jwt';
 
 
 /**
@@ -21,35 +30,17 @@ import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken } from '.
 
 const logger = getLogger('JwtService');
 
-// Type exports at top level
-// P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
-// SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
-export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
-export interface JwtClaims {
-  sub: string;
-  role: UserRole;
-  // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
-  orgId: string;
-  aud?: string;
-  iss?: string;
-  jti: string;
-  iat: number;
-  exp: number;
-  boundOrgId?: string;
-}
+// P1-2 AUDIT FIX: Re-export types from the canonical source (packages/security/jwt.ts)
+// for backward compatibility with existing imports from this module.
+export type { UserRole, JwtClaims };
 
 // Re-export from unified auth package for backward compatibility
 export {
   AuthError as JwtError,
 };
 
-// ============================================================================
-// Zod Schemas
-// ============================================================================
-
-// P0-FIX: Added 'owner' to match packages/security/jwt.ts and prevent Zod validation
-// failures when creating tokens for org owners.
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner', 'buyer']);
+// P1-2 AUDIT FIX: Re-export UserRoleSchema from canonical source
+export { UserRoleSchema };
 
 export const JwtClaimsInputSchema = z.object({
   sub: z.string().min(1).max(256),
@@ -239,12 +230,16 @@ function getKeys(): string[] {
   );
   }
 
-  // Prevent use of placeholder values
-  const placeholderPatterns = /placeholder|example|test|demo|secret|key/i;
-  if (placeholderPatterns.test(key1) || key1.includes('your_')) {
+  // P1-7 AUDIT FIX: Tightened placeholder detection. The previous regex
+  // /placeholder|example|test|demo|secret|key/i had false positives: a hex key
+  // like "f8a2key91c3..." was rejected because it contains "key". Now we reject
+  // only keys that are ENTIRELY composed of known placeholder patterns (e.g.,
+  // "your_secret_key_here") or have very low entropy (repeating chars).
+  const placeholderExactPatterns = /^(placeholder|example|test|demo|secret|change[-_]?me|your[-_]?(secret|key|token)[-_]?.*|key[-_]?here.*)$/i;
+  if (placeholderExactPatterns.test(key1.trim()) || key1.includes('your_')) {
   throw new InvalidKeyError('JWT_KEY_1 appears to be a placeholder value. Please set a secure random key.');
   }
-  if (placeholderPatterns.test(key2) || key2.includes('your_')) {
+  if (placeholderExactPatterns.test(key2.trim()) || key2.includes('your_')) {
   throw new InvalidKeyError('JWT_KEY_2 appears to be a placeholder value. Please set a secure random key.');
   }
 

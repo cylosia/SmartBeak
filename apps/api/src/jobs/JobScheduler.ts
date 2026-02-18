@@ -668,7 +668,16 @@ export class JobScheduler extends EventEmitter {
   }
 
   // P1-FIX: Validate payload size to prevent Redis OOM
-  const payloadSize = JSON.stringify(data).length;
+  // P1-5 AUDIT FIX: Wrap in try/catch — JSON.stringify throws on circular references
+  // or BigInt values, producing an unhelpful TypeError instead of a clear error.
+  let payloadSize: number;
+  try {
+    payloadSize = JSON.stringify(data).length;
+  } catch (serializationError) {
+    throw new Error(
+      `Job data cannot be serialized to JSON: ${serializationError instanceof Error ? serializationError.message : String(serializationError)}`
+    );
+  }
   if (payloadSize > this.MAX_PAYLOAD_SIZE) {
     throw new Error(
       `Job payload too large: ${payloadSize} bytes (max: ${this.MAX_PAYLOAD_SIZE})`

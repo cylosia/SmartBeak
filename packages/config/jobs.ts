@@ -83,8 +83,14 @@ export const contentIdeaConfig = {
 export const exportConfig = {
   /** Maximum rows per export file */
   maxRowsPerFile: parseIntEnv('EXPORT_MAX_ROWS_PER_FILE', 10000),
+  // P2-4 AUDIT FIX: Validate the format against allowed values. Previously any
+  // string (e.g., 'xml') was accepted silently, causing runtime errors.
   /** Default export format */
-  defaultFormat: process.env['EXPORT_DEFAULT_FORMAT'] || 'json',
+  defaultFormat: (() => {
+    const allowed = ['json', 'csv', 'pdf', 'markdown'] as const;
+    const val = process.env['EXPORT_DEFAULT_FORMAT'] || 'json';
+    return allowed.includes(val as typeof allowed[number]) ? val : 'json';
+  })(),
   /** Export file retention in days */
   retentionDays: parseIntEnv('EXPORT_RETENTION_DAYS', 7),
 } as const;

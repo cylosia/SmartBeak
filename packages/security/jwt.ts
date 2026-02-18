@@ -341,8 +341,10 @@ export function verifyToken(
   // Reject disallowed algorithms before attempting signature verification
   rejectDisallowedAlgorithm(token);
 
-  // SECURITY FIX: Constant-time verification to prevent timing attacks
-  // Process all keys regardless of success/failure to maintain consistent timing
+  // P2-8 AUDIT FIX: Updated comment. This loop tries all keys to support key
+  // rotation. It is NOT cryptographically constant-time — jwt.verify() does
+  // different work for success vs failure paths. The timing reveals which key
+  // matched, but that is not secret material (the key index is not a secret).
   let successResult: JwtClaims | null = null;
   let lastError: Error | null = null;
 

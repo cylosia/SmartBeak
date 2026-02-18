@@ -340,17 +340,20 @@ async function insertBatch(
   );
   }
 
+  // P1-3 AUDIT FIX: Removed withRetry wrapper. Retrying an INSERT inside an active
+  // Knex transaction is dangerous: if the first attempt succeeds but the response is
+  // lost (network blip), the retry re-inserts, producing duplicate rows. Transaction
+  // rollback already handles transient errors at the outer level.
+  // Added ON CONFLICT (id) DO NOTHING for idempotent inserts.
   const query = `
   INSERT INTO ${tableName} (
     domain_id, id, title, description, target_keywords, content_type,
     estimated_read_time, suggested_outline, created_at, idempotency_key
   ) VALUES ${placeholders.join(', ')}
+  ON CONFLICT (id) DO NOTHING
   `;
 
-  await withRetry(
-  () => trx.raw(query, values),
-  { maxRetries: 3, initialDelayMs: 500 }
-  );
+  await trx.raw(query, values);
 
   logger.debug('Batch insert completed', {
   batchSize: batch.length,

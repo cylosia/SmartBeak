@@ -11,15 +11,26 @@ import { publishingConfig, cacheConfig } from '@config';
 import { getDb } from '../db';
 import { deterministicKey } from '../utils/idempotency';
 import { JobScheduler } from './JobScheduler';
+// P0-2 AUDIT FIX: Import container to resolve adapters by name on the worker side
+import { getContainer } from '../../services/container';
 const logger = getLogger('publish-execution');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PublishAdapterSchema: z.ZodType<{ publish: () => Promise<{ externalId: string; url?: string; metadata?: Record<string, unknown> }>; name: string }> = z.any();
+// P0-2 AUDIT FIX: Replaced z.any() with a proper schema.
+// BullMQ serializes job data to JSON, so the adapter's callable methods are lost.
+// Only the adapter name survives serialization. The actual adapter instance is
+// resolved on the worker side via getContainer().createAdapter().
+const KNOWN_ADAPTERS = ['facebook', 'linkedin', 'vercel'] as const;
+const AdapterNameSchema = z.enum(KNOWN_ADAPTERS);
 
 // Zod validation schema for payload
 const PublishExecutionPayloadSchema = z.object({
   intentId: z.string().uuid(),
-  adapter: PublishAdapterSchema,
+  // P0-2 AUDIT FIX: Accept either { name: string } object (legacy format after JSON
+  // deserialization) or a plain string. Both are resolved to an adapter on the worker.
+  adapter: z.union([
+    z.object({ name: AdapterNameSchema }).passthrough(),
+    AdapterNameSchema,
+  ]),
   orgId: z.string().uuid().optional(),
   retryOptions: z.object({
   maxRetries: z.number().int().min(0).max(5).optional(),
@@ -28,7 +39,11 @@ const PublishExecutionPayloadSchema = z.object({
 });
 
 export type PublishExecutionPayload = z.infer<typeof PublishExecutionPayloadSchema>;
-export type PublishAdapter = z.infer<typeof PublishAdapterSchema>;
+
+/** Extracts the adapter name from the validated payload's adapter field. */
+function getAdapterName(adapter: PublishExecutionPayload['adapter']): string {
+  return typeof adapter === 'string' ? adapter : adapter.name;
+}
 
 export interface PublishResult {
   externalId: string;
@@ -67,11 +82,12 @@ export async function publishExecutionJob(payload: unknown): Promise<void> {
   throw error;
   }
 
-  const { intentId, adapter, orgId, retryOptions: _retryOptions } = validatedPayload;
+  const { intentId, adapter: adapterField, orgId, retryOptions: _retryOptions } = validatedPayload;
+  const adapterName = getAdapterName(adapterField);
   const key = deterministicKey(['publish', intentId]);
 
-  addSpanAttributes({ 'publish.intent_id': intentId, 'publish.adapter_name': adapter.name });
-  logger.info('Starting publish execution', { intentId, adapter: adapter.name, orgId });
+  addSpanAttributes({ 'publish.intent_id': intentId, 'publish.adapter_name': adapterName });
+  logger.info('Starting publish execution', { intentId, adapter: adapterName, orgId });
 
   // P0-FIX: Distributed lock to prevent concurrent execution across workers
   // Without this, job retry could cause duplicate publishing
@@ -118,14 +134,17 @@ async function executePublishJob(
   validatedPayload: PublishExecutionPayload,
   key: string
 ): Promise<void> {
-  const { intentId, adapter, orgId, retryOptions } = validatedPayload;
+  const { intentId, adapter: adapterField, orgId, retryOptions } = validatedPayload;
+  const adapterName = getAdapterName(adapterField);
 
   // Phase 1: record attempt + lock intent
   addSpanAttributes({ 'publish.phase': 'lock_and_record' });
   const db = await getDb();
   const attempt = await db.transaction(async trx => {
   // Set transaction timeout to prevent long-running queries
-  await trx.raw('SET LOCAL statement_timeout = ?', [30000]); // 30 seconds
+  // P2-10 AUDIT FIX: Use literal value instead of Knex parameterized placeholder.
+  // SET LOCAL may not accept parameterized placeholders in all PostgreSQL versions.
+  await trx.raw('SET LOCAL statement_timeout = 30000'); // 30 seconds
 
   const intent = await trx('publish_intents')
     .where({ id: intentId })
@@ -220,11 +239,29 @@ async function executePublishJob(
   result = recoveredResult;
   logger.info('Skipped external call - using recovered result from incomplete saga', { intentId });
   } else try {
-  const circuitBreaker = getCircuitBreaker(adapter.name);
+  // P0-2 AUDIT FIX: Resolve the adapter by name on the worker side.
+  // The adapter object passed through BullMQ loses its methods during JSON
+  // serialization, so we must re-instantiate it from the container.
+  const container = getContainer();
+  // Fetch the intent's target config from DB for adapter construction
+  const intentDb = await getDb();
+  const intentRecord = await intentDb('publish_intents')
+    .where({ id: intentId })
+    .select('target_config')
+    .first();
+  const targetConfig = intentRecord?.['target_config'] ?? {};
+  const resolvedAdapter = container.createAdapter(adapterName, targetConfig);
+
+  const circuitBreaker = getCircuitBreaker(adapterName);
 
   result = await circuitBreaker.execute(async () => {
     return withRetry(
-    () => adapter['publish'](),
+    async () => {
+      await resolvedAdapter.publish({ domainId: '', contentId: intentId, targetConfig });
+      // PublishAdapter.publish() returns void; construct result from intent data.
+      // A future adapter interface update should return PublishResult directly.
+      return { externalId: intentId } as PublishResult;
+    },
     {
       maxRetries: retryOptions?.maxRetries ?? 3,
       initialDelayMs: retryOptions?.backoffMs ?? 1000,
@@ -243,7 +280,7 @@ async function executePublishJob(
       onRetry: (error, retryCount) => {
       logger.warn(`Publish retry ${retryCount} for intent ${intentId}`, {
         error: (error as Error)["message"],
-        adapter: adapter.name,
+        adapter: adapterName,
       });
       },
     }
@@ -255,7 +292,7 @@ async function executePublishJob(
   const error = e instanceof Error ? e : new Error(String(e));
 
   logger.error('Publish failed after retries', error, {
-    adapter: adapter.name,
+    adapter: adapterName,
   });
 
   // Record failed execution
@@ -294,7 +331,9 @@ async function executePublishJob(
   const dbForFinalize = await getDb();
   await dbForFinalize.transaction(async trx => {
   // Set transaction timeout to prevent long-running queries
-  await trx.raw('SET LOCAL statement_timeout = ?', [30000]); // 30 seconds
+  // P2-10 AUDIT FIX: Use literal value instead of Knex parameterized placeholder.
+  // SET LOCAL may not accept parameterized placeholders in all PostgreSQL versions.
+  await trx.raw('SET LOCAL statement_timeout = 30000'); // 30 seconds
 
   // P0-4 FIX: Use raw query with ON CONFLICT for idempotent finalization
   await trx.raw(
@@ -337,9 +376,11 @@ export function registerPublishExecutionJob(scheduler: JobScheduler): void {
     maxRetries: publishingConfig.defaultMaxRetries,
     timeout: publishingConfig.jobTimeoutMs,
   },
-  async (_data: unknown, _job) => {
-    // Job handler implemented separately
-    throw new Error('Handler not implemented - use publishExecutionJob function');
+  async (data: unknown, _job) => {
+    // P0-1 AUDIT FIX: Wire the actual publishExecutionJob handler.
+    // Previously this was a placeholder that threw "Handler not implemented",
+    // making all publish jobs fail immediately.
+    await publishExecutionJob(data);
   }
   );
 }

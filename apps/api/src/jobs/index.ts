@@ -6,6 +6,7 @@ import { registerContentIdeaJob } from './contentIdeaGenerationJob';
 import { JobScheduler } from './JobScheduler';
 import { registerDomainExportJob } from './domainExportJob';
 import { getLogger } from '@kernel/logger';
+import { jobConfig } from '@config';
 
 const logger = getLogger('Jobs');
 
@@ -38,13 +39,18 @@ export function initializeJobScheduler(redisUrl?: string, pool?: Pool) {
     registerContentIdeaJob(scheduler, pool);
   }
   registerDomainExportJob(scheduler);
-  registerFeedbackIngestJob(scheduler);
+  // P0-3 AUDIT FIX: feedbackIngestJob always throws NotImplementedError, wasting
+  // retries and flooding error logs. Gated behind env flag until implementation is ready.
+  if (process.env['ENABLE_FEEDBACK_INGEST'] === 'true') {
+    registerFeedbackIngestJob(scheduler);
+  }
   registerPublishExecutionJob(scheduler);
   registerExperimentStartJob(scheduler);
   // Start workers
   // P0-FIX: Prevent worker storm on restart
+  // P2-2 AUDIT FIX: Use jobConfig.workerConcurrency instead of hardcoded 5
   if (!scheduler.isRunning()) {
-    scheduler.startWorkers(5);
+    scheduler.startWorkers(jobConfig.workerConcurrency);
   }
   logger.info('Scheduler initialized with all registered jobs');
   return scheduler;
@@ -68,8 +74,11 @@ export const QUEUES = {
  * MEDIUM FIX M4: Proper job priority inheritance
  */
 export const JOB_DEFINITIONS = {
+  // P2-1 AUDIT FIX: Queue was 'ai-tasks' but registerContentIdeaJob uses 'content'.
+  // Synchronized to match the actual registration to prevent orphaned jobs if
+  // JOB_DEFINITIONS is used to schedule manually.
   'content-idea-generation': {
-    queue: QUEUES.AI_TASKS,
+    queue: 'content',
     priority: 'normal',
     maxRetries: 2,
     timeout: 120000,

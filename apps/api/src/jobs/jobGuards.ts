@@ -53,9 +53,13 @@ export interface KnexQueryBuilder<T> {
 export async function assertOrgCapacity(db: Database, orgId: string): Promise<void> {
   logger.debug('Checking org capacity', { orgId, maxActiveJobs: MAX_ACTIVE_JOBS_PER_ORG });
 
+  // P1-1 AUDIT FIX: Query org_id instead of entity_id. The job_executions table
+  // stores the intent/entity ID in entity_id and the org ID in org_id. Previously
+  // this queried entity_id = orgId which never matched any publish jobs (they store
+  // intentId in entity_id), making the concurrency limit completely ineffective.
   const countResult = await db('job_executions')
   .where({ status: 'started' })
-  .andWhere({ entity_id: orgId })["count"]();
+  .andWhere({ org_id: orgId })["count"]();
 
   // P2-2 FIX: Check array is non-empty before accessing index 0
   if (!countResult.length) {
@@ -112,9 +116,10 @@ export async function checkOrgCapacity(db: Database, orgId: string): Promise<boo
 * Get current active job count for org
 */
 export async function getOrgActiveJobCount(db: Database, orgId: string): Promise<number> {
+  // P1-1 AUDIT FIX: Use org_id instead of entity_id (see assertOrgCapacity fix above)
   const countResult = await db('job_executions')
   .where({ status: 'started' })
-  .andWhere({ entity_id: orgId })["count"]();
+  .andWhere({ org_id: orgId })["count"]();
 
   // P2-2 FIX: Check array is non-empty before accessing index 0
   if (!countResult.length) {

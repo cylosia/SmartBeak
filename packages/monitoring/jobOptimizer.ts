@@ -280,7 +280,9 @@ export class JobOptimizer extends EventEmitter {
   * @returns Optimal priority for current time
   */
   getOptimalPriority(requestedPriority?: JobPriority): JobPriority {
-  const hour = new Date().getHours();
+  // P2-6 AUDIT FIX: Use UTC to ensure consistent priority windows across
+  // multi-region deployments. getHours() returns server-local timezone.
+  const hour = new Date().getUTCHours();
 
   for (const window of this.scheduledWindows) {
     if (hour >= window.startHour && hour < window.endHour) {
@@ -387,12 +389,18 @@ export class JobOptimizer extends EventEmitter {
   markCompleted(jobName: string): void {
   this.completedJobs.set(jobName, new Date());
 
-  // Clean up old entries
+  // P1-8 AUDIT FIX: Collect stale keys first, then delete after iteration.
+  // Deleting from a Map/LRUCache during iteration may skip entries depending
+  // on the implementation.
   const oneHourAgo = new Date(Date.now() - 3600000);
+  const staleKeys: string[] = [];
   for (const [name, time] of this.completedJobs.entries()) {
     if (time < oneHourAgo) {
-    this.completedJobs.delete(name);
+    staleKeys.push(name);
     }
+  }
+  for (const key of staleKeys) {
+    this.completedJobs.delete(key);
   }
   }
 
@@ -426,9 +434,12 @@ export class JobOptimizer extends EventEmitter {
   for (const [_key, groupItems] of groups) {
     for (let i = 0; i < groupItems.length; i += batchSize) {
     const batch = groupItems.slice(i, i + batchSize);
+    // P1-4 AUDIT FIX: Previously cast JobData[] (array) to JobData (Record) via
+    // `as unknown as JobData`, causing downstream code to receive an array pretending
+    // to be a Record. Wrap the batch in an object to maintain the Record contract.
     await this.scheduleWithCoalescing(
     jobName,
-    batch as unknown as JobData,
+    { items: batch } as JobData,
     { priority: 'background' }
     );
     }

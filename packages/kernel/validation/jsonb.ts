@@ -134,7 +134,15 @@ export function truncateJSONB(
   data: Record<string, unknown>,
   maxSize: number = MAX_JSONB_SIZE
 ): Record<string, unknown> {
-  const jsonString = JSON.stringify(data);
+  // P2-3 AUDIT FIX: JSON.stringify can throw on circular references. Unlike
+  // calculateJSONBSize and serializeForJSONB (which have try/catch), this function
+  // was unguarded. Return a fallback object instead of crashing.
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(data);
+  } catch {
+    return { _error: 'Data cannot be serialized', _truncated: true };
+  }
   const sizeInBytes = Buffer.byteLength(jsonString, 'utf8');
 
   if (sizeInBytes <= maxSize) {
