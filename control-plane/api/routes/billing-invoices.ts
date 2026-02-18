@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
-import { z } from 'zod';
 
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
@@ -11,23 +10,15 @@ import { errors } from '@errors/responses';
 
 const logger = getLogger('billing-invoices');
 
-const FormatQuerySchema = z.object({
-  format: z.enum(['csv', 'pdf']).default('csv')
+// P1-FIX: Initialize Stripe eagerly at module load, not lazily per-request.
+// The previous lazy-singleton used a non-atomic check-then-assign that allowed
+// concurrent requests to each create their own Stripe instance, leaking HTTP
+// agents and file descriptors under load. Eager init also surfaces missing
+// credentials immediately at startup instead of on the first billing request.
+import Stripe from 'stripe';
+const stripe = new Stripe(billingConfig.stripeSecretKey, {
+  apiVersion: '2023-10-16',
 });
-
-// P1-FIX: Create Stripe client once at module level instead of per-request.
-// Stripe SDK initializes HTTP agent, retry logic, etc. — creating it per request
-// causes memory churn and potential file descriptor exhaustion under load.
-let stripeClient: import('stripe').default | null = null;
-async function getStripeClient(): Promise<import('stripe').default> {
-  if (!stripeClient) {
-    const Stripe = (await import('stripe')).default;
-    stripeClient = new Stripe(billingConfig.stripeSecretKey, {
-      apiVersion: '2023-10-16',
-    });
-  }
-  return stripeClient;
-}
 
 export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /billing/invoices - List invoices for the organization
@@ -51,9 +42,6 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     if (!stripeCustomerId) {
     return { invoices: [] };
     }
-
-    // P1-FIX: Use shared Stripe singleton instead of per-request instantiation
-    const stripe = await getStripeClient();
 
     const invoices = await stripe.invoices.list({
     customer: stripeCustomerId,
@@ -81,81 +69,17 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
 
     return { invoices: formattedInvoices };
   } catch (error) {
+    // P2-FIX: Removed silent swallow of 'Stripe'-message errors. Any error whose
+    // message contained "Stripe" was returned as an empty invoice list with no
+    // logging — hiding API key rotations, timeouts, and config failures in prod.
     logger.error('Error fetching invoices', error instanceof Error ? error : new Error(String(error)));
-
-    // Return empty array if Stripe is not configured
-    if (error instanceof Error && error.message.includes('Stripe')) {
-    return { invoices: [] };
-    }
-
     return errors.internal(res, 'Failed to fetch invoices');
   }
   });
 
-  // GET /billing/invoices/export - Export invoices (CSV/PDF)
-  app.get('/billing/invoices/export', async (req, res) => {
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin']);
-  await rateLimit('billing:invoices:export', 20, req, res);
-
-  try {
-    const { format } = FormatQuerySchema.parse(req.query);
-
-    // Fetch invoices
-    const { rows: orgRows } = await pool.query(
-    'SELECT stripe_customer_id FROM organizations WHERE id = $1',
-    [ctx["orgId"]]
-    );
-
-    const stripeCustomerId = orgRows[0]?.stripe_customer_id;
-
-    if (!stripeCustomerId) {
-    return errors.notFound(res, 'Billing data');
-    }
-
-    // P1-FIX: Use shared Stripe singleton
-    const stripe = await getStripeClient();
-
-    const invoices = await stripe.invoices.list({
-    customer: stripeCustomerId,
-    limit: 100
-    });
-
-    if (format === 'csv') {
-    // Generate CSV with injection protection
-    const csvHeader = 'Invoice Number,Date,Amount,Currency,Status,Description\n';
-    const csvRows = invoices.data.map(inv => {
-    // SECURITY FIX: Sanitize fields to prevent CSV injection
-    const sanitize = (field: string | null | undefined): string => {
-    if (!field) return '';
-    // Escape quotes and wrap in quotes
-    let sanitized = field.replace(/"/g, '""');
-    // SECURITY: Prefix formulas to prevent injection
-    if (/^[=+\-@\t\r|]/.test(sanitized)) {
-        sanitized = "'" + sanitized;
-    }
-    return `"${sanitized}"`;
-    };
-
-    return [
-    sanitize(inv.number),
-    sanitize(new Date(inv.created * 1000).toISOString()),
-    sanitize(String(inv.amount_paid / 100)),
-    sanitize(inv.currency),
-    sanitize(inv.status),
-    sanitize(inv.description),
-    ].join(',');
-    }).join('\n');
-
-    void res.header('Content-Type', 'text/csv');
-    void res.header('Content-Disposition', "attachment; filename='invoices.csv'");
-    return res.type('text/csv').send(csvHeader + csvRows);
-    }
-
-    return errors.badRequest(res, 'Unsupported format. Use csv.');
-  } catch (error) {
-    logger.error('Error exporting invoices', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to export invoices');
-  }
-  });
+  // P2-FIX: Removed duplicate GET /billing/invoices/export registration.
+  // The canonical implementation lives in billingInvoiceExport.ts and is
+  // registered there with its own dedicated plugin. Having two registrations
+  // caused the second one loaded to shadow the first, producing unpredictable
+  // routing behaviour depending on plugin load order.
 }

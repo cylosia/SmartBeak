@@ -77,6 +77,29 @@ export function validateUrl(url: unknown, name: string): string {
 }
 
 /**
+ * P2-FIX: Extracted from billingStripe.ts and billingPaddle.ts where it was
+ * duplicated verbatim. A single canonical copy prevents the two routes drifting
+ * when security fixes are applied to one but not the other.
+ *
+ * Strips any keys not in `allowed` from `input`, preventing mass-assignment.
+ * Complements (rather than replaces) Zod `.strict()` which rejects unknown
+ * fields at parse time — this function is a defence-in-depth runtime guard.
+ */
+export function whitelistFields<T extends Record<string, unknown>>(
+  input: T,
+  allowed: readonly string[]
+): Partial<T> {
+  const result: Partial<T> = {};
+  for (const key of allowed) {
+    if (key in input) {
+      const k = key as keyof T;
+      result[k] = input[k];
+    }
+  }
+  return result;
+}
+
+/**
  * Validates that a value is an array with items matching a validator function
  * @param arr - The array to validate
  * @param validator - Function to validate each item

@@ -6,6 +6,7 @@ import { getDb } from '../db';
 import { optionalAuthFastify } from '@security/auth';
 import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
+import { rateLimitMiddleware } from '../middleware/rateLimiter';
 
 const logger = getLogger('BuyerRoi');
 
@@ -105,12 +106,20 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
     created_at: new Date(),
   });
   } catch (error) {
+  // P1-FIX: Do NOT rethrow audit failures. Audit logging is non-critical; its
+  // failure must never break the user-facing request. The previous rethrow caused
+  // the route handler to return 500 on any transient DB blip during audit insert,
+  // and allowed DoS by filling/locking the audit_events table.
   logger.error('Failed to record audit event', error instanceof Error ? error : new Error(String(error)));
-  throw error;
   }
 }
 
 export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
+  // P1-FIX: Apply rate limiting before auth. This endpoint runs a JOIN across
+  // content_roi_models + content fetching up to 10 000 rows. Without a rate limit
+  // an authenticated attacker can issue it in a tight loop, exhausting DB CPU.
+  app.addHook('onRequest', rateLimitMiddleware('strict'));
+
   app.get<{
   Querystring: BuyerRoiQueryType;
   Reply: RoiSummaryResponse | ErrorResponse;

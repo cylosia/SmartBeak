@@ -32,7 +32,6 @@ export type QueryType = z.infer<typeof QuerySchema>;
 export interface JwtClaims {
   sub?: string | undefined;
   orgId?: string | undefined;
-  stripeCustomerId?: string | undefined;
   [key: string]: unknown;
 }
 
@@ -40,12 +39,28 @@ type AuthenticatedRequest = FastifyRequest & {
   user: {
   id?: string | undefined;
   orgId?: string | undefined;
-  stripeCustomerId?: string | undefined;
   };
 };
 
+// P0-FIX: Removed stripeCustomerId from InvoiceResponse — now returns a safe DTO.
+export interface InvoiceDto {
+  id: string | null;
+  number: string | null;
+  amountPaid: number;
+  amountDue: number;
+  currency: string;
+  status: Stripe.Invoice.Status | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+  createdAt: string | null;
+  dueDate: string | null;
+  description: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+}
+
 export interface InvoiceResponse {
-  invoices: Stripe.Invoice[];
+  invoices: InvoiceDto[];
   hasMore: boolean;
 }
 
@@ -56,7 +71,6 @@ export interface ErrorResponse {
 
 /**
  * Verify user membership in organization
- * P1-FIX: Added org membership verification for billing routes
  */
 async function verifyOrgMembership(userId: string, orgId: string): Promise<boolean> {
   const db = await getDb();
@@ -80,11 +94,9 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     // Use unified auth package for token verification
     const claims = verifyToken(token) as JwtClaims;
 
-    // P1-FIX: Store full user context including id and orgId for membership verification
     (req as AuthenticatedRequest).user = {
       id: claims.sub,
       orgId: claims.orgId,
-      stripeCustomerId: claims.stripeCustomerId
     };
   } catch (error) {
     if (error instanceof TokenExpiredError) {
@@ -97,16 +109,12 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
   }
   });
 
-  // P1-FIX: Membership verification hook
-  // SECURITY AUDIT FIX: Require orgId for billing routes. Previously, requests
-  // without orgId skipped the membership check entirely, allowing IDOR via
-  // a JWT with stripeCustomerId but no orgId.
+  // Require orgId and verify membership before any route handler runs.
   app.addHook('onRequest', async (req, reply) => {
     const authReq = req as AuthenticatedRequest;
     const userId = authReq.user?.id;
     const orgId = authReq.user?.orgId;
 
-    // Require both userId and orgId for billing access
     if (!userId) {
       return errors.unauthorized(reply, 'Authentication required');
     }
@@ -114,7 +122,6 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
       return errors.forbidden(reply, 'Organization context required for billing access');
     }
 
-    // Verify user is a member of the organization
     const hasMembership = await verifyOrgMembership(userId, orgId);
     if (!hasMembership) {
       return errors.forbidden(reply, 'Forbidden');
@@ -137,9 +144,23 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     }
 
     const { limit, startingAfter } = queryResult.data;
-    const customerId = authReq.user?.stripeCustomerId;
-    if (!customerId) {
+
+    // P0-FIX: Fetch stripeCustomerId from the database using the verified orgId.
+    // Never trust the JWT claim — an attacker with a valid token could supply any
+    // stripeCustomerId and pivot to another organization's invoice history (IDOR).
+    const orgId = authReq.user?.orgId;
+    if (!orgId) {
       return errors.unauthorized(reply);
+    }
+    const db = await getDb();
+    const orgRow = await db('organizations')
+      .where({ id: orgId })
+      .select('stripe_customer_id')
+      .first();
+    const customerId: string | undefined = orgRow?.['stripe_customer_id'];
+    if (!customerId) {
+      // Org has no Stripe customer yet — return empty list, not an error.
+      return reply.status(200).send({ invoices: [], hasMore: false });
     }
 
     const invoices = await stripe.invoices.list({
@@ -148,8 +169,27 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
     starting_after: startingAfter ?? undefined,
     } as Stripe.InvoiceListParams);
 
+    // P2-FIX: Map to a minimal DTO — the raw Stripe.Invoice type exposes sensitive
+    // internal fields (payment_intent, default_payment_method, customer_tax_ids,
+    // metadata, full line items) that must not reach the client.
+    const invoiceDtos: InvoiceDto[] = invoices.data.map((inv: Stripe.Invoice) => ({
+      id: inv.id,
+      number: inv.number,
+      amountPaid: inv.amount_paid,
+      amountDue: inv.amount_due,
+      currency: inv.currency,
+      status: inv.status,
+      hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
+      invoicePdf: inv.invoice_pdf ?? null,
+      createdAt: inv.created ? new Date(inv.created * 1000).toISOString() : null,
+      dueDate: inv.due_date ? new Date(inv.due_date * 1000).toISOString() : null,
+      description: inv.description ?? null,
+      periodStart: inv.period_start ? new Date(inv.period_start * 1000).toISOString() : null,
+      periodEnd: inv.period_end ? new Date(inv.period_end * 1000).toISOString() : null,
+    }));
+
     return reply.status(200).send({
-    invoices: invoices.data,
+    invoices: invoiceDtos,
     hasMore: invoices.has_more,
     });
   } catch (error) {

@@ -31,6 +31,28 @@ function validateInput(input: unknown): SeoCompletenessInput {
 * @returns A score between 0-100 representing SEO completeness
 * @throws Error if input validation fails
 */
+// P2-FIX: Read and validate weight/target constants ONCE at module load.
+// Previously computed inside the function body on every call, which:
+//   1. Re-parsed env vars on a hot path for no benefit.
+//   2. Silently produced NaN: Number('abc') === NaN, propagating through all
+//      arithmetic and serialising to JSON null — corrupting buyer SEO reports.
+function readSeoEnv(key: string, defaultVal: number): number {
+  const raw = process.env[key];
+  if (raw === undefined || raw === null || raw === '') return defaultVal;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`${key} must be a non-negative finite number, got: "${raw}"`);
+  }
+  return n;
+}
+
+const PAGE_WEIGHT = readSeoEnv('SEO_PAGE_WEIGHT', 25);
+const PAGE_TARGET = readSeoEnv('SEO_PAGE_TARGET', 50);
+const CLUSTER_WEIGHT = readSeoEnv('SEO_CLUSTER_WEIGHT', 25);
+const CLUSTER_TARGET = readSeoEnv('SEO_CLUSTER_TARGET', 20);
+const FRESHNESS_WEIGHT = readSeoEnv('SEO_FRESHNESS_WEIGHT', 25);
+const SCHEMA_WEIGHT = readSeoEnv('SEO_SCHEMA_WEIGHT', 25);
+
 export function computeSeoCompleteness(input: {
   pages: number;
   clusters: number;
@@ -40,17 +62,8 @@ export function computeSeoCompleteness(input: {
 
   const validated = validateInput(input);
 
-  // P1-FIX: Use ?? instead of || so that explicitly setting a weight to 0 works.
-  // With ||, Number('0') is falsy so it falls back to the default, making 0 unreachable.
-  const PAGE_WEIGHT = Number(process.env['SEO_PAGE_WEIGHT'] ?? 25);
-  const PAGE_TARGET = Number(process.env['SEO_PAGE_TARGET'] ?? 50);
-  const CLUSTER_WEIGHT = Number(process.env['SEO_CLUSTER_WEIGHT'] ?? 25);
-  const CLUSTER_TARGET = Number(process.env['SEO_CLUSTER_TARGET'] ?? 20);
-  const FRESHNESS_WEIGHT = Number(process.env['SEO_FRESHNESS_WEIGHT'] ?? 25);
-  const SCHEMA_WEIGHT = Number(process.env['SEO_SCHEMA_WEIGHT'] ?? 25);
-
   let score = 0;
-  // FIX: Division by zero protection - use safe division with targets
+  // Division by zero protection — use safe division with targets
   score += Math.min(
   PAGE_TARGET > 0 ? (validated.pages / PAGE_TARGET) * PAGE_WEIGHT : 0,
   PAGE_WEIGHT
