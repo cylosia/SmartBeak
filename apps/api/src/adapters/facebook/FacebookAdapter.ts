@@ -1,6 +1,9 @@
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
 import { validateUrlWithDns } from '@security/ssrf';
 import { apiConfig, timeoutConfig } from '@config';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('FacebookAdapter');
 
 /**
  * Facebook Publishing Adapter
@@ -231,7 +234,13 @@ export class FacebookAdapter {
     const targetUrl = `${this.baseUrl}/${validatedInput.pageId}/feed`;
     const ssrfCheck = await validateUrlWithDns(targetUrl);
     if (!ssrfCheck.allowed) {
-      throw new Error(`SSRF protection: request blocked — ${ssrfCheck.reason}`);
+      // P1 FIX: Do not include ssrfCheck.reason in the thrown error. The reason
+      // describes exactly why the URL was blocked (e.g., "DNS resolved to private IP
+      // 192.168.1.1"), giving an attacker iterative feedback for bypass attempts.
+      // Log internally; throw a generic message that reveals nothing about the policy.
+      // (The logger auto-redacts sensitive fields per @kernel/logger configuration.)
+      logger.error('SSRF check blocked Facebook API request', new Error(`SSRF: ${ssrfCheck.reason}`));
+      throw new Error('Facebook API request blocked by security policy');
     }
 
     let lastError: Error = new Error('Facebook publish: no attempts made');

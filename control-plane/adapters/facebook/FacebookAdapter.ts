@@ -50,7 +50,14 @@ export class FacebookAdapter implements PublishAdapter {
   const targetUrl = `${this.baseUrl}/${pageId}/feed`;
   const ssrfCheck = await validateUrlWithDns(targetUrl);
   if (!ssrfCheck.allowed) {
-  throw new Error(`SSRF check failed for Facebook API URL: ${ssrfCheck.reason}`);
+    // P1 FIX: Do NOT include ssrfCheck.reason in the thrown error. The reason
+    // string describes WHY the URL was blocked (e.g., "DNS resolved to private IP
+    // 192.168.1.1") which gives an attacker actionable feedback for iterative
+    // bypass attempts. Log the detail internally; throw a generic message.
+    this.logger.error('SSRF check failed for Facebook API URL', context, {
+      reason: ssrfCheck.reason,
+    });
+    throw new Error('Facebook API request blocked by security policy');
   }
 
   const startTime = Date.now();
