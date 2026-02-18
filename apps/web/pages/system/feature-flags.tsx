@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GetServerSideProps } from 'next';
 
 import { AppShell } from '../../components/AppShell';
@@ -42,6 +42,10 @@ export default function FeatureFlags() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
 
+  // F-7 FIX: Track any in-flight re-fetch triggered by handleToggle so it can be
+  // aborted if the component unmounts or a subsequent toggle fires first.
+  const refetchControllerRef = useRef<AbortController | null>(null);
+
   const fetchFlags = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(apiUrl('admin/flags'), { credentials: 'include', signal });
@@ -80,8 +84,12 @@ export default function FeatureFlags() {
         body: JSON.stringify({ value: newValue }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // Re-fetch to get updated timestamp
-      void fetchFlags();
+      // F-7 FIX: Re-fetch with an AbortController so setState is not called
+      // on an unmounted component if the component unmounts mid-request.
+      refetchControllerRef.current?.abort();
+      const ctrl = new AbortController();
+      refetchControllerRef.current = ctrl;
+      void fetchFlags(ctrl.signal);
     } catch {
       // Revert on failure
       setFlags(prev => prev.map(f => f.key === key ? { ...f, value: !newValue } : f));
@@ -167,10 +175,17 @@ export default function FeatureFlags() {
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  // F-1 FIX: Gate on the admin-protected `admin/flags` endpoint instead of the
+  // public `system/health` check. The `admin/flags` GET route requires
+  // `['owner', 'admin']` roles (enforced server-side in guardrails.ts).
+  // A non-admin authenticated user receives HTTP 403, which triggers the
+  // redirect below — preventing feature-flag management by regular users.
   try {
-    await authFetch(apiUrl('system/health'), { ctx });
+    await authFetch(apiUrl('admin/flags'), { ctx });
     return { props: {} };
   } catch {
+    // Redirect to /login for unauthenticated; /login will show an error for
+    // authenticated non-admins who were rejected with 403.
     return { redirect: { destination: '/login', permanent: false } };
   }
 };

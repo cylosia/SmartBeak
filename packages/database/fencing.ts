@@ -33,6 +33,22 @@ export async function validateFencingToken(
     throw new Error('resourceType and resourceId must be non-empty strings');
   }
 
+  // F-5 FIX: JavaScript `number` is an IEEE 754 double with 53-bit integer mantissa.
+  // Number.MAX_SAFE_INTEGER = 2^53 - 1 = 9_007_199_254_740_991.
+  // Distributed lock fencing tokens (e.g. Redlock) are monotonically-incrementing
+  // 64-bit integers; values above MAX_SAFE_INTEGER round silently to the nearest
+  // representable float. The rounded value fed into the PostgreSQL `fence_token < $3`
+  // comparison then produces wrong results — a stale lock holder passes as "current",
+  // corrupting the resource it should have been blocked from writing.
+  // Fail fast here rather than silently letting a corrupting write through.
+  if (!Number.isInteger(fencingToken) || fencingToken < 0 || fencingToken > Number.MAX_SAFE_INTEGER) {
+    throw new DatabaseError(
+      `validateFencingToken: fencingToken must be a safe non-negative integer ` +
+      `(received ${fencingToken}). For tokens that may exceed 2^53, migrate the ` +
+      `parameter type to bigint and pass token.toString() to the query.`
+    );
+  }
+
   const { rowCount } = await client.query(
     `INSERT INTO fence_tokens (resource_type, resource_id, fence_token, updated_at)
      VALUES ($1, $2, $3, NOW())

@@ -187,10 +187,15 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
       if (timeSinceLastFailure < this.resetTimeoutMs) {
         throw new Error(`Circuit open for ${this.name}`);
       }
-      // P1-1 FIX: Atomic half-open via stored probePromise.
-      // All concurrent requests share the same probe; no two requests race through.
+      // F-2 FIX: When the circuit is half-open and a probe is already in flight
+      // for ANOTHER caller's message, we must NOT return that probe's promise.
+      // Doing so would return the OTHER message's send result to this caller,
+      // silently losing this caller's email — the email is never actually sent.
+      //
+      // Instead, throw immediately so FallbackEmailSender can try the next provider
+      // for this request. The probe already in flight will close/reopen the circuit.
       if (this.probePromise) {
-        return this.probePromise;
+        throw new Error(`Circuit half-open for ${this.name}: probe in progress, try next provider`);
       }
       // This request becomes the probe
       this.probePromise = this.executeProbe(message).finally(() => {

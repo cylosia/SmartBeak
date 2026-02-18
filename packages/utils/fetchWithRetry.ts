@@ -78,11 +78,18 @@ function executeCacheWrite(
   timeoutMs: number
 ): void {
   const cacheWritePromise = (async (): Promise<void> => {
-    // P2-7 FIX: Skip caching if Content-Length indicates a large response
+    // P2-7 FIX: Skip caching if Content-Length indicates a large response.
+    // F-6 FIX: parseInt returns NaN for non-numeric headers (e.g. "chunked").
+    // NaN > MAX_CACHEABLE_BODY_SIZE is false, silently bypassing the cap and
+    // allowing an unbounded response body to be buffered into the in-process cache.
+    // Explicitly check isNaN so the guard works correctly for malformed headers.
     const contentLength = clonedResponse.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_CACHEABLE_BODY_SIZE) {
-      logger.debug(`Skipping cache for large response (${contentLength} bytes)`);
-      return;
+    if (contentLength) {
+      const parsedLength = parseInt(contentLength, 10);
+      if (!isNaN(parsedLength) && parsedLength > MAX_CACHEABLE_BODY_SIZE) {
+        logger.debug(`Skipping cache for large response (${parsedLength} bytes)`);
+        return;
+      }
     }
 
     const timeoutPromise = new Promise<never>((_, reject) => {
