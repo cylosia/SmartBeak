@@ -5,7 +5,7 @@
  * request lifecycle, and error handling.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach, afterAll } from 'vitest';
 import {
   WebPublishingAdapter,
   FetchTimeoutError,
@@ -13,6 +13,7 @@ import {
   unregisterRequestController,
   cancelRequest,
   cancelAllRequests,
+  stopControllerCleanup,
 } from '../WebPublishingAdapter';
 import type { PublishingContent, PublishingTarget } from '../PublishingAdapter';
 
@@ -60,6 +61,12 @@ describe('WebPublishingAdapter', () => {
       statusText: 'OK',
       json: async () => ({ id: 'pub-123', url: 'https://example.com/post/123' }),
     });
+  });
+
+  afterAll(() => {
+    // P2-1 FIX: Stop the module-level cleanup interval to prevent timer leaks
+    // in the Vitest test runner.
+    stopControllerCleanup();
   });
 
   afterEach(() => {
@@ -184,6 +191,35 @@ describe('WebPublishingAdapter', () => {
       await adapter.publish(validContent, target);
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[1].headers['x-api-key']).toBe('key-123');
+    });
+
+    it('should reject api-key auth when keyHeader is missing (P0-3b: silent auth bypass)', async () => {
+      const target: PublishingTarget = {
+        ...validTarget,
+        config: {
+          url: 'https://api.example.com/webhook',
+          auth: { type: 'api-key', token: 'key-123' }, // keyHeader missing
+        },
+      };
+      const result = await adapter.publish(validContent, target);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('api-key auth requires both keyHeader and token');
+      // Confirm no outbound request was made without auth
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should reject api-key auth when token is missing (P0-3b: silent auth bypass)', async () => {
+      const target: PublishingTarget = {
+        ...validTarget,
+        config: {
+          url: 'https://api.example.com/webhook',
+          auth: { type: 'api-key', keyHeader: 'x-api-key' }, // token missing
+        },
+      };
+      const result = await adapter.publish(validContent, target);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('api-key auth requires both keyHeader and token');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('should reject api-key auth with disallowed header (header injection)', async () => {

@@ -94,12 +94,13 @@ describe('Worker - Async/Concurrency Tests', () => {
       
       // Should not throw immediately due to setTimeout
       uncaughtExceptionHandler!(testError);
-      
-      // Process exit is delayed by 5 seconds
+
+      // P3-E FIX: worker.ts uses a 1-second grace period (setTimeout(..., 1000))
+      // before forcing exit — not 5 seconds. Advance by the correct duration.
       expect(processExitSpy).not.toHaveBeenCalled();
-      
-      // Fast-forward time
-      vi.advanceTimersByTime(5000);
+
+      // Fast-forward past the 1-second forced-exit grace period
+      vi.advanceTimersByTime(1000);
     });
   });
 

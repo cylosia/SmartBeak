@@ -87,9 +87,19 @@ export async function fetchWordPressPosts(
   throw new Error('HTTPS is required when using authentication credentials');
   }
 
-  // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
-  const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
-  const apiVersion = config.apiVersion || 'v2';
+  // TOCTOU FIX: Fail closed — do not fall back to attacker-controlled config.baseUrl
+  // if the SSRF library omits sanitizedUrl (e.g. a future API version change).
+  if (!urlCheck.sanitizedUrl) {
+    throw new Error('Internal: SSRF validation did not return a sanitized URL');
+  }
+  const baseUrl = urlCheck.sanitizedUrl;
+
+  const rawApiVersion = config.apiVersion || 'v2';
+  // P1-A FIX: Validate apiVersion to prevent path traversal (e.g. "../../wp-admin")
+  if (!/^v\d+$/.test(rawApiVersion)) {
+    throw new Error(`Invalid apiVersion: must match pattern v{number}, got: ${rawApiVersion}`);
+  }
+  const apiVersion = rawApiVersion;
   const url = new URL(`${baseUrl}/wp-json/wp/${apiVersion}/posts`);
   url.searchParams.set('per_page', String(perPage));
   url.searchParams.set('page', String(page));
@@ -120,7 +130,13 @@ export async function fetchWordPressPosts(
   // P2-RESPONSE-SIZE FIX: Reject oversized responses before buffering the body.
   assertResponseSizeOk(response);
 
-  const rawData = await response.json();
+  // P1-B FIX: Read body as text first to enforce size limit even when
+  // Content-Length is absent (e.g. chunked transfer encoding from hostile server).
+  const responseText = await response.text();
+  if (Buffer.byteLength(responseText, 'utf8') > MAX_RESPONSE_BYTES) {
+    throw new Error(`WordPress response body too large: exceeds ${MAX_RESPONSE_BYTES} bytes`);
+  }
+  const rawData: unknown = JSON.parse(responseText);
   if (!Array.isArray(rawData)) {
     throw new Error('Invalid response format: expected array');
   }
@@ -166,9 +182,18 @@ export async function createWordPressPost(
   throw new Error('HTTPS is required when using authentication credentials');
   }
 
-  // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
-  const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
-  const apiVersion = config.apiVersion || 'v2';
+  // TOCTOU FIX: Fail closed — do not fall back to attacker-controlled config.baseUrl.
+  if (!urlCheck.sanitizedUrl) {
+    throw new Error('Internal: SSRF validation did not return a sanitized URL');
+  }
+  const baseUrl = urlCheck.sanitizedUrl;
+
+  const rawApiVersion = config.apiVersion || 'v2';
+  // P1-A FIX: Validate apiVersion to prevent path traversal (e.g. "../../wp-admin")
+  if (!/^v\d+$/.test(rawApiVersion)) {
+    throw new Error(`Invalid apiVersion: must match pattern v{number}, got: ${rawApiVersion}`);
+  }
+  const apiVersion = rawApiVersion;
   const url = `${baseUrl}/wp-json/wp/${apiVersion}/posts`;
 
   const headers: Record<string, string> = {
@@ -209,7 +234,13 @@ export async function createWordPressPost(
   // P2-RESPONSE-SIZE FIX: Reject oversized responses before buffering the body.
   assertResponseSizeOk(response);
 
-  const rawData = await response.json();
+  // P1-B FIX: Read body as text first to enforce size limit even when
+  // Content-Length is absent (e.g. chunked transfer encoding from hostile server).
+  const responseText = await response.text();
+  if (Buffer.byteLength(responseText, 'utf8') > MAX_RESPONSE_BYTES) {
+    throw new Error(`WordPress response body too large: exceeds ${MAX_RESPONSE_BYTES} bytes`);
+  }
+  const rawData: unknown = JSON.parse(responseText);
   if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
     throw new Error('Invalid response format: expected object');
   }
@@ -257,9 +288,18 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-  // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
-  const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
-  const apiVersion = config.apiVersion || 'v2';
+  // TOCTOU FIX: Fail closed — do not fall back to attacker-controlled config.baseUrl.
+  if (!urlCheck.sanitizedUrl) {
+    return { healthy: false, latency: 0, error: 'Internal: SSRF validation did not return a sanitized URL' };
+  }
+  const baseUrl = urlCheck.sanitizedUrl;
+
+  const rawApiVersion = config.apiVersion || 'v2';
+  // P1-A FIX: Validate apiVersion to prevent path traversal (e.g. "../../wp-admin")
+  if (!/^v\d+$/.test(rawApiVersion)) {
+    return { healthy: false, latency: 0, error: `Invalid apiVersion: must match pattern v{number}, got: ${rawApiVersion}` };
+  }
+  const apiVersion = rawApiVersion;
   const url = `${baseUrl}/wp-json/wp/${apiVersion}/posts?per_page=1`;
   const headers: Record<string, string> = {
     'Accept': 'application/json',
@@ -304,9 +344,24 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
 /**
 * Parse WordPress content
 */
+// P2-2 FIX: Cap input size before applying any regex to prevent ReDoS.
+// The image regex `[^>]+src=` can catastrophically backtrack on malformed HTML
+// (e.g. a long string with no closing `>`) even with the iteration guard,
+// because the guard limits the NUMBER of matches, not backtracking within one.
+const MAX_PARSE_INPUT_BYTES = 2 * 1024 * 1024; // 2 MB
+
 export function parseWordPressContent(htmlContent: string): { text: string; images: string[] } {
   if (!htmlContent || typeof htmlContent !== 'string') {
   return { text: '', images: [] };
+  }
+
+  // P2-2 FIX: Reject oversized inputs before regex application to bound backtracking time.
+  if (Buffer.byteLength(htmlContent, 'utf8') > MAX_PARSE_INPUT_BYTES) {
+    logger.warn('parseWordPressContent: input truncated to prevent ReDoS', {
+      context: 'WordPressAdapter.parseWordPressContent',
+      sizeBytes: Buffer.byteLength(htmlContent, 'utf8'),
+    });
+    return { text: '', images: [] };
   }
 
   // P1-FIX: ReDoS - Simplified regex without catastrophic backtracking
@@ -326,7 +381,7 @@ export function parseWordPressContent(htmlContent: string): { text: string; imag
   }
 
   if (iterations >= MAX_ITERATIONS) {
-  logger.warn('Regex iteration limit reached, iterations: ' + iterations, { context: 'WordPressAdapter.parseWordPressContent' });
+  logger.warn('Regex iteration limit reached', { iterations, context: 'WordPressAdapter.parseWordPressContent' });
   }
 
   // Strip HTML tags for plain text
