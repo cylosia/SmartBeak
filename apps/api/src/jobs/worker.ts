@@ -50,7 +50,11 @@ logger.info('Registered queues: high_priority, ai-tasks, publishing, low_priorit
 logger.info('Waiting for jobs...');
 
 // P1-10 FIX: Shared shutdown function with timeout protection
-const SHUTDOWN_TIMEOUT_MS = 10000; // 10 second max shutdown time
+const SHUTDOWN_TIMEOUT_MS = 10000; // 10 second max shutdown time for scheduler
+// P1-TELEMETRY FIX: Telemetry shutdown also needs its own timeout — an OTel
+// exporter hanging on a dead collector would otherwise stall graceful shutdown
+// indefinitely after scheduler.stop() has already completed.
+const TELEMETRY_SHUTDOWN_MS = 5000; // 5 second max for telemetry flush
 
 // P0-HEARTBEAT FIX: Write heartbeat file so the K8s liveness probe can detect
 // a live process. The probe checks that /tmp/worker-heartbeat was modified
@@ -104,8 +108,20 @@ async function gracefulShutdown(signal: string): Promise<void> {
     });
     logger.info('Worker stopped');
 
-    // Flush pending OTel spans
-    await shutdownTelemetry();
+    // Flush pending OTel spans — wrap in its own timeout so a hung exporter
+    // (e.g. collector unreachable) cannot stall the entire shutdown sequence.
+    let telemetryTimerId: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      shutdownTelemetry(),
+      new Promise<never>((_, reject) => {
+        telemetryTimerId = setTimeout(
+          () => reject(new Error('Telemetry shutdown timeout')),
+          TELEMETRY_SHUTDOWN_MS
+        );
+      }),
+    ]).finally(() => {
+      clearTimeout(telemetryTimerId);
+    });
     logger.info('Telemetry shutdown complete');
   } catch (shutdownError) {
     logger.error('Forced shutdown due to timeout or error',
