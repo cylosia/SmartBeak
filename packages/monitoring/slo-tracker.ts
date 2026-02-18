@@ -130,9 +130,19 @@ export class SloTracker {
   }
 
   /**
-   * Register an SLO definition
+   * Register an SLO definition.
+   * P2-FIX: Throws if an SLO with the same ID is already registered. Silent overwrites
+   * would discard all historical window data accumulated since startup, causing the
+   * error budget calculation to reset unexpectedly (e.g. during hot-reload or misconfiguration).
+   * Pass `force: true` to intentionally replace an existing SLO.
    */
-  registerSlo(slo: SloConfig): void {
+  registerSlo(slo: SloConfig, { force = false }: { force?: boolean } = {}): void {
+    if (!force && this.slos.has(slo.id)) {
+      throw new Error(
+        `SLO '${slo.id}' is already registered. ` +
+        `Pass { force: true } to intentionally overwrite the existing SLO and reset its window.`
+      );
+    }
     this.slos.set(slo.id, slo);
     this.windows.set(slo.id, { successes: 0, failures: 0, entries: [] });
   }

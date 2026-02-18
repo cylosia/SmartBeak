@@ -30,10 +30,12 @@ async function verifyContentOwnership(userId: string, contentId: string, pool: P
 }
 
 export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
+  // P2-FIX: Added .strict() — without it, extra body fields are silently ignored,
+  // masking client bugs and potential injection via unexpected properties.
   const UpdateSeoSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(500),
-  });
+  }).strict();
 
   const ParamsSchema = z.object({
   id: z.string().uuid(),

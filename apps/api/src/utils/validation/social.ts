@@ -78,11 +78,15 @@ export interface LinkedInPostResponse {
 
 /**
  * Type guard for LinkedIn post response
+ * P3-FIX: Added `status` field validation. The interface declares `status: 'created' | 'failed'`
+ * as required, but previously only `id` was checked, meaning the guard would pass for objects
+ * that lacked the status field and code accessing `.status` would get `undefined`.
  */
 export function isLinkedInPostResponse(data: unknown): data is LinkedInPostResponse {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return typeof obj['id'] === 'string';
+  return typeof obj['id'] === 'string' &&
+    (obj['status'] === 'created' || obj['status'] === 'failed');
 }
 
 // ============================================================================

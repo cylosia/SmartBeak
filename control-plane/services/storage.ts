@@ -134,10 +134,10 @@ const VALID_MIME_TYPES = new Set([
 
 function validateMimeType(mimeType: string): boolean {
   if (!mimeType || typeof mimeType !== 'string') return false;
-  return VALID_MIME_TYPES.has(mimeType.toLowerCase()) ||
-    mimeType.startsWith('image/') ||
-    mimeType.startsWith('video/') ||
-    mimeType.startsWith('audio/');
+  // P1-FIX: Use strict allowlist only. Removed .startsWith('image/'), .startsWith('video/'),
+  // and .startsWith('audio/') fallbacks — they bypassed the allowlist and accepted arbitrary
+  // MIME types like 'image/x-arbitrary'. The VALID_MIME_TYPES set is the sole source of truth.
+  return VALID_MIME_TYPES.has(mimeType.toLowerCase());
 }
 
 export function generateStorageKey(domain: string, mimeType?: string): string {
@@ -145,7 +145,8 @@ export function generateStorageKey(domain: string, mimeType?: string): string {
   throw new ValidationError('Valid domain string is required');
   }
   if (mimeType !== undefined && !validateMimeType(mimeType)) {
-  throw new ValidationError(`Invalid MIME type: ${mimeType}`);
+  // P2-FIX: Generic message avoids reflecting user-controlled MIME type in error output.
+  throw new ValidationError('Invalid or unsupported MIME type');
   }
   // Sanitize domain to prevent path traversal
   const sanitizedDomain = domain.replace(/[^a-zA-Z0-9\-_]/g, '_');

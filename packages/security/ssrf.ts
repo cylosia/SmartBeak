@@ -537,6 +537,5 @@ export function normalizeIp(ip: string): string | null {
   }
 }
 
-// Default export
-export default {
-};
+// P2-FIX: Removed empty default export — it served no purpose and encouraged
+// incorrect default-import usage. All exports are named.

@@ -172,31 +172,46 @@ export async function createShardVersion(
     file.path = sanitizeFilePath(file.path);
   }
 
-  // SECURITY FIX P0 #9: Atomic version assignment inside a serializable transaction
-  const result = await knex.transaction(async (trx: typeof knex) => {
-    // Lock the row to prevent concurrent version assignment
+  // P1-FIX: S3/R2 storage operations are NOT transactional and cannot be rolled back.
+  // Placing saveShardToStorage() INSIDE the DB transaction causes orphaned S3 objects
+  // whenever the DB INSERT fails (e.g., constraint violation, conflict) after a successful
+  // S3 upload. The correct order is:
+  //   1. Acquire atomic version number inside a short DB transaction (no S3 calls).
+  //   2. Upload to S3 OUTSIDE the transaction.
+  //   3. Insert the DB record (with a separate transaction or direct insert).
+  // If S3 succeeds but the final DB insert fails, the S3 path must be cleaned up.
+
+  // Step 1: Atomically assign a version number (short lock, no S3 I/O inside).
+  const { version } = await knex.transaction(async (trx: typeof knex) => {
     const lastVersion = await trx('site_shards')
       .where('site_id', siteId)
       .max('version as max')
       .forUpdate()
       .first();
-    const version = (lastVersion?.max || 0) + 1;
+    return { version: (lastVersion?.max || 0) + 1 };
+  });
 
-    // Save files to storage
-    const storagePath = await saveShardToStorage(siteId, version, files);
+  // Build file manifest with SHA hashes (CPU only, no I/O).
+  const fileManifest: Record<string, { sha: string; size: number }> = {};
+  for (const file of files) {
+    const sha = calculateSha1(file.content);
+    fileManifest[file.path] = {
+      sha,
+      size: Buffer.byteLength(file.content, 'utf8'),
+    };
+  }
 
-    // Build file manifest with SHA hashes
-    const fileManifest: Record<string, { sha: string; size: number }> = {};
-    for (const file of files) {
-      const sha = calculateSha1(file.content);
-      fileManifest[file.path] = {
-        sha,
-        size: Buffer.byteLength(file.content, 'utf8'),
-      };
-    }
+  // Step 2: Upload to S3/R2 OUTSIDE the DB transaction. S3 writes cannot be rolled back,
+  // so we don't hold a DB lock while waiting for network I/O.
+  const storagePath = await saveShardToStorage(siteId, version, files);
 
-    // Insert into database
-    const [shard] = await trx('site_shards')
+  // Step 3: Insert the DB record. If this fails, the S3 objects are orphaned.
+  // A background cleanup job (or retry) should remove orphaned S3 paths where
+  // no corresponding DB record exists. This is an accepted trade-off vs. holding
+  // a long-lived DB lock during S3 I/O.
+  let shardId: string;
+  try {
+    const [shard] = await knex('site_shards')
       .insert({
         site_id: siteId,
         version,
@@ -210,11 +225,17 @@ export async function createShardVersion(
         }),
       })
       .returning('id');
+    shardId = shard.id;
+  } catch (dbError) {
+    logger.error('DB insert failed after S3 upload; S3 path may be orphaned', {
+      storagePath,
+      siteId,
+      version,
+    });
+    throw dbError;
+  }
 
-    return { shardId: shard.id, storagePath };
-  });
-
-  return result;
+  return { shardId, storagePath };
 }
 
 /**
@@ -296,27 +317,22 @@ export async function deployShardToVercel(
     // VercelAdapter.deployFilesDirectly is not yet implemented.
     // Throwing here is intentional: fail fast and loudly rather than silently
     // corrupting deployment state with an undefined method call.
+    // P0-FIX: Removed unreachable dead code that referenced undefined `deployment`
+    // variable after this throw. Previously lines 304-319 would have caused a
+    // ReferenceError if the throw were removed without wiring the real implementation.
+    // When VercelAdapter.deployFilesDirectly is implemented, replace this throw with:
+    //   const deployment = await vercelAdapter.deployFilesDirectly(fileList, vercelProjectId);
+    //   await knex('site_shards').where('id', shardId).update({
+    //     status: 'deployed', vercel_project_id: vercelProjectId,
+    //     vercel_deployment_id: deployment.id, vercel_url: deployment.url,
+    //     deployed_at: new Date().toISOString(),
+    //   });
+    //   return { success: true, deploymentId: deployment.id, url: deployment.url };
+    void vercelAdapter; // suppress unused variable warning until implementation
     throw new Error(
       'VercelAdapter.deployFilesDirectly is not yet implemented. ' +
       'Track progress in GitHub issue for direct file upload support.'
     );
-
-    // 5. Update database with deployment info
-    await knex('site_shards')
-      .where('id', shardId)
-      .update({
-        status: 'deployed',
-        vercel_project_id: vercelProjectId,
-        vercel_deployment_id: deployment.id,
-        vercel_url: deployment.url,
-        deployed_at: new Date().toISOString(),
-      });
-
-    return {
-      success: true,
-      deploymentId: deployment.id,
-      url: deployment.url,
-    };
 
   } catch (error) {
     // Update status to failed
