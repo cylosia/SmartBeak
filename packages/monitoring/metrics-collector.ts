@@ -409,10 +409,16 @@ export class MetricsCollector extends EventEmitter {
     const metrics = this.metrics.get(key)!;
     metrics.push(metric);
 
-    // Clean old metrics
+    // FIX(P2): Replace O(k·n) shift() loop with O(n) findIndex + single splice.
+    // Array.shift() is O(n) per call (moves every element left); repeating it k
+    // times for k expired entries costs O(k·n). findIndex scans once (O(n)) and
+    // splice(0, k) removes in one operation (O(n)), so total cost is O(n).
     const cutoff = Date.now() - this.config.retentionMs;
-    while (metrics.length > 0 && metrics[0]!.timestamp < cutoff) {
-      metrics.shift();
+    const firstValidIndex = metrics.findIndex(m => m.timestamp >= cutoff);
+    if (firstValidIndex === -1) {
+      metrics.splice(0); // All entries expired
+    } else if (firstValidIndex > 0) {
+      metrics.splice(0, firstValidIndex);
     }
 
     // Emit for real-time processing
@@ -987,6 +993,20 @@ export function getMetricsCollector(): MetricsCollector {
     throw new Error('Metrics collector not initialized. Call initMetricsCollector first.');
   }
   return globalCollector;
+}
+
+/**
+ * FIX(P2): Reset the global collector for test isolation.
+ * Without this, the module-level singleton persists across Jest test files
+ * in the same worker, causing cross-test pollution (metrics from one test
+ * appearing in the next). Call in afterAll/afterEach as needed.
+ */
+export function resetMetricsCollector(): void {
+  if (globalCollector) {
+    globalCollector.stop();
+    globalCollector.clear();
+  }
+  globalCollector = null;
 }
 
 /**

@@ -3,7 +3,7 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
-import { ValidationError, NotFoundError, ForbiddenError, ErrorCodes } from '@errors';
+import { ValidationError, NotFoundError, ForbiddenError } from '@errors';
 
 const logger = getLogger('membership-service');
 
@@ -17,6 +17,9 @@ const ROLE_HIERARCHY: Record<Role, number> = {
   editor: 2,
   viewer: 1,
 };
+
+// FIX(P2): UUID regex for input validation
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Email validation — split into parts to avoid ReDoS from nested quantifiers
 const EMAIL_LOCAL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
@@ -45,10 +48,12 @@ export class MembershipService {
 
   /**
    * Validate role is allowed
+   * FIX(P2): ValidationError constructor second arg is `details`, not `code`.
+   * ValidationError already hard-codes ErrorCodes.VALIDATION_ERROR internally.
    */
   private validateRole(role: string): asserts role is Role {
     if (!VALID_ROLES.includes(role as Role)) {
-      throw new ValidationError(`Invalid role: ${role}. Must be one of: ${VALID_ROLES.join(', ')}`, ErrorCodes['VALIDATION_ERROR']);
+      throw new ValidationError(`Invalid role: ${role}. Must be one of: ${VALID_ROLES.join(', ')}`);
     }
   }
 
@@ -57,19 +62,24 @@ export class MembershipService {
    */
   private validateEmail(email: string): void {
     if (!email || typeof email !== 'string') {
-      throw new ValidationError('Email is required', ErrorCodes['VALIDATION_ERROR']);
+      throw new ValidationError('Email is required');
     }
     if (!isValidEmailFormat(email)) {
-      throw new ValidationError('Invalid email format', ErrorCodes['VALIDATION_ERROR']);
+      throw new ValidationError('Invalid email format');
     }
   }
 
   /**
-   * P2-20 FIX: Validate input strings at method entry
+   * P2-20 FIX: Validate input strings at method entry.
+   * FIX(P2): Also validate UUID format — previously any non-empty string was
+   * accepted, enabling org ID enumeration via 403/404 differential.
    */
   private validateId(value: string, name: string): void {
     if (!value || typeof value !== 'string') {
-      throw new ValidationError(`Valid ${name} is required`, ErrorCodes['VALIDATION_ERROR']);
+      throw new ValidationError(`Valid ${name} is required`);
+    }
+    if (!UUID_REGEX.test(value)) {
+      throw new ValidationError(`${name} must be a valid UUID`);
     }
   }
 
@@ -84,13 +94,16 @@ export class MembershipService {
       [userId, orgId]
     );
     if (rows.length > 0) {
-      throw new ValidationError('User is already a member of this organization', ErrorCodes['VALIDATION_ERROR']);
+      throw new ValidationError('User is already a member of this organization');
     }
   }
 
   /**
    * P1-19 FIX: Check that the acting user has sufficient role to perform the action.
-   * An actor can only assign/modify roles at or below their own level.
+   * FIX(P1): Changed `targetLevel > actorLevel` to `targetLevel >= actorLevel` AND
+   * added explicit guard preventing admins from granting admin to others.
+   * Previously: admin could promote other users to admin (same level, check passed).
+   * Now: only owners can grant or modify admin-level roles.
    */
   private async checkActorPermission(client: PoolClient, orgId: string, actorUserId: string, targetRole: Role): Promise<void> {
     const { rows } = await client.query(
@@ -103,8 +116,27 @@ export class MembershipService {
     const actorRole = rows[0]?.['role'] as Role;
     const actorLevel = ROLE_HIERARCHY[actorRole] ?? 0;
     const targetLevel = ROLE_HIERARCHY[targetRole] ?? 0;
-    if (targetLevel > actorLevel) {
+    // Only owners can grant or modify admin-level memberships
+    if (targetRole === 'admin' && actorRole !== 'owner') {
+      throw new ForbiddenError(`Only owners can assign the 'admin' role`);
+    }
+    // Actors cannot assign roles at their own level or above (except owners are exempt
+    // from the same-level check since they assign other owners in ownership transfer)
+    if (targetLevel >= actorLevel && actorRole !== 'owner') {
       throw new ForbiddenError(`Cannot assign role '${targetRole}' - insufficient permissions`);
+    }
+  }
+
+  /**
+   * FIX(P1): ROLLBACK failures now log the error and preserve the original
+   * exception. Previously a network failure during ROLLBACK would silently
+   * replace the original business error with a confusing connection error.
+   */
+  private async safeRollback(client: PoolClient): Promise<void> {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rbErr) {
+      logger.error('ROLLBACK failed — connection may be in bad state', rbErr instanceof Error ? rbErr : new Error(String(rbErr)));
     }
   }
 
@@ -120,7 +152,9 @@ export class MembershipService {
       await client.query('BEGIN');
       await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
-      // P1-19 FIX: Check actor has permission to assign this role
+      // P1-19 FIX: Check actor has permission to assign this role.
+      // When actorUserId is absent this is a system/internal call (e.g., org
+      // bootstrap or migration). Routes MUST always provide actorUserId.
       if (actorUserId) {
         await this.checkActorPermission(client, orgId, actorUserId, role);
       }
@@ -135,7 +169,7 @@ export class MembershipService {
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await this.safeRollback(client);
       throw error;
     } finally {
       client.release();
@@ -173,7 +207,7 @@ export class MembershipService {
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await this.safeRollback(client);
       throw error;
     } finally {
       client.release();
@@ -221,7 +255,7 @@ export class MembershipService {
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await this.safeRollback(client);
       throw error;
     } finally {
       client.release();

@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { MediaLifecycleService } from '../../services/media-lifecycle';
 import { requireRole, RoleAccessError, AuthContext } from '../../services/auth';
-import { rateLimit } from '../../services/rate-limit';
+import { checkRateLimitAsync } from '../../services/rate-limit';
 import { errors } from '@errors/responses';
 
 const logger = getLogger('media-lifecycle');
@@ -46,8 +46,11 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
         return errors.unauthorized(res);
       }
       requireRole(ctx, ['owner', 'admin']);
-      // P2-22 FIX: Add rate limiting to admin endpoint
-      await rateLimit(`admin:media:${ctx.userId}`, 30, req, res);
+      // FIX(P0): Use checkRateLimitAsync to avoid double-send (same issue as media.ts)
+      const rlResult = await checkRateLimitAsync(`admin:media:${ctx.userId}`, 'admin.media');
+      if (!rlResult.allowed) {
+        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+      }
 
       const queryResult = QuerySchema.safeParse(req.query);
       if (!queryResult.success) {
@@ -60,7 +63,8 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
       let coldCandidates: number;
 
       try {
-        hot = await svc.getHotCount();
+        // FIX(P0): Pass orgId — getHotCount now requires tenant scoping
+        hot = await svc.getHotCount(ctx.orgId);
         coldCandidates = await svc.countColdCandidates(days);
       } catch (serviceError) {
         logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));

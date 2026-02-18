@@ -12,7 +12,10 @@ export class MediaUploaded {
     version: 1,
     occurredAt: new Date().toISOString(),
     payload: { mediaId },
-    meta: { correlationId: correlationId || '', domainId: 'media', source: 'domain' }
+    // FIX(P1): Use a generated UUID fallback instead of '' — empty string clusters
+    // ALL uncorrelated events under the same key in distributed tracing systems,
+    // making incident investigation impossible.
+    meta: { correlationId: correlationId ?? crypto.randomUUID(), domainId: 'media', source: 'domain' }
   };
   }
 }

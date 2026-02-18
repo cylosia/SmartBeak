@@ -26,10 +26,15 @@ const CANARY_TIMEOUT_MS = 30000;
 * @throws Error if the health check fails or times out
 */
 export async function runMediaCanary(name: string, fn: () => Promise<void>, timeoutMs: number = CANARY_TIMEOUT_MS): Promise<void> {
+  // FIX(P1): Capture the timer handle so it can be cleared once fn() resolves.
+  // Without clearTimeout the timer holds the Node.js event loop open for
+  // `timeoutMs` (30 s) after every successful run, blocking clean process
+  // shutdown in tests and Lambda-style short-lived invocations.
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
     // P2-18 FIX: Add timeout to prevent canary checks from hanging indefinitely
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         reject(new Error(`Canary check '${name}' timed out after ${timeoutMs}ms`));
       }, timeoutMs);
     });
@@ -43,5 +48,8 @@ export async function runMediaCanary(name: string, fn: () => Promise<void>, time
     logger.error(`[MediaCanary] ${name} failed:`, safeError);
     emitMetric({ name: 'media_canary_failure', labels: { name } });
     throw safeError;
+  } finally {
+    // FIX(P1): Always clear the timeout — prevents event-loop retention on success
+    clearTimeout(timeoutHandle);
   }
 }
