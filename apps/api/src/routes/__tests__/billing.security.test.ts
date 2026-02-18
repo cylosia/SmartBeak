@@ -87,7 +87,9 @@ describe('Billing Routes Security Tests', () => {
 
       // Should verify membership
       expect(mockMembershipDb).toHaveBeenCalled();
-      expect(response.statusCode).not.toBe(403);
+      // P2-FIX: Use exact assertion — .not.toBe(403) allows any non-403 status
+      // (including 500), masking regressions. Membership success must be 200.
+      expect(response.statusCode).toBe(200);
     });
 
     it('should reject access when user is not org member', async () => {
@@ -130,7 +132,8 @@ describe('Billing Routes Security Tests', () => {
       });
 
       // Should not check membership when no org context
-      expect(response.statusCode).not.toBe(403);
+      // P2-FIX: Use exact assertion — success must be 200, not merely non-403.
+      expect(response.statusCode).toBe(200);
     });
   });
 

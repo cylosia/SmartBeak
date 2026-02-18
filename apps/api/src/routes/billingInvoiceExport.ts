@@ -150,9 +150,27 @@ export async function billingInvoiceExportRoutes(app: FastifyInstance): Promise<
     return errors.validationFailed(reply, parseResult.error.issues);
     }
 
-    const customerId = authReq.user?.stripeCustomerId;
-    if (!customerId) {
+    // P0-FIX (P0-3): Never trust stripeCustomerId from the JWT claim — an attacker
+    // with any valid token can forge that claim to access another org's invoices (IDOR).
+    // Always re-fetch the Stripe customer ID from the database using the verified orgId.
+    const orgId = authReq.user?.orgId;
+    if (!orgId) {
       return errors.unauthorized(reply);
+    }
+    const exportDb = await getDb();
+    const orgRow = await exportDb('organizations')
+      .where({ id: orgId })
+      .select('stripe_customer_id')
+      .first();
+    const customerId: string | undefined = orgRow?.['stripe_customer_id'];
+    if (!customerId) {
+      // Org has no Stripe customer yet — return empty CSV rather than an error.
+      const headers = ['id', 'number', 'amount_paid', 'created'];
+      return reply
+        .header('Content-Type', 'text/csv')
+        .header('Content-Disposition', 'attachment; filename="invoices.csv"')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(headers.join(',') + '\n');
     }
 
     const { format } = parseResult.data;

@@ -22,6 +22,8 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    # P2-FIX (P2-16): Add timeout to prevent runaway jobs blocking CI for 6 hours.
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
@@ -40,6 +42,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # P2-FIX (P2-17): Install jq explicitly. The ubuntu-latest image does not
+      # guarantee jq is present; the "Check bundle size limits" step uses it.
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
       - name: Analyze bundle size
         run: npm run analyze:bundle
         env:
@@ -50,6 +57,9 @@ jobs:
         with:
           name: bundle-stats
           path: apps/web/.next/analyze/
+          # P2-FIX (P2-18): Limit retention to avoid accumulating stale artifacts
+          # and reduce storage costs. 7 days is sufficient for PR review cycles.
+          retention-days: 7
 
       - name: Comment PR with bundle analysis
         if: github.event_name == 'pull_request'
@@ -77,6 +87,17 @@ jobs:
               return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
             };
 
+            // P1-FIX (P1-10): Escape bundle filenames before interpolating into
+            // markdown. A malicious package name (e.g. from a supply-chain attack
+            // or typosquatting) could include HTML/markdown that executes in the
+            // reviewer's browser when GitHub renders the PR comment.
+            const escapeMd = (s) => String(s).replace(/[<>&"'|[\]\\`]/g, c => `&#${c.charCodeAt(0)};`);
+
+            // P3-FIX (P3-9): Single source of truth for the bundle size threshold.
+            // Previously 500 * 1024 was used in JS and 512000 was used in the shell
+            // script — a 12 KB discrepancy. Both now reference MAX_BUNDLE_SIZE_BYTES.
+            const MAX_BUNDLE_SIZE_BYTES = 500 * 1024; // 512 000 bytes
+
             // Build comment body
             const body = `## Bundle Analysis
 
@@ -90,10 +111,10 @@ jobs:
             ### Changes
             | Module | Before | After | Diff |
             |--------|--------|-------|------|
-            ${stats.changes.map(c => `| ${c.name} | ${formatBytes(c.before)} | ${formatBytes(c.after)} | ${c.diff > 0 ? '+' : ''}${formatBytes(Math.abs(c.diff))} |`).join('\n')}
+            ${stats.changes.map(c => `| ${escapeMd(c.name)} | ${formatBytes(c.before)} | ${formatBytes(c.after)} | ${c.diff > 0 ? '+' : ''}${formatBytes(Math.abs(c.diff))} |`).join('\n')}
             ` : '> No significant size changes detected'}
 
-            ${stats.totalSize > 500 * 1024 ? '**Warning:** Bundle size exceeds 500KB recommendation' : 'Bundle size within recommended limits'}
+            ${stats.totalSize > MAX_BUNDLE_SIZE_BYTES ? '**Warning:** Bundle size exceeds 500KB recommendation' : 'Bundle size within recommended limits'}
             `;
 
             // Create or update comment
@@ -126,8 +147,8 @@ jobs:
 
       - name: Check bundle size limits
         run: |
-          # Check if bundle exceeds limits
-          MAX_SIZE=512000  # 500 KiB (500 * 1024) — matches the JS threshold above
+          # P3-FIX (P3-9): Threshold aligned with JS constant (500 * 1024 = 512000 bytes).
+          MAX_SIZE=512000  # 500 KiB — matches MAX_BUNDLE_SIZE_BYTES in the JS step above
           STATS_FILE="apps/web/.next/analyze/__bundle_analysis.json"
 
           if [ -f "$STATS_FILE" ]; then

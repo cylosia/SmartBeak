@@ -232,7 +232,7 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
     if (error instanceof Error) {
         const errorCode = (error as Error & { code?: string }).code;
         const isStripeError = errorCode?.startsWith('stripe_') ||
-                    error["message"].includes('Stripe') ||
+                    error.message.includes('Stripe') ||
                     error.name === 'StripeError';
         if (isStripeError) {
         return reply.status(502).send({

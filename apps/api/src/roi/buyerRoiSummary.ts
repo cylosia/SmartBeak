@@ -66,10 +66,22 @@ export async function generateBuyerRoiSummary(
   );
   const missingDataCount = input.roi_rows.length - completeRows.length;
 
-  const portfolio = computePortfolioRoi(completeRows.map(r => ({
-    production_cost_usd: r.production_cost_usd as number,
-    monthly_revenue_estimate: r.monthly_revenue_estimate as number,
-  })));
+  // P1-FIX (P1-7): Replace unsafe `as number` cast with explicit numeric validation.
+  // After the null/undefined filter above, TypeScript still infers the fields as
+  // `number | undefined` because the interface uses optional properties. The cast
+  // was silently accepted even when a DB returns a string or NaN, producing corrupt
+  // ROI figures on buyer reports. Use Number() + isFinite to fail loudly instead.
+  const portfolio = computePortfolioRoi(completeRows.map(r => {
+    const cost = Number(r.production_cost_usd);
+    const revenue = Number(r.monthly_revenue_estimate);
+    if (!Number.isFinite(cost) || !Number.isFinite(revenue)) {
+      throw new Error(
+        `Non-numeric financial data in ROI row: cost=${String(r.production_cost_usd)}, ` +
+        `revenue=${String(r.monthly_revenue_estimate)}`
+      );
+    }
+    return { production_cost_usd: cost, monthly_revenue_estimate: revenue };
+  }));
   const kw = await keywordCoverageForDomain(input.domain_id);
 
   const notes: string[] = [

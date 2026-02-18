@@ -37,11 +37,36 @@ function getRedisConnection(): { host: string; port: number; password?: string; 
   };
 }
 
+// P1-FIX (P1-1): Validate the Redis connection is reachable before the queue
+// is created. Without this, the Queue object is constructed successfully but
+// every job enqueue silently fails until the first I/O error is emitted —
+// by which time the process has started serving traffic with a dead queue.
+async function validateRedisConnection(conn: ReturnType<typeof getRedisConnection>): Promise<void> {
+  // BullMQ already depends on ioredis, so import it directly.
+  const { default: Redis } = await import('ioredis');
+  const client = new Redis(conn);
+  try {
+    await client.ping();
+  } finally {
+    client.disconnect();
+  }
+}
+
+const _redisConn = getRedisConnection();
+// Top-level await is valid in ESM modules (this package uses "type": "module").
+// This will throw at startup if Redis is unreachable, preventing silent job loss.
+await validateRedisConnection(_redisConn);
+
 export const eventQueue = new Queue('events', {
-  connection: getRedisConnection(),
+  connection: _redisConn,
   defaultJobOptions: {
     attempts: 5,
     backoff: { type: 'exponential', delay: 2_000 },
+    // P2-FIX (P2-1): Add explicit job timeout. Without this, a job that hangs
+    // (e.g. waiting on a network call that never resolves) stays in the active
+    // state forever, blocking the worker slot and preventing other jobs from
+    // running. BullMQ's default is no timeout (unlimited).
+    timeout: 30_000, // 30 seconds
     removeOnComplete: { count: 1_000 },
     // P1-FIX: Bound failed-job retention. removeOnFail: false kept all failed jobs
     // in Redis permanently — under sustained downstream failures this exhausts Redis

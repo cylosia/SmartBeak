@@ -149,18 +149,23 @@ export async function processInBatchesStrict<T>(
   const batchErrors: Array<{ index: number; error: Error }> = [];
   for (const [index, result] of batchResults.entries()) {
     if (result.status === 'rejected') {
-    const error = result['reason'] instanceof Error
-    ? result['reason']
-    : new Error(String(result['reason']));
+    const error = result.reason instanceof Error
+    ? result.reason
+    : new Error(String(result.reason));
     batchErrors.push({ index: i + index, error });
     }
   }
 
   // P1-FIX: If any errors occurred, throw aggregated error
+  // P2-FIX: Log each failure server-side; expose only the count in the thrown
+  // error to prevent leaking per-item error strings (SQL details, stack frames)
+  // to callers who may surface them externally.
   if (batchErrors.length > 0) {
+    for (const { index, error } of batchErrors) {
+      logger.error(`[batch-strict] Item at index ${index} failed`, error);
+    }
     throw new BatchError(
-    `Batch processing failed for ${batchErrors.length} item(s): ` +
-    batchErrors.map(e => `index ${e['index']}: ${e['error']['message']}`).join(', '),
+    `Batch processing failed for ${batchErrors.length} item(s)`,
     batchErrors,
     );
   }
