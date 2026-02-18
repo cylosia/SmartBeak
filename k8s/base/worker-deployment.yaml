@@ -38,7 +38,7 @@ spec:
         fsGroup: 1001
       containers:
         - name: worker
-          image: smartbeak/worker:latest
+          image: smartbeak/worker:IMAGE_TAG_PLACEHOLDER  # CI replaces with git SHA; never deploy :latest
           command: ["node", "--import", "tsx/esm", "apps/api/src/jobs/worker.ts"]
           envFrom:
             - configMapRef:
@@ -55,6 +55,17 @@ spec:
             limits:
               cpu: "1"
               memory: 512Mi
+          livenessProbe:
+            exec:
+              # Worker writes a heartbeat file every job cycle; absence means the process is hung.
+              command:
+                - sh
+                - -c
+                - "test $(( $(date +%s) - $(stat -c %Y /tmp/worker-heartbeat 2>/dev/null || echo 0) )) -lt 120"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 2
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

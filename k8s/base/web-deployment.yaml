@@ -36,7 +36,7 @@ spec:
         fsGroup: 1001
       containers:
         - name: web
-          image: smartbeak/web:latest
+          image: smartbeak/web:IMAGE_TAG_PLACEHOLDER  # CI replaces with git SHA; never deploy :latest
           command: ["node", "apps/web/server.js"]
           ports:
             - name: http
@@ -61,21 +61,23 @@ spec:
               memory: 512Mi
           readinessProbe:
             httpGet:
-              path: /
+              path: /api/health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
             failureThreshold: 30
             periodSeconds: 2

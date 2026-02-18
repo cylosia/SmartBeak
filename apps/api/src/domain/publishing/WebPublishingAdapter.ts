@@ -107,10 +107,12 @@ function generateRequestId(): string {
 export function registerRequestController(requestId: string, controller: AbortController): void {
   // P2-1 FIX: Prevent unbounded memory growth
   if (activeControllers.size >= MAX_ACTIVE_CONTROLLERS) {
-    // Evict oldest entry
-    const oldest = activeControllers.keys().next().value;
-    if (oldest !== undefined) {
-      activeControllers.delete(oldest);
+    // Evict oldest entry AND abort its in-flight request to free the connection
+    const oldestEntry = activeControllers.entries().next().value;
+    if (oldestEntry !== undefined) {
+      const [oldestKey, { controller: evictedController }] = oldestEntry;
+      evictedController.abort();
+      activeControllers.delete(oldestKey);
     }
   }
   activeControllers.set(requestId, { controller, createdAt: Date.now() });
@@ -283,9 +285,17 @@ export class WebPublishingAdapter extends PublishingAdapter {
 
       const timeoutId = setTimeout(() => controller.abort(), PUBLISHING_TIMEOUT_MS);
 
+      // Guard: sanitizedUrl must be set when allowed === true. If the SSRF library
+      // omits it (e.g., a future version change), fail closed rather than falling back
+      // to the original (potentially dangerous) URL.
+      if (!urlValidation.sanitizedUrl) {
+        return { success: false, error: 'Internal: SSRF validation did not return a sanitized URL', timestamp: new Date() };
+      }
+      const sanitizedUrl = urlValidation.sanitizedUrl;
+
       try {
         // P0-5 FIX: Use sanitizedUrl from SSRF validation instead of original config URL (TOCTOU)
-        const response = await fetch(urlValidation.sanitizedUrl!, {
+        const response = await fetch(sanitizedUrl, {
           method: config["method"] || 'POST',
           headers,
           body: JSON.stringify(payload),
