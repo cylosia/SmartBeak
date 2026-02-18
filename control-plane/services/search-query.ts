@@ -71,7 +71,10 @@ export class SearchQueryService {
     throw new ValidationError('orgId is required for search');
   }
 
-  const key = `${ctx.orgId}:${ctx.userId}:${query}:${limit}:${offset}`;
+  // P1-FIX: Removed ctx.userId from cache key. Search results are already org-scoped
+  // (query filters by org_id), so including userId caused 1000-user orgs to have
+  // 1000x more cache entries for identical queries, fragmenting the LRU cache.
+  const key = `${ctx.orgId}:${query}:${limit}:${offset}`;
   const cached = CACHE.get(key);
   if (cached) {
     return cached.value;

@@ -16,6 +16,8 @@ const logger = getLogger('search-routes');
 export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new SearchQueryService(pool);
 
+  // P2-FIX: Added .strict() — without it, extra query parameters are silently ignored,
+  // masking client bugs. Note: .strict() on Zod query-param schemas rejects unknown keys.
   const SearchQuerySchema = z.object({
   q: z.string()
     .min(1, 'Search query must be at least 1 character')
@@ -24,7 +26,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
     .transform(val => sanitizeSearchQuery(val)),
   limit: z.coerce.number().min(1).max(100).default(20),
   page: z.coerce.number().min(1).default(1),
-  });
+  }).strict();
 
   app.get('/search', async (req, res) => {
   try {

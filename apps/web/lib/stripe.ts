@@ -1,130 +1,85 @@
 
 import Stripe from 'stripe';
 
-import { getLogger } from '@kernel/logger';
-
-const logger = getLogger('stripe');
-
-/**
-* Stripe configuration
-* Server-side only - never expose secret keys to client
-* P0-FIX: Deferred validation to prevent crash on module load
-*/
-
-// P0-FIX: Cache for lazy initialization
+// Lazily-initialised singleton — avoids crashing on import in environments where
+// STRIPE_SECRET_KEY is not yet available (e.g. build time, test setup).
 let stripeInstance: Stripe | null = null;
-let stripeSecretKeyCache: string | null = null;
 
 /**
-* Get Stripe secret key with deferred validation
-* P0-FIX: Validation happens on first use, not module load
-*/
+ * Return the Stripe secret key with format validation.
+ * P2-FIX: Reads from process.env on every call — no module-level plaintext cache —
+ * so we don't hold the key as an additional heap reference beyond the env store.
+ */
 function getStripeSecretKey(): string {
-  if (stripeSecretKeyCache) {
-  return stripeSecretKeyCache;
-  }
-
   const key = process.env['STRIPE_SECRET_KEY'];
   if (!key || key.includes('placeholder')) {
-  throw new Error(
-    'STRIPE_SECRET_KEY is not set or contains placeholder value. ' +
-    'Please set your actual Stripe secret key from https://dashboard.stripe.com'
-  );
+    throw new Error(
+      'STRIPE_SECRET_KEY is not set or contains placeholder value. ' +
+      'Please set your actual Stripe secret key from https://dashboard.stripe.com'
+    );
   }
-  // Validate key format
   if (!key.startsWith('sk_') && !key.startsWith('rk_')) {
-  throw new Error(
-    "STRIPE_SECRET_KEY appears to be invalid. " +
-    "Secret keys should start with 'sk_' or 'rk_'"
-  );
+    throw new Error(
+      "STRIPE_SECRET_KEY appears to be invalid. " +
+      "Secret keys should start with 'sk_' or 'rk_'"
+    );
   }
-  stripeSecretKeyCache = key;
-  return stripeSecretKeyCache;
+  return key;
 }
 
 /**
-* Get or create Stripe API client
-* P0-FIX: Lazy initialization
-*/
+ * Get or create the Stripe API client (lazy singleton).
+ */
 export function getStripe(): Stripe {
   if (stripeInstance) {
-  return stripeInstance;
+    return stripeInstance;
   }
 
   const secretKey = getStripeSecretKey();
+  // P3-FIX: Removed `typescript: true` — not a valid Stripe SDK v10+ constructor option;
+  // passing it causes a TypeScript type error and may produce a runtime warning.
   stripeInstance = new Stripe(secretKey, {
-  apiVersion: '2023-10-16',
-  typescript: true,
-  // Add app info for Stripe dashboard
-  appInfo: {
-    name: 'SmartBeak',
-    version: '1.0.0',
-  },
+    apiVersion: '2023-10-16',
+    appInfo: {
+      name: 'SmartBeak',
+      version: '1.0.0',
+    },
   });
 
   return stripeInstance;
 }
 
 /**
- * P0-FIX: Export stripe as a lazy-initialized proxy for backward compatibility
- * Uses a Proxy that forwards all property access to the actual Stripe instance
- * This avoids unsafe type casting while maintaining the same API
+ * Stripe webhook secret for verifying webhook signatures.
+ *
+ * P0-FIX: Now throws instead of logging a warning and returning '' when the secret
+ * is absent or is a placeholder. The previous behaviour was a complete signature-bypass
+ * vulnerability: constructEvent computes HMAC(secret, payload) — passing '' as the
+ * secret means any payload with a matching empty-key HMAC passes verification.
  */
-export const stripe: Stripe = new Proxy({} as Stripe, {
-  get(_target, prop: string | symbol) {
-    if (typeof prop !== 'string') {
-      return undefined;
-    }
-    
-    const client = getStripe();
-    const value = client[prop as keyof Stripe];
-    
-    // If the value is a function, bind it to the Stripe client
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    
-    return value;
-  }
-});
-
-/**
-* Stripe webhook secret for verifying webhook signatures
-* P0-FIX: Deferred validation
-*/
 export function getStripeWebhookSecret(): string {
   const key = process.env['STRIPE_WEBHOOK_SECRET'];
   if (!key || key.includes('placeholder')) {
-  logger.warn('STRIPE_WEBHOOK_SECRET is not set. Webhook verification will fail.');
-  return '';
+    throw new Error(
+      'STRIPE_WEBHOOK_SECRET is not set or contains a placeholder value. ' +
+      'Webhook signature verification cannot proceed without a valid secret.'
+    );
   }
-  // Validate webhook secret format
   if (!key.startsWith('whsec_')) {
-  throw new Error(
-    "STRIPE_WEBHOOK_SECRET appears to be invalid. " +
-    "Webhook secrets should start with 'whsec_'"
-  );
+    throw new Error(
+      "STRIPE_WEBHOOK_SECRET appears to be invalid. " +
+      "Webhook secrets should start with 'whsec_'"
+    );
   }
   return key;
 }
 
 /**
-* @deprecated Use getStripeWebhookSecret() instead. This constant was removed
-* because reading process.env at module load time breaks the deferred validation
-* pattern and can silently produce an empty string in production environments
-* where the secret is injected after module initialisation.
-*
-* Migrate all call-sites to: getStripeWebhookSecret()
-*/
-// STRIPE_WEBHOOK_SECRET removed — do not re-add a module-level const here.
-
-/**
-* Validates that Stripe is properly configured
-* Call this in API routes before using Stripe
-*/
+ * Validates that Stripe is properly configured.
+ * Call this in API routes before using Stripe.
+ */
 export function validateStripeConfig(): void {
-  const secretKey = getStripeSecretKey();
-  if (!secretKey || secretKey.includes('placeholder')) {
-  throw new Error('Stripe is not properly configured');
-  }
+  // getStripeSecretKey throws descriptively on misconfiguration.
+  getStripeSecretKey();
 }
+

@@ -256,7 +256,10 @@ export class SecurityAlertManager extends EventEmitter {
     filtered = filtered.filter(a => a["userId"] === options["userId"]);
   }
   if (options.since) {
-    filtered = filtered.filter(a => a.timestamp >= options.since!);
+    // P2-FIX: Use local const to narrow type for the closure — avoids the `!` non-null
+    // assertion which is a code smell flagged by strict TypeScript linting.
+    const since = options.since;
+    filtered = filtered.filter(a => a.timestamp >= since);
   }
 
   const limit = options.limit || 100;
@@ -284,7 +287,9 @@ export class SecurityAlertManager extends EventEmitter {
     'high',
     'multiple_failed_attempts',
     `User ${userId} has ${failedAttempts} failed attempts in the last hour`,
-    { failedAttempts, recentEvents: userAlerts },
+    // P1-FIX: Removed `recentEvents: userAlerts` — full alert objects contain IPs,
+    // device fingerprints, and event details that constitute PII. Only log the count.
+    { failedAttempts },
     );
   }
 
@@ -299,10 +304,20 @@ export class SecurityAlertManager extends EventEmitter {
     void this.triggerAlert(
     'medium',
     'suspicious_login',
-    `Login from new IP address: ${event["ip"]}`,
-    { newIp: event["ip"], knownIps: [...knownIPs] },
+    // P1-FIX: Do not include knownIps list in alert — it exposes a history of the
+    // user's IP addresses (PII). Record only the fact of a new-IP login.
+    `Login from new IP address`,
+    { newIpHash: this.hashIp(event["ip"]) },
     );
   }
+  }
+
+  /**
+   * Hash an IP address for logging (one-way, not reversible)
+   * Used to record IP events without storing raw PII.
+   */
+  private hashIp(ip: string): string {
+    return crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16);
   }
 }
 

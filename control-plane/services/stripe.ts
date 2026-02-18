@@ -66,29 +66,27 @@ export class StripePaymentGateway implements PaymentGateway {
     void this.apiKey;
   }
 
-  async createCustomer(orgId: string): Promise<CreateCustomerResult> {
-    // TODO: replace with real Stripe SDK call when stripe package is available
-    // e.g.: const customer = await stripe.customers.create({ metadata: { orgId } });
-    logger.warn('StripePaymentGateway.createCustomer: SDK not wired, returning stub', { orgId });
-    return { customerId: `cus_${orgId}` };
+  // P1-FIX: All methods now throw ServiceUnavailableError instead of logging a warning
+  // and returning a fake ID. Previously, if StripePaymentGateway was selected (STRIPE_SECRET_KEY
+  // present) but the Stripe SDK calls were not yet wired, the code would silently insert
+  // stub IDs like "cus_${orgId}" into the database. Those records look like real Stripe
+  // objects but are not, causing silent billing failures and phantom subscriptions.
+  // Throwing immediately surfaces the misconfiguration at the earliest possible moment.
+
+  async createCustomer(_orgId: string): Promise<CreateCustomerResult> {
+    throw new ServiceUnavailableError('StripePaymentGateway.createCustomer: Stripe SDK integration not yet implemented');
   }
 
-  async createSubscription(customerId: string, planId: string): Promise<CreateSubscriptionResult> {
-    // TODO: replace with real Stripe SDK call
-    logger.warn('StripePaymentGateway.createSubscription: SDK not wired, returning stub', { customerId, planId });
-    return { subscriptionId: `sub_${customerId}_${planId}` };
+  async createSubscription(_customerId: string, _planId: string): Promise<CreateSubscriptionResult> {
+    throw new ServiceUnavailableError('StripePaymentGateway.createSubscription: Stripe SDK integration not yet implemented');
   }
 
-  async cancelSubscription(subscriptionId: string): Promise<boolean> {
-    // TODO: replace with real Stripe SDK call
-    logger.warn('StripePaymentGateway.cancelSubscription: SDK not wired', { subscriptionId });
-    return true;
+  async cancelSubscription(_subscriptionId: string): Promise<boolean> {
+    throw new ServiceUnavailableError('StripePaymentGateway.cancelSubscription: Stripe SDK integration not yet implemented');
   }
 
-  async deleteCustomer(customerId: string): Promise<boolean> {
-    // TODO: replace with real Stripe SDK call
-    logger.warn('StripePaymentGateway.deleteCustomer: SDK not wired', { customerId });
-    return true;
+  async deleteCustomer(_customerId: string): Promise<boolean> {
+    throw new ServiceUnavailableError('StripePaymentGateway.deleteCustomer: Stripe SDK integration not yet implemented');
   }
 }
 
@@ -112,8 +110,6 @@ export function createPaymentGateway(): PaymentGateway {
   return new StubPaymentGateway();
 }
 
-// Keep backward-compatible export so existing imports of StripeAdapter still compile.
-// Alias points to the stub for non-production; production callers must migrate to
-// createPaymentGateway() or inject a PaymentGateway directly.
-/** @deprecated Use createPaymentGateway() instead */
-export const StripeAdapter = StubPaymentGateway;
+// P1-FIX: Removed deprecated StripeAdapter export. The only consumer (billing.ts) was
+// already migrated to PaymentGateway / StubPaymentGateway. The alias pointed to StubPaymentGateway
+// which silently returned fake IDs in production — a data-integrity hazard.

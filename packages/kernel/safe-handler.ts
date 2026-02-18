@@ -34,17 +34,8 @@ const MAX_RETRY_ATTEMPTS = 3;
 export type ErrorCategory = 'timeout' | 'network' | 'memory' | 'validation' | 'unknown';
 
 /**
-* Assert never for exhaustiveness checking
-* @param value - Value that should never exist
-* @throws Error with the unexpected value
-*/
-function _assertNever(value: never): never {
-  throw new Error(`Unexpected value: ${String(value)}`);
-}
-
-/**
 * Categorize errors for better handling
-
+*
 * @param error - Error to categorize
 * @returns Category and retryable flag
 */
@@ -68,9 +59,10 @@ function categorizeError(error: unknown): { category: ErrorCategory; retryable: 
   return { category: 'validation', retryable: false };
   }
 
-  // Exhaustive check
-  const category: ErrorCategory = 'unknown';
-  return { category, retryable: true };
+  // P2-FIX: Removed dead `_assertNever` function that was defined but never called.
+  // `categorizeError` works on runtime `Error` messages (not a discriminated union),
+  // so exhaustiveness checking via assertNever does not apply here.
+  return { category: 'unknown', retryable: true };
 }
 
 // ============================================================================

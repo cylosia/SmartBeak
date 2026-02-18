@@ -263,25 +263,30 @@ export async function getMaintenanceStatus(
   `);
   
   // Get unacknowledged alerts
+  // P1-FIX: PostgreSQL COUNT returns bigint which pg serializes as a string (e.g. "42").
+  // The type was previously declared as `{ count: number }` which was incorrect and
+  // caused `alertCount?.count ?? 0` to return the string "42" instead of the number 42.
   const alertCount = await knex('sequence_monitoring_alerts')
     .whereNull('acknowledged_at')
-    .count<{ count: number }>('id as count')
+    .count<{ count: string }>('id as count')
     .first();
-  
+
   // Get last maintenance
   const lastMaintenance = await knex('db_maintenance_log')
     .where('success', true)
     .max<{ max: Date }>('completed_at as max')
     .first();
-  
+
   const seqMap = new Map(sequenceHealth.rows.map(r => [r.status, r.count]));
   const bloatMap = new Map(bloatStatus.rows.map(r => [r.status, r.count]));
   const totalBloat = bloatStatus.rows.reduce((sum, r) => sum + r.count, 0);
   // Guard against division by zero when no bloat data is available.
+  // P2-FIX: Null-coalesce avg_bloat to 0 before multiplying — PostgreSQL AVG() returns
+  // NULL for empty groups, which would propagate as NaN through the weighted sum.
   const avgBloat = totalBloat === 0
     ? 0
-    : bloatStatus.rows.reduce((sum, r) => sum + (r.avg_bloat * r.count), 0) / totalBloat;
-  
+    : bloatStatus.rows.reduce((sum, r) => sum + ((r.avg_bloat ?? 0) * r.count), 0) / totalBloat;
+
   return {
     sequences: {
       total: sequenceHealth.rows.reduce((sum, r) => sum + r.count, 0),
@@ -296,7 +301,8 @@ export async function getMaintenanceStatus(
       healthy: bloatMap.get('OK') ?? 0,
       average_bloat_ratio: avgBloat,
     },
-    unacknowledged_alerts: alertCount?.count ?? 0,
+    // P1-FIX: Parse string to number since pg COUNT returns bigint serialized as string.
+    unacknowledged_alerts: parseInt(String(alertCount?.count ?? '0'), 10),
     last_maintenance: lastMaintenance?.max ?? undefined as Date | undefined,
   };
 }

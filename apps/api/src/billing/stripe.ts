@@ -1,5 +1,4 @@
 import Stripe from 'stripe';
-import crypto from 'crypto';
 import { getLogger } from '@kernel/logger';
 
 /**
@@ -90,6 +89,32 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Returns true if this Stripe error is worth retrying.
+ * P1-FIX: Previously withRetry retried ALL errors including card_declined and auth failures,
+ * wasting time (3× delays) and triggering Stripe's fraud-detection for repeated declines.
+ * Non-transient errors will not succeed on retry and must surface immediately to the caller.
+ */
+function isRetryableStripeError(error: unknown): boolean {
+  // Non-Stripe errors (JS TypeError, network timeout) — retry
+  if (!(error instanceof Stripe.errors.StripeError)) return true;
+
+  switch (error.type) {
+    case 'StripeConnectionError':    // Network connectivity — retry
+    case 'StripeAPIError':           // Stripe 5xx server error — retry
+    case 'StripeRateLimitError':     // Rate limited — retry with backoff
+      return true;
+    case 'StripeCardError':          // Card declined — retry won't help
+    case 'StripeInvalidRequestError': // Bad request params — retry won't help
+    case 'StripeAuthenticationError': // Wrong API key — config error
+    case 'StripePermissionError':    // Insufficient permissions — config error
+    case 'StripeIdempotencyError':   // Idempotency key reuse with different params
+      return false;
+    default:
+      return true; // Unknown subtypes — retry conservatively
+  }
+}
+
+/**
 * MEDIUM FIX M2: Execute with retry
 */
 async function withRetry<T>(fn: () => Promise<T>, operationName: string): Promise<T> {
@@ -100,6 +125,11 @@ async function withRetry<T>(fn: () => Promise<T>, operationName: string): Promis
     return await fn();
   } catch (error) {
     lastError = error instanceof Error ? error : new Error(String(error));
+
+    // P1-FIX: Don't retry non-transient Stripe errors (card declines, bad params, auth)
+    if (!isRetryableStripeError(error)) {
+      throw lastError;
+    }
 
       logger.warn(
         `${operationName} failed (attempt ${attempt + 1}/${MAX_RETRIES})`,
@@ -139,9 +169,14 @@ export async function createStripeCheckoutSession(
 
   const appUrl = getAppUrl();
 
-  // P0-FIX: Use cryptographically secure random UUID for idempotency key
-  // Date.now() can collide within same millisecond causing double-charges
-  const idempotencyKey = `checkout_${orgId}_${priceId}_${crypto.randomUUID()}`;
+  // P1-FIX: Use a time-bucketed deterministic idempotency key.
+  // The previous `randomUUID()` generated a new key on every call, completely defeating
+  // idempotency: a network timeout followed by an app-level retry would produce two
+  // checkout sessions (and potentially two charges). A time-bucketed key (1-hour window)
+  // ensures retries within the same window hit the Stripe idempotency cache and return
+  // the same session, while allowing a new session after the hour expires.
+  const hourBucket = Math.floor(Date.now() / 3_600_000);
+  const idempotencyKey = `checkout_${orgId}_${priceId}_${hourBucket}`;
 
   // P0-FIX: Pass idempotencyKey to Stripe API to prevent double-charges on retry
   return withRetry(() =>
@@ -168,11 +203,8 @@ export async function createStripeCheckoutSession(
 * @returns Promise that resolves when event is processed
 */
 export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
-  if (!event || !event.type) {
-  logger.error('Invalid webhook event: missing type', undefined, { eventType: String(event) });
-  return;
-  }
-
+  // P3-FIX: Removed dead `if (!event || !event.type)` guard — event is typed as
+  // Stripe.Event which always has a `type: string` field; the guard can never be true.
   logger.info('Received webhook', { eventType: event.type });
 
   try {

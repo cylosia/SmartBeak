@@ -22,13 +22,34 @@ import {
   rollbackShard,
 } from '../../services/shard-deployment';
 import { generateShardFiles, VALID_THEME_IDS } from '../../services/shard-generator';
+import type { ThemeConfig } from '../../services/shard-generator';
 import { errors } from '@errors/responses';
+
+// ── ThemeConfig Zod schema ─────────────────────────────────────────────────
+// P1-FIX: Validate themeConfig against ThemeConfig schema before passing to
+// generateShardFiles(). Previously themeConfig was typed as Record<string, unknown>
+// and cast implicitly; missing required fields (siteName, primaryColor) caused
+// silent crashes or XSS-safe-but-wrong template output.
+const ThemeConfigSchema: z.ZodType<ThemeConfig> = z.object({
+  siteName: z.string().min(1).max(500),
+  siteDescription: z.string().max(1000).optional(),
+  primaryColor: z.string().min(1).max(50),
+  secondaryColor: z.string().max(50).optional(),
+  logoUrl: z.string().url().max(2000).optional(),
+  socialLinks: z.object({
+    twitter: z.string().url().max(2000).optional(),
+    facebook: z.string().url().max(2000).optional(),
+    instagram: z.string().url().max(2000).optional(),
+  }).optional(),
+  customCss: z.string().max(50000).optional(),
+  metaTags: z.record(z.string()).optional(),
+}).strict();
 
 // ── Request body schemas ───────────────────────────────────────────────────
 const DeployBodySchema = z.object({
   siteId: z.string().min(1).max(255),
   themeId: z.string().min(1).max(100),
-  themeConfig: z.record(z.unknown()),
+  themeConfig: ThemeConfigSchema,
   vercelProjectId: z.string().min(1).max(255),
 }).strict();
 
