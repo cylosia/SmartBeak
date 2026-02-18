@@ -14,13 +14,16 @@ import {
 } from '../provider/fallback';
 
 // Mock Redis
-// P1 FIX: Include ltrim in the mock. queueForRetry calls redis.ltrim() to cap
-// the queue size. Without this mock, ltrim threw TypeError at runtime, which was
-// silently swallowed by the try-catch in queueForRetry, masking the real failure.
+// P2 FIX: Mock redis.multi() pipeline for atomic lpush+ltrim.
+// queueForRetry now calls redis.multi().lpush(...).ltrim(...).exec() so the
+// queue-cap enforcement is atomic. The mock must return a chainable pipeline object.
 vi.mock('@kernel/redis', () => ({
   getRedis: vi.fn().mockResolvedValue({
-    lpush: vi.fn().mockResolvedValue(1),
-    ltrim: vi.fn().mockResolvedValue('OK'),
+    multi: vi.fn().mockReturnValue({
+      lpush: vi.fn().mockReturnThis(),
+      ltrim: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([1, 'OK']),
+    }),
   }),
 }));
 
@@ -130,12 +133,15 @@ describe('Email Provider Fallback Tests', () => {
 
     it('should queue failed emails for manual retry', async () => {
       const { getRedis } = await import('@kernel/redis');
-      // P1 FIX: Mock both lpush and ltrim. Previously only lpush was mocked;
-      // queueForRetry also calls ltrim to cap queue size, so the missing mock
-      // caused a silent TypeError that prevented queue size enforcement.
+      // P2 FIX: Mock redis.multi() pipeline — queueForRetry now uses
+      // redis.multi().lpush(...).ltrim(...).exec() for atomic queue-cap enforcement.
+      const mockPipeline = {
+        lpush: vi.fn().mockReturnThis(),
+        ltrim: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([1, 'OK']),
+      };
       const mockRedis = {
-        lpush: vi.fn().mockResolvedValue(1),
-        ltrim: vi.fn().mockResolvedValue('OK'),
+        multi: vi.fn().mockReturnValue(mockPipeline),
       };
       (getRedis as any).mockResolvedValue(mockRedis);
 
@@ -151,20 +157,17 @@ describe('Email Provider Fallback Tests', () => {
         // Expected to throw
       }
 
-      // P1 FIX: queueForRetry now stores the ORIGINAL recipient address so that
-      // a retry worker can actually re-deliver the email. Previously it stored
-      // maskEmail(to) = "t***@e***.com" which is undeliverable, making the
-      // "retry queue" non-functional.
-      //
+      // Verify pipeline was used and the ORIGINAL recipient address is stored
+      // (not the masked form) so a retry worker can actually re-deliver the email.
       // PII masking is applied only in log output, not in the retry payload.
-      // The Redis list 'email:failed' must be protected via auth, encryption,
-      // and access control per the data retention policy.
-      expect(mockRedis.lpush).toHaveBeenCalledWith(
+      expect(mockRedis.multi).toHaveBeenCalled();
+      expect(mockPipeline.lpush).toHaveBeenCalledWith(
         'email:failed',
         expect.stringContaining('test@example.com')
       );
-      // Verify ltrim is also called to enforce queue size cap
-      expect(mockRedis.ltrim).toHaveBeenCalledWith('email:failed', 0, expect.any(Number));
+      // Verify ltrim is chained to enforce queue size cap atomically
+      expect(mockPipeline.ltrim).toHaveBeenCalledWith('email:failed', 0, expect.any(Number));
+      expect(mockPipeline.exec).toHaveBeenCalled();
     });
   });
 

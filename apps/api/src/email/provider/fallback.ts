@@ -206,13 +206,22 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
 
     // COMPLIANCE FIX (Finding 13): Inject List-Unsubscribe headers if provided
     // P2-10 FIX: Sanitize header values to prevent CRLF injection
+    // P2 FIX: Cap header value length. RFC 5322 limits header lines to 998 chars;
+    // an unbounded value can exceed mail-server limits or trigger parsing bugs.
+    const MAX_UNSUBSCRIBE_HEADER_LEN = 2048;
     const enrichedMessage = { ...message };
     if (message.listUnsubscribe) {
+      if (message.listUnsubscribe.length > MAX_UNSUBSCRIBE_HEADER_LEN) {
+        throw new Error(`listUnsubscribe header value exceeds ${MAX_UNSUBSCRIBE_HEADER_LEN} characters`);
+      }
       enrichedMessage.headers = {
         ...enrichedMessage.headers,
         [sanitizeHeaderKey('List-Unsubscribe')]: sanitizeHeaderValue(message.listUnsubscribe),
       };
       if (message.listUnsubscribePost) {
+        if (message.listUnsubscribePost.length > MAX_UNSUBSCRIBE_HEADER_LEN) {
+          throw new Error(`listUnsubscribePost header value exceeds ${MAX_UNSUBSCRIBE_HEADER_LEN} characters`);
+        }
         enrichedMessage.headers[sanitizeHeaderKey('List-Unsubscribe-Post')] = sanitizeHeaderValue(message.listUnsubscribePost);
       }
     }
@@ -408,9 +417,15 @@ export class FallbackEmailSender {
         retryCount: 0,
       };
 
-      await redis.lpush('email:failed', JSON.stringify(failedMessage));
-      // P1-3 FIX: Cap the queue size to prevent unbounded growth
-      await redis.ltrim('email:failed', 0, FallbackEmailSender.MAX_FAILED_QUEUE_SIZE - 1);
+      // P2 FIX: Use a pipeline (MULTI/EXEC) to make lpush + ltrim atomic.
+      // Without atomicity, a concurrent writer between the two commands can
+      // push an item that ltrim then evicts — the cap is momentarily off by
+      // O(concurrency). Under the default cap of 10 000 this is low-risk, but
+      // using a pipeline eliminates the race entirely at no extra cost.
+      const pipeline = redis.multi();
+      pipeline.lpush('email:failed', JSON.stringify(failedMessage));
+      pipeline.ltrim('email:failed', 0, FallbackEmailSender.MAX_FAILED_QUEUE_SIZE - 1);
+      await pipeline.exec();
       // SECURITY FIX (Finding 14): Mask PII in log output only (not in the retry payload)
       logger.info('Email queued for manual retry', { to: maskEmail(message.to) });
     } catch (error) {
@@ -453,7 +468,12 @@ export function createLogProvider(): EmailProvider {
         from: message.from,
         subject: message.subject,
       });
-      return { id: `log-${Date.now()}`, provider: 'Log' };
+      // P2 FIX: Append a random suffix to guarantee uniqueness under concurrent sends.
+      // Date.now() alone has millisecond granularity; two sends within the same
+      // millisecond produce identical IDs, breaking retry deduplication.
+      // Math.random().toString(36).slice(2,9) gives ~7 base36 chars (~36^7 ≈ 78B
+      // combinations per millisecond), making accidental collisions negligible.
+      return { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, provider: 'Log' };
     },
     async healthCheck() {
       return true;
