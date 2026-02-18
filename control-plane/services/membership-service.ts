@@ -104,6 +104,8 @@ export class MembershipService {
    * added explicit guard preventing admins from granting admin to others.
    * Previously: admin could promote other users to admin (same level, check passed).
    * Now: only owners can grant or modify admin-level roles.
+   * FIX(P2): Validate actorRole from DB before casting — avoids treating an
+   * unexpected DB value as a valid Role and inadvertently passing security checks.
    */
   private async checkActorPermission(client: PoolClient, orgId: string, actorUserId: string, targetRole: Role): Promise<void> {
     const { rows } = await client.query(
@@ -113,7 +115,14 @@ export class MembershipService {
     if (rows.length === 0) {
       throw new ForbiddenError('Actor is not a member of this organization');
     }
-    const actorRole = rows[0]?.['role'] as Role;
+    const rawRole = rows[0]?.['role'];
+    // FIX(P2): Runtime-validate the role value from DB before treating it as a
+    // typed Role. An unexpected value (e.g. from a DB migration gap) would
+    // silently receive actorLevel=0 and fail closed rather than crashing.
+    if (typeof rawRole !== 'string' || !VALID_ROLES.includes(rawRole as Role)) {
+      throw new ForbiddenError('Actor has an unrecognised role and cannot perform this action');
+    }
+    const actorRole = rawRole as Role;
     const actorLevel = ROLE_HIERARCHY[actorRole] ?? 0;
     const targetLevel = ROLE_HIERARCHY[targetRole] ?? 0;
     // Only owners can grant or modify admin-level memberships
@@ -145,6 +154,12 @@ export class MembershipService {
     this.validateId(orgId, 'orgId');
     this.validateId(userId, 'userId');
     this.validateRole(role);
+    // FIX(P2): Validate actorUserId as UUID when provided — a non-UUID string
+    // would be silently forwarded to the DB permission query, potentially
+    // enabling IDOR enumeration via 403/404 differential on malformed inputs.
+    if (actorUserId !== undefined) {
+      this.validateId(actorUserId, 'actorUserId');
+    }
 
     const client = await this.pool.connect();
 
@@ -184,6 +199,10 @@ export class MembershipService {
     this.validateId(orgId, 'orgId');
     this.validateId(userId, 'userId');
     this.validateRole(role);
+    // FIX(P2): Validate actorUserId as UUID when provided
+    if (actorUserId !== undefined) {
+      this.validateId(actorUserId, 'actorUserId');
+    }
 
     const client = await this.pool.connect();
 

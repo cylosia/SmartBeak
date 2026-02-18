@@ -197,13 +197,18 @@ export class MultiTierCache {
 
     if (cleaned > 0) {
       this.inFlightCleaned += cleaned;
-      logger.error(`Cleaned ${cleaned} stale in-flight requests. Total cleaned: ${this.inFlightCleaned}`);
+      // FIX(P3): Use logger.warn — cleaning up stale entries is expected
+      // maintenance behaviour, not an application error.
+      logger.warn(`Cleaned ${cleaned} stale in-flight requests. Total cleaned: ${this.inFlightCleaned}`);
     }
 
     // Check if approaching limit
     const utilization = this.inFlightRequests.size / MAX_IN_FLIGHT_REQUESTS;
     if (utilization >= IN_FLIGHT_ALERT_THRESHOLD) {
-      logger.error(`ALERT: In-flight requests approaching limit`, undefined, {
+      // FIX(P3): Use logger.warn with metadata object — previously called
+      // logger.error(msg, undefined, obj) which passed undefined as the Error
+      // argument and silently dropped the metadata as an ignored third argument.
+      logger.warn(`ALERT: In-flight requests approaching limit`, {
         current: this.inFlightRequests.size,
         max: MAX_IN_FLIGHT_REQUESTS,
         utilization: `${(utilization * 100).toFixed(1)}%`,

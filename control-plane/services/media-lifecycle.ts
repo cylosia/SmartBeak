@@ -102,16 +102,20 @@ export class MediaLifecycleService {
   /**
    * Count cold candidates without loading all IDs into memory.
    * P2-6 FIX: Use Number() instead of parseInt().
+   * FIX(P1): Added orgId parameter — previously counted across ALL tenants,
+   * leaking cross-tenant aggregate counts to any org-level admin.
    */
-  async countColdCandidates(days: number): Promise<number> {
+  async countColdCandidates(orgId: string, days: number): Promise<number> {
+    validateOrgId(orgId);
     const safeDays = validatePositiveNumber(days, 'days');
 
     const { rows } = await this.pool.query(
       `SELECT COUNT(*)::int AS count FROM media_assets
        WHERE storage_class = 'hot'
          AND status != 'deleted'
-         AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)`,
-      [safeDays]
+         AND org_id = $1
+         AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $2::int)`,
+      [orgId, safeDays]
     );
     return Number(rows[0]?.['count'] ?? 0);
   }
@@ -120,8 +124,11 @@ export class MediaLifecycleService {
    * Find cold media candidates.
    * P2-5 FIX: Add deterministic ORDER BY.
    * FIX(P2): Validate that extracted IDs are non-null strings before returning.
+   * FIX(P1): Added orgId parameter — previously returned IDs from ALL tenants,
+   * leaking cross-tenant media asset identifiers to background jobs.
    */
-  async findColdCandidates(days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
+  async findColdCandidates(orgId: string, days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
+    validateOrgId(orgId);
     const safeDays = validatePositiveNumber(days, 'days');
     const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
@@ -129,10 +136,11 @@ export class MediaLifecycleService {
       `SELECT id FROM media_assets
        WHERE storage_class = 'hot'
          AND status != 'deleted'
-         AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)
+         AND org_id = $1
+         AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $2::int)
        ORDER BY COALESCE(last_accessed_at, created_at) ASC
-       LIMIT $2`,
-      [safeDays, safeLimit]
+       LIMIT $3`,
+      [orgId, safeDays, safeLimit]
     );
     return rows.map((r: Record<string, unknown>) => {
       const id = r['id'];
@@ -246,9 +254,20 @@ export class MediaLifecycleService {
        LIMIT $3`,
       [storageClass, orgId, safeLimit]
     );
-    // The local MediaAsset is an interface (plain object shape), not the domain
-    // entity class. The pg rows satisfy this interface directly.
-    return rows as MediaAsset[];
+    // FIX(P2): Map rows through validated fields instead of blind cast.
+    // pg returns Record<string, unknown>; blindly casting to MediaAsset[] bypasses
+    // the type system and hides missing/mistyped columns at runtime.
+    return rows.map((r: Record<string, unknown>): MediaAsset => ({
+      id: typeof r['id'] === 'string' ? r['id'] : String(r['id'] ?? ''),
+      org_id: typeof r['org_id'] === 'string' ? r['org_id'] : String(r['org_id'] ?? ''),
+      size_bytes: Number(r['size_bytes'] ?? 0),
+      created_at: r['created_at'] instanceof Date ? r['created_at'] : new Date(String(r['created_at'] ?? 0)),
+      last_accessed_at: r['last_accessed_at'] instanceof Date
+        ? r['last_accessed_at']
+        : (r['last_accessed_at'] == null ? null : new Date(String(r['last_accessed_at']))),
+      storage_class: typeof r['storage_class'] === 'string' ? r['storage_class'] : String(r['storage_class'] ?? ''),
+      status: typeof r['status'] === 'string' ? r['status'] : String(r['status'] ?? ''),
+    }));
   }
 
   /**

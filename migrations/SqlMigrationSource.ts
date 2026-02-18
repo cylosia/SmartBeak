@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Knex } from 'knex';
 
@@ -21,6 +21,22 @@ export class SqlMigrationSource implements Knex.MigrationSource<string> {
       .filter(f => f.endsWith('.up.sql'))
       .map(f => f.replace('.up.sql', ''))
       .sort();
+
+    // FIX(P2): Validate that every .up.sql migration has a corresponding
+    // .down.sql pair at discovery time. Previously a missing rollback file was
+    // only discovered during rollback execution — after the forward migration
+    // had already run — making rollback impossible and leaving the schema in a
+    // non-reversible state that blocks CI migration roundtrip checks.
+    for (const migration of files) {
+      const downPath = join(SQL_DIR, `${migration}.down.sql`);
+      if (!existsSync(downPath)) {
+        throw new Error(
+          `Migration '${migration}' is missing a rollback file: ${downPath}. ` +
+          'Create the corresponding .down.sql before running migrations.'
+        );
+      }
+    }
+
     return Promise.resolve(files);
   }
 

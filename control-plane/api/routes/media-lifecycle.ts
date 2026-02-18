@@ -65,7 +65,9 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
       try {
         // FIX(P0): Pass orgId — getHotCount now requires tenant scoping
         hot = await svc.getHotCount(ctx.orgId);
-        coldCandidates = await svc.countColdCandidates(days);
+        // FIX(P1): Pass orgId — countColdCandidates now requires tenant scoping
+        // to prevent cross-tenant count leakage to org-level admins.
+        coldCandidates = await svc.countColdCandidates(ctx.orgId, days);
       } catch (serviceError) {
         logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
         return errors.serviceUnavailable(res);

@@ -295,10 +295,13 @@ export class MetricsCollector extends EventEmitter {
     this.gauge('metrics.collector.evicted', this.keysEvicted, {}, 'Total keys evicted');
 
     // Alert if above threshold and not alerted recently
-    if (utilization >= KEY_ALERT_THRESHOLD && 
+    if (utilization >= KEY_ALERT_THRESHOLD &&
         (now - this.lastAlertTime) > ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      logger.error('Metrics collector approaching key limit', undefined, {
+      // FIX(P3): Use logger.warn with metadata object — previously called
+      // logger.error(msg, undefined, obj) which passed undefined as the Error
+      // argument and silently dropped the metadata as an ignored third argument.
+      logger.warn('Metrics collector approaching key limit', {
         keyCount,
         maxKeys: this.config.maxKeys,
         utilization: `${(utilization * 100).toFixed(1)}%`,

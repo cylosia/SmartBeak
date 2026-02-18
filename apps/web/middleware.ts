@@ -1,5 +1,6 @@
 
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import type { ClerkMiddlewareAuth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { BASE_SECURITY_HEADERS, buildWebAppCsp, PERMISSIONS_POLICY_WEB_APP } from '@config/headers';
@@ -59,10 +60,31 @@ function getAppOrigin(): string {
   return process.env['NEXT_PUBLIC_APP_URL'] || 'https://app.smartbeak.com';
 }
 
-// P0-5 FIX: Define protected routes that require authentication
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/settings(.*)', '/admin(.*)']);
+// FIX(P0): Use a public-route allowlist and protect everything else.
+// Previously only '/dashboard(.*)', '/settings(.*)', '/admin(.*)' were protected;
+// the 40+ application pages (/billing, /domains, /activity, /reports, etc.)
+// were silently unauthenticated — any visitor could access them without logging in.
+const isPublicRoute = createRouteMatcher([
+  '/login(.*)',
+  '/register(.*)',
+  '/pricing(.*)',
+  '/demo(.*)',
+  '/help(.*)',
+  '/constitution(.*)',
+  // Token-based public diligence links
+  '/diligence/(.*)',
+  // Webhook endpoints use their own HMAC signature verification, not Clerk auth
+  '/api/webhooks/(.*)',
+]);
 
-// P2-16 FIX: CSRF origin validation for state-changing requests
+// FIX(P1): Webhook routes must be excluded from CSRF origin validation.
+// Stripe, Clerk, and Paddle webhooks POST without Origin or Referer headers.
+// The previous CSRF guard at line 97–100 returned 403 for all such requests,
+// silently blocking all inbound payment and auth webhooks in production.
+const isWebhookRoute = createRouteMatcher(['/api/webhooks/(.*)']);
+
+// P2-16 FIX: CSRF origin validation for state-changing browser requests.
+// FIX(P1): Webhook routes bypass this check via the isWebhookRoute guard above.
 function validateOrigin(req: NextRequest): boolean {
   const method = req.method.toUpperCase();
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
@@ -91,11 +113,17 @@ function validateOrigin(req: NextRequest): boolean {
 }
 
 // P0-5 FIX: Use clerkMiddleware - the official Clerk v6 pattern
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- types inferred from @clerk/nextjs/server
-export default clerkMiddleware(async (auth: any, req: any) => {
-  // P2-16 FIX: CSRF validation for state-changing requests
-  if (!validateOrigin(req)) {
-    logger.warn('CSRF origin validation failed', { method: req.method, url: req.url });
+// FIX(P2): Use proper Clerk/Next.js types instead of `any` to preserve type
+// safety on auth.protect() and all NextRequest properties (method, headers, url).
+export default clerkMiddleware(async (auth: ClerkMiddlewareAuth, req: NextRequest) => {
+  // FIX(P1): Skip CSRF validation for webhook routes — they use HMAC signatures,
+  // not browser-based origin checks, and never send Origin/Referer headers.
+  if (!isWebhookRoute(req) && !validateOrigin(req)) {
+    // FIX(P2): Log only the pathname — req.url includes query string which may
+    // contain sensitive OAuth params (code=, state=, token=) that must not be
+    // persisted in log aggregation systems.
+    const safePath = new URL(req.url).pathname;
+    logger.warn('CSRF origin validation failed', { method: req.method, path: safePath });
     return new NextResponse('Forbidden', { status: 403 });
   }
 
@@ -110,8 +138,9 @@ export default clerkMiddleware(async (auth: any, req: any) => {
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-nonce', nonce);
 
-  // Protect routes that require authentication
-  if (isProtectedRoute(req)) {
+  // FIX(P0): Protect all routes that are not in the public allowlist.
+  // Webhooks are public but have their own HMAC auth; they do not use Clerk.
+  if (!isPublicRoute(req)) {
     try {
       await auth.protect();
     } catch {
