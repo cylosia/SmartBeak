@@ -135,23 +135,27 @@ export class QueryPlanAnalyzer {
   }
 
   /**
-   * Analyze without executing (safe for production)
+   * Analyze without executing (safe for production).
+   *
+   * P2-8 FIX: Added params parameter. Without it, queries containing $1, $2
+   * etc. would fail with "there is no parameter $1" because PostgreSQL has no
+   * type information for the placeholders in a bare EXPLAIN (no ANALYZE).
    */
-  async analyzeSafe(query: string): Promise<Partial<PlanAnalysis>> {
+  async analyzeSafe(query: string, params?: unknown[]): Promise<Partial<PlanAnalysis>> {
     validateSelectOnly(query);
     const explainQuery = `EXPLAIN (FORMAT JSON) ${query}`;
-    
+
     try {
-      const result = await this.pool.query(explainQuery);
+      const result = await this.pool.query(explainQuery, params);
       const planData = result.rows[0]?.['QUERY PLAN'] as Array<{ Plan: QueryPlanNode }>;
-      
+
       if (!planData || planData.length === 0) {
         throw new Error('Failed to get query plan');
       }
 
-      return this.analyzePlanSafe(planData[0]!.Plan!, query);
+      return this.analyzePlanSafe(planData[0]!['Plan']!, query);
     } catch (error) {
-      logger.error('[QueryPlanAnalyzer] Failed to analyze query', error as Error);
+      logger.error('[QueryPlanAnalyzer] Failed to analyze query', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -315,8 +319,12 @@ export class QueryPlanAnalyzer {
     // Sequential scan recommendations
     if (analysis.sequentialScans.length > 0) {
       for (const table of analysis.sequentialScans) {
-        // Extract WHERE conditions for this table
-        const whereMatch = query.match(new RegExp(`FROM\\s+${table}[^\\w].*?WHERE\\s+(.+?)(?:ORDER|GROUP|LIMIT|$)`, 'i'));
+        // P1-6 FIX: Escape the table name before using it in a RegExp. Table
+        // names from EXPLAIN output can contain '.' (schema.table) or other
+        // regex metacharacters. Without escaping, '.' matches any character and
+        // can cause catastrophic backtracking with the .*? quantifier.
+        const escapedTable = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const whereMatch = query.match(new RegExp(`FROM\\s+${escapedTable}[^\\w].*?WHERE\\s+(.+?)(?:ORDER|GROUP|LIMIT|$)`, 'i'));
         if (whereMatch?.[1]) {
           const columns = this.extractColumnsFromWhere(whereMatch[1]);
           if (columns.length > 0) {
@@ -396,8 +404,15 @@ export class QueryPlanAnalyzer {
           });
         }
       }
-    } catch {
-      // pg_stat_statements might not be available
+    } catch (error) {
+      // P2-9 FIX: Distinguish between "extension not installed" (expected) and
+      // unexpected failures (connection errors, permissions) that should surface.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('does not exist') || msg.includes('pg_stat_statements')) {
+        logger.debug('[QueryPlanAnalyzer] pg_stat_statements not available', { tableName });
+      } else {
+        logger.error('[QueryPlanAnalyzer] Unexpected error in getIndexRecommendations', error instanceof Error ? error : new Error(msg));
+      }
     }
 
     return recommendations;
@@ -454,8 +469,12 @@ export class QueryPlanAnalyzer {
         meanTime: row.mean_time as number,
         stddevTime: row.stddev_time as number,
       }));
-    } catch {
-      // pg_stat_statements might not be available
+    } catch (error) {
+      // P2-9 FIX: Log unexpected errors; silently ignore only missing extension.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!msg.includes('does not exist') && !msg.includes('pg_stat_statements')) {
+        logger.error('[QueryPlanAnalyzer] Unexpected error in getSlowQueries', error instanceof Error ? error : new Error(msg));
+      }
       return [];
     }
   }

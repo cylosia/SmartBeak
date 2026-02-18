@@ -69,10 +69,32 @@ export class DbQueryCache {
       enableLogging: options.enableLogging ?? false,
     };
 
+    // P2-7 FIX: Validate invariant at construction time to prevent every cached
+    // entry from being immediately stale (staleAt = now + ttl - threshold < now).
+    if (this.options.staleThresholdMs >= this.options.defaultTtlMs) {
+      throw new Error(
+        `DbQueryCache: staleThresholdMs (${this.options.staleThresholdMs}ms) must be ` +
+        `less than defaultTtlMs (${this.options.defaultTtlMs}ms)`
+      );
+    }
+
     this.cache = new LRUCache({
       max: this.options.maxSize,
       updateAgeOnGet: true,
-      dispose: (value, key) => {
+      dispose: (_value, key) => {
+        // P2-2 FIX: When the LRU evicts an entry, remove the cache key from
+        // every table→keys Set in tableQueries. Without this, tableQueries
+        // accumulates dead keys indefinitely (unbounded memory growth).
+        const stats = this.queryStats.get(key);
+        if (stats) {
+          for (const table of stats.tables) {
+            const keySet = this.tableQueries.get(table);
+            if (keySet) {
+              keySet.delete(key);
+              if (keySet.size === 0) this.tableQueries.delete(table);
+            }
+          }
+        }
         this.queryStats.delete(key);
       },
     });
@@ -83,7 +105,9 @@ export class DbQueryCache {
    * SECURITY FIX P1-4: Use SHA-256 instead of 32-bit DJB2 hash to prevent collisions
    */
   private generateKey(query: string, params: unknown[]): string {
-    const normalizedQuery = query.replace(/\s+/g, ' ').trim().toLowerCase();
+    // P1-4 FIX: Do NOT toLowerCase() — SQL string literals are case-sensitive.
+    // WHERE status='Active' and WHERE status='active' are different queries.
+    const normalizedQuery = query.replace(/\s+/g, ' ').trim();
     return `db:${this.hashString(normalizedQuery)}:${this.hashString(JSON.stringify(params))}`;
   }
 
@@ -204,7 +228,11 @@ export class DbQueryCache {
         rowCount: result.rowCount ?? 0,
         cachedAt: now,
         expiresAt: now + ttlMs,
-        staleAt: now + ttlMs - this.options.staleThresholdMs,
+        // P2-7 FIX: Clamp staleAt so it can never be in the past at creation time.
+        // The constructor now enforces staleThresholdMs < defaultTtlMs, but a
+        // per-call ttlMs override could still produce staleAt < now if the caller
+        // passes a ttlMs smaller than staleThresholdMs.
+        staleAt: Math.max(now, now + ttlMs - this.options.staleThresholdMs),
         query: queryText.substring(0, 100),
         key: cacheKey,
       };
@@ -268,7 +296,7 @@ export class DbQueryCache {
           rowCount: result.rowCount ?? 0,
           cachedAt: now,
           expiresAt: now + ttlMs,
-          staleAt: now + ttlMs - this.options.staleThresholdMs,
+          staleAt: Math.max(now, now + ttlMs - this.options.staleThresholdMs),
           query: queryText.substring(0, 100),
           key: cacheKey,
         };

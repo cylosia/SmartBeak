@@ -70,17 +70,18 @@ async function fetchQueueMetrics(pool: Pool, orgId: string): Promise<QueueMetric
 export async function queueMetricsRoutes(app: FastifyInstance, pool: Pool) {
   app.get('/admin/queues/metrics', async (req, res) => {
   try {
-    // SECURITY FIX P1-8: Use getAuthContext() instead of unsafe cast
-    const ctx = getAuthContext(req);
-    requireRole(ctx, ['owner','admin']);
-    await rateLimit('admin:queues:metrics', 40);
+    // P1-3 FIX: Rate limit BEFORE auth checks. Previously rate limiting ran
+    // after requireRole(), meaning unauthenticated/unauthorized callers could
+    // spam auth failures without consuming any rate-limit quota.
+    await rateLimit(`admin:queues:metrics:${req.ip}`, 40);
 
-    // SECURITY FIX P1-6: Pass orgId for tenant isolation
-    const metrics = await fetchQueueMetrics(pool, ctx["orgId"]);
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin']);
+
+    const metrics = await fetchQueueMetrics(pool, ctx['orgId']);
     return res.send(metrics);
   } catch (error) {
-    // P2-6: Use structured logger instead of console.error
-    logger.error('[admin/queues/metrics] Error:', error as Error);
+    logger.error('[admin/queues/metrics] Error', { message: error instanceof Error ? error.message : String(error) });
     return errors.internal(res, 'Failed to retrieve queue metrics');
   }
   });

@@ -108,12 +108,29 @@ describe('QueryCache Memory Leak Prevention', () => {
 
   describe('Version Cleanup', () => {
     it('should reset version number when exceeding maximum', async () => {
-      // Simulate many invalidations
-      for (let i = 0; i < 1000010; i++) {
-        await queryCache.invalidateTable('test_table');
-      }
+      // P2-12 FIX: The original test looped 1,000,010 times with `await`, which
+      // serialises 1M microtask turns and always exceeds Jest's timeout. The
+      // trivial assertion (versionKeys > 0) also provided no real coverage.
+      //
+      // Instead, we directly set the internal version entry to MAX_VERSION_NUMBER
+      // and assert that one more invalidation wraps it back to 1.
+      const MAX_VERSION_NUMBER = 1000000;
 
-      // Version should have been reset
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (queryCache as any).queryVersions.set('test_table', {
+        version: MAX_VERSION_NUMBER,
+        lastAccessed: Date.now(),
+        tableCount: 1,
+      });
+
+      await queryCache.invalidateTable('test_table');
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const entry = (queryCache as any).queryVersions.get('test_table');
+      expect(entry).toBeDefined();
+      // version was MAX_VERSION_NUMBER; next = MAX_VERSION_NUMBER + 1 > MAX → resets to 1
+      expect(entry.version).toBe(1);
+
       const stats = queryCache.getStats();
       expect(stats.versionKeys).toBeGreaterThan(0);
     });
