@@ -63,6 +63,14 @@ export async function domainOwnershipRoutes(app: FastifyInstance, pool: Pool) {
         return errors.forbidden(res, 'Forbidden: Source organization mismatch');
       }
 
+      // P2-SELF-TRANSFER-FIX: Reject transfers where source and destination are the
+      // same org. Without this check the transfer succeeds as a no-op but still
+      // creates a spurious audit log entry in domain_transfer_log, polluting the
+      // audit trail and making it impossible to distinguish real ownership changes.
+      if (fromOrg === toOrg) {
+        return errors.badRequest(res, 'Cannot transfer domain to the same organization');
+      }
+
       await svc.transferDomain(id, fromOrg, toOrg);
       return { ok: true, transferred: true };
     } catch (error) {

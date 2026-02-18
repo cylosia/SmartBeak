@@ -278,11 +278,17 @@ export async function verifyDnsMultiSafe(
 
   return results;
   } catch (error) {
-  logger.error(
+  // P1-LOG-FIX: DnsValidationError is an expected input-validation rejection — do not
+  // log it as an error. Previously ALL errors (including expected validation failures)
+  // were logged at error level, causing noisy false alerts in production monitoring.
+  // Compare: verifyDnsSafe (line ~191) correctly suppresses DnsValidationError logs.
+  if (!(error instanceof DnsValidationError)) {
+    logger.error(
     'Multi DNS verification failed',
     error instanceof Error ? error : new Error(String(error)),
     { domain, methodCount: methods?.length }
-  );
+    );
+  }
   throw error;
   }
 }
@@ -304,6 +310,17 @@ export async function getDnsTxtRecordsSafe(domain: string): Promise<string[]> {
 
   const sanitizedDomain = domain.trim().toLowerCase();
 
+  // P2-REGEX-FIX: Add the same format check that verifyDnsSafe uses. Without it,
+  // malformed domains (e.g. leading/trailing hyphens, consecutive dots) could reach
+  // kernelGetDnsTxtRecords which validates internally but produces cryptic errors.
+  // This makes the validation surface consistent across all three safe wrappers.
+  if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(sanitizedDomain) || sanitizedDomain.includes('..')) {
+    logger.error('Domain format validation failed in TXT lookup', new Error('Validation failed'), {
+    domain: sanitizedDomain,
+    });
+    throw new DnsValidationError('Invalid domain format');
+  }
+
   // P1-REBINDING-FIX: Added DNS rebinding check (same rationale as verifyDnsMultiSafe fix).
   if (isPotentialRebindingAttack(sanitizedDomain)) {
     logger.error('Potential DNS rebinding attack detected in TXT lookup', new Error('Security validation failed'), {
@@ -321,11 +338,14 @@ export async function getDnsTxtRecordsSafe(domain: string): Promise<string[]> {
 
   return records;
   } catch (error) {
-  logger.error(
+  // P1-LOG-FIX: DnsValidationError is expected (input validation) — suppress error log.
+  if (!(error instanceof DnsValidationError)) {
+    logger.error(
     'Failed to get DNS TXT records',
     error instanceof Error ? error : new Error(String(error)),
     { domain }
-  );
+    );
+  }
   throw error;
   }
 }

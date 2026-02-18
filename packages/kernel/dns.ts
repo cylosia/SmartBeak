@@ -123,13 +123,22 @@ export async function verifyDns(domain: string, token: string): Promise<boolean>
     .filter(r => r.length <= MAX_TXT_RECORD_VALUE_LENGTH);
   return flatRecords.includes(token);
   } catch (error: unknown) {
-  const dnsError = error as { code?: string };
-  if (dnsError.code === 'SERVFAIL') {
-    // DNS-3-FIX P1: Log SERVFAIL separately — it may indicate DNSSEC failure.
+  // DNS-CAST-FIX P1: Use type guard instead of unsafe `as` cast on unknown error.
+  const dnsCode = error instanceof Error && 'code' in error
+    ? (error as Error & { code?: string })['code']
+    : undefined;
+  if (dnsCode === 'SERVFAIL') {
+    // DNS-3-FIX P1: SERVFAIL must throw — it signals a DNSSEC failure or upstream
+    // resolver error. Returning false would silently mask DNSSEC tampering as "record
+    // not found", making a security-relevant event indistinguishable from a missing
+    // TXT record. Callers must handle this to avoid false-negative verification.
     logger.warn('SERVFAIL during DNS verification — possible DNSSEC or resolver failure', { domain });
-    return false;
+    throw Object.assign(
+      new Error('DNS SERVFAIL: possible DNSSEC or upstream resolver failure'),
+      { code: 'SERVFAIL' }
+    );
   }
-  if (dnsError.code && RECOVERABLE_DNS_ERRORS.includes(dnsError.code)) {
+  if (dnsCode && RECOVERABLE_DNS_ERRORS.includes(dnsCode)) {
     return false;
   }
   throw error;
@@ -186,9 +195,14 @@ export async function verifyDnsMulti(
     results[method.record] = flatRecords.includes(method["token"]);
     }
   } catch (error: unknown) {
-    // DNS-3-FIX P1: Log SERVFAIL separately — it may indicate DNSSEC failure.
-    const code = (error as { code?: string }).code;
+    // DNS-CAST-FIX P1: Use type guard instead of unsafe `as` cast on unknown error.
+    const code = error instanceof Error && 'code' in error
+      ? (error as Error & { code?: string })['code']
+      : undefined;
     if (code === 'SERVFAIL') {
+      // DNS-3-FIX P1: SERVFAIL is a security-relevant event; log prominently.
+      // In verifyDnsMulti we record false for this method rather than aborting
+      // the entire batch, but the warning must still be visible for investigation.
       logger.warn('SERVFAIL during multi DNS verification — possible DNSSEC or resolver failure', { record: method.record });
     } else if (!code || !RECOVERABLE_DNS_ERRORS.includes(code)) {
       // P1-FIX: Log unexpected errors so they are not silently masked as "record not found".
@@ -223,13 +237,20 @@ export async function getDnsTxtRecords(domain: string): Promise<string[]> {
   return records.flat().slice(0, MAX_TXT_RECORDS)
     .filter(r => r.length <= MAX_TXT_RECORD_VALUE_LENGTH);
   } catch (error: unknown) {
-  const dnsError = error as { code?: string };
-  if (dnsError.code === 'SERVFAIL') {
-    // DNS-3-FIX P1: Log SERVFAIL separately — may indicate DNSSEC or resolver failure.
+  // DNS-CAST-FIX P1: Use type guard instead of unsafe `as` cast on unknown error.
+  const dnsCode = error instanceof Error && 'code' in error
+    ? (error as Error & { code?: string })['code']
+    : undefined;
+  if (dnsCode === 'SERVFAIL') {
+    // DNS-3-FIX P1: SERVFAIL must throw — it signals a DNSSEC failure or upstream
+    // resolver error that callers must handle, not silently swallow as empty results.
     logger.warn('SERVFAIL during DNS TXT records lookup — possible DNSSEC or resolver failure', { domain });
-    return [];
+    throw Object.assign(
+      new Error('DNS SERVFAIL: possible DNSSEC or upstream resolver failure'),
+      { code: 'SERVFAIL' }
+    );
   }
-  if (dnsError.code && RECOVERABLE_DNS_ERRORS.includes(dnsError.code)) {
+  if (dnsCode && RECOVERABLE_DNS_ERRORS.includes(dnsCode)) {
     return [];
   }
   throw error;

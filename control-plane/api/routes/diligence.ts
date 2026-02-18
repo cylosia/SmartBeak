@@ -82,7 +82,10 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     },
     content: {
     totalArticles: parseInt(stats.total_articles || '0', 10),
-    avgContentLength: parseInt(stats.avg_content_length || '0', 10),
+    // P1-FLOAT-FIX: AVG() returns a float — parseInt() silently truncated the decimal
+    // (e.g. 1234.7 → 1234), under-reporting average content length in due-diligence
+    // reports. parseFloat preserves the precision returned by the database.
+    avgContentLength: parseFloat(stats.avg_content_length || '0'),
     lastPublished: stats.last_published,
     },
     revenueConfidence: domain.revenue_confidence,

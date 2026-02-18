@@ -28,8 +28,15 @@ export class DomainOwnershipService {
   // When called without a client (pool.query), no locking is applied since we're
   // outside a transaction and FOR UPDATE requires an active transaction.
   const lockClause = client ? 'FOR UPDATE' : '';
+  // P2-ARCHIVE-FIX: Added JOIN on domains to check archived_at IS NULL. Previously
+  // this queried only domain_registry, which has no archived_at column. A soft-deleted
+  // domain (domains.archived_at IS NOT NULL) would still pass ownership verification,
+  // allowing operations on domains that should no longer be accessible after deletion.
+  // The FOR UPDATE lock applies to domain_registry rows; the JOIN only filters.
   const { rows } = await db.query(
-    `SELECT 1 FROM domain_registry WHERE id=$1 AND org_id=$2 ${lockClause}`,
+    `SELECT 1 FROM domain_registry dr
+     JOIN domains d ON d.id = dr.id
+     WHERE dr.id=$1 AND dr.org_id=$2 AND d.archived_at IS NULL ${lockClause}`,
     [domainId, orgId]
   );
   if (rows.length === 0) {
