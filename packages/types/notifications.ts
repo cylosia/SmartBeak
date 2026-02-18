@@ -109,7 +109,7 @@ export interface NotificationAttempt {
   id: string;
   notificationId: string;
   channel: string;
-  status: 'pending' | 'sent' | 'failed' | 'delivered';
+  status: 'success' | 'failure';
   sentAt?: Date;
   deliveredAt?: Date;
   failedAt?: Date;

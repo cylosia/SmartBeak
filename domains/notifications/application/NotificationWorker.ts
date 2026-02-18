@@ -96,8 +96,22 @@ export class NotificationWorker {
     const attemptCount = await this.attempts.countByNotification(notification["id"], client);
     const attempt = attemptCount + 1;
 
-    // Check user preferences
-    const preferences = await this.prefs.getForUser(notification.userId);
+    // Enforce retry cap: send to DLQ and mark as permanently failed if exhausted
+    if (attempt > NotificationWorker.MAX_RETRIES) {
+    await this.dlq.record(notification["id"], notification.channel, `Max retries (${NotificationWorker.MAX_RETRIES}) exceeded`, client);
+    const failedNotification = notification.fail();
+    await this.notifications.save(failedNotification, client);
+    await client.query('COMMIT');
+    logger.warn('Notification exceeded max retries, moved to DLQ', {
+      notificationId: notification["id"],
+      channel: notification.channel,
+      attempts: attempt,
+    });
+    return { success: false, error: 'Max retries exceeded' };
+    }
+
+    // Check user preferences within the transaction to prevent stale reads
+    const preferences = await this.prefs.getForUser(notification.userId, client);
     const pref = preferences.find(p => p.channel === notification.channel);
     if (pref && !pref.isEnabled()) {
     // Skip delivery based on user preference
@@ -208,7 +222,7 @@ export class NotificationWorker {
     const failedNotification = sendingNotification.fail();
     await this.notifications.save(failedNotification, client);
 
-    await this.dlq.record(notification["id"], notification.channel, errorMessage);
+    await this.dlq.record(notification["id"], notification.channel, errorMessage, client);
 
     // Write event to outbox within the transaction for at-least-once delivery.
     await writeToOutbox(client, new NotificationFailed().toEnvelope(notification["id"], errorMessage));
@@ -250,7 +264,8 @@ export class NotificationWorker {
   * @returns Promise resolving to batch results
   * MEDIUM FIX M14: Explicit return type
   *
-  * HIGH FIX: Added transaction wrapper for batch operations to ensure atomicity
+  * Each notification is processed independently in its own transaction.
+  * Batch processing uses a concurrency limit to avoid pool exhaustion.
   */
   async processBatch(notificationIds: string[]): Promise<Map<string, ProcessResult>> {
     if (!Array.isArray(notificationIds)) {

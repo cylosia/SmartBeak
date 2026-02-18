@@ -1,15 +1,20 @@
-export type AdvisorSignal = {
-  content_id: string;
-  traffic: number;
-  roi_12mo: number;
-  freshness_days: number;
-  decay: boolean;
-  serp_volatility: 'stable' | 'moderate' | 'volatile';
-};
+import { z } from 'zod';
 
+export const AdvisorSignalSchema = z.object({
+  content_id: z.string().min(1),
+  traffic: z.number().nonnegative(),
+  roi_12mo: z.number(),
+  freshness_days: z.number().nonnegative(),
+  decay: z.boolean(),
+  serp_volatility: z.enum(['stable', 'moderate', 'volatile']),
+});
+
+export type AdvisorSignal = z.infer<typeof AdvisorSignalSchema>;
+
+// 'create' removed: this function scores existing content — creation is out of scope
 export type AdvisorRecommendation = {
   content_id: string;
-  action: 'refresh' | 'expand' | 'create' | 'prune';
+  action: 'refresh' | 'expand' | 'prune';
   priority_score: number;
   explanation: string[];
 };

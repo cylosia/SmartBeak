@@ -8,7 +8,7 @@ import { requireRole, type Role } from '../../services/auth';
 import { NotificationAdminService } from '../../services/notification-admin';
 import { rateLimit } from '../../services/rate-limit';
 import { sanitizeErrorMessage } from '../../../packages/security/logger';
-import { NotFoundError, ValidationError } from '@errors';
+import { NotFoundError, ValidationError, ForbiddenError } from '@errors';
 import { errors } from '@errors/responses';
 import { isValidUUID } from '../../../packages/security/input-validator';
 
@@ -44,6 +44,9 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       const result = await admin.listNotifications(ctx["orgId"]);
       return res.send(result);
     } catch (error) {
+      if (error instanceof ForbiddenError) {
+        return errors.forbidden(res, 'Insufficient permissions');
+      }
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve notifications');
       logger.error(`[admin/notifications] Error: ${sanitizedError}`);
@@ -75,6 +78,9 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
     } catch (error) {
       logger.error('[admin/notifications/:id/retry] Error', error instanceof Error ? error : new Error(String(error)));
 
+      if (error instanceof ForbiddenError) {
+        return errors.forbidden(res, 'Insufficient permissions');
+      }
       if (error instanceof NotFoundError) {
         return errors.notFound(res, 'Notification');
       }
@@ -102,6 +108,9 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       const result = await dlq.list(ctx["orgId"]);
       return res.send(result);
     } catch (error) {
+      if (error instanceof ForbiddenError) {
+        return errors.forbidden(res, 'Insufficient permissions');
+      }
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve DLQ');
       logger.error(`[admin/notifications/dlq] Error: ${sanitizedError}`);
@@ -124,6 +133,9 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
       const result = await admin.metrics(ctx["orgId"]);
       return res.send(result);
     } catch (error) {
+      if (error instanceof ForbiddenError) {
+        return errors.forbidden(res, 'Insufficient permissions');
+      }
       // SECURITY FIX: Issue 22 - Sanitize error messages
       const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to retrieve metrics');
       logger.error(`[admin/notifications/metrics] Error: ${sanitizedError}`);
@@ -156,6 +168,9 @@ export async function notificationAdminRoutes(app: FastifyInstance, pool: Pool) 
     } catch (error) {
       logger.error('[admin/notifications/:id/cancel] Error', error instanceof Error ? error : new Error(String(error)));
 
+      if (error instanceof ForbiddenError) {
+        return errors.forbidden(res, 'Insufficient permissions');
+      }
       if (error instanceof NotFoundError) {
         return errors.notFound(res, 'Notification');
       }

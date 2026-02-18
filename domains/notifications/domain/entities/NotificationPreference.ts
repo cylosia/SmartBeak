@@ -103,6 +103,7 @@ export class NotificationPreference {
   * @returns New NotificationPreference with updated frequency
   */
   setFrequency(frequency: 'immediate' | 'daily' | 'weekly'): NotificationPreference {
+  NotificationPreference.validateFrequency(frequency);
   return new NotificationPreference(
     this["id"],
     this.userId,

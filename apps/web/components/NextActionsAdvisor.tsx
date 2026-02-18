@@ -15,9 +15,14 @@ export function NextActionsAdvisor({ recommendations = [] }: NextActionsAdvisorP
   return (
   <div>
     <h2>What Should I Work on Next?</h2>
+    {recommendations.length === 0 && (
+    <p>No recommendations available at this time.</p>
+    )}
+    <ul role="list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
     {recommendations.map((recommendation) => (
-    <div
+    <li
       key={recommendation.content_id}
+      role="listitem"
       style={{
       border: '1px solid #e5e7eb',
       borderRadius: 6,
@@ -29,13 +34,14 @@ export function NextActionsAdvisor({ recommendations = [] }: NextActionsAdvisorP
       <strong>Priority:</strong> {recommendation.priority_score ?? 0}
       {Array.isArray(recommendation.explanation) && recommendation.explanation.length > 0 && (
       <ul>
-        {recommendation.explanation.map((explanationItem) => (
-        <li key={explanationItem}>{explanationItem}</li>
+        {recommendation.explanation.map((explanationItem, idx) => (
+        <li key={idx}>{explanationItem}</li>
         ))}
       </ul>
       )}
-    </div>
+    </li>
     ))}
+    </ul>
   </div>
   );
 }
