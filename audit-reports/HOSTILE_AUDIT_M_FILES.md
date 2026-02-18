@@ -36,6 +36,13 @@
 
 ---
 
+## ADDENDUM: Agent-Verified Findings (Cross-Checked)
+
+The following additional P0/P1 findings were discovered by parallel audit agents and
+independently verified against source code and dependency versions.
+
+---
+
 ## CRITICAL (P0) - Production Outage / Data Loss / Security Breach Imminent
 
 ### P0-1: Membership Table Name Mismatch - Data Integrity Failure
@@ -94,6 +101,21 @@
   }
   ```
 - **Risk**: **Silent metric data loss under load**. When the system is busiest and metrics matter most, persistence fails. No alerting on the failure path. **Blast radius: Complete loss of metrics persistence during high-cardinality events.**
+
+### P0-5: Clerk `getAuth()` Called Without `clerkMiddleware` -- All Auth Potentially Broken
+- **File**: `apps/web/middleware.ts:55`
+- **Category**: Security | Authentication
+- **Violation**: The project uses `@clerk/nextjs: ^6.0.0` (confirmed in `apps/web/package.json:12`). In Clerk v5+/v6, `getAuth(req)` requires the request to have been processed by `clerkMiddleware()` first. **There is no `clerkMiddleware` call anywhere in the codebase** (verified via codebase-wide grep). Without it, `getAuth()` either: (a) throws an error on every call, causing the catch block to redirect all users to `/login`, or (b) returns `{ userId: null }`, causing line 73 to invalidate all sessions.
+- **Fix**: Replace the manual middleware with Clerk's official pattern:
+  ```typescript
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
+  export default clerkMiddleware(async (auth, req) => {
+    if (isProtectedRoute(req)) { await auth.protect(); }
+    // Add security headers...
+  });
+  ```
+- **Risk**: **Complete authentication failure**. Either all users are constantly logged out (redirect loop to `/login`), or all session validation is bypassed. **Blast radius: Every authenticated page in the web application.**
 
 ---
 
@@ -234,6 +256,20 @@
   The LRU cache already handles the deduplication via `cache.get(key)`.
 - **Risk**: CPU waste under contention. 10-second delays for cache hits.
 
+### P1-11: Open Redirect via Host Header Injection
+- **File**: `apps/web/middleware.ts:59,74,96`
+- **Category**: Security
+- **Violation**: `new URL('/login', req.url)` uses `req.url` as the base URL in three redirect locations. If an attacker injects a crafted `Host` header (e.g., `Host: evil.com`) via reverse proxy misconfiguration, the redirect sends users to `https://evil.com/login` -- a phishing page.
+- **Fix**: Hardcode the application origin: `const origin = process.env['NEXT_PUBLIC_APP_URL'] || 'https://app.smartbeak.com';` and use `new URL('/login', origin)`.
+- **Risk**: Credential theft via phishing redirect after session expiry.
+
+### P1-12: `ThreadSafeModuleCache` Lock Provides Zero Mutual Exclusion
+- **File**: `apps/api/src/utils/moduleCache.ts:104,117,121`
+- **Category**: Concurrency
+- **Violation**: The lock is set on line 104 and deleted in the `finally` block on line 121 -- but `return promise` on line 118 returns the promise *before it resolves*. The `finally` runs in the same microtask as the lock set, so the lock is held for zero time. Concurrent callers bypass it completely.
+- **Fix**: Remove the lock mechanism entirely. The LRU cache already provides memoization via `cache.set(key, promise)` on line 117.
+- **Risk**: False sense of concurrency protection. Duplicate expensive loader invocations under contention.
+
 ---
 
 ## MEDIUM (P2) - Technical Debt / Maintainability / Performance Degradation
@@ -348,6 +384,48 @@
 - **Fix**: Write audit records to a database table within the same transaction as the membership mutation.
 - **Risk**: Compliance failure. No durable audit trail for membership changes.
 
+### P2-14: CSP Nonce Not Propagated to Server Components
+- **File**: `apps/web/middleware.ts:120-128`
+- **Category**: Security
+- **Violation**: The nonce is generated per-request and embedded in the CSP header, but NOT propagated via request headers to Next.js server components. The comment says "Server Components should read it from the CSP header" -- but this requires fragile CSP header parsing. Standard Next.js pattern is to set `x-nonce` on request headers.
+- **Fix**: Set nonce on request headers: `requestHeaders.set('x-nonce', nonce); NextResponse.next({ request: { headers: requestHeaders } });`
+- **Risk**: Inline scripts/styles blocked by CSP, or developers disable CSP to "fix" the issue.
+
+### P2-15: Missing `Vary` Header for CDN-Cached CSP Nonces
+- **File**: `apps/web/middleware.ts:115-128`
+- **Category**: Security
+- **Violation**: CSP header contains a per-request nonce but no `Vary` header prevents CDN caching of the response. A CDN caching the CSP header turns the per-request nonce into a static nonce, defeating XSS protection.
+- **Fix**: Add `response.headers.set('Vary', 'Cookie');`
+- **Risk**: CDN caching makes CSP nonces predictable, nullifying XSS protection.
+
+### P2-16: No CSRF Protection in Middleware
+- **File**: `apps/web/middleware.ts:41-108`
+- **Category**: Security
+- **Violation**: No `Origin`/`Referer` header validation for state-changing requests. CSP `form-action 'self'` doesn't protect against JavaScript-initiated cross-origin POSTs.
+- **Fix**: Add origin validation for non-GET/HEAD requests.
+- **Risk**: Cross-site request forgery against cookie-authenticated endpoints.
+
+### P2-17: Hardcoded Clerk Session Cookie Name
+- **File**: `apps/web/middleware.ts:42`
+- **Category**: Security
+- **Violation**: `req.cookies.get('__session')` hardcodes the cookie name. Clerk's cookie name varies by version and config (`__clerk_db_jwt` in dev, custom names possible). If mismatched, all auth validation is silently skipped.
+- **Fix**: Use Clerk's official middleware which handles cookie names internally.
+- **Risk**: Auth validation bypassed if Clerk uses a different cookie name.
+
+### P2-18: No Canary Timeout -- Hung Adapter Blocks Indefinitely
+- **File**: `apps/api/src/canaries/mediaCanaries.ts:27`
+- **Category**: Resilience
+- **Violation**: `await fn()` has no timeout. A hung external adapter (DNS/TCP/TLS hang) blocks the canary runner forever.
+- **Fix**: Wrap with `AbortSignal.timeout(30000)` or use the project's `CircuitBreaker`.
+- **Risk**: Single hung adapter stalls all canary monitoring, masking failures in other adapters.
+
+### P2-19: `ModuleCache` Dead Branch at Line 33
+- **File**: `apps/api/src/utils/moduleCache.ts:33-35`
+- **Category**: Architecture
+- **Violation**: `if (this.isLoading && this.promise)` is unreachable dead code. Line 26 already returns when `this.promise` is truthy. When we reach line 33, `this.promise` is always null.
+- **Fix**: Remove the dead branch and the `isLoading` flag entirely. The promise-based memoization pattern needs only the `this.promise` check.
+- **Risk**: Dead code creates confusion about the intended concurrency model.
+
 ---
 
 ## LOW (P3) - Style / Nitpicks / Perfectionist Ideals
@@ -388,16 +466,18 @@
 
 | Rank | ID | Issue | Blast Radius | Trigger Condition |
 |------|----|-------|-------------|------------------|
-| 1 | P0-1 | Membership table mismatch | All multi-tenant auth in apps/api | Any billing/membership API call |
-| 2 | P0-3 | requireRole errors masked as 500 | All media routes | Any role-denied request |
-| 3 | P0-2 | Metrics endpoint unauthenticated | System observability data leak | Any HTTP request to /metrics |
-| 4 | P1-1 | Client-controlled media ID | Media asset integrity | Malicious client submits existing UUID |
-| 5 | P1-2 | verifyOrgMembership ignores role | Billing privilege escalation | Viewer accesses billing routes |
-| 6 | P1-4 | removeMember stale role read | Org permanently ownerless | Concurrent role update + removal |
-| 7 | P0-4 | persistMetrics exceeds param limit | Metrics persistence silently fails | >13,000 unique metric keys |
-| 8 | P1-3 | Pool mismatch in media routes | AuthZ bypass in sharded setup | Multi-database deployment |
-| 9 | P1-8 | baseline without transaction | Corrupted migration state | Process crash during baseline |
-| 10 | P1-5 | AbortSignal listener leak | OOM under sustained load | High-traffic cache usage |
+| **1** | **P0-5** | **Clerk getAuth() without clerkMiddleware** | **ALL authenticated users** | **Every page load with session** |
+| 2 | P0-1 | Membership table mismatch | All multi-tenant auth in apps/api | Any billing/membership API call |
+| 3 | P0-3 | requireRole errors masked as 500 | All media routes | Any role-denied request |
+| 4 | P1-2 | verifyOrgMembership ignores role | Billing privilege escalation | Viewer accesses billing routes |
+| 5 | P0-2 | Metrics endpoint unauthenticated | System observability data leak | Any HTTP request to /metrics |
+| 6 | P1-1 | Client-controlled media ID | Media asset integrity | Malicious client submits existing UUID |
+| 7 | P1-11 | Open redirect via Host header | Credential theft via phishing | Misconfigured reverse proxy |
+| 8 | P1-4 | removeMember stale role read | Org permanently ownerless | Concurrent role update + removal |
+| 9 | P0-4 | persistMetrics exceeds param limit | Metrics persistence silently fails | >13,000 unique metric keys |
+| 10 | P1-3 | Pool mismatch in media routes | AuthZ bypass in sharded setup | Multi-database deployment |
+| 11 | P1-8 | baseline without transaction | Corrupted migration state | Process crash during baseline |
+| 12 | P1-5 | AbortSignal listener leak | OOM under sustained load | High-traffic cache usage |
 
 ---
 
@@ -418,3 +498,18 @@ All media route handlers use `req as AuthenticatedRequest` (lines 68, 103 in `me
 
 ### Pattern: No `statement_timeout` on Direct Pool Queries
 `media-lifecycle.ts` uses `this.pool.query(...)` directly without setting `statement_timeout`. The `membership-service.ts` correctly sets `SET LOCAL statement_timeout = $1` inside transactions, but `media-lifecycle.ts` has no timeout protection. A slow query could hold a connection indefinitely.
+
+### Pattern: Clerk v6 Migration Incomplete
+The codebase upgraded to `@clerk/nextjs ^6.0.0` but never migrated the middleware from the v4/v5 `getAuth()` pattern to v6's `clerkMiddleware()`. This is the single most dangerous finding -- it likely breaks authentication for every user.
+
+---
+
+## Final Totals
+
+| Severity | Count | Key Issues |
+|----------|-------|-----------|
+| **P0 Critical** | 5 | Clerk auth broken, membership table split, metrics exposed, role errors masked, batch overflow |
+| **P1 High** | 12 | Client-controlled UUID, role-less auth check, pool mismatch, race conditions, open redirect, memory leaks, lock ineffective |
+| **P2 Medium** | 19 | Zod .strict() missing, branded types, CSP nonce propagation, CSRF gap, dead code, no-op metrics flush, pagination fiction |
+| **P3 Low** | 5 | Type complexity, any cast, handler mutation, log duplication, missing updated_at |
+| **Total** | **41** | |
