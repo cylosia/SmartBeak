@@ -439,7 +439,9 @@ export class QueryPlanAnalyzer {
       if (msg.includes('does not exist') || msg.includes('pg_stat_statements')) {
         logger.debug('[QueryPlanAnalyzer] pg_stat_statements not available', { tableName });
       } else {
-        logger.error('[QueryPlanAnalyzer] Unexpected error in getIndexRecommendations', error instanceof Error ? error : new Error(msg));
+        // P3-2 FIX: Include tableName in error context so the affected table is
+        // visible in production logs without having to correlate with request params.
+        logger.error('[QueryPlanAnalyzer] Unexpected error in getIndexRecommendations', error instanceof Error ? error : new Error(msg), { tableName });
       }
     }
 

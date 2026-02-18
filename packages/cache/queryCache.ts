@@ -331,9 +331,15 @@ export class QueryCache {
     let evicted = 0;
 
     for (let i = 0; i < keysToEvict && i < entries.length; i++) {
-      const [key] = entries[i]!;
-      this.queryVersions.delete(key);
-      evicted++;
+      // P3-3 FIX: Replace non-null assertion (entries[i]!) with optional
+      // chaining. The loop bounds already prevent out-of-bounds access, but
+      // the assertion suppresses TypeScript's noUncheckedIndexedAccess check.
+      const entry = entries[i];
+      if (entry) {
+        const [key] = entry;
+        this.queryVersions.delete(key);
+        evicted++;
+      }
     }
 
     if (evicted > 0) {

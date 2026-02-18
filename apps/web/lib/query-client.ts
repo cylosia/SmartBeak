@@ -87,12 +87,15 @@ const defaultQueryFn = async ({ queryKey, signal }: QueryFunctionContext) => {
 
   // P3-1 FIX: String(null) → "null" and String(undefined) → "undefined", which
   // are semantically incorrect query-string values. Filter out null/undefined
-  // entries before encoding so they are simply omitted from the URL. Also skip
-  // entries whose value serialises to [object Object] to prevent silent data loss.
+  // entries before encoding so they are simply omitted from the URL.
+  // P3-2 FIX: Non-primitive values (objects, arrays, functions) produce
+  // "[object Object]" or similar when coerced with String() — silently sending
+  // meaningless query parameters that the server will reject or ignore.
+  // Only allow string, number, and boolean values through.
   const queryString = params
     ? (() => {
         const entries = Object.entries(params)
-          .filter(([, v]) => v !== null && v !== undefined)
+          .filter(([, v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
           .map(([k, v]) => [k, String(v)] as [string, string]);
         return entries.length > 0 ? '?' + new URLSearchParams(entries).toString() : '';
       })()
