@@ -46,11 +46,21 @@ const config: Config = {
       moduleNameMapper: sharedModuleNameMapper,
       setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
       transform: sharedTransform,
-      // rateLimiterRedis.test.ts uses Vitest API (vi.mock/vi.fn).
-      // Jest picks it up via __tests__/**/*.test.ts but cannot run Vitest mocks,
-      // so the rate-limiter tests silently pass without actually exercising
-      // the production code. Exclude here; Vitest covers it via vitest.config.ts.
-      testPathIgnorePatterns: ['/node_modules/', '/dist/', '/.next/', 'test/a11y/', 'packages/kernel/__tests__/rateLimiterRedis.test.ts'],
+      // The following test files use Vitest APIs (vi.mock/vi.fn/vi.spyOn) and are
+      // covered by the Vitest config. Running them under Jest produces incorrect
+      // results: mocks don't work and tests silently pass without exercising
+      // production code. Exclude them here.
+      // P1-FIX: Added the two JobScheduler Vitest tests that were missing from
+      // this exclusion list (same root cause as rateLimiterRedis below).
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '/dist/',
+        '/.next/',
+        'test/a11y/',
+        'packages/kernel/__tests__/rateLimiterRedis.test.ts',
+        'apps/api/src/jobs/__tests__/JobScheduler.test.ts',
+        'apps/api/src/jobs/__tests__/JobScheduler.concurrency.test.ts',
+      ],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       clearMocks: true,
       restoreMocks: true,

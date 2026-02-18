@@ -407,29 +407,43 @@ function recordFailure(error: unknown): void {
 }
 
 /**
-* Check if token is revoked in Redis
-* SECURITY FIX: Implement circuit breaker pattern to prevent auth service unavailability
-*
-* @param jti - Token ID to check
-* @returns Whether the token is revoked
-*/
-async function _isTokenRevoked(jti: string): Promise<boolean> {
+ * Check if a specific token JTI is revoked in Redis.
+ * Also checks for user-wide revocation (revokeAllUserTokens).
+ *
+ * P0-FIX: Was previously prefixed `_isTokenRevoked` (dead-code convention) and
+ * never called. `verifyToken` delegated to securityVerifyToken with NO revocation
+ * check, making `revokeToken`/`revokeAllUserTokens` completely non-functional.
+ *
+ * @param jti    - The token's unique ID (jti claim)
+ * @param userId - The token's subject (sub claim) — used for user-wide revocation
+ * @returns Whether the token should be treated as revoked
+ */
+export async function isTokenRevoked(jti: string, userId: string): Promise<boolean> {
   // Check if circuit breaker is open
   if (isCircuitOpen()) {
-  logger.warn('Circuit breaker open, allowing token (Redis unavailable)');
-  return false;
+    logger.warn('Circuit breaker open, allowing token (Redis unavailable)');
+    return false;
   }
 
   try {
-  const revoked = await getRedisClient().exists(`${REVOCATION_KEY_PREFIX}${jti}`);
-  // Success - reset failure count
-  circuitBreaker.failures = 0;
-  return revoked === 1;
+    const client = getRedisClient();
+    // Check both per-token revocation AND user-wide revocation in a single pipeline
+    const [jtiRevoked, userRevoked] = await client.pipeline()
+      .exists(`${REVOCATION_KEY_PREFIX}${jti}`)
+      .exists(`jwt:revoked:user:${userId}`)
+      .exec();
+
+    // Success - reset failure count
+    circuitBreaker.failures = 0;
+
+    // Pipeline results are [error, value] tuples
+    const jtiResult = jtiRevoked?.[1];
+    const userResult = userRevoked?.[1];
+    return jtiResult === 1 || userResult === 1;
   } catch (error) {
-  recordFailure(error);
-  // SECURITY FIX: Log but don't block auth when Redis is down
-  // Allow the request through - the token signature is still verified
-  return false;
+    recordFailure(error);
+    // Log but don't block auth when Redis is down (token signature is still verified)
+    return false;
   }
 }
 
@@ -472,26 +486,36 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
 // ============================================================================
 
 /**
-* Verify a JWT token
-* Delegates to unified auth package with Redis revocation check
-*
-* @param token - JWT token string
-* @param aud - Expected audience
-* @param iss - Expected issuer
-* @returns Verified claims
-* @throws {TokenRevokedError} When token has been revoked
-* @throws {TokenInvalidError} When token is invalid
-* @throws {MissingClaimError} When required claims are missing
-* @throws {TokenBindingError} When org binding check fails
-*/
-export function verifyToken(
+ * Verify a JWT token including Redis revocation check.
+ * Delegates signature verification to packages/security/jwt.ts, then checks
+ * per-token and user-wide revocation lists.
+ *
+ * P0-FIX: Previously synchronous and skipped the revocation check entirely,
+ * making revokeToken() and revokeAllUserTokens() security theatre.
+ *
+ * @param token - JWT token string
+ * @param aud   - Expected audience
+ * @param iss   - Expected issuer
+ * @returns Verified claims
+ * @throws {TokenInvalidError} When token is invalid or revoked
+ */
+export async function verifyToken(
   token: string,
   aud: string = DEFAULT_AUDIENCE,
   iss: string = DEFAULT_ISSUER
-): JwtClaims {
-  // Delegate directly to packages/security/jwt.ts — the canonical implementation.
-  // The previous dynamic import(@kernel/auth) routed through a stub that always threw.
-  return securityVerifyToken(token, { audience: aud, issuer: iss }) as JwtClaims;
+): Promise<JwtClaims> {
+  // Step 1: verify signature and standard claims (synchronous, throws on failure)
+  const claims = securityVerifyToken(token, { audience: aud, issuer: iss }) as JwtClaims;
+
+  // Step 2: check revocation lists (async Redis lookup)
+  if (claims.jti) {
+    const revoked = await isTokenRevoked(claims.jti, claims.sub);
+    if (revoked) {
+      throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+    }
+  }
+
+  return claims;
 }
 
 // ============================================================================
@@ -571,19 +595,23 @@ export function refreshToken(token: string, _expiresIn?: string): string {
   // P0-1 FIX: VERIFY the token cryptographically instead of just decoding it.
   // jwt.decode() performs NO signature verification - an attacker could craft
   // any payload and get it signed with a valid production key.
+  // P0-FIX: Pass audience and issuer to jwt.verify during refresh.
+  // Previously omitting these allowed tokens issued for a different audience
+  // (e.g., a third-party service) to be refreshed against this issuer's signing key.
+  const verifyOpts: jwt.VerifyOptions = {
+    algorithms: ['HS256'],
+    clockTolerance: 30,
+    audience: DEFAULT_AUDIENCE,
+    issuer: DEFAULT_ISSUER,
+  };
+
   let verified: jwt.JwtPayload;
   try {
-    verified = jwt.verify(token, KEYS[0]!, {
-      algorithms: ['HS256'],
-      clockTolerance: 30,
-    }) as jwt.JwtPayload;
+    verified = jwt.verify(token, KEYS[0]!, verifyOpts) as jwt.JwtPayload;
   } catch {
     // Try second key for rotation support
     try {
-      verified = jwt.verify(token, KEYS[1]!, {
-        algorithms: ['HS256'],
-        clockTolerance: 30,
-      }) as jwt.JwtPayload;
+      verified = jwt.verify(token, KEYS[1]!, verifyOpts) as jwt.JwtPayload;
     } catch {
       throw new TokenInvalidError('Token verification failed during refresh');
     }

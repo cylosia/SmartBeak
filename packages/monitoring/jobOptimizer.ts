@@ -216,7 +216,8 @@ export class JobOptimizer extends EventEmitter {
     clearTimeout(existing.timeout);
   }
 
-  // P1-4 FIX: Enforce max size with proper timeout cleanup on eviction
+  // P1-FIX: Enforce max size with proper timeout cleanup on eviction.
+  // P1-FIX: Log eviction so silently-dropped jobs are visible in observability.
   if (this.pendingJobs.size >= this.MAX_PENDING_JOBS && !this.pendingJobs.has(key)) {
     // Evict oldest entry (first key in Map insertion order)
     const oldestKey = this.pendingJobs.keys().next().value;
@@ -224,6 +225,12 @@ export class JobOptimizer extends EventEmitter {
       const oldEntry = this.pendingJobs.get(oldestKey);
       if (oldEntry) clearTimeout(oldEntry.timeout);
       this.pendingJobs.delete(oldestKey);
+      logger.warn('Pending job evicted due to capacity limit', {
+        evictedKey: oldestKey,
+        incomingKey: key,
+        maxPendingJobs: this.MAX_PENDING_JOBS,
+      });
+      this.emit('jobEvicted', { evictedKey: oldestKey });
     }
   }
 
@@ -246,19 +253,25 @@ export class JobOptimizer extends EventEmitter {
   }
 
   /**
-  * Merge job data
-  */
+   * Merge job data.
+   *
+   * P1-FIX: The array branch previously returned `[...a, ...b] as unknown as JobData`.
+   * JobData is `Record<string, unknown>`, not an array, so the double cast was a type
+   * lie that caused runtime failures when downstream code treated the result as an
+   * object (e.g. `Object.entries`, `data['key']`). Arrays are now wrapped in an
+   * object to maintain the Record<string,unknown> contract.
+   */
   private mergeData(existing: JobData, incoming: JobData): JobData {
-  // Simple merge - arrays are concatenated, objects merged
-  if (Array.isArray(existing) && Array.isArray(incoming)) {
-    return [...existing, ...incoming] as unknown as JobData;
-  }
+    // Arrays: wrap in an object with an `items` key to preserve Record shape
+    if (Array.isArray(existing) && Array.isArray(incoming)) {
+      return { items: [...existing, ...incoming] };
+    }
 
-  if (typeof existing === 'object' && typeof incoming === 'object') {
-    return { ...existing, ...incoming };
-  }
+    if (typeof existing === 'object' && typeof incoming === 'object') {
+      return { ...existing, ...incoming };
+    }
 
-  return incoming;
+    return incoming;
   }
 
   /**
