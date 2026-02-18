@@ -88,11 +88,8 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   }
 
   const { source, entities, orgId } = validatedInput;
-
-  // Validate orgId at job start
-  if (!orgId) {
-  throw new Error('orgId is required');
-  }
+  // orgId is guaranteed non-null and UUID-valid here — Zod schema (z.string().uuid())
+  // already rejected any missing or malformed value before this point.
 
   addSpanAttributes({ 'ingest.source': source, 'ingest.entity_count': entities.length });
   try { getBusinessKpis().recordIngestionAttempt(source); } catch (kpiErr) {

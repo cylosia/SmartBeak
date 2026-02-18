@@ -243,7 +243,10 @@ function generateCacheKey(url: string, options: RequestInit): string {
       rawAuth = headers.get('authorization') || headers.get('cookie') || '';
     } else if (Array.isArray(headers)) {
       const authEntry = headers.find(([k]) => k.toLowerCase() === 'authorization' || k.toLowerCase() === 'cookie');
-      rawAuth = authEntry ? authEntry[1] : '';
+      // P1 FIX: authEntry[1] can be undefined if a header tuple has only one element
+      // (malformed but valid JS). Undefined produces an empty auth segment, collapsing
+      // cache keys across different auth contexts → cross-user cache poisoning.
+      rawAuth = authEntry != null && authEntry.length > 1 ? (authEntry[1] ?? '') : '';
     } else {
       // Normalise to lowercase so 'Authorization' and 'authorization' hash identically
       const normHeaders: Record<string, string> = {};

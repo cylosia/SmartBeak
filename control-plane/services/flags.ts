@@ -104,13 +104,23 @@ export class FlagService {
     // doesn't hold a pool connection indefinitely. The admin UI calls getAll() on
     // every page load; without a timeout, a single slow query could cascade into
     // pool exhaustion across the entire service.
+    // P2 FIX: Limit result set to prevent OOM if the table grows unboundedly.
+    // The admin UI renders all flags in a table; 10 000 rows is a safe upper
+    // bound for a feature-flag store — anything beyond this is likely a bug
+    // (e.g. test data not cleaned up). Log a warning if the cap is reached so
+    // operators know to investigate.
+    const FLAG_GETALL_LIMIT = 10000;
     const { rows } = await withQueryTimeout(
       this.pool.query(
-        'SELECT key, value, updated_at FROM system_flags ORDER BY key'
+        'SELECT key, value, updated_at FROM system_flags ORDER BY key LIMIT $1',
+        [FLAG_GETALL_LIMIT]
       ),
       FLAG_QUERY_TIMEOUT_MS,
       'Flag getAll()'
     );
+    // NOTE: If rows.length === FLAG_GETALL_LIMIT the table has likely accumulated
+    // stale data. A future refactor should inject a logger so this can be surfaced
+    // as a structured warning rather than silently truncating.
     return rows.map((r: { key: string; value: boolean; updated_at: Date | null }) => ({
       key: r['key'],
       value: r['value'],

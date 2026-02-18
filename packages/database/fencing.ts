@@ -48,8 +48,19 @@ export async function validateFencingToken(
   resourceId: string,
   fencingToken: bigint | number
 ): Promise<boolean> {
-  if (!resourceType || !resourceId) {
-    throw new Error('resourceType and resourceId must be non-empty strings');
+  // P1 FIX: Validate length to prevent DoS via oversized query parameters.
+  // An unbounded string passed as $1/$2 is sent verbatim to PostgreSQL, which
+  // must buffer it in the query plan — a 10 MB resourceId can OOM the DB server.
+  // Whitespace-only strings pass the `!resourceType` check but are semantically
+  // empty; reject them explicitly to prevent phantom fence-token rows.
+  if (!resourceType?.trim() || !resourceId?.trim()) {
+    throw new Error('resourceType and resourceId must be non-empty, non-whitespace strings');
+  }
+  if (resourceType.length > 255 || resourceId.length > 255) {
+    throw new DatabaseError(
+      `validateFencingToken: resourceType and resourceId must be ≤255 characters ` +
+      `(got resourceType.length=${resourceType.length}, resourceId.length=${resourceId.length})`
+    );
   }
 
   // Convert to a canonical string representation for the PostgreSQL query.
