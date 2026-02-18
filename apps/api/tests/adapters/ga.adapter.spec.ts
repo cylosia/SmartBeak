@@ -25,7 +25,10 @@ describe('GA adapter', () => {
   });
 
   test('fetchMetrics calls runReport and returns row data', async () => {
-    const adapter = new GaAdapter({});
+    // P1-FIX: {} fails validateCredentials() before the mocked BetaAnalyticsDataClient
+    // is even reached — `client_email` and `private_key` are required strings.
+    // Pass the minimal valid credentials so the constructor succeeds.
+    const adapter = new GaAdapter({ client_email: 'test@example.com', private_key: 'key' });
     const res = await adapter.fetchMetrics('123', { dimensions: [], metrics: [] }) as {
       rows: Array<{ metricValues: Array<{ value: string }> }>;
     };

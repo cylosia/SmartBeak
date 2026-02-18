@@ -50,7 +50,7 @@ function encryptToken(token: string): string {
  * @returns The decrypted token
  * @throws Error if decryption fails or data is malformed
  */
-function _decryptToken(encryptedData: string): string {
+function decryptToken(encryptedData: string): string {
   try {
     const parts = encryptedData.split(':');
     if (parts.length !== 3) {
@@ -538,18 +538,28 @@ export class GbpAdapter {
     try {
       // P0-CRITICAL FIX: Use AES-256-GCM encryption for refresh tokens
       const encryptedRefreshToken = encryptToken(refreshToken);
-      
+
       await db.raw(
         `INSERT INTO gbp_credentials (org_id, encrypted_refresh_token, updated_at)
          VALUES (?, ?, NOW())
-         ON CONFLICT (org_id) 
+         ON CONFLICT (org_id)
          DO UPDATE SET encrypted_refresh_token = ?, updated_at = NOW()`,
         [orgId, encryptedRefreshToken, encryptedRefreshToken]
       );
-      logger.info(`Refresh token stored for org ${orgId}`);
+      logger.info('gbp_refresh_token_stored', { orgId });
     } catch (error) {
-      logger.error('Failed to store refresh token', error instanceof Error ? error : new Error(String(error)));
-      // Log but don't fail - token response is still valid
+      // P1-FIX: Google only issues a refresh_token on the *first* authorization
+      // (or after the user explicitly revokes access). If we fail to persist it
+      // now, the token is permanently lost — the user must re-authorize from
+      // scratch. Promote this to a structured error log with the orgId so
+      // on-call engineers can identify affected orgs in the incident timeline.
+      logger.error('gbp_refresh_token_storage_failed — token permanently lost for org; user must re-authorize', {
+        orgId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Still return the access_token so the current request succeeds; callers
+      // that depend on persistent access should check loadRefreshToken() and
+      // surface a re-authorization prompt if it returns null.
     }
   }
 
@@ -570,6 +580,38 @@ export class GbpAdapter {
     throw new Error('Refresh token is required and must be a string');
   }
   this.auth.setCredentials({ refresh_token: refreshToken });
+  }
+
+  /**
+  * Load a previously-persisted refresh token from the database, decrypt it,
+  * and install it on the OAuth2 client so subsequent API calls auto-refresh.
+  *
+  * P1-FIX: `_decryptToken` (now `decryptToken`) was defined but never called —
+  * the encrypt-side of token persistence was implemented but the retrieve-side
+  * was missing entirely, making the stored credentials unreachable.
+  *
+  * @param orgId - Organization whose credentials to load
+  * @returns The plaintext refresh token, or null if none is stored
+  * @throws Error if the database query or decryption fails
+  */
+  async loadRefreshToken(orgId: string): Promise<string | null> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required and must be a string');
+  }
+
+  const result = await db.raw<{ rows: Array<{ encrypted_refresh_token: string }> }>(
+    `SELECT encrypted_refresh_token FROM gbp_credentials WHERE org_id = ? LIMIT 1`,
+    [orgId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  const plaintext = decryptToken(row['encrypted_refresh_token']);
+  this.auth.setCredentials({ refresh_token: plaintext });
+  return plaintext;
   }
 
   /**
