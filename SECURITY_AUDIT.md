@@ -513,3 +513,75 @@ Issues that would cause a production incident **today** if not fixed:
 | **Total** | **99** deduplicated findings |
 
 *(Raw findings across 5 agents: 235; deduplicated and cross-referenced above)*
+
+---
+
+## Phase 2 — Adversarial Re-Review Results
+
+### Verification of Critical Phase 1 Findings
+
+**✅ CONFIRMED** `cache.ts:69` — ReDoS via unescaped regex metacharacters. V8's irregexp mitigates some patterns, but nested quantifiers over long key strings still hang the event loop. Additional: the `total` field in the response exposes real L1 key count even when `limit` is small — information disclosure.
+
+**✅ CONFIRMED** `create-checkout-session.ts:46` — Open redirect. The "P1-4 FIX" comment only protects the *default* fallback URL, not caller-supplied `successUrl`/`cancelUrl`. The fix is deliberately incomplete.
+
+**✅ CONFIRMED** `clerk.ts:411` — Membership ID fallback: `|| membershipData.id` re-introduces the exact bug the fix comment claims to resolve. When `public_user_data.user_id` is absent or falsy (empty string), the membership ID `mem_xxx` is used as the user identifier, creating phantom memberships.
+
+**✅ CONFIRMED** `container.ts:235` — `require()` in ESM causes `ReferenceError` at runtime. The ESLint suppression comment masks it; CI lint passes with warning-only rule.
+
+**✅ CONFIRMED** `container.ts:379/400` — Fire-and-forget `dispose()` confirmed in both `initializeContainer` and `resetContainer`. Especially dangerous in rapid test teardown.
+
+**✅ CONFIRMED** `costTracker.ts:94` — TOCTOU budget race confirmed. Additionally: `this.buffer.splice(0)` in `flush()` races with `this.buffer.push()` in concurrent `track()` calls — entries can be spliced out before being confirmed written to DB, then re-pushed in the catch block, causing double-counting.
+
+**✅ CONFIRMED** `circuitBreaker.ts:20` — 5-minute timeout default confirmed. 300,000ms vs the standard 5,000–30,000ms range.
+
+**✅ CONFIRMED** `connectionHealth.ts:252/261` — `/100` division bug confirmed. `0.8 / 100 = 0.008`; scale-up fires at 0.8% utilization.
+
+**✅ CONFIRMED** `billing.up.sql:12-13` — Nullable `org_id` and `plan_id` on subscriptions confirmed. Also missing: `updated_at`, `stripe_subscription_id`.
+
+**❌ FALSE POSITIVE** `contentRoi.ts` — 100x ROI inflation bug: the function itself is arithmetically correct. The `conversion_rate` unit convention is undocumented and inconsistent between the Zod schema range (0–100) and the calculation (direct multiplication), but this is a latent misuse risk, not a confirmed bug in the current code.
+
+**❌ FALSE POSITIVE (mechanism)** `connectionHealth.ts:534` — Double-release race: the `finally { client.release() }` executes exactly once. The real issue is an *uncleared timer*: when the query resolves before timeout, the `setTimeout` callback fires later and calls `reject()` on an already-settled promise, potentially surfacing as `UnhandledPromiseRejection` in strict Node.js configurations.
+
+**⚠️ NUANCED** `cache.tsx:326` — Auth bypass: the health endpoint URL `apiUrl('system/health')` resolves to `{NEXT_PUBLIC_API_URL}/v1/system/health` which does not exist in the control-plane (health is at root `/health`). This means **all users — including authenticated admins — are redirected to `/login`** (page is inaccessible). If the URL were corrected without adding role checks, any authenticated `viewer` could reach the cache inspector. The finding is directionally correct but the mechanism is wrong.
+
+### New Findings from Phase 2
+
+**[SEVERITY: P0]** `cache.tsx:328` | Auth — Cache Admin Panel Inaccessible Due to Wrong Health URL
+`authFetch(apiUrl('system/health'))` targets a non-existent route (`/v1/system/health`); the control-plane health endpoint is at `/health`. The 404 triggers the error redirect, blocking all users — including admins — from the cache inspector. If the URL is "fixed" without adding explicit role verification, any authenticated user gains access.
+Fix: Replace the health endpoint probe with an explicit `getAuth(ctx.req)` Clerk call + DB role lookup for `owner`/`admin`.
+
+**[SEVERITY: P1]** `clerk.ts:337–378` | GDPR — OR-Clause with Clerk String ID Against Integer FK Is Silent No-Op
+Queries `DELETE FROM org_memberships WHERE user_id = $1 OR user_id = $2` pass `[internalUserId, clerkStringId]` where `user_id` is an integer/UUID column. PostgreSQL silently casts the Clerk string to `0` or throws a type error; the clause matches nothing. The GDPR erasure log still records "9 tables cleared".
+Fix: Use only the correct ID type per table. Log actual `rowCount` results per DELETE, not a hardcoded `tablesCleared: 9`.
+
+**[SEVERITY: P1]** `connectionHealth.ts:535` | Async — Uncleared Timer Causes Phantom Rejection
+`Promise.race([query, setTimeout reject])` — when the query wins, the timer fires later calling `reject()` on an already-settled promise. With `--unhandled-rejections=throw` (default in Node.js 15+), this crashes the process.
+Fix: `const timerId = setTimeout(...); try { await Promise.race(...) } finally { clearTimeout(timerId); }`.
+
+**[SEVERITY: P2]** `package.json` | Dependencies — Stripe SDK `14.25.0` Is Significantly Outdated
+Current Stripe Node.js SDK is v17+. v14 may use deprecated API endpoints Stripe plans to sunset; missing security fixes in webhook signature verification.
+Fix: Upgrade to latest Stripe SDK. Add Renovate/Dependabot for automated dependency updates.
+
+**[SEVERITY: P2]** `jest.config.ts:102` | Config — Billing Coverage Threshold Targets Wrong Directory
+`coverageThreshold` for billing is set on `./apps/api/src/billing/**/*.ts` but billing code lives in `control-plane/services/billing.ts` and `control-plane/api/routes/billing.ts`. The threshold covers no real billing code.
+Fix: Change path to `./control-plane/services/billing*` and `./control-plane/api/routes/billing*`.
+
+**[SEVERITY: P2]** `.eslintrc.cjs:46` | Config — `no-var-requires` Is `'warn'` Not `'error'`
+The rule that would have caught the `require()` in ESM crash (SEC-010) is only a warning. `npm run lint` passes; only `lint-staged` with `--max-warnings 0` would catch it.
+Fix: Elevate to `'error'`. Add `--max-warnings 0` to the `npm run lint` script.
+
+**[SEVERITY: P2]** `tsconfig.base.json` | Config — `"moduleResolution": "Bundler"` Incompatible with Node.js ESM Runtime
+`"Bundler"` resolution does not enforce the `.js` extension requirement for ESM imports, does not validate `exports` field in `package.json`, and accepts import paths that fail in Node.js at runtime. Creates a class of runtime-only import resolution failures invisible to TypeScript.
+Fix: Use `"moduleResolution": "NodeNext"` with `"module": "NodeNext"` for all backend packages (`control-plane`, `apps/api`, `packages/*`). The Next.js frontend (`apps/web`) can retain `"Bundler"`.
+
+**[SEVERITY: P3]** `contentRoi.ts` | API Contract — `conversion_rate` Unit Convention Undocumented
+No JSDoc, no Zod range validation, no unit annotation. Callers passing `3` (3%) instead of `0.03` produce 100× inflated revenue figures that would be stored in the database.
+Fix: Add Zod schema: `z.number().min(0).max(1)` (for fraction) with JSDoc `@param conversion_rate Decimal fraction (e.g. 0.03 for 3%)`.
+
+**[SEVERITY: P3]** `clerk.ts:398` | Observability — Hardcoded `tablesCleared: 9` in GDPR Audit Log
+The count is static regardless of actual rows deleted, creating a false audit trail.
+Fix: Track actual `rowCount` from each query result; log per-table counts.
+
+**[SEVERITY: P3]** `.eslintrc.cjs:107` | Config — `*.js`/`*.mjs` Files Excluded from Security Lint
+Build scripts, migration runners, and config files are not covered by the security ESLint rules.
+Fix: Add targeted includes for security-sensitive script files.
