@@ -2,16 +2,55 @@
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 import { getLogger } from '@kernel/logger';
+import { ValidationError, ErrorCodes } from '@errors';
 
 const logger = getLogger('OrgService');
 
 /** Hard upper bound on the number of members returned per page. */
 const MAX_MEMBERS_LIMIT = 200;
 
+/** Maximum org name length — mirrors the Zod constraint in the orgs route. */
+const MAX_ORG_NAME_LENGTH = 100;
+
+interface MemberRow {
+  user_id: string;
+  role: string;
+}
+
+interface OrgRecord {
+  id: string;
+  name: string;
+}
+
+/**
+ * Assert that orgId is a non-empty string.
+ * Throws ValidationError (400) rather than letting the DB return a generic error.
+ */
+function assertOrgId(orgId: string): void {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new ValidationError('Valid orgId is required', ErrorCodes.VALIDATION_ERROR);
+  }
+}
+
 export class OrgService {
   constructor(private pool: Pool) {}
 
-  async createOrg(name: string, ownerUserId: string) {
+  async createOrg(name: string, ownerUserId: string): Promise<OrgRecord> {
+  // FIX (OS-01): Validate inputs at service level — defense-in-depth since the
+  // route layer also validates, but services may be called from other contexts.
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    throw new ValidationError('Organization name is required', ErrorCodes.VALIDATION_ERROR);
+  }
+  if (name.length > MAX_ORG_NAME_LENGTH) {
+    throw new ValidationError(
+      `Organization name must be ${MAX_ORG_NAME_LENGTH} characters or less`,
+      ErrorCodes.VALIDATION_ERROR
+    );
+  }
+  if (!ownerUserId || typeof ownerUserId !== 'string') {
+    throw new ValidationError('Valid ownerUserId is required', ErrorCodes.VALIDATION_ERROR);
+  }
+
   const orgId = randomUUID();
   const client = await this.pool.connect();
 
@@ -44,7 +83,9 @@ export class OrgService {
   }
   }
 
-  async listMembers(orgId: string, limit = 50, offset = 0) {
+  async listMembers(orgId: string, limit = 50, offset = 0): Promise<MemberRow[]> {
+  // FIX (OS-01): Validate orgId before hitting the DB.
+  assertOrgId(orgId);
   // FIX (P2-bounds): Enforce hard bounds so callers (or callers of callers)
   // cannot trigger full-table scans by passing unbounded limit/offset values.
   const safeLimit = Math.min(Math.max(1, Math.floor(limit)), MAX_MEMBERS_LIMIT);

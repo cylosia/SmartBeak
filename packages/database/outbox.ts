@@ -19,15 +19,67 @@ import { DomainEventEnvelope } from '@packages/types/domain-event';
 const MAX_BATCH_SIZE = 1_000;
 
 /**
+ * Maximum length for event_name. Enforced here before hitting the DB constraint
+ * so the caller receives a clear error rather than an opaque PostgreSQL message.
+ * The DB schema CHECK only ensures length > 0; application layer adds upper bound.
+ */
+const MAX_EVENT_NAME_LENGTH = 255;
+
+/**
  * JSON replacer that converts BigInt values to strings so that
  * JSON.stringify never throws "TypeError: Do not know how to serialize a BigInt".
+ *
+ * FIX (OW-1 / DB-01): Also detects circular references using a WeakSet.
+ * Previously JSON.stringify would throw "TypeError: Converting circular structure
+ * to JSON" even with a replacer, if the object graph contained a cycle.  A
+ * circular payload or meta object would cause writeToOutbox to throw inside the
+ * business transaction, rolling it back and losing the domain state change.
+ *
  * Callers that need to reconstruct BigInt on the consumer side should document
  * which payload fields carry BigInt semantics.
  */
 function safeStringify(value: unknown): string {
-  return JSON.stringify(value, (_key, v) =>
-    typeof v === 'bigint' ? v.toString() : v
-  );
+  const seen = new WeakSet<object>();
+  return JSON.stringify(value, function (_key, v) {
+    // Handle BigInt
+    if (typeof v === 'bigint') return v.toString();
+    // Detect circular references
+    if (typeof v === 'object' && v !== null) {
+      if (seen.has(v)) {
+        return '[Circular]';
+      }
+      seen.add(v);
+    }
+    return v;
+  });
+}
+
+/**
+ * Validate common event fields before persisting.
+ * Throws a descriptive Error so the caller receives a clear message rather than
+ * an opaque PostgreSQL constraint violation.
+ *
+ * FIX (OW-2/OW-3/DB-04): Validate event_name length, version positivity, and
+ * occurredAt format at application level to surface clear errors early.
+ */
+function validateEvent(event: DomainEventEnvelope<string, unknown>): void {
+  if (!event.name || typeof event.name !== 'string') {
+    throw new Error('writeToOutbox: event.name is required and must be a non-empty string');
+  }
+  if (event.name.length > MAX_EVENT_NAME_LENGTH) {
+    throw new Error(
+      `writeToOutbox: event.name length ${event.name.length} exceeds maximum ${MAX_EVENT_NAME_LENGTH} characters`
+    );
+  }
+  if (!Number.isInteger(event.version) || event.version < 1) {
+    throw new Error(`writeToOutbox: event.version must be a positive integer, got ${String(event.version)}`);
+  }
+  // FIX (OW-2): occurredAt is a branded IsoDateString but the brand is only a
+  // compile-time guarantee.  Validate the runtime value to catch casts-without-
+  // validation (e.g. someString as IsoDateString) before they corrupt the table.
+  if (!event.occurredAt || isNaN(new Date(event.occurredAt).getTime())) {
+    throw new Error(`writeToOutbox: event.occurredAt is not a valid ISO date string: "${String(event.occurredAt)}"`);
+  }
 }
 
 /**
@@ -39,14 +91,18 @@ function safeStringify(value: unknown): string {
  */
 export async function writeToOutbox(
   client: PoolClient,
-  event: DomainEventEnvelope<unknown>
+  event: DomainEventEnvelope<string, unknown>
 ): Promise<void> {
+  validateEvent(event);
+
   await client.query(
     `INSERT INTO event_outbox (event_name, event_version, payload, meta, occurred_at)
-     VALUES ($1, $2, $3, $4, $5)`,
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)`,
     [
       event.name,
       event.version,
+      // FIX (DB-02): Use explicit ::jsonb cast in the SQL rather than relying on
+      // PostgreSQL's implicit text→jsonb coercion, which is version-dependent.
       safeStringify(event.payload),
       safeStringify(event.meta),
       event.occurredAt,
@@ -66,7 +122,7 @@ export async function writeToOutbox(
  */
 export async function writeMultipleToOutbox(
   client: PoolClient,
-  events: DomainEventEnvelope<unknown>[]
+  events: DomainEventEnvelope<string, unknown>[]
 ): Promise<void> {
   if (events.length === 0) return;
 
@@ -75,6 +131,12 @@ export async function writeMultipleToOutbox(
       `writeMultipleToOutbox: batch size ${events.length} exceeds maximum ${MAX_BATCH_SIZE}. ` +
       `Split into smaller batches to stay within PostgreSQL's 65,535 parameter limit.`
     );
+  }
+
+  // Validate all events before building the query — fail fast with a clear error
+  // rather than a partial INSERT that is harder to debug.
+  for (const event of events) {
+    validateEvent(event);
   }
 
   const values: unknown[] = [];
@@ -89,8 +151,9 @@ export async function writeMultipleToOutbox(
     // refactor that reorders the expressions silently breaks parameter binding.
     const base = paramIdx;
     paramIdx += 5;
+    // FIX (DB-02): Explicit ::jsonb casts for payload and meta parameters.
     placeholders.push(
-      `($${base}, $${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`
+      `($${base}, $${base + 1}, $${base + 2}::jsonb, $${base + 3}::jsonb, $${base + 4})`
     );
     values.push(
       event.name,

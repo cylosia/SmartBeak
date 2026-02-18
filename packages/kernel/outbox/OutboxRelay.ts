@@ -7,6 +7,12 @@
  * event publishing (done asynchronously by this relay).
  *
  * Supports multiple relay instances via FOR UPDATE SKIP LOCKED.
+ *
+ * At-least-once delivery note: if eventBus.publish() succeeds but
+ * enqueueEvent() fails, the event will be retried on the next poll cycle.
+ * The event bus will therefore receive the event again.  All event bus
+ * consumers MUST be idempotent.  BullMQ consumers are protected by the
+ * outbox event ID being used as the job ID (deduplication window: 24 h).
  */
 
 import { Pool } from 'pg';
@@ -17,6 +23,13 @@ import { getLogger } from '../logger';
 import { DomainEventEnvelope } from '@packages/types/domain-event';
 
 const logger = getLogger('outbox-relay');
+
+/**
+ * Maximum number of characters stored in the last_error column.
+ * The DB column is TEXT (unbounded); we truncate here to prevent
+ * adversarially long error messages from filling disk.
+ */
+const MAX_LAST_ERROR_LENGTH = 2048;
 
 export interface OutboxRelayOptions {
   /** Poll interval in milliseconds (default: 1000) */
@@ -122,8 +135,15 @@ export class OutboxRelay {
     if (!this.running) return;
 
     this.pollInFlight = true;
+    // FIX (RL-02): Use a single client reference managed exclusively through
+    // try/catch/finally so that the connection is ALWAYS released, even when
+    // COMMIT throws in the empty-batch fast path.  Previously client.release()
+    // was called inline inside the try block — if COMMIT threw, execution jumped
+    // to the inner catch (which called release(true)) but had no reference to the
+    // client, causing a connection leak.
+    let client;
     try {
-      const client = await this.pool.connect();
+      client = await this.pool.connect();
 
       try {
         await client.query('BEGIN');
@@ -141,8 +161,9 @@ export class OutboxRelay {
         );
 
         if (rows.length === 0) {
+          // FIX (RL-02): Do NOT call client.release() here. The finally block
+          // below unconditionally releases the connection, even if COMMIT throws.
           await client.query('COMMIT');
-          client.release();
           this.resetBackoff();
           this.scheduleNext();
           return;
@@ -152,7 +173,13 @@ export class OutboxRelay {
         const failedUpdates: Array<{ id: string; error: string }> = [];
 
         for (const row of rows) {
-          const envelope: DomainEventEnvelope<unknown> = {
+          // FIX (OR-1): Populate the `id` field so consumers can use the outbox
+          // event's stable identifier for idempotency checks.  Previously `id`
+          // was omitted, causing all reconstructed envelopes to have
+          // `envelope.id === undefined`, silently breaking consumers that rely on
+          // the field introduced in DomainEventEnvelope.id (EVT-3-FIX).
+          const envelope: DomainEventEnvelope<string, unknown> = {
+            id: row.id,
             name: row.event_name,
             version: row.event_version,
             occurredAt: row.occurred_at,
@@ -169,20 +196,33 @@ export class OutboxRelay {
 
             publishedIds.push(row.id);
           } catch (err) {
-            const errorMsg = err instanceof Error ? err.message : String(err);
+            // FIX (OR-7): Truncate error message before storing to prevent
+            // attacker-influenced exception strings from filling the TEXT column
+            // (which has no DB-level length limit).
+            const rawMsg = err instanceof Error ? err.message : String(err);
+            const errorMsg = rawMsg.slice(0, MAX_LAST_ERROR_LENGTH);
             failedUpdates.push({ id: row.id, error: errorMsg });
             // FIX (P1-logger): pass the actual Error instance so stack traces
             // are captured; previously undefined was passed which loses context.
             logger.error(
               'Failed to publish outbox event',
-              err instanceof Error ? err : new Error(errorMsg),
+              err instanceof Error ? err : new Error(rawMsg),
               { id: row.id, eventName: row.event_name }
             );
           }
         }
 
-        // Mark successful events as published
+        // FIX (OR-6): Validate that all IDs are numeric strings (as pg returns
+        // BIGSERIAL columns) before the ::bigint[] cast.  A non-numeric value
+        // would cause a PostgreSQL runtime error inside this committed transaction,
+        // leaving events published but not marked, creating duplicate deliveries.
         if (publishedIds.length > 0) {
+          const allNumeric = publishedIds.every((id) => /^\d+$/.test(id));
+          if (!allNumeric) {
+            throw new Error(
+              `OutboxRelay: non-numeric event ID(s) in publishedIds — expected BIGSERIAL strings. IDs: ${publishedIds.join(', ')}`
+            );
+          }
           await client.query(
             `UPDATE event_outbox SET published_at = NOW()
              WHERE id = ANY($1::bigint[])`,
@@ -213,7 +253,6 @@ export class OutboxRelay {
         }
 
         await client.query('COMMIT');
-        client.release();
 
         logger.info('Outbox relay cycle complete', {
           published: publishedIds.length,
@@ -239,8 +278,18 @@ export class OutboxRelay {
             rbErr instanceof Error ? rbErr : new Error(String(rbErr))
           );
         });
+        // Signal the pool that this connection may be in a bad state.
         client.release(true);
+        // Nullify to prevent double-release in the outer finally.
+        client = undefined;
         throw err;
+      } finally {
+        // FIX (RL-02): Always release the connection if the inner catch did not
+        // already do so (i.e. the happy path where no error occurred).
+        if (client !== undefined) {
+          client.release();
+          client = undefined;
+        }
       }
     } catch (err) {
       logger.error(
