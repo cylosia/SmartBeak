@@ -4,7 +4,9 @@ const VALID_DOMAIN_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
 // For now, use env-based mapping.
 export function resolveDomainDb(domainId: string): string {
   if (!VALID_DOMAIN_ID_REGEX.test(domainId)) {
-  throw new Error(`Invalid domain ID format: ${domainId}`);
+  // P2-LEAK-FIX: Don't include domainId in the error message. The ID could be
+  // logged or surfaced in error responses, leaking internal tenant identifiers.
+  throw new Error('Invalid domain ID format');
   }
 
   // REG-1-FIX P1: Replace hyphens with underscores before constructing the env key.
@@ -12,6 +14,8 @@ export function resolveDomainDb(domainId: string): string {
   // undefined in Kubernetes). A domain ID like 'foo-bar' produced key
   // DOMAIN_FOO-BAR_DB which Kubernetes would never set, causing silent undefined reads.
   const cs = process.env[`DOMAIN_${domainId.toUpperCase().replace(/-/g, '_')}_DB`];
-  if (!cs) throw new Error(`Missing DB for domain ${domainId}`);
+  // P2-LEAK-FIX: Don't include domainId in the error message to prevent leaking
+  // internal identifiers in logs or error responses.
+  if (!cs) throw new Error('Database connection not configured for domain');
   return cs;
 }

@@ -13,6 +13,11 @@ export function toIsoDateString(date: Date): IsoDateString {
 // preventing exhaustive `switch (event.name)` patterns and allowing silently unhandled
 // event types to reach production.
 export interface DomainEventEnvelope<TName extends string, TPayload> {
+  // EVT-3-FIX P2: Added `id` field for event idempotency and deduplication.
+  // Without a unique event ID, consumers cannot deduplicate redelivered events
+  // (e.g. after a worker crash), leading to double-processing of financial or
+  // state-mutating operations. Callers must set this to a UUID (randomUUID()).
+  id: string;
   name: TName;
   version: number;
   // EVT-1-FIX P2: Use branded IsoDateString instead of plain string.

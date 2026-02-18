@@ -60,7 +60,7 @@ export function DomainTabs({ domainId, active }: { domainId: string; active: str
         role="tab"
         aria-selected={isActive}
         tabIndex={isActive ? 0 : -1}
-        href={`/domains/${domainId}/${key}`}
+        href={`/domains/${encodeURIComponent(domainId)}/${key}`}
         style={{
           marginRight: 16,
           fontWeight: isActive ? 'bold' : 'normal',

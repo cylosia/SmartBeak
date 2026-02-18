@@ -297,41 +297,42 @@ export class DLQService {
   }
 
   /**
-  * Get retry statistics
-  * P0-3 SECURITY FIX: Added orgId parameter for tenant isolation
+  * Get retry statistics for a specific organization
+  * P1-TENANT-FIX: orgId is now required. Previously optional orgId meant calling
+  * getStats() without an orgId returned aggregate stats across ALL tenants — a
+  * cross-tenant data leak (e.g., error rates, job counts of other orgs visible).
   * @param orgId - Organization ID for tenant isolation (required)
   * @returns DLQ statistics including totals and breakdowns
   */
-  async getStats(orgId?: string): Promise<{
+  async getStats(orgId: string): Promise<{
   total: number;
   byCategory: Record<ErrorCategory, number>;
   byRegion: Record<string, number>;
   }> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required for tenant isolation');
+  }
   logger.debug('Getting DLQ stats', { orgId });
 
-  // P0-3 FIX: Filter by org_id when provided to prevent cross-tenant data leakage
-  const orgFilter = orgId ? 'WHERE org_id = $1' : '';
-  const orgParams = orgId ? [orgId] : [];
-
   const { rows: totalRows } = await this["pool"].query(
-    `SELECT COUNT(*) as count FROM publishing_dlq ${orgFilter}`,
-    orgParams
+    `SELECT COUNT(*) as count FROM publishing_dlq WHERE org_id = $1`,
+    [orgId]
   );
 
   const { rows: categoryRows } = await this["pool"].query(
     `SELECT error_category, COUNT(*) as count
     FROM publishing_dlq
-    ${orgFilter}
+    WHERE org_id = $1
     GROUP BY error_category`,
-    orgParams
+    [orgId]
   );
 
   const { rows: regionRows } = await this["pool"].query(
     `SELECT region, COUNT(*) as count
     FROM publishing_dlq
-    ${orgFilter}
+    WHERE org_id = $1
     GROUP BY region`,
-    orgParams
+    [orgId]
   );
 
   const byCategory: Record<string, number> = {};
@@ -356,21 +357,31 @@ export class DLQService {
   }
 
   /**
-  * Purge old DLQ entries
+  * Purge old DLQ entries for a specific organization
+  * P0-TENANT-FIX: orgId is now required. Previously purge() had no tenant isolation —
+  * any caller could delete ALL entries across ALL orgs. This caused cross-tenant data loss
+  * when the purge job ran in a shared infra context.
+  * @param orgId - Organization ID for tenant isolation (required)
   * @param olderThanDays - Purge entries older than this many days
   * @returns Number of entries purged
   */
-  async purge(olderThanDays: number): Promise<number> {
-  logger.info('Purging old DLQ entries', { olderThanDays });
+  async purge(orgId: string, olderThanDays: number): Promise<number> {
+  if (!orgId || typeof orgId !== 'string') {
+    throw new Error('orgId is required for tenant isolation');
+  }
+  if (!Number.isFinite(olderThanDays) || olderThanDays < 1) {
+    throw new Error('olderThanDays must be a positive finite number');
+  }
+  logger.info('Purging old DLQ entries', { orgId, olderThanDays });
 
   const { rowCount } = await this["pool"].query(
     `DELETE FROM publishing_dlq
-    WHERE created_at < NOW() - make_interval(days => $1::int)`,
-    [olderThanDays]
+    WHERE org_id = $1 AND created_at < NOW() - make_interval(days => $2::int)`,
+    [orgId, olderThanDays]
   );
 
   const purged = rowCount ?? 0;
-  logger.info('DLQ purge completed', { purged, olderThanDays });
+  logger.info('DLQ purge completed', { orgId, purged, olderThanDays });
 
   return purged;
   }

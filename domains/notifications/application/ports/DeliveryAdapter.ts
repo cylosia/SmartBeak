@@ -7,11 +7,19 @@
 export type NotificationPayload = Record<string, unknown>;
 
 /**
+* Supported notification delivery channels.
+* P2-TYPE-FIX: Changed from `string` to a discriminated union. Using `string` allowed
+* any value to be passed, making exhaustive switch statements impossible and causing
+* silent routing failures when an unsupported channel was used at runtime.
+*/
+export type NotificationChannel = 'email' | 'sms' | 'push' | 'webhook';
+
+/**
 * Input parameters for sending a notification
 */
 export interface SendNotificationInput {
-  /** The delivery channel (e.g., 'email', 'sms', 'push', 'webhook') */
-  channel: string;
+  /** The delivery channel */
+  channel: NotificationChannel;
   /** Recipient identifier (format depends on channel: email address, phone number, device token, etc.) */
   to: string;
   /** Template identifier for the notification content */

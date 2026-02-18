@@ -21,8 +21,15 @@ export class DomainOwnershipService {
 
   async assertOrgOwnsDomain(orgId: string, domainId: string, client?: PoolClient) {
   const db = client || this.pool;
+  // P1-TOCTOU-FIX: Added FOR UPDATE when running inside a transaction (client provided).
+  // Without the lock, a concurrent transferDomain() could change ownership between
+  // this SELECT and the callback in withOwnershipCheck(), allowing the callback to
+  // operate on a domain the org no longer owns (silent authorization bypass).
+  // When called without a client (pool.query), no locking is applied since we're
+  // outside a transaction and FOR UPDATE requires an active transaction.
+  const lockClause = client ? 'FOR UPDATE' : '';
   const { rows } = await db.query(
-    'SELECT 1 FROM domain_registry WHERE id=$1 AND org_id=$2',
+    `SELECT 1 FROM domain_registry WHERE id=$1 AND org_id=$2 ${lockClause}`,
     [domainId, orgId]
   );
   if (rows.length === 0) {

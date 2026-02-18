@@ -15,6 +15,14 @@ export interface ExportScope {
 }
 
 /**
+* Possible states of a domain export operation.
+* P2-TYPE-FIX: Changed from `string` to a union type. Using `string` allowed
+* invalid status values to be set at construction time with no compile-time
+* error, and made exhaustive switch statements on status impossible.
+*/
+export type ExportStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/**
 * Domain export entity
 * Represents an export operation for domain data
 */
@@ -28,6 +36,6 @@ export class DomainExport {
   constructor(
   readonly id: string,
   readonly scope: ExportScope,
-  readonly status: string
+  readonly status: ExportStatus
   ) {}
 }

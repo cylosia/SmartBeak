@@ -374,12 +374,17 @@ export function safeValidatePublishTargetConfig(config: unknown): PublishTargetC
 }
 
 /**
-* Helper function to validate URL format
+* Helper function to validate URL format.
+* P0-SSRF-FIX: The previous implementation accepted ANY valid URL including
+* javascript:, data:, file://, and ftp:// schemes. For fields like webhookUrl
+* and apiEndpoint the server actively calls these URLs, making unrestricted
+* scheme acceptance a direct SSRF vector. Only https:// and http:// are permitted.
 */
 function isValidUrl(url: string): boolean {
   try {
-  new URL(url);
-  return true;
+  const parsed = new URL(url);
+  // Only permit http and https — block javascript:, data:, file://, ftp://, etc.
+  return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch {
   return false;
   }
