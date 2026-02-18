@@ -52,6 +52,12 @@ const app = Fastify({
   // P2-MEDIUM FIX: Add explicit timeouts for better resource management
   requestTimeout: 30000,  // 30 seconds per request
   connectionTimeout: 5000, // 5 seconds for connection establishment
+  // P1-FIX: Trust the first X-Forwarded-For hop from the ingress/load balancer.
+  // Without this, req.ip resolves to the load balancer's internal IP, causing:
+  // 1. Auth rate limiting to apply to the entire user base as a single bucket
+  //    (5 failed auth attempts from one attacker locks out ALL users for 15 min)
+  // 2. Any IP-based access control to be trivially bypassed
+  trustProxy: true,
 });
 
 // Register CORS - allows frontend to communicate with API
@@ -133,10 +139,16 @@ await app.register(swagger, {
   },
 });
 
-await app.register(swaggerUi, {
-  routePrefix: '/docs',
-  uiConfig: { docExpansion: 'list' },
-});
+// P2-FIX: Only expose Swagger UI in non-production environments.
+// In production the full API contract (all endpoint paths, schemas, security
+// schemes, billing structures) is served unauthenticated at /docs, giving
+// attackers a complete map for targeted exploitation.
+if (process.env['NODE_ENV'] !== 'production') {
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list' },
+  });
+}
 
 // API Versioning: Backward compatibility for unversioned paths.
 // Redirects (or rewrites) requests like GET /domains to /v1/domains.
@@ -213,6 +225,40 @@ app.addHook('preValidation', async (request, reply) => {
       code: ErrorCodes.UNSUPPORTED_MEDIA_TYPE,
       requestId,
     });
+  }
+});
+
+// P1-FIX: Rate-limit probe endpoints (/health, /readyz, /livez).
+// These are unauthenticated and each triggers real DB/Redis queries. Without a
+// rate limit, any unauthenticated client can flood them to exhaust the DB pool
+// and cause 503s for legitimate traffic — no auth required for the attack.
+// Limit: 60 requests per minute per IP (1 req/s — sufficient for any K8s prober).
+const PROBE_RATE_LIMIT_WINDOW_MS = 60_000;
+const PROBE_RATE_LIMIT_MAX = 60;
+const probeRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+app.addHook('onRequest', async (request, reply) => {
+  const url = request.url ?? '';
+  const isProbe = url === '/health' || url.startsWith('/health/') ||
+                  url === '/readyz' || url === '/livez';
+  if (!isProbe) return;
+
+  const ip = request.ip || 'unknown';
+  const now = Date.now();
+  const entry = probeRateLimitMap.get(ip);
+
+  if (!entry || now >= entry.resetAt) {
+    probeRateLimitMap.set(ip, { count: 1, resetAt: now + PROBE_RATE_LIMIT_WINDOW_MS });
+    return;
+  }
+
+  entry.count++;
+  if (entry.count > PROBE_RATE_LIMIT_MAX) {
+    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+    return reply
+      .status(429)
+      .header('Retry-After', String(retryAfter))
+      .send({ error: 'Too Many Requests', retryAfter });
   }
 });
 
@@ -818,7 +864,11 @@ async function start(): Promise<void> {
   });
 
   await registerRoutes();
-  const port = Number(process.env['PORT']) || 3000; // P3-FIX: Use Number() || fallback instead of parseInt to avoid NaN
+  // P3-FIX: Validate port is an integer in the unprivileged range [1024, 65535].
+  // Number(process.env['PORT']) returns 0 for empty strings (falsy, falls back to 3000),
+  // but parseInt with no validation accepts port 80 (requires root on Linux) silently.
+  const rawPort = parseInt(process.env['PORT'] ?? '', 10);
+  const port = (Number.isInteger(rawPort) && rawPort >= 1024 && rawPort <= 65535) ? rawPort : 3000;
   await app.listen({ port, host: '0.0.0.0' });
   logger.info(`Server started on port ${port}`);
 
