@@ -98,9 +98,18 @@ function validateLabels(labels: Record<string, string> | undefined): void {
   if (labelCount > MAX_LABELS) {
     throw new Error(`Invalid labels: too many labels (${labelCount} > ${MAX_LABELS})`);
   }
+  // FIX(P2-MET-05): Validate label key format against Prometheus naming rules.
+  // Previously any non-empty string was accepted, including keys with '.', '-',
+  // spaces, or unicode — which Prometheus rejects at scrape time. Attacker-controlled
+  // label keys (e.g. from request headers reflected into metrics) could also inject
+  // labels or cause metric cardinality explosion.
+  const LABEL_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
   for (const [key, value] of Object.entries(labels)) {
     if (typeof key !== 'string' || key.length === 0) {
       throw new Error('Invalid label key: must be a non-empty string');
+    }
+    if (!LABEL_KEY_PATTERN.test(key)) {
+      throw new Error(`Invalid label key '${key}': must match Prometheus pattern [a-zA-Z_][a-zA-Z0-9_]*`);
     }
     if (key.length > MAX_LABEL_LENGTH) {
       throw new Error(`Invalid label key: exceeds maximum length of ${MAX_LABEL_LENGTH}`);
@@ -142,9 +151,14 @@ export function emitMetric(metric: Metric): void {
       logger.warn('[emitMetric] Rate limit exceeded, dropping metric', { metricName: metric.name });
       return;
     }
-        const enrichedMetric = {
+    // FIX(P2-MET-04): Apply the value default at enrichment time, not at log
+    // time. Previously the buffer stored value=undefined while the log printed
+    // value=1, creating a discrepancy: the metric backend would receive undefined
+    // but operators reading logs would see 1 — a silent observability lie.
+    const enrichedMetric = {
       ...metric,
-      timestamp: metric.timestamp || Date.now(),
+      value: metric.value ?? 1,
+      timestamp: metric.timestamp ?? Date.now(),
     };
 
     // P2-8 FIX: Enforce max buffer size to prevent unbounded memory growth
@@ -160,7 +174,7 @@ export function emitMetric(metric: Metric): void {
       flushMetrics();
     }
     // P1-10 FIX: Use structured logger for metric emission
-    logger.debug('[METRIC]', { name: enrichedMetric.name, labels: enrichedMetric.labels, value: enrichedMetric.value ?? 1 });
+    logger.debug('[METRIC]', { name: enrichedMetric.name, labels: enrichedMetric.labels, value: enrichedMetric.value });
   }
   catch (error) {
     // P1-10 FIX: Use structured logger

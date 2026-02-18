@@ -1,5 +1,5 @@
 
-import { MediaAsset } from '../../domain/entities/MediaAsset';
+import { MediaAsset, MediaStatus } from '../../domain/entities/MediaAsset';
 
 /**
 * Repository interface for MediaAsset persistence.
@@ -36,7 +36,12 @@ export interface MediaRepository {
   * @returns Promise resolving to array of media assets
   * @throws {Error} If query execution fails
   */
-  listByStatus(status: 'pending' | 'uploaded', limit?: number, offset?: number): Promise<MediaAsset[]>;
+  // FIX(P1-REPO-02): Accept the full MediaStatus union including 'deleted'.
+  // Previously 'deleted' was excluded, making it impossible to list soft-deleted
+  // assets without an unsafe cast. MediaStatus is enforced by the DB CHECK
+  // constraint; excluding a valid DB state from the interface was an inconsistency
+  // that forced callers to bypass the type system to retrieve deleted assets.
+  listByStatus(status: MediaStatus, limit?: number, offset?: number): Promise<MediaAsset[]>;
 
   /**
   * Batch save multiple media assets
