@@ -72,19 +72,52 @@ function validateNumericConfig(name: string, value: unknown): number {
 }
 
 /**
- * P1-10 FIX: Set statement timeout for maintenance operations
- * Prevents runaway VACUUM FULL from holding AccessExclusiveLock indefinitely
+ * Raw SQL executor bound to a specific pool connection.
+ * Pass this into withStatementTimeout callbacks so that SET and the
+ * maintenance command run on the *same* connection — otherwise the pool
+ * may route SET and the VACUUM/ANALYZE to different backend connections,
+ * making the timeout silently ineffective.
+ */
+type BoundRawExecutor = (sql: string) => Promise<void>;
+
+/**
+ * P1-FIX: Acquire a dedicated connection so that SET statement_timeout and
+ * the maintenance SQL (VACUUM / ANALYZE) execute on the same PostgreSQL
+ * session. Using knex.raw() for all three calls risks them landing on
+ * three different pool connections, leaving the timeout protection void.
  */
 async function withStatementTimeout(
   knex: Knex,
   timeoutMs: number,
-  fn: () => Promise<void>
+  fn: (executeRaw: BoundRawExecutor) => Promise<void>
 ): Promise<void> {
-  await knex.raw('SET statement_timeout = ?', [timeoutMs]);
+  // knex.client is the internal connection-pool driver; acquireConnection /
+  // query / releaseConnection are stable across knex >= 0.95.
+  type KnexClient = {
+    acquireConnection(): Promise<unknown>;
+    query(conn: unknown, opts: { method: string; sql: string }): Promise<unknown>;
+    releaseConnection(conn: unknown): void;
+  };
+  const client = knex.client as KnexClient;
+  const conn = await client.acquireConnection();
+
+  const executeRaw: BoundRawExecutor = async (sql: string) => {
+    await client.query(conn, { method: 'raw', sql });
+  };
+
   try {
-    await fn();
+    await executeRaw(`SET statement_timeout = ${timeoutMs}`);
+    await fn(executeRaw);
   } finally {
-    await knex.raw('RESET statement_timeout');
+    try {
+      await executeRaw('RESET statement_timeout');
+    } catch (resetError) {
+      logger.error(
+        'Failed to reset statement_timeout — connection may be in a bad state',
+        resetError instanceof Error ? resetError : new Error(String(resetError))
+      );
+    }
+    client.releaseConnection(conn);
   }
 }
 
@@ -174,9 +207,9 @@ export async function vacuumAnalyzeTable(
       knex.raw('??', [tableName]).toString(),
     ].filter(Boolean).join(' ');
 
-    // P1-10 FIX: Execute vacuum with statement timeout to prevent runaway locks
-    await withStatementTimeout(knex, DEFAULT_TIMEOUT_MS, async () => {
-      await knex.raw(vacuumCmd);
+    // P1-FIX: Execute vacuum on the same dedicated connection as SET statement_timeout
+    await withStatementTimeout(knex, DEFAULT_TIMEOUT_MS, async (executeRaw) => {
+      await executeRaw(vacuumCmd);
     });
 
     // Get after stats
@@ -244,9 +277,9 @@ export async function analyzeTable(
       knex.raw('??', [tableName]).toString(),
     ].filter(Boolean).join(' ');
 
-    // P1-10 FIX: Execute with statement timeout
-    await withStatementTimeout(knex, DEFAULT_TIMEOUT_MS, async () => {
-      await knex.raw(analyzeCmd);
+    // P1-FIX: Execute analyze on the same dedicated connection as SET statement_timeout
+    await withStatementTimeout(knex, DEFAULT_TIMEOUT_MS, async (executeRaw) => {
+      await executeRaw(analyzeCmd);
     });
 
     const duration = Date.now() - startTime;
@@ -520,8 +553,11 @@ export function formatVacuumStats(stats: VacuumStatistics): string {
     : 'OK';
 
   const lastVacuum = stats.last_autovacuum ?? stats.last_vacuum;
+  // P1-FIX: Use ISO 8601 date (YYYY-MM-DD) instead of toLocaleDateString() which
+  // produces locale-dependent output (e.g. "1/20/2026" in US, "20.1.2026" in DE).
+  // Locale-dependent output causes intermittent CI failures on non-US locale machines.
   const lastVacuumStr = lastVacuum
-    ? new Date(lastVacuum).toLocaleDateString()
+    ? new Date(lastVacuum).toISOString().slice(0, 10)
     : 'Never';
 
   return `[${status}] ${stats.table_name}: ${stats.dead_tuple_ratio.toFixed(2)}% dead tuples ` +

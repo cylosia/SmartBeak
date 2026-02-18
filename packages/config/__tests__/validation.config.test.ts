@@ -255,7 +255,9 @@ describe('Configuration Validation', () => {
       process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
       process.env['JWT_KEY_1'] = 'jwt-secret-1';
       process.env['JWT_KEY_2'] = 'jwt-secret-2';
-      
+      // KEY_ENCRYPTION_SECRET is required — must be present or validateEnv() throws
+      process.env['KEY_ENCRYPTION_SECRET'] = 'test-encryption-secret-32chars!!';
+
       expect(() => validateEnv()).not.toThrow();
     });
   });
@@ -283,8 +285,10 @@ describe('Configuration Validation', () => {
       process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
       process.env['JWT_KEY_1'] = 'jwt-secret-1';
       process.env['JWT_KEY_2'] = 'jwt-secret-2';
+      // KEY_ENCRYPTION_SECRET required — without it validateEnv() throws before BCRYPT_ROUNDS is checked
+      process.env['KEY_ENCRYPTION_SECRET'] = 'test-encryption-secret-32chars!!';
       process.env['BCRYPT_ROUNDS'] = '8';
-      
+
       expect(() => validateStartup()).toThrow('STARTUP_VALIDATION_FAILED');
       expect(() => validateStartup()).toThrow('BCRYPT_ROUNDS must be at least 10 in production');
     });
@@ -301,8 +305,10 @@ describe('Configuration Validation', () => {
       process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
       process.env['JWT_KEY_1'] = 'jwt-secret-1';
       process.env['JWT_KEY_2'] = 'jwt-secret-2';
+      // KEY_ENCRYPTION_SECRET required — without it validateEnv() throws before BCRYPT_ROUNDS is checked
+      process.env['KEY_ENCRYPTION_SECRET'] = 'test-encryption-secret-32chars!!';
       process.env['BCRYPT_ROUNDS'] = '12';
-      
+
       // Should not throw for BCRYPT_ROUNDS (might throw for other missing security vars)
       expect(() => validateStartup()).not.toThrow(/BCRYPT_ROUNDS/);
     });
@@ -319,9 +325,11 @@ describe('Configuration Validation', () => {
       process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
       process.env['JWT_KEY_1'] = 'jwt-secret-1';
       process.env['JWT_KEY_2'] = 'jwt-secret-2';
+      // KEY_ENCRYPTION_SECRET required — without it validateEnv() throws before JWT_EXPIRY_SECONDS is checked
+      process.env['KEY_ENCRYPTION_SECRET'] = 'test-encryption-secret-32chars!!';
       process.env['BCRYPT_ROUNDS'] = '12';
       process.env['JWT_EXPIRY_SECONDS'] = '172800'; // 48 hours
-      
+
       expect(() => validateStartup()).toThrow('STARTUP_VALIDATION_FAILED');
       expect(() => validateStartup()).toThrow('JWT_EXPIRY_SECONDS should not exceed 86400');
     });

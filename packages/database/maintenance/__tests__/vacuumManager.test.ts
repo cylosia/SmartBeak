@@ -51,13 +51,27 @@ function createMockKnex() {
     return Promise.resolve({ rows: [] });
   });
 
-  const knex = Object.assign(mockTableBuilder, {
-    raw: mockRaw,
-  }) as unknown as Knex & {
-    raw: jest.Mock;
+  // P1-FIX: withStatementTimeout now acquires a dedicated connection via
+  // knex.client.{acquireConnection,query,releaseConnection} to guarantee that
+  // SET statement_timeout and the VACUUM/ANALYZE run on the same session.
+  // The mock must expose these methods so unit tests continue to work.
+  const mockConn = {};
+  const mockClientQuery = jest.fn().mockResolvedValue({ rows: [] });
+  const mockClient = {
+    acquireConnection: jest.fn().mockResolvedValue(mockConn),
+    query: mockClientQuery,
+    releaseConnection: jest.fn(),
   };
 
-  return { knex, mockRaw, mockInsert, mockTableBuilder };
+  const knex = Object.assign(mockTableBuilder, {
+    raw: mockRaw,
+    client: mockClient,
+  }) as unknown as Knex & {
+    raw: jest.Mock;
+    client: typeof mockClient;
+  };
+
+  return { knex, mockRaw, mockInsert, mockTableBuilder, mockClient, mockClientQuery };
 }
 
 describe('VacuumManager', () => {
@@ -180,9 +194,12 @@ describe('VacuumManager', () => {
         })
       ).resolves.toBeUndefined();
 
+      // P1-FIX: Use exact array match instead of arrayContaining — arrayContaining
+      // ignores element order, so ['users', 0.1, 50] would match [0.1, 50, 'users'],
+      // allowing a positional SQL bug to pass silently (wrong value bound to table name).
       expect(mockRaw).toHaveBeenCalledWith(
         expect.stringContaining('ALTER TABLE'),
-        expect.arrayContaining(['users', 0.1, 50])
+        ['users', 0.1, 50]
       );
     });
 
@@ -486,9 +503,11 @@ describe('VacuumManager', () => {
         last_autovacuum: autoDate,
         last_vacuum: manualDate,
       });
-      // Should use autovacuum date (Jan 20) not manual date (Jan 10)
-      const formatted = autoDate.toLocaleDateString();
-      expect(result).toContain(formatted);
+      // P1-FIX: Use ISO 8601 format (YYYY-MM-DD) for locale-invariant comparison.
+      // toLocaleDateString() produces "1/20/2026" in US, "20.1.2026" in DE — causes
+      // intermittent CI failures on non-US locale machines.
+      expect(result).toContain('2026-01-20'); // autovacuum date takes precedence
+      expect(result).not.toContain('2026-01-10'); // manual vacuum date should not appear
     });
 
     it('should threshold at exactly 15 for WARNING', () => {
