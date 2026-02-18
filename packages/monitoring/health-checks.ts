@@ -134,6 +134,12 @@ export class HealthChecksRegistry extends EventEmitter {
   private readonly checks: Map<string, HealthCheckConfig> = new Map();
   private readonly results: Map<string, HealthCheckResult> = new Map();
   private readonly intervals: Map<string, NodeJS.Timeout> = new Map();
+  // P2-CONCURRENCY-FIX: Track in-flight checks to prevent concurrent execution.
+  // Without this guard, if intervalMs <= timeoutMs, a slow check causes the
+  // interval to fire again before the prior invocation completes, producing
+  // overlapping concurrent checks that race to write this.results and create
+  // an ever-growing backlog of in-flight network connections.
+  private readonly inFlight: Set<string> = new Set();
   private readonly version: string;
   private readonly environment: string;
   private startTime: number;
@@ -210,6 +216,19 @@ export class HealthChecksRegistry extends EventEmitter {
       throw new Error(`Health check '${name}' not found`);
     }
 
+    // P2-CONCURRENCY-FIX: Skip if a prior invocation is still in flight.
+    // This prevents concurrent executions when intervalMs <= timeoutMs (e.g. a
+    // 5s-timeout check with a 5s interval fires again before the first completes),
+    // which would create an unbounded backlog of in-flight connections and race
+    // writes to this.results. Return the most recent cached result instead.
+    if (this.inFlight.has(name)) {
+      const cached = this.results.get(name);
+      if (cached) return cached;
+      // No cached result yet — this is the very first execution for a slow check.
+      // Fall through and execute; the inFlight guard will prevent future overlap.
+    }
+
+    this.inFlight.add(name);
     const start = Date.now();
     const timeoutMs = config.timeoutMs || 5000;
 
@@ -256,6 +275,8 @@ export class HealthChecksRegistry extends EventEmitter {
       try { this.emit('failure', failedResult); } catch (e) { logger.warn('Health check failure listener error', { error: e }); }
 
       return failedResult;
+    } finally {
+      this.inFlight.delete(name);
     }
   }
 
@@ -463,6 +484,26 @@ export class HealthChecksRegistry extends EventEmitter {
       }
     }
 
+    // P1-BUG-FIX: Vacuous truth guard — Array.every() returns true on an empty
+    // array. Without this guard, a pod with zero critical checks registered
+    // would declare ready:true with no dependency verification, causing
+    // Kubernetes to route live traffic before DB/Redis are confirmed healthy.
+    // This mirrors the identical guard already present in checkReadiness().
+    if (criticalChecks.length === 0) {
+      logger.warn('getHealthStatus: no critical health checks registered — reporting not ready (fail-safe)');
+      const notReadyResult: ReadinessResult = {
+        ready: false,
+        timestamp: new Date().toISOString(),
+        checks: [],
+        dependencies: [],
+      };
+      return {
+        health,
+        readiness: notReadyResult,
+        liveness: await this.checkLiveness(),
+      };
+    }
+
     const readiness: ReadinessResult = {
       ready: dependencies.every(d => d.ready),
       timestamp: new Date().toISOString(),
@@ -639,6 +680,19 @@ export function createExternalApiHealthCheck(
   // exfiltrate cloud credentials on every health check interval.
   validateHealthCheckUrl(options.url, options.name);
 
+  // P2-BUG-FIX: Reject body on GET/HEAD at registration time, not at probe time.
+  // The Fetch spec (and Node.js 18 undici) throws TypeError for GET/HEAD+body,
+  // which is caught silently as an 'unhealthy' result on every probe interval.
+  // This produces a misleading "network failure" error instead of a clear
+  // misconfiguration error, and causes the check to report degraded forever.
+  const method = options.method || 'GET';
+  if (options.body !== undefined && (method === 'GET' || method === 'HEAD')) {
+    throw new Error(
+      `createExternalApiHealthCheck [${options.name}]: body cannot be used with ${method} method. ` +
+      `Use method: 'POST' or remove the body option.`
+    );
+  }
+
   return async (): Promise<HealthCheckResult> => {
     const start = Date.now();
     const controller = new AbortController();
@@ -648,12 +702,15 @@ export function createExternalApiHealthCheck(
     );
 
     try {
-      const requestInit = {
-        method: options.method || 'GET',
+      const requestInit: RequestInit = {
+        method,
         headers: options.headers,
         signal: controller.signal,
-        body: options.body ? JSON.stringify(options.body) : undefined,
-      } as RequestInit;
+        // Only include body for non-GET/HEAD methods (validated above at registration)
+        ...(method === 'POST' && options.body !== undefined
+          ? { body: JSON.stringify(options.body) }
+          : {}),
+      };
       const response = await fetch(options.url, requestInit);
 
       clearTimeout(timeoutId);

@@ -163,6 +163,15 @@ export async function checkAllHealth(): Promise<{
   // resolution failure on external API) would block the entire health system forever.
   const DEFAULT_CHECK_TIMEOUT_MS = 10000;
   const healthChecks = Array.from(getMutableHealthChecks().entries());
+
+  // P1-BUG-FIX: Fail-safe for empty registry. If no health checks are registered,
+  // returning { healthy: true } (vacuous truth) causes callers to believe the
+  // system is operational with zero dependency verification. Return healthy:false
+  // to force callers to register at least one check before trusting the result.
+  if (healthChecks.length === 0) {
+    return { healthy: false, checks: [], timestamp: new Date().toISOString() };
+  }
+
   const results = await Promise.allSettled(
     healthChecks.map(async ([name, check]) => {
       let timeoutHandle: NodeJS.Timeout;

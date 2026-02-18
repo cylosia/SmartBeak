@@ -131,7 +131,15 @@ export default clerkMiddleware(async (auth: any, req: any) => {
 
 /**
 * Add security headers to response
-* P2-15 FIX: Add Vary header to prevent CDN caching per-request nonces
+* P1-AUDIT-FIX: Replaced Vary: Cookie with Cache-Control: no-store.
+* The previous Vary: Cookie was insufficient to prevent CDN caching of
+* per-request CSP nonces. Vary: Cookie creates separate cache entries
+* per distinct cookie value, but nonces are per-REQUEST — two requests
+* from the same user (same cookies) still get different nonces, so a
+* CDN caching by cookie would serve a stale nonce on the second request,
+* causing the browser to reject all inline scripts (CSP nonce mismatch).
+* Cache-Control: no-store instructs all caches (CDN, browser) not to
+* store this response, ensuring each request generates a fresh nonce.
 * FIX(P2): Accept nonce as a parameter — nonce is now generated once at the
 * middleware level and shared with both the request (x-nonce) and the response
 * CSP, so server components and the browser CSP use the same value.
@@ -141,8 +149,9 @@ function addSecurityHeaders(response: NextResponse, nonce: string): void {
     response.headers.set(key, value);
   }
   response.headers.set('Content-Security-Policy', buildWebAppCsp(nonce));
-  // P2-15 FIX: Vary header prevents CDN from caching per-request nonce
-  response.headers.set('Vary', 'Cookie');
+  // P1-AUDIT-FIX: no-store prevents CDN/proxy from caching per-request nonces.
+  // Stale nonces in a cached response cause CSP to block all inline scripts.
+  response.headers.set('Cache-Control', 'no-store');
 }
 
 /**

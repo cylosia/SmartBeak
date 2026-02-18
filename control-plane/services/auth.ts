@@ -177,7 +177,10 @@ export async function authFromHeader(header?: string): Promise<AuthContext> {
 
   // P0-FIX: Runtime validation of role value instead of unchecked `as Role` cast.
   // A malformed JWT could contain an arbitrary string in the role claim.
-  const VALID_ROLES: readonly Role[] = ['admin', 'editor', 'viewer', 'owner'];
+  // P0-BUG-FIX: Added 'buyer' — it is in the Role type union but was absent from
+  // VALID_ROLES, causing every legitimate buyer JWT to throw InvalidTokenError with
+  // "Invalid role in token: buyer". This silently blocks the entire buyer user class.
+  const VALID_ROLES: readonly Role[] = ['admin', 'editor', 'viewer', 'owner', 'buyer'];
   if (!VALID_ROLES.includes(claims.role as Role)) {
   throw new InvalidTokenError(`Invalid role in token: ${claims.role}`);
   }
