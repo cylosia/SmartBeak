@@ -150,7 +150,10 @@ function isRetryableError(error: Error, options: RetryOptions): boolean {
   }
 
   // Check against known retryable patterns
-  const message = error["message"].toLowerCase();
+  // P1-FIX: Use dot notation on the concrete Error.message property.
+  // Bracket notation is only required for index-signature types; Error.message
+  // is a regular typed property. Guard with ?? '' in case message is undefined.
+  const message = (error.message ?? '').toLowerCase();
   return options.retryableErrors?.some(pattern =>
   message.includes(pattern.toLowerCase())
   ) ?? false;
@@ -247,8 +250,8 @@ export async function withRetry<T>(
 
     _retryMetricsHook?.onAttempt(operationName, attempt, delay);
 
-    logger.warn(`Retry attempt ${attempt}/${opts.maxRetries} after ${delay}ms: ${err["message"]}`, {
-    error: err["message"],
+    logger.warn(`Retry attempt ${attempt}/${opts.maxRetries} after ${delay}ms: ${err.message}`, {
+    error: err.message,
     });
 
     opts.onRetry?.(error as Error, attempt);
@@ -475,7 +478,7 @@ export class CircuitBreaker {
     const previousState = this.state;
     this.state = CircuitState.OPEN;
     _circuitBreakerMetricsHook?.onStateChange(this.name, previousState, 'open');
-    logger["error"](`Circuit breaker opened for ${this.name} (${this.failures} failures)`);
+    logger.error(`Circuit breaker opened for ${this.name} (${this.failures} failures)`);
     }
   } finally {
     release();

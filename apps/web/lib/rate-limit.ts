@@ -23,7 +23,7 @@ const memoryCounters = new LRUCache<string, RateLimitRecord>({
 function getClientIp(req: NextApiRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
   const ip = typeof forwarded === 'string'
-  ? forwarded.split(',')[0]!.trim()
+  ? (forwarded.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown')
   : req.socket.remoteAddress || 'unknown';
   return ip;
 }

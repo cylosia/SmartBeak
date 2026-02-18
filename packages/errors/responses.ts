@@ -23,7 +23,8 @@ export function sendError(
   message: string,
   opts?: { details?: unknown; retryAfter?: number }
 ): FastifyReply {
-  const requestId = (reply.request.headers['x-request-id'] as string) || '';
+  const rawRequestId = reply.request.headers['x-request-id'];
+  const requestId = (typeof rawRequestId === 'string' ? rawRequestId : Array.isArray(rawRequestId) ? rawRequestId[0] : undefined) ?? '';
   const isDevelopment = process.env['NODE_ENV'] === 'development';
   const body: ErrorResponse & { retryAfter?: number } = {
     error: message,

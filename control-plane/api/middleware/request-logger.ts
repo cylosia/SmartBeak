@@ -89,7 +89,9 @@ export async function requestLoggerMiddleware(
 
   const requestContext = createRequestContext({
   userId: auth?.userId,
-  orgId: auth?.["orgId"],
+  // P2-FIX: AuthContext.orgId is a concrete typed property, not an index-
+  // signature access. Use dot notation per the codebase conventions.
+  orgId: auth?.orgId,
   path: req.routeOptions.url || req.url,
   method: req.method,
   });
@@ -101,7 +103,7 @@ export async function requestLoggerMiddleware(
     correlationId: requestId,
     context: {
     userId: auth?.userId,
-    orgId: auth?.["orgId"],
+    orgId: auth?.orgId,
     }
   });
 
@@ -136,19 +138,25 @@ export async function requestLoggerMiddleware(
     query: sanitizedQuery,
     headers: {
     'user-agent': safeHeaders['user-agent'],
-    'content-type': safeHeaders['content-type'] as string,
+    // P2-FIX: Remove the unsafe `as string` cast. redactSensitiveHeaders()
+    // returns Record<string, string | undefined>. The RequestLog interface
+    // already accepts `content-type?: string | undefined` so no cast is needed.
+    'content-type': safeHeaders['content-type'],
     'x-request-id': requestId,
     },
     ip: getClientIP(req),
     userId: auth?.userId,
-    orgId: auth?.["orgId"],
+    orgId: auth?.orgId,
     statusCode: res.statusCode,
     duration,
     };
 
     if (res.statusCode >= 400) {
-    logEntry["error"] = `HTTP ${res.statusCode}`;
-    logger["error"]('API request error', undefined, {
+    // P2-FIX: Use dot notation on concrete typed properties (RequestLog.error
+    // and Logger.error). Bracket notation is only required for index-signature
+    // types, not for explicitly declared object properties or class methods.
+    logEntry.error = `HTTP ${res.statusCode}`;
+    logger.error('API request error', undefined, {
     statusCode: res.statusCode,
     method: req.method,
     path: req.routeOptions.url || req.url,
@@ -183,15 +191,14 @@ export async function requestLoggerMiddleware(
 * Sanitize query parameters for logging
 * Removes sensitive fields like passwords, tokens, keys
 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sanitizeQueryParams(query: Record<string, any>): Record<string, any> {
+// P2-FIX: Replace any with unknown to satisfy the no-explicit-any ESLint rule.
+function sanitizeQueryParams(query: Record<string, unknown>): Record<string, unknown> {
   if (!query || typeof query !== 'object') {
   return {};
   }
 
   const sensitiveFields = ['password', 'token', 'api_key', 'apiKey', 'secret', 'authorization', 'auth'];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sanitized: Record<string, any> = {};
+  const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(query)) {
   if (sensitiveFields.some(field => key.toLowerCase().includes(field))) {
@@ -241,7 +248,7 @@ export function logRequest(
   correlationId: requestId,
   context: {
     userId: auth?.userId,
-    orgId: auth?.["orgId"],
+    orgId: auth?.orgId,
   },
   });
 

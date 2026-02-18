@@ -172,12 +172,27 @@ export function recordRetryAttempt(operation: string, attempt: number, delayMs: 
 }
 
 /**
+ * Bucket a raw attempt count into a bounded label value to prevent cardinality
+ * explosion in Prometheus. Using exact counts (e.g. "47") as labels creates an
+ * unbounded number of time-series: with maxRetries=100 across 50 operations you
+ * get 5,000 label combinations that exhaust scraper memory and slow queries.
+ */
+function bucketAttempts(totalAttempts: number): string {
+  if (totalAttempts <= 3) return '1-3';
+  if (totalAttempts <= 10) return '4-10';
+  if (totalAttempts <= 30) return '11-30';
+  return '31+';
+}
+
+/**
  * Record all retries exhausted for an operation
  */
 export function recordRetryExhaustion(operation: string, totalAttempts: number): void {
   try {
     const collector = getMetricsCollector();
-    collector.counter('resource.retry.exhausted_total', 1, { operation, total_attempts: String(totalAttempts) });
+    // P1-FIX: Bucket attempt counts instead of using exact values as labels.
+    // Exact counts create unbounded label cardinality and Prometheus OOM risk.
+    collector.counter('resource.retry.exhausted_total', 1, { operation, attempt_bucket: bucketAttempts(totalAttempts) });
   } catch {
     // Metrics not initialized yet — silently drop
   }
@@ -230,7 +245,14 @@ export function recordRateLimitCheck(key: string, allowed: boolean, remaining: n
     const collector = getMetricsCollector();
     collector.counter('resource.rate_limit.checks_total', 1, { result: allowed ? 'allowed' : 'denied' });
     const utilization = limit > 0 ? 1 - (remaining / limit) : 0;
-    collector.gauge('resource.rate_limit.utilization', utilization, { key });
+    // P1-FIX: Do NOT include `key` as a metric label. Rate-limit keys are often
+    // per-user or per-IP identifiers (e.g. "user:abc-123", "1.2.3.4") which
+    // create unbounded cardinality — potentially millions of label values in
+    // production. This causes Prometheus to OOM and makes metric scraping fail.
+    // Aggregate utilization across all keys; use logs for per-key debugging.
+    collector.gauge('resource.rate_limit.utilization', utilization);
+    // `key` parameter is intentionally unused for cardinality reasons above.
+    void key;
   } catch {
     // Metrics not initialized yet — silently drop
   }

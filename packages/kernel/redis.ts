@@ -49,14 +49,28 @@ export async function getRedis(): Promise<Redis> {
     });
 
     newRedis.on('error', (err: Error) => {
-      logger.error('Connection error', err);
-      // AUDIT-FIX P1-04: On fatal connection errors, reset the singleton
-      // so the next getRedis() call creates a fresh connection instead
-      // of returning the dead instance forever.
+      logger.error('Redis connection error', err);
+      // P0-FIX: Acquire the mutex before resetting the singleton to prevent a
+      // TOCTOU race where a concurrent getRedis() caller checks `if (redis)`
+      // on the fast path (line 29) between the reset here and the mutex re-check
+      // inside runExclusive. Without the mutex, multiple callers could each
+      // create a new connection after a fatal error, leaking all but one.
       const fatalPatterns = ['ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET', 'ERR AUTH'];
       if (fatalPatterns.some(p => err.message.includes(p))) {
-        logger.warn('Fatal Redis error detected - resetting connection for recovery');
-        redis = null;
+        logger.warn('Fatal Redis error detected, resetting connection for recovery');
+        redisMutex.runExclusive(async () => {
+          // Only reset if we still hold the same instance — another caller may
+          // have already created a fresh connection while we were waiting.
+          if (redis === newRedis) {
+            try { await newRedis.quit(); } catch { /* ignore quit errors on dead conn */ }
+            redis = null;
+          }
+        }).catch((mutexErr: unknown) => {
+          logger.error(
+            'Failed to acquire mutex during Redis error recovery',
+            mutexErr instanceof Error ? mutexErr : new Error(String(mutexErr))
+          );
+        });
       }
     });
 

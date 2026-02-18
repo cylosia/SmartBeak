@@ -47,14 +47,18 @@ export async function rateLimit(
     keyPrefix: 'ratelimit:api',
   });
 
-  // Set rate limit headers
-  void res.header('X-RateLimit-Limit', result.limit);
-  void res.header('X-RateLimit-Remaining', result.remaining);
-  void res.header('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
+  // P2-FIX: res.header() is synchronous in Fastify (returns the reply for
+  // chaining), not a Promise. The void operator was unnecessary and misleading.
+  res.header('X-RateLimit-Limit', result.limit);
+  res.header('X-RateLimit-Remaining', result.remaining);
+  res.header('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
 
   if (!result.allowed) {
     const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000);
-    void res.status(429).send({
+    // P1-FIX: res.send() returns a Promise in Fastify. Awaiting it ensures
+    // the response is fully flushed before we return false to the caller.
+    // Using void previously dropped any send errors silently.
+    await res.status(429).send({
       error: 'Too many requests',
       message: `Rate limit exceeded for ${endpoint}. Please try again later.`,
       retryAfter,

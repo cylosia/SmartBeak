@@ -4,6 +4,7 @@ import { getRequestId } from '@kernel/request-context';
 import {
   AppError,
   ErrorCodes,
+  type ErrorCode,
   type ErrorResponse,
   shouldExposeErrorDetails,
   RateLimitError,
@@ -59,7 +60,10 @@ export function createRouteErrorHandler(options: RouteErrorHandlerOptions) {
 
     // --- Determine status code and error code ---
     let statusCode = 500;
-    let errorCode: string = ErrorCodes.INTERNAL_ERROR;
+    // P1-FIX: Declare as ErrorCode (branded union) not plain string. This
+    // prevents arbitrary internal strings (e.g. DB driver codes, third-party
+    // error.code values) from leaking into API responses as error codes.
+    let errorCode: ErrorCode = ErrorCodes.INTERNAL_ERROR;
     let clientMessage: string = 'An error occurred processing your request';
 
     if (error instanceof AppError) {
@@ -72,10 +76,23 @@ export function createRouteErrorHandler(options: RouteErrorHandlerOptions) {
       typeof (error as ErrorLike).statusCode === 'number' &&
       typeof (error as ErrorLike).code === 'string'
     ) {
-      // Duck-typed errors like AuthError from control-plane/services/auth.ts
+      // Duck-typed errors like AuthError from control-plane/services/auth.ts.
       const typed = error as ErrorLike;
-      statusCode = typed.statusCode!;
-      errorCode = typed.code!;
+      // P1-FIX: Validate duck-typed statusCode before forwarding. A third-party
+      // error with statusCode=0 or statusCode=999 would produce an invalid HTTP
+      // response; reject anything outside the 4xx–5xx client/server-error range.
+      const candidateStatus = typed.statusCode;
+      if (candidateStatus !== undefined && candidateStatus >= 400 && candidateStatus < 600) {
+        statusCode = candidateStatus;
+      }
+      // P1-FIX: Only forward the duck-typed code if it's a known ErrorCode.
+      // Anything else (e.g. 'SQLITE_CONSTRAINT', 'ECONNRESET') must not reach
+      // the client — fall back to INTERNAL_ERROR for unrecognized values.
+      const candidateCode = typed.code;
+      const knownCodes = Object.values(ErrorCodes) as string[];
+      if (candidateCode !== undefined && knownCodes.includes(candidateCode)) {
+        errorCode = candidateCode as ErrorCode;
+      }
       clientMessage = error.message;
     }
 
