@@ -30,7 +30,7 @@ const ContentRoiSchema = z.object({
   monthly_traffic: z.number().min(0).max(1000000000),
   conversion_rate: z.number().min(0).max(100),
   revenue_per_conversion: z.number().min(0).max(1000000),
-});
+}).strict();
 /**
  * Whitelist fields to prevent mass assignment vulnerabilities
  * @param input - Input object
@@ -212,14 +212,15 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
       if (!Array.isArray(result) || result.length === 0) {
         throw new Error('Failed to create ROI model');
       }
-      const row = result[0];
+      const row = result[0] as Record<string, unknown>;
+      const rowId = typeof row['id'] === 'string' ? row['id'] : undefined;
 
       await recordAuditEvent({
         orgId: auth.orgId,
         userId: auth.userId,
         action: 'content_roi_created',
         entityType: 'content_roi_model',
-        entityId: row.id as string,
+        entityId: rowId,
         metadata: {
           domain_id,
           content_id,

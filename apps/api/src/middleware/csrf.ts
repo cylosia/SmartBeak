@@ -209,9 +209,9 @@ export function csrfProtection(config: CsrfConfig = {}) {
     } catch (error) {
       // P1-FIX #15: Use structured logging instead of console.error to prevent
       // PII/connection strings leaking to stdout in production container logs.
-      const err = error instanceof Error ? error : new Error(String(error));
-      // Import would create circular dependency - use minimal safe logging
-      process.stderr.write(`[CSRF] Validation error: ${err.message}\n`);
+      // Import would create circular dependency - use minimal safe logging.
+      // Do NOT include err.message: Redis errors can contain connection strings / key names.
+      process.stderr.write('[CSRF] Token validation failed - Redis error\n');
       return res.status(500).send({
         error: 'CSRF protection: Validation error',
         code: 'CSRF_VALIDATION_ERROR',
