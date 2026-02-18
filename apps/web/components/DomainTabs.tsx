@@ -23,6 +23,12 @@ export function DomainTabs({ domainId, active }: { domainId: string; active: str
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLElement>) => {
       const currentIndex = tabs.findIndex(([key]) => key === active);
+      // P1-ARIA-FIX: Guard against invalid `active` prop. If active doesn't match
+      // any tab key, findIndex returns -1 and modulo arithmetic wraps to the last
+      // tab ((-1 + 1) % 12 === 0 for ArrowRight, (-1 - 1 + 12) % 12 === 10 for
+      // ArrowLeft) causing unexpected focus jumps to unrelated tabs.
+      if (currentIndex === -1) return;
+
       let newIndex = currentIndex;
 
       if (e.key === 'ArrowRight') {
@@ -47,7 +53,6 @@ export function DomainTabs({ domainId, active }: { domainId: string; active: str
   <div
     role="tablist"
     aria-label="Domain sections"
-    tabIndex={0}
     style={{ marginBottom: 24 }}
     onKeyDown={handleKeyDown}
   >
@@ -65,7 +70,9 @@ export function DomainTabs({ domainId, active }: { domainId: string; active: str
           marginRight: 16,
           fontWeight: isActive ? 'bold' : 'normal',
           textDecoration: isActive ? 'underline' : 'none',
-          outline: 'none',
+          // P2-A11Y-FIX: Removed outline:none. Suppressing the focus ring without
+          // providing an equivalent custom indicator violates WCAG 2.1 SC 2.4.7
+          // (Focus Visible). Keyboard users cannot determine which tab has focus.
         }}
       >
         {label}
