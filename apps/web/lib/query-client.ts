@@ -33,10 +33,19 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
   
-  // Combine external signal with internal timeout
-  // SECURITY FIX P1-7: Use { once: true } to prevent event listener memory leak
+  // Combine external signal with internal timeout.
+  // SECURITY FIX P1-7: Use { once: true } to prevent event listener memory leak.
+  // P1-8 FIX: If the caller passes an already-aborted signal (e.g. a query key
+  // changed before the previous fetch even started), the 'abort' event has
+  // already fired and addEventListener will never receive it — the request
+  // would proceed despite the component having unmounted. Check signal.aborted
+  // first and abort the internal controller immediately in that case.
   if (signal) {
-    signal.addEventListener('abort', () => controller.abort(), { once: true });
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
   }
   
   try {
@@ -76,8 +85,17 @@ const defaultQueryFn = async ({ queryKey, signal }: QueryFunctionContext) => {
       ? (rawParams as Record<string, unknown>)
       : undefined;
 
+  // P3-1 FIX: String(null) → "null" and String(undefined) → "undefined", which
+  // are semantically incorrect query-string values. Filter out null/undefined
+  // entries before encoding so they are simply omitted from the URL. Also skip
+  // entries whose value serialises to [object Object] to prevent silent data loss.
   const queryString = params
-    ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
+    ? (() => {
+        const entries = Object.entries(params)
+          .filter(([, v]) => v !== null && v !== undefined)
+          .map(([k, v]) => [k, String(v)] as [string, string]);
+        return entries.length > 0 ? '?' + new URLSearchParams(entries).toString() : '';
+      })()
     : '';
   
   const response = await fetchWithTimeout(`${url}${queryString}`, {

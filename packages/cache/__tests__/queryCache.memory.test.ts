@@ -310,48 +310,56 @@ describe('QueryCache Memory Leak Prevention', () => {
 
 describe('QueryCache Memory Leak Integration', () => {
   it('should handle rapid table invalidations without unbounded growth', async () => {
+    // P2-5 FIX: Use try/finally so cleanup always runs even if an assertion
+    // fails. Without it, the cleanup interval left open by the QueryCache
+    // causes Jest to report "open handles" or hang after a test failure.
     const multiTierCache = new MultiTierCache({ stampedeProtection: false });
     const queryCache = new QueryCache(multiTierCache);
 
-    // Simulate rapid table changes
-    for (let i = 0; i < 10000; i++) {
-      const tableName = `dynamic_table_${i % 100}`;
-      await queryCache.invalidateTable(tableName);
+    try {
+      // Simulate rapid table changes
+      for (let i = 0; i < 10000; i++) {
+        const tableName = `dynamic_table_${i % 100}`;
+        await queryCache.invalidateTable(tableName);
+      }
+
+      const stats = queryCache.getStats();
+      expect(stats.versionKeys).toBeLessThanOrEqual(5000);
+    } finally {
+      queryCache.stopCleanup();
+      await queryCache.clear();
+      await multiTierCache.close();
     }
-
-    const stats = queryCache.getStats();
-    expect(stats.versionKeys).toBeLessThanOrEqual(5000);
-
-    queryCache.stopCleanup();
-    await queryCache.clear();
-    await multiTierCache.close();
   });
 
   it('should handle many unique table combinations', async () => {
+    // P2-5 FIX: Use try/finally so cleanup always runs even if an assertion fails.
     const multiTierCache = new MultiTierCache({ stampedeProtection: false });
     const queryCache = new QueryCache(multiTierCache);
 
-    // Simulate complex queries with many table combinations
-    for (let i = 0; i < 3000; i++) {
-      const tables = [
-        `users_${i % 50}`,
-        `orders_${i % 30}`,
-        `products_${i % 20}`,
-      ];
-      
-      await queryCache.execute(
-        'SELECT * FROM multiple tables',
-        [],
-        async () => ({ data: 'result' }),
-        { dependsOn: tables }
-      );
+    try {
+      // Simulate complex queries with many table combinations
+      for (let i = 0; i < 3000; i++) {
+        const tables = [
+          `users_${i % 50}`,
+          `orders_${i % 30}`,
+          `products_${i % 20}`,
+        ];
+
+        await queryCache.execute(
+          'SELECT * FROM multiple_tables',
+          [],
+          async () => ({ data: 'result' }),
+          { dependsOn: tables }
+        );
+      }
+
+      const stats = queryCache.getStats();
+      expect(stats.versionKeys).toBeLessThanOrEqual(5000);
+    } finally {
+      queryCache.stopCleanup();
+      await queryCache.clear();
+      await multiTierCache.close();
     }
-
-    const stats = queryCache.getStats();
-    expect(stats.versionKeys).toBeLessThanOrEqual(5000);
-
-    queryCache.stopCleanup();
-    await queryCache.clear();
-    await multiTierCache.close();
   });
 });

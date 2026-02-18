@@ -93,8 +93,30 @@ export class QuotaService {
   );
 
   if ((rowCount ?? 0) === 0) {
-    // Either the org_usage row doesn't exist yet, or the quota is full.
-    // Read current value to produce a meaningful error message.
+    // rowCount = 0 has two distinct causes:
+    //   (a) the org_usage row doesn't exist yet (new organization)
+    //   (b) the quota is full (field >= limit)
+    // P0-4 FIX: The previous code conflated these cases and always threw
+    // "Quota exceeded", which incorrectly blocked new organisations from
+    // creating their first resource. We now distinguish the two cases by
+    // checking for row existence before throwing.
+    const existsResult = await this.pool.query<{ exists: boolean }>(
+      'SELECT EXISTS(SELECT 1 FROM org_usage WHERE org_id = $1) AS exists',
+      [orgId]
+    );
+    const rowExists = existsResult.rows[0]?.['exists'] === true;
+
+    if (!rowExists) {
+      // The org_usage row has not been initialised. This is a configuration
+      // error — the provisioning pipeline must INSERT the row when an org is
+      // created. Surface a clear, actionable message rather than "quota exceeded".
+      throw new Error(
+        `Organization usage record not found for org_id=${orgId}. ` +
+        'Ensure org_usage is initialised during organisation provisioning.'
+      );
+    }
+
+    // Row exists — quota is genuinely full.
     const usageRecord = await this.usage.getUsage(orgId);
     const current = (usageRecord[field as keyof typeof usageRecord] as number) ?? 0;
     throw new Error(

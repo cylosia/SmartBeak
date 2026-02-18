@@ -94,6 +94,14 @@ export interface SlowQueryReport {
  * as a valid opener and rely on the semicolon guard to block multi-statement
  * injections such as:
  *   WITH x AS (SELECT 1) SELECT 1; DROP TABLE users;
+ *
+ * P0-3 FIX: The previous implementation allowed DML inside CTEs, e.g.:
+ *   WITH x AS (INSERT INTO users VALUES(1)) SELECT 1
+ * EXPLAIN ANALYZE *executes* the query, so this INSERT would actually run.
+ * We now reject any query containing DML keywords (INSERT, UPDATE, DELETE,
+ * DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) anywhere in the text.
+ * This blocks writable CTEs, function calls that perform DML, and all other
+ * mutation patterns. Legitimate analytical queries do not require DML.
  */
 function validateSelectOnly(query: string): void {
   if (!/^\s*(?:SELECT|WITH)\b/i.test(query)) {
@@ -102,6 +110,16 @@ function validateSelectOnly(query: string): void {
   // Block semicolons to prevent multi-statement injection
   if (query.includes(';')) {
     throw new Error('Query must not contain semicolons. Multi-statement queries are not allowed.');
+  }
+  // Block DML anywhere in the query, including inside CTE bodies.
+  // EXPLAIN ANALYZE executes the full query tree — a writable CTE like
+  //   WITH x AS (INSERT INTO users VALUES (1)) SELECT 1
+  // would actually insert a row.
+  if (/\b(?:INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE)\b/i.test(query)) {
+    throw new Error(
+      'DML statements (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) ' +
+      'are not permitted, including inside CTEs. EXPLAIN ANALYZE executes the entire query tree.'
+    );
   }
 }
 
@@ -130,14 +148,16 @@ export class QueryPlanAnalyzer {
     try {
       const result = await this.pool.query(explainQuery, params);
       const planData = result.rows[0]?.['QUERY PLAN'] as QueryPlan[];
-      
+
       if (!planData || planData.length === 0) {
         throw new Error('Failed to get query plan');
       }
 
       return this.analyzePlan(planData[0]!, query);
     } catch (error) {
-      logger.error('[QueryPlanAnalyzer] Failed to analyze query', error as Error);
+      // P1-6 FIX: error is unknown; casting as Error is unsafe and silently
+      // discards context when a non-Error is thrown. Use instanceof guard.
+      logger.error('[QueryPlanAnalyzer] Failed to analyze query', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
