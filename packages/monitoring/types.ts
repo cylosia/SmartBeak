@@ -1,7 +1,24 @@
 /**
  * Monitoring Types
  * Type definitions for the monitoring package
+ *
+ * CRITICAL SECURITY NOTES:
+ * - Never include PII (email, phone, SSN, IP addresses) in span attributes or metric dimensions
+ * - Never use high-cardinality values (user IDs, request IDs, timestamps) as metric label keys
+ * - Metric cardinality explosion can cause OTelemetry collector crashes and data loss
+ *
+ * CARDINALITY GUIDELINES:
+ * - Span/metric attributes: low-cardinality only (status, HTTP method, error code, service name)
+ * - Alert metadata: primitive values only, no nested objects
  */
+
+/**
+ * FIXED (MONITORING-CARDINALITY): Safe attribute value types for spans, metrics, and alerts.
+ * Restricts to primitives that OpenTelemetry supports natively and cannot carry nested PII.
+ * High-cardinality values (user IDs, request UUIDs, timestamps as strings) MUST NOT be used
+ * as attribute keys or metric dimension values.
+ */
+export type SafeAttributeValue = string | number | boolean | string[] | number[] | boolean[];
 
 // ============================================================================
 // Legacy Types (for backward compatibility)
@@ -40,8 +57,13 @@ export interface Alert {
   message: string;
   /** Alert timestamp */
   timestamp: Date;
-  /** Alert metadata */
-  metadata?: Record<string, unknown>;
+  /**
+   * Alert metadata — low-cardinality primitives only, no PII.
+   * FIXED (MONITORING-ALERT-METADATA): Narrowed from Record<string, unknown> to prevent
+   * accidental inclusion of PII or nested objects that could be forwarded to Slack/PagerDuty.
+   * Approved keys: rule_id, component_name, severity_reason, threshold_value, affected_service.
+   */
+  metadata?: Record<string, SafeAttributeValue>;
   /** Whether alert is acknowledged */
   acknowledged?: boolean;
 }
@@ -117,7 +139,12 @@ export interface DashboardPanel {
   metric: string;
   aggregation: 'avg' | 'sum' | 'min' | 'max' | 'count';
   dimensions?: string[];
-  options?: Record<string, unknown>;
+  /**
+   * Panel visualization options.
+   * FIXED (MONITORING-PANEL-OPTIONS): Narrowed from Record<string, unknown> to SafeAttributeValue
+   * to prevent injection of credentials, nested objects, or invalid configuration values.
+   */
+  options?: Record<string, SafeAttributeValue>;
 }
 
 /**
@@ -131,12 +158,20 @@ export interface TraceSpan {
   kind: 'internal' | 'server' | 'client' | 'producer' | 'consumer';
   startTime: number;
   endTime: number;
-  attributes: Record<string, unknown>;
+  /**
+   * Span attributes — low-cardinality, no PII.
+   * FIXED (MONITORING-SPAN-ATTRS): Narrowed from Record<string, unknown> to SafeAttributeValue
+   * to prevent cardinality explosion and PII leakage into OTelemetry backends.
+   * NEVER store: user IDs, email addresses, request bodies, IP addresses, session tokens.
+   * SAFE to store: HTTP method, HTTP status code, error code, operation name, service version.
+   */
+  attributes: Record<string, SafeAttributeValue>;
   status: { code: 'ok' | 'error'; message?: string };
   events: {
     timestamp: number;
     name: string;
-    attributes?: Record<string, unknown>;
+    /** Span event attributes — same cardinality/PII constraints as span attributes */
+    attributes?: Record<string, SafeAttributeValue>;
   }[];
 }
 
@@ -203,7 +238,11 @@ export interface CorrelatedLogEntry {
   service: string;
   traceId?: string;
   spanId?: string;
-  attributes: Record<string, unknown>;
+  /**
+   * Log correlation attributes — low-cardinality only, no PII.
+   * FIXED (MONITORING-LOG-ATTRS): Narrowed from Record<string, unknown> to SafeAttributeValue.
+   */
+  attributes: Record<string, SafeAttributeValue>;
 }
 
 /**

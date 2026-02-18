@@ -20,6 +20,8 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
@@ -59,7 +61,9 @@
       "@packages/*": ["packages/*"],
       "@shutdown": ["packages/shutdown/index.ts"],
       "@monitoring": ["packages/monitoring/index.ts"],
-      "@monitoring/*": ["packages/monitoring/*"]
+      "@monitoring/*": ["packages/monitoring/*"],
+      "@cache": ["packages/cache/index.ts"],
+      "@cache/*": ["packages/cache/*"]
     },
     "resolveJsonModule": true
   },
@@ -78,6 +82,7 @@
     { "path": "./packages/utils" },
     { "path": "./packages/shutdown" },
     { "path": "./packages/ml" },
-    { "path": "./packages/adapters" }
+    { "path": "./packages/adapters" },
+    { "path": "./packages/cache" }
   ]
 }
