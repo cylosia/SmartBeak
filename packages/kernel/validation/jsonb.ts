@@ -16,7 +16,17 @@ export const MAX_JSONB_SIZE_LARGE = 10 * 1024 * 1024;
  * @returns Size in bytes
  */
 export function calculateJSONBSize(data: unknown): number {
-  const jsonString = JSON.stringify(data);
+  // P1-10 FIX: JSON.stringify throws TypeError for circular references.
+  // Propagate as a clear ValidationError rather than an unhandled crash.
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(data);
+  } catch (err) {
+    throw new ValidationError(
+      `Cannot calculate JSONB size: ${err instanceof Error ? err.message : String(err)}`,
+      'jsonb'
+    );
+  }
   // Use a conservative estimate for UTF-8 encoding
   let size = 0;
   for (let i = 0; i < jsonString.length; i++) {
@@ -94,7 +104,16 @@ export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZ
   // P2-8 FIX: Serialize once instead of twice. Previously, validateJSONBSize
   // called JSON.stringify internally, and then we called JSON.stringify again
   // here. For large payloads, this doubled CPU and memory usage.
-  const jsonString = JSON.stringify(data);
+  // P1-10 FIX: Guard against circular references.
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(data);
+  } catch (err) {
+    throw new ValidationError(
+      `Cannot serialize for JSONB: ${err instanceof Error ? err.message : String(err)}`,
+      'jsonb'
+    );
+  }
   const size = Buffer.byteLength(jsonString, 'utf8');
 
   if (size > maxSize) {

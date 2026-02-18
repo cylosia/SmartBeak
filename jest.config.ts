@@ -24,6 +24,9 @@ const sharedModuleNameMapper = {
   '^@security/(.*)$': '<rootDir>/packages/security/$1',
   '^@database/(.*)$': '<rootDir>/packages/database/$1',
   '^@config$': '<rootDir>/packages/config/index.ts',
+  // P2-1 FIX: Missing sub-path alias. Without this, any test in the unit/a11y
+  // projects that imports @config/jobs, @config/env, etc. fails with module not found.
+  '^@config/(.*)$': '<rootDir>/packages/config/$1',
   '^@errors$': '<rootDir>/packages/errors/index.ts',
 };
 
@@ -46,7 +49,22 @@ const config: Config = {
       moduleNameMapper: sharedModuleNameMapper,
       setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
       transform: sharedTransform,
-      testPathIgnorePatterns: ['/node_modules/', '/dist/', '/.next/', 'test/a11y/'],
+      // P0-3 FIX: Vitest test files live in __tests__/ directories and import from
+      // 'vitest', which Jest cannot resolve. They must be excluded from Jest's testMatch.
+      // These files are intentionally run by Vitest (npm run test:load / test:chaos).
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '/dist/',
+        '/.next/',
+        'test/a11y/',
+        // Vitest files — import from 'vitest', incompatible with Jest
+        'JobScheduler.concurrency.test.ts',
+        'JobScheduler.test.ts',
+        // packages/security jwt tests also import from vitest
+        'packages/security/__tests__/jwt.test.ts',
+        // control-plane jwt-signing test imports from vitest
+        'control-plane/services/__tests__/jwt-signing.test.ts',
+      ],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       clearMocks: true,
       restoreMocks: true,
@@ -85,6 +103,10 @@ const config: Config = {
   collectCoverageFrom: [
     'apps/**/*.{ts,tsx}',
     'packages/**/*.{ts,tsx}',
+    // P2-2 FIX: control-plane and domains were missing from coverage.
+    // The JWT signing service and all domain logic had zero coverage visibility.
+    'control-plane/**/*.{ts,tsx}',
+    'domains/**/*.{ts,tsx}',
     '!**/node_modules/**',
     '!**/dist/**',
     '!**/*.d.ts',

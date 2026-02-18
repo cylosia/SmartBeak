@@ -6,6 +6,9 @@ import { getLogger } from '../../packages/kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
 import { rejectDisallowedAlgorithm } from '../../packages/security/jwt';
+// P1-4 FIX: Static import instead of per-call dynamic await import('@kernel/auth').
+// The hot auth path was paying microtask + module-map-lookup cost on every request.
+import { verifyToken as verifyTokenSync } from '@kernel/auth';
 
 
 /**
@@ -433,6 +436,32 @@ async function _isTokenRevoked(jti: string): Promise<boolean> {
 }
 
 /**
+ * P0-2 FIX: Check if ALL tokens for a user have been revoked.
+ * revokeAllUserTokens() writes jwt:revoked:user:{userId}; this function reads it.
+ * Previously nothing in the verification path read this key, making mass revocation
+ * (account suspension, forced logout-all, credential reset) a complete no-op.
+ *
+ * @param userId - User ID (sub claim) to check
+ * @returns Whether all tokens for this user have been revoked
+ */
+async function _isUserRevoked(userId: string): Promise<boolean> {
+  if (isCircuitOpen()) {
+    logger.warn('Circuit breaker open, skipping user revocation check (Redis unavailable)');
+    return false;
+  }
+
+  try {
+    const key = `jwt:revoked:user:${userId}`;
+    const revoked = await getRedisClient().exists(key);
+    circuitBreaker.failures = 0;
+    return revoked === 1;
+  } catch (error) {
+    recordFailure(error);
+    return false;
+  }
+}
+
+/**
 * Revoke a token by its ID
 *
 * @param tokenId - Token ID to revoke
@@ -488,11 +517,31 @@ export async function verifyToken(
   aud: string = DEFAULT_AUDIENCE,
   iss: string = DEFAULT_ISSUER
 ): Promise<JwtClaims> {
-  // Import from unified auth package
-  const { verifyToken: verifyTokenSync } = await import('@kernel/auth');
-  // P2-13 FIX: Remove incorrect Promise<JwtClaims> cast. verifyTokenSync returns
-  // JwtClaims synchronously; the async function auto-wraps it in a Promise.
-  return verifyTokenSync(token, { audience: aud, issuer: iss }) as JwtClaims;
+  // P1-4 FIX: Use statically-imported verifyTokenSync (no per-call dynamic import overhead).
+  const claims = verifyTokenSync(token, { audience: aud, issuer: iss }) as JwtClaims;
+
+  // P0-1 FIX: Check per-token revocation. Previously _isTokenRevoked was defined but
+  // never called here, making revokeToken() a complete no-op. A revoked token would
+  // continue to be accepted until its natural expiry (up to 24 h).
+  if (claims.jti) {
+    const revoked = await _isTokenRevoked(claims.jti);
+    if (revoked) {
+      throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+    }
+  }
+
+  // P0-2 FIX: Check user-level revocation (revokeAllUserTokens). Previously
+  // revokeAllUserTokens() stored jwt:revoked:user:{userId} in Redis but nothing
+  // ever read that key, making mass revocation (logout-all, account suspension,
+  // credential reset) a complete no-op.
+  if (claims.sub) {
+    const userRevoked = await _isUserRevoked(claims.sub);
+    if (userRevoked) {
+      throw new AuthError('All tokens for this user have been revoked', 'USER_REVOKED');
+    }
+  }
+
+  return claims;
 }
 
 // ============================================================================

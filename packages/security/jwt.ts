@@ -121,6 +121,15 @@ const TOKEN_FORMAT_REGEX = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 * Constant-time string comparison to prevent timing attacks
 */
 export function constantTimeCompare(a: string, b: string): boolean {
+  // P1-9 FIX: Explicitly reject empty inputs.
+  // timingSafeEqual(Buffer.alloc(0), Buffer.alloc(0)) returns true, and
+  // ''.length === ''.length is also true, so ('', '') previously returned true —
+  // the opposite of what security-sensitive callers expect. Two empty strings
+  // must never be considered a valid secret match.
+  if (a.length === 0 || b.length === 0) {
+    return false;
+  }
+
   const aBuf = Buffer.from(a, 'utf8');
   const bBuf = Buffer.from(b, 'utf8');
   const maxLen = Math.max(aBuf.length, bBuf.length);

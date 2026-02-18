@@ -99,8 +99,12 @@ export class JobScheduler extends EventEmitter {
   private readonly abortControllers = new Map<string, AbortController>();
   // P1-FIX: Track controller creation time for auto-cleanup of stale controllers
   private readonly abortControllerTimestamps = new Map<string, number>();
-  // P1-FIX: Maximum age for abort controllers (5 minutes)
-  private readonly ABORT_CONTROLLER_MAX_AGE_MS = 300000;
+  // P1-8 FIX: Use the maximum configured job timeout + 60 s buffer so that
+  // export jobs (10 min = 600,000 ms) are never force-aborted by stale-controller
+  // cleanup before their own timeout fires. The previous hard-coded 300,000 ms
+  // (5 min) was shorter than exportTimeoutMs (600,000 ms = 10 min), causing
+  // all long-running export jobs to be silently killed mid-execution.
+  private readonly ABORT_CONTROLLER_MAX_AGE_MS = (jobConfig.exportTimeoutMs ?? 600000) + 60000;
   // P1-FIX: Cleanup interval for stale abort controllers
   private abortControllerCleanupInterval?: NodeJS.Timeout | undefined;
   private redisReconnectDelay = redisConfig.initialReconnectDelayMs;
@@ -392,7 +396,11 @@ export class JobScheduler extends EventEmitter {
       return;
     }
 
-    // P1-5 FIX: Set running flag immediately to prevent concurrent startWorkers() calls
+    // P1-3/P1-5 FIX: Set running=true before the loop to prevent concurrent calls,
+    // but reset it inside a try/catch so that a Worker constructor failure (e.g.
+    // Redis unavailable) does not leave the scheduler permanently stuck in a
+    // "running but no workers" state where every subsequent startWorkers() call
+    // silently returns without effect.
     this.running = true;
 
     // P1-FIX: Start auto-cleanup of stale abort controllers
@@ -407,6 +415,7 @@ export class JobScheduler extends EventEmitter {
       queueHandlers.get(config.queue)!.push(name);
     }
 
+    try {
     for (const [queueName, _jobNames] of queueHandlers) {
       const worker = new Worker(
         queueName,
@@ -506,7 +515,11 @@ export class JobScheduler extends EventEmitter {
                   message: error instanceof Error ? error.message : String(error),
                 });
                 if (error instanceof Error) jobSpan?.recordException(error);
-                this.emit('jobFailed', job, error);
+                // P1-6 FIX: Removed explicit this.emit('jobFailed') here.
+                // The worker's 'failed' event handler (attachWorkerHandlers) already
+                // emits 'jobFailed' when BullMQ fires its native 'failed' event.
+                // Emitting here too caused every failure to be counted twice in
+                // monitoring, dashboards, and DLQ logic.
                 throw error;
               } finally {
                 jobSpan?.end();
@@ -534,9 +547,14 @@ export class JobScheduler extends EventEmitter {
 
       this.workers.set(queueName, worker);
     }
-
-    // P0-FIX: Running flag already set at method start (P1-5 FIX)
-    // If worker creation fails, the running flag should be reset by the caller
+    } catch (err) {
+      // P1-3 FIX: Roll back running flag so startWorkers() can be retried after
+      // fixing the underlying problem (e.g. Redis becoming available).
+      this.running = false;
+      this.stopAbortControllerCleanup();
+      logger.error('[JobScheduler] Worker creation failed, rolling back running state', err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    }
   }
 
   private async executeWithTimeout<T>(
@@ -653,12 +671,36 @@ export class JobScheduler extends EventEmitter {
     throw new Error(`Job ${name} not registered`);
   }
 
-  // P1-FIX: Validate payload size to prevent Redis OOM
-  const payloadSize = JSON.stringify(data).length;
+  // P1-7 FIX: Use Buffer.byteLength instead of .length. String.length returns
+  // UTF-16 code units, not bytes. For CJK / emoji payloads a character can be
+  // 3-4 bytes, so .length underreports by up to 3×, allowing ~3 MB payloads
+  // past a nominal 1 MB Redis limit. Buffer.byteLength gives the true UTF-8
+  // byte count that Redis will actually store.
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(data);
+  } catch (err) {
+    // P1-10 FIX: JSON.stringify throws TypeError for circular references.
+    // Propagate as a clear validation error rather than an opaque 500.
+    throw new Error(
+      `Job payload cannot be serialized: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  const payloadSize = Buffer.byteLength(serialized, 'utf8');
   if (payloadSize > this.MAX_PAYLOAD_SIZE) {
     throw new Error(
       `Job payload too large: ${payloadSize} bytes (max: ${this.MAX_PAYLOAD_SIZE})`
     );
+  }
+
+  // P0-4 FIX: checkRateLimit was defined but never called from schedule(), making
+  // per-org / per-job rate limiting completely non-functional. Any authenticated
+  // user could flood any queue without restriction.
+  if (handlerConfig.config.rateLimit) {
+    const orgId = (typeof data === 'object' && data !== null && 'orgId' in data)
+      ? String((data as Record<string, unknown>)['orgId'])
+      : undefined;
+    await this.checkRateLimit(name, handlerConfig.config.rateLimit, orgId);
   }
 
   const queue = this.queues.get(handlerConfig.config.queue);
@@ -880,8 +922,13 @@ export class JobScheduler extends EventEmitter {
     }
     this.redisEventHandlers.clear();
 
-    // P2-6 FIX: Remove only internal event listeners instead of removeAllListeners(),
-    // which would nuke user-attached monitoring/logging listeners without warning.
+    // P1-5 FIX: Emit 'shutdown' event BEFORE removing internal listeners so that
+    // external code registered on 'shutdown' (cleanup hooks, metrics flushers,
+    // graceful-drain logic) actually receives it. The event was previously never
+    // emitted, silently skipping all shutdown hooks.
+    this.emit('shutdown');
+
+    // Remove internal listeners after emitting shutdown so they don't fire again
     this.removeAllListeners('redisConnected');
     this.removeAllListeners('redisDisconnected');
     this.removeAllListeners('redisError');
@@ -890,6 +937,7 @@ export class JobScheduler extends EventEmitter {
     this.removeAllListeners('jobCompleted');
     this.removeAllListeners('jobFailed');
     this.removeAllListeners('workerError');
+    this.removeAllListeners('shutdown');
 
     // FIX: Close Redis connection
     logger.info('[JobScheduler] Shutdown complete');
