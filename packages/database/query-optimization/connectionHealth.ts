@@ -248,8 +248,9 @@ export class PoolHealthMonitor extends EventEmitter {
   private async adjustPoolSize(utilization: number, waitingClients: number): Promise<void> {
     const currentMax = this.pool.options.max;
 
-    // Scale up if high utilization and waiting clients
-    if (utilization > this.config.scaleUpThreshold / 100 && waitingClients > 0) {
+    // Scale up if high utilization and waiting clients.
+    // Thresholds are stored as fractions (0–1); compare directly without dividing.
+    if (utilization > this.config.scaleUpThreshold && waitingClients > 0) {
       const newMax = Math.min(currentMax + 5, this.config.maxSize);
       if (newMax > currentMax) {
         this.pool.options.max = newMax;
@@ -258,7 +259,7 @@ export class PoolHealthMonitor extends EventEmitter {
     }
 
     // Scale down if low utilization
-    if (utilization < this.config.scaleDownThreshold / 100 && currentMax > this.config.minSize) {
+    if (utilization < this.config.scaleDownThreshold && currentMax > this.config.minSize) {
       const newMax = Math.max(currentMax - 2, this.config.minSize);
       if (newMax < currentMax) {
         // Note: pg Pool doesn't support decreasing max directly
@@ -532,13 +533,16 @@ export async function checkDatabaseHealth(
   try {
     const client = await pool.connect();
     try {
+      let timerId: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         client.query('SELECT 1'),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Health check timeout')), timeoutMs)
-        ),
-      ]);
-      
+        new Promise((_, reject) => {
+          timerId = setTimeout(() => reject(new Error('Health check timeout')), timeoutMs);
+        }),
+      ]).finally(() => {
+        if (timerId !== undefined) clearTimeout(timerId);
+      });
+
       return {
         healthy: true,
         latency: Date.now() - startTime,

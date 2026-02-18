@@ -16,6 +16,6 @@ export const circuitBreakerConfig = {
   /** Maximum calls in half-open state */
   halfOpenMaxCalls: parseIntEnv('CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS', 3),
 
-  /** Default timeout for circuit breaker operations in milliseconds */
-  timeoutMs: parseIntEnv('CIRCUIT_BREAKER_TIMEOUT_MS', 300000),
+  /** Default timeout for circuit breaker operations in milliseconds (30s; override via CIRCUIT_BREAKER_TIMEOUT_MS) */
+  timeoutMs: parseIntEnv('CIRCUIT_BREAKER_TIMEOUT_MS', 30000),
 } as const;

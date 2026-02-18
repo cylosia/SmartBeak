@@ -34,6 +34,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     // P1-4 FIX: Never trust req.headers.origin — use configured app URL only
     const origin = process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000';
+    // Validate caller-supplied redirect URLs to prevent open redirect after payment.
+    // Only allow URLs that begin with the configured app origin.
+    if (successUrl && !String(successUrl).startsWith(origin)) {
+      return res.status(400).json({ error: 'Invalid successUrl: must be a relative or same-origin URL' });
+    }
+    if (cancelUrl && !String(cancelUrl).startsWith(origin)) {
+      return res.status(400).json({ error: 'Invalid cancelUrl: must be a relative or same-origin URL' });
+    }
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],

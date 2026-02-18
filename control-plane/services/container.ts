@@ -20,6 +20,7 @@ import { PostgresNotificationRepository } from '../../domains/notifications/infr
 import { PostgresPublishAttemptRepository } from '../../domains/publishing/infra/persistence/PostgresPublishAttemptRepository';
 import { PostgresPublishingJobRepository } from '../../domains/publishing/infra/persistence/PostgresPublishingJobRepository';
 import { PostgresSearchDocumentRepository } from '../../domains/search/infra/persistence/PostgresSearchDocumentRepository';
+import { PostgresIndexingJobRepository } from '../../domains/search/infra/persistence/PostgresIndexingJobRepository';
 import { PostgresContentRepository } from '../../domains/content/infra/persistence/PostgresContentRepository';
 import { PublishAdapter } from '../../domains/publishing/application/ports/PublishAdapter';
 import { PublishingWorker } from '../../domains/publishing/application/PublishingWorker';
@@ -230,9 +231,6 @@ export class Container {
   */
   get indexingJobRepository(): import('../../domains/search/application/ports/IndexingJobRepository').IndexingJobRepository {
   return this.get('indexingJobRepository', () => {
-    // Import dynamically to avoid circular dependencies
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { PostgresIndexingJobRepository } = require('../../domains/search/infra/persistence/PostgresIndexingJobRepository');
     return new PostgresIndexingJobRepository(this.db);
   });
   }
@@ -373,10 +371,10 @@ let globalContainer: Container | null = null;
 /**
 * Initialize the global container
 */
-export function initializeContainer(config: ContainerConfig): Container {
+export async function initializeContainer(config: ContainerConfig): Promise<Container> {
   if (globalContainer) {
   logger.warn('Container already initialized — disposing previous instance');
-  void globalContainer.dispose();
+  await globalContainer.dispose();
   }
   globalContainer = new Container(config);
   return globalContainer;
@@ -395,9 +393,10 @@ export function getContainer(): Container {
 /**
 * Reset the global container (useful for testing)
 */
-export function resetContainer(): void {
+export async function resetContainer(): Promise<void> {
   if (globalContainer) {
-  void globalContainer.dispose();
+  const previous = globalContainer;
   globalContainer = null;
+  await previous.dispose();
   }
 }

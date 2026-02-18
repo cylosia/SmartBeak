@@ -92,15 +92,20 @@ export class CostTracker extends EventEmitter {
   * @throws Error if daily budget is exceeded
   */
   async track(entry: CostEntry): Promise<void> {
-  // Validate budget before tracking
+  // Validate budget before tracking.
+  // Include buffered (not-yet-flushed) costs for this org so concurrent calls
+  // cannot each see a stale DB total and collectively overshoot the daily cap.
   const budget = this.budgets.get(entry["orgId"]);
   if (budget) {
+    const bufferedCost = this.buffer
+      .filter(e => e["orgId"] === entry["orgId"])
+      .reduce((sum, e) => sum + e.cost, 0);
     const todayCost = await this.getTodayCost(entry["orgId"]);
-    if (todayCost + entry.cost > budget.daily) {
+    if (todayCost + bufferedCost + entry.cost > budget.daily) {
     this.emit('budgetExceeded', {
     orgId: entry["orgId"],
     budget: budget.daily,
-    attempted: todayCost + entry.cost,
+    attempted: todayCost + bufferedCost + entry.cost,
     });
     throw new Error(`Daily budget exceeded for org ${entry["orgId"]}`);
     }
