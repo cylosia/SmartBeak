@@ -88,7 +88,7 @@ export function withETagCache(
     return result;
   }
 
-  const etag = generateETag(result);
+  const etag = generateETag(result ?? {});
 
   // Check if client has fresh content
   if (isETagMatch(req, etag)) {

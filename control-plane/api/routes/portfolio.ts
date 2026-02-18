@@ -33,13 +33,13 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('analytics', 50);
+    await rateLimit('analytics', 50, req, res);
     const { orgId } = ctx;
 
     // H2-FIX: Query only domains table (domain_confidence table does not exist yet)
     // TODO: Create domain_confidence migration and populate real data
     const { rows: domainRows } = await pool.query(
-    `SELECT d["id"] as "domainId", d.name
+    `SELECT d.id as "domainId", d.name
     FROM domains d
     WHERE d.org_id = $1 AND d.status != 'inactive'`,
     [orgId]
@@ -78,7 +78,7 @@ export async function portfolioRoutes(app: FastifyInstance, pool: Pool) {
     return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-    await rateLimit('analytics', 50);
+    await rateLimit('analytics', 50, req, res);
     const { orgId: _orgId } = ctx;
 
     // H2-FIX: Removed queries to non-existent tables (traffic_dependencies, portfolio_risks)

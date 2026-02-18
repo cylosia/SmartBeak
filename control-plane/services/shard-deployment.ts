@@ -282,7 +282,11 @@ export async function deployShardToVercel(
     }
 
     // 4. Deploy to Vercel using direct file upload
-    const vercelAdapter = new VercelAdapter(process.env['VERCEL_TOKEN']!);
+    const vercelToken = process.env['VERCEL_TOKEN'];
+    if (!vercelToken) {
+      throw new Error('VERCEL_TOKEN environment variable is required for deployment');
+    }
+    const vercelAdapter = new VercelAdapter(vercelToken);
 
     // TODO: Implement direct file upload method in VercelAdapter
     // @ts-expect-error -- deployFilesDirectly not yet implemented on VercelAdapter
