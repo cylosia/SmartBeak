@@ -14,12 +14,16 @@ const logger = getLogger('CacheWarming');
 // Configuration
 // ============================================================================
 
+const _rawInterval = parseInt(process.env['CACHE_WARM_INTERVAL_MS'] ?? '300000', 10);
+const _rawStart = parseInt(process.env['LOW_TRAFFIC_START_HOUR'] ?? '2', 10);
+const _rawEnd = parseInt(process.env['LOW_TRAFFIC_END_HOUR'] ?? '5', 10);
+
 const CACHE_WARMING_CONFIG = {
-  redisUrl: process.env['REDIS_URL'] || 'redis://localhost:6379',
-  intervalMs: parseInt(process.env['CACHE_WARM_INTERVAL_MS'] || '300000', 10), // 5 minutes
+  redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
+  intervalMs: Number.isNaN(_rawInterval) ? 300000 : _rawInterval, // 5 minutes default
   lowTrafficHours: {
-    start: parseInt(process.env['LOW_TRAFFIC_START_HOUR'] || '2', 10), // 2 AM
-    end: parseInt(process.env['LOW_TRAFFIC_END_HOUR'] || '5', 10),     // 5 AM
+    start: Number.isNaN(_rawStart) ? 2 : _rawStart, // 2 AM default
+    end: Number.isNaN(_rawEnd) ? 5 : _rawEnd,       // 5 AM default
   },
 };
 
@@ -237,26 +241,41 @@ async function main(): Promise<void> {
       warmer.start();
 
       // Handle graceful shutdown
-      process.on('SIGINT', async () => {
-        logger.info('Shutting down cache warming service (SIGINT)');
-        warmer.stop();
-        await cache.close();
-        logger.info('Cache warming service stopped');
-        if (process.env['CLI_MODE']) {
-          console.log('[CacheWarm] Goodbye!');
-        }
-        process.exit(0);
+      // Signal handlers must be synchronous; use void IIFE for async work.
+      process.on('SIGINT', () => {
+        void (async () => {
+          try {
+            logger.info('Shutting down cache warming service (SIGINT)');
+            warmer.stop();
+            await cache.close();
+            logger.info('Cache warming service stopped');
+            if (process.env['CLI_MODE']) {
+              console.log('[CacheWarm] Goodbye!');
+            }
+          } catch (err) {
+            logger.error('Error during SIGINT shutdown', err instanceof Error ? err : new Error(String(err)));
+          } finally {
+            process.exit(0);
+          }
+        })();
       });
 
-      process.on('SIGTERM', async () => {
-        logger.info('Shutting down cache warming service (SIGTERM)');
-        warmer.stop();
-        await cache.close();
-        logger.info('Cache warming service stopped');
-        if (process.env['CLI_MODE']) {
-          console.log('[CacheWarm] Goodbye!');
-        }
-        process.exit(0);
+      process.on('SIGTERM', () => {
+        void (async () => {
+          try {
+            logger.info('Shutting down cache warming service (SIGTERM)');
+            warmer.stop();
+            await cache.close();
+            logger.info('Cache warming service stopped');
+            if (process.env['CLI_MODE']) {
+              console.log('[CacheWarm] Goodbye!');
+            }
+          } catch (err) {
+            logger.error('Error during SIGTERM shutdown', err instanceof Error ? err : new Error(String(err)));
+          } finally {
+            process.exit(0);
+          }
+        })();
       });
 
       // Keep process alive
@@ -298,4 +317,7 @@ if (process.argv.includes('--help')) {
 }
 
 // Run main
-main().catch((err) => logger.error('Main execution error', err));
+main().catch((err) => {
+  logger.error('Main execution error', err instanceof Error ? err : new Error(String(err)));
+  process.exit(1);
+});

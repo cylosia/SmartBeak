@@ -23,16 +23,19 @@ import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 
 const CreateContentSchema = z.object({
-  id: z.string().uuid().default(() => crypto.randomUUID()),
   domainId: z.string().uuid('Domain ID must be a valid UUID'),
   title: z.string().min(1, 'Title is required').max(500, 'Title must be 500 characters or less'),
   body: z.string().max(50000, 'Body must be 50KB or less').optional(), // 50KB max
   contentType: z.enum(['article', 'page', 'product', 'review', 'guide', 'post', 'video', 'image']).default('article'),
   excerpt: z.string().max(500, 'Excerpt must be 500 characters or less').optional(),
-  status: z.enum(['draft', 'published', 'archived']).default('draft'),
   meta: z.record(z.string(), z.unknown()).optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
 });
+
+function hasErrorCode(err: unknown): err is { code: string } {
+  return typeof err === 'object' && err !== null && 'code' in err &&
+    typeof (err as Record<string, unknown>)['code'] === 'string';
+}
 
 const UpdateContentSchema = z.object({
   title: z.string().min(1).max(500).optional(),
@@ -75,7 +78,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     requireRole(ctx, ['admin', 'editor', 'viewer']);
 
     // Validate orgId
-    if (!ctx?.["orgId"]) {
+    if (!ctx["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required');
     }
 
@@ -205,7 +208,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     requireRole(ctx, ['admin', 'editor']);
 
     // Validate orgId
-    if (!ctx?.["orgId"]) {
+    if (!ctx["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required');
     }
 
@@ -227,7 +230,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     const handler = new CreateDraft(repo);
 
     const item = await handler.execute(
-    validated.id,
+    crypto.randomUUID(),
     validated.domainId,
     validated.title,
     validated.body,
@@ -236,11 +239,10 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return { success: true, item };
   } catch (error: unknown) {
     logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    const errWithCode = error as { code?: string };
-    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
     }
-    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
     return errors.internal(res);
@@ -274,11 +276,10 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return { success: true, item };
   } catch (error: unknown) {
     logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    const errWithCode = error as { code?: string };
-    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
     }
-    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
     return errors.internal(res);
@@ -323,19 +324,18 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     // Apply update directly to avoid the double-fetch inside UpdateDraft.execute
     const updatedItem = item.updateDraft(
-    validated.title ?? item.title ?? '',
-    validated.body ?? item.body ?? ''
+    validated.title ?? item.title,
+    validated.body ?? item.body
     );
     await repo.save(updatedItem);
 
     return { success: true, item: updatedItem };
   } catch (error: unknown) {
     logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    const errWithCode = error as { code?: string };
-    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
     }
-    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
     return errors.internal(res);
@@ -372,11 +372,10 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return { success: true, event };
   } catch (error: unknown) {
     logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    const errWithCode = error as { code?: string };
-    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
     }
-    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
     return errors.internal(res);
@@ -407,21 +406,20 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
-    // Soft delete
-    // C4-FIX: Changed table 'content' to 'content_items' and 'deleted_at' to 'archived_at' to match migration schema
+    // Soft delete — anchor to org_id to prevent cross-org TOCTOU after ownership check
     await pool.query(
-    'UPDATE content_items SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE id = $2',
-    ['archived', params.id]
+    `UPDATE content_items SET status = $1, archived_at = NOW(), updated_at = NOW()
+    WHERE id = $2 AND domain_id IN (SELECT id FROM domains WHERE org_id = $3)`,
+    ['archived', params.id, ctx.orgId]
     );
 
     return { success: true, id: params.id, deleted: true };
   } catch (error: unknown) {
     logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    const errWithCode = error as { code?: string };
-    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
     return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
     }
-    if (errWithCode.code === 'CONTENT_NOT_FOUND') {
+    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
     return errors.internal(res);
