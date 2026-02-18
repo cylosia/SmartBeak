@@ -27,7 +27,8 @@ export {
   isAllowedPort,
   validateUrl,
   validateUrlWithDns,
-  validateUrlWithDnsCheck,
+  // SS-02-FIX: validateUrlWithDnsCheck removed — had weaker DNS-error semantics than
+  // validateUrlWithDns. No outside consumers existed. Use validateUrlWithDns instead.
   validateResolvedIps,
   extractSafeUrl,
   normalizeIp,

@@ -82,6 +82,17 @@ export class SessionManager extends EventEmitter {
     currentSessions: userSessionIds.size,
     maxSessions: this.maxConcurrentSessions,
     });
+    // S-05-FIX: Session limit exceeded is a security-meaningful event (credential sharing,
+    // account takeover). Previously only an EventEmitter event was emitted with no audit trail.
+    // Now triggers a security alert so SIEM/alerting handlers can act on it.
+    void securityAlertManager.triggerAlert(
+    'medium',
+    'concurrent_session_limit',
+    'Concurrent session limit reached',
+    { currentSessions: userSessionIds.size, maxSessions: this.maxConcurrentSessions },
+    userId,
+    orgId,
+    );
     return false;
   }
 
@@ -144,22 +155,27 @@ export class SessionManager extends EventEmitter {
   /**
   * Clean up expired sessions
   * SECURITY FIX: Add TTL to session entries to prevent memory leak
-
   */
   cleanupExpiredSessions(maxAgeMs: number = 24 * 60 * 60 * 1000): number {
   const now = Date.now();
-  let cleaned = 0;
 
-  // LRUCache handles TTL automatically, but we also check lastActivity for session-specific logic
+  // S-03-FIX: Collect expired session IDs first, then evict in a second pass.
+  // Calling terminateSession() (which mutates this.sessions and this.userSessions)
+  // inside a for...of over this.sessions.keys() is unsafe — while Map iteration
+  // handles deletions correctly per spec, terminateSession can trigger EventEmitter
+  // handlers that further mutate the maps, and the cleaned counter was incremented
+  // even for races where the session was already gone. Two-pass approach is safe.
+  const expired: string[] = [];
   for (const sessionId of this.sessions.keys()) {
     const session = this.sessions.get(sessionId);
     if (session && now - session.lastActivity > maxAgeMs) {
-    this.terminateSession(sessionId);
-    cleaned++;
+    expired.push(sessionId);
     }
   }
-
-  return cleaned;
+  for (const sessionId of expired) {
+    this.terminateSession(sessionId);
+  }
+  return expired.length;
   }
 }
 
@@ -324,10 +340,25 @@ export class SecurityAlertManager extends EventEmitter {
 /**
 * Generate device fingerprint for tracking
 * SECURITY FIX: Device tracking for audit logs
+*
+* S-07-FIX: Use length-prefixed encoding to prevent hash collisions.
+* The previous `${userAgent}:${ip}` concatenation is ambiguous: a colon appears in
+* both user-agent strings and IPv6 addresses, so different (UA, IP) pairs can produce
+* the same pre-hash string (e.g., UA="Mozilla:1" + IP="2" == UA="Mozilla" + IP="1:2").
+* Length-prefixing makes the encoding injective: each unique (UA, IP) pair maps to a
+* distinct byte sequence.
 */
 export function generateDeviceFingerprint(userAgent: string, ip: string): string {
-  const data = `${userAgent}:${ip}`;
-  return crypto.createHash('sha256').update(data).digest('hex').slice(0, 32);
+  const uaBuf = Buffer.from(userAgent, 'utf8');
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32BE(uaBuf.length, 0);
+  return crypto
+    .createHash('sha256')
+    .update(lenBuf)   // 4-byte length of userAgent
+    .update(uaBuf)    // userAgent bytes
+    .update(ip)       // ip bytes (implicitly terminated by end-of-input)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 /**
@@ -338,9 +369,18 @@ function generateAlertId(): string {
 }
 
 // Export singleton instances for global use
+//
+// S-04-FIX: Removed Object.freeze() wrappers. Object.freeze on an EventEmitter is
+// shallow — it only prevents re-assignment of own enumerable properties on the frozen
+// object. It does NOT prevent mutation of the LRUCache/Map values held by those
+// properties, nor does it prevent calling methods that mutate internal state. The freeze
+// was therefore cosmetically meaningless and gave a false sense of immutability.
+// The as-cast back to SessionManager also defeated the only compile-time benefit
+// (Readonly<SessionManager>) that a proper immutability type would provide.
+// The singleton pattern is documented here; callers must not replace these references.
 
 const sessionManagerInstance = new SessionManager();
 const securityAlertManagerInstance = new SecurityAlertManager();
 
-export const sessionManager = Object.freeze(sessionManagerInstance) as SessionManager;
-export const securityAlertManager = Object.freeze(securityAlertManagerInstance) as SecurityAlertManager;
+export const sessionManager: SessionManager = sessionManagerInstance;
+export const securityAlertManager: SecurityAlertManager = securityAlertManagerInstance;

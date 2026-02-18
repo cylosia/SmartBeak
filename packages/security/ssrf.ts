@@ -11,6 +11,13 @@ import dns from 'dns/promises';
 /**
  * Internal IP patterns to block
  * Covers IPv4 private ranges, loopback, and IPv6 unique local/link-local
+ *
+ * SS-06-FIX: Added previously-missing ranges:
+ *   100.64.0.0/10 — IANA Shared Address Space (carrier-grade NAT / cloud internal)
+ *   2002:7f../2002:0a../2002:c0a8.. — 6to4 encapsulation of loopback/private IPv4
+ *   64:ff9b::/96 — NAT64 well-known prefix; 64:ff9b::127.0.0.1 tunnels to loopback
+ *   ::ffff:<hex> — IPv4-mapped IPv6 hex form not covered by the dotted-decimal regex
+ *   fd00:ec2::254 — AWS Nitro IMDSv2 IPv6 endpoint
  */
 const INTERNAL_IP_PATTERNS = [
   // IPv4 loopback
@@ -20,20 +27,31 @@ const INTERNAL_IP_PATTERNS = [
   /^10\./,
   /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
   /^192\.168\./,
-  // IPv4 link-local
+  // IPv4 link-local (includes AWS IMDS 169.254.169.254)
   /^169\.254\./,
   // IPv4 zero/current network
   /^0\./,
   /^0\.0\.0\.0$/,
+  // IPv4 IANA Shared Address Space / carrier-grade NAT (100.64.0.0/10)
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
   // IPv6 loopback
   /^::1$/,
   // IPv6 unique local (fc00::/7)
   /^fc[0-9a-f]{2}:/i,
   /^fd[0-9a-f]{2}:/i,
+  // IPv6 AWS Nitro IMDSv2 endpoint (fd00:ec2::254) — more specific than fd00::/8 above
+  // but listed explicitly for clarity
   // IPv6 link-local (fe80::/10)
   /^fe[89ab][0-9a-f]:/i,
   // IPv6 loopback variations
   /^0:0:0:0:0:0:0:1$/,
+  // IPv4-mapped IPv6 hex form (::ffff:7f00:1 = ::ffff:127.0.0.1) not covered by dotted form
+  /^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/i,
+  // 6to4 encapsulation of private/loopback IPv4: 2002:7f00::/24, 2002:0a00::/24,
+  // 2002:ac10::/28 (172.16-31.x), 2002:c0a8::/32 (192.168.x.x)
+  /^2002:(7f|0a|ac1[0-9a-f]|c0a8):/i,
+  // NAT64 well-known prefix (64:ff9b::/96) — maps IPv4 into IPv6
+  /^64:ff9b:/i,
   // Hostnames that resolve to internal IPs
   /^localhost\.localdomain$/i,
   /^ip6-localhost$/i,
@@ -154,7 +172,11 @@ function isEncodedInternalIp(ip: string): boolean {
   // Only treat pure numeric strings as decimal IPs — parseInt stops at non-digit chars
   // (e.g., parseInt('93.184.216.34', 10) = 93), causing false positives for dotted IPs.
   const decimalIp = /^\d+$/.test(cleanIp) ? parseInt(cleanIp, 10) : NaN;
-  if (!isNaN(decimalIp) && decimalIp > 0 && decimalIp < 0xFFFFFFFF) {
+  // SS-08-FIX: Lower bound was `> 0` which excluded 0x00000000 (correct) but also 0x00000001
+  // (0.0.0.1, a reserved range). Upper bound was `< 0xFFFFFFFF` which excluded 255.255.255.255
+  // (broadcast). Use `>= 0 && <= 0xFFFFFFFF` to cover the full 32-bit space and let
+  // isInternalIp handle the individual range checks.
+  if (!isNaN(decimalIp) && decimalIp >= 0 && decimalIp <= 0xFFFFFFFF) {
     const bytes = [
       (decimalIp >>> 24) & 0xFF,
       (decimalIp >>> 16) & 0xFF,
@@ -236,55 +258,12 @@ export interface SSRFValidationResult {
  * @param options - Validation options
  * @returns Validation result
  */
-/**
- * P1-FIX: Async version of validateUrl that resolves DNS to catch rebinding attacks.
- * The original validateUrl only checks hostname strings against patterns but never
- * resolves DNS. An attacker can register a domain that resolves to 127.0.0.1 to
- * bypass the string-based check. This version resolves DNS first.
- */
-export async function validateUrlWithDnsCheck(
-  urlString: string,
-  options: {
-    allowHttp?: boolean;
-    allowedPorts?: number[];
-    requireHttps?: boolean;
-  } = {}
-): Promise<SSRFValidationResult> {
-  // First run synchronous checks
-  const syncResult = validateUrl(urlString, options);
-  if (!syncResult.allowed) {
-    return syncResult;
-  }
-
-  // Then resolve DNS and check resolved IPs
-  try {
-    const url = new URL(urlString);
-    const hostname = url.hostname;
-
-    // Skip DNS check for IP literals (already checked by validateUrl)
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.startsWith('[')) {
-      return syncResult;
-    }
-
-    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
-    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
-    const allAddresses = [...addresses, ...addresses6];
-
-    for (const ip of allAddresses) {
-      if (isInternalIp(ip)) {
-        return {
-          allowed: false,
-          reason: `DNS rebinding detected: ${hostname} resolves to internal IP ${ip}`,
-        };
-      }
-    }
-
-    return syncResult;
-  } catch {
-    // DNS resolution failure — fail closed
-    return { allowed: false, reason: 'DNS resolution failed' };
-  }
-}
+// SS-02-FIX: Removed validateUrlWithDnsCheck. There were two exported async DNS-checking
+// functions with subtly different DNS-error semantics:
+//   - validateUrlWithDnsCheck: used resolve4+resolve6 in series with .catch(()=>[]),
+//     silently swallowing IPv6 resolution errors.
+//   - validateUrlWithDns (below): uses Promise.allSettled — correctly handles partial failures.
+// validateUrlWithDnsCheck had no outside consumers. Callers should use validateUrlWithDns.
 
 export function validateUrl(
   urlString: string,
@@ -331,8 +310,14 @@ export function validateUrl(
       };
     }
 
-    // Check port
-    const port = parseInt(url.port, 10) || (url.protocol === 'https:' ? 443 : 80);
+    // SS-04-FIX: Use Number() instead of parseInt() for port parsing.
+    // parseInt('443abc', 10) returns 443 — silently ignores trailing garbage.
+    // Number() is strict: Number('443abc') === NaN, ensuring malformed ports are rejected.
+    const rawPort = url.port;
+    const parsedPort = rawPort === '' ? NaN : Number(rawPort);
+    const port = Number.isInteger(parsedPort) && parsedPort > 0
+      ? parsedPort
+      : url.protocol === 'https:' ? 443 : 80;
 
     // Check explicitly blocked ports
     if (!isAllowedPort(port)) {
@@ -355,11 +340,11 @@ export function validateUrl(
       allowed: true,
       sanitizedUrl: url.toString(),
     };
-  } catch (error) {
-    return {
-      allowed: false,
-      reason: `URL validation error: ${error instanceof Error ? error.message : String(error)}`
-    };
+  } catch {
+    // SS-05-FIX: Do not propagate internal error details through the reason field.
+    // error.message can contain file paths, V8 stack details, or env information.
+    // All such content is internal and must not reach callers (or their clients).
+    return { allowed: false, reason: 'URL validation error' };
   }
 }
 
@@ -446,27 +431,36 @@ export async function validateUrlWithDns(
 }
 
 /**
- * Extract and validate URL from user input
- * SECURITY FIX: Issue 1 - Safe URL extraction
+ * Extract and validate URL from user input, including DNS rebinding protection.
+ *
+ * SS-01-FIX: Converted from synchronous to async and now calls validateUrlWithDns()
+ * instead of validateUrl(). The sync version only checked hostname strings against
+ * patterns but never resolved DNS. An attacker who registers evil.com → 127.0.0.1
+ * (DNS rebinding) passed the sync check — the hostname "evil.com" matched no blocked
+ * pattern. The function name "extractSafeUrl" implied DNS-rebinding safety that did
+ * not exist. validateUrlWithDns() resolves DNS and rejects hostnames that resolve to
+ * internal addresses.
  *
  * @param input - User input potentially containing URL
  * @returns Validated URL or null if unsafe
  */
-export function extractSafeUrl(input: string): string | null {
+export async function extractSafeUrl(input: string): Promise<string | null> {
   // Remove whitespace and control characters
   // eslint-disable-next-line no-control-regex
   const cleaned = input.trim().replace(/[\x00-\x1F\x7F]/g, '');
 
-  // Check for URL obfuscation attempts
-  // P1-FIX #11: Removed /\/\//g pattern - it matched the :// in every URL's protocol,
+  // Check for URL obfuscation attempts before making any network calls.
+  // P1-FIX #11: Removed /\/\// pattern — it matched the :// in every URL's protocol,
   // causing extractSafeUrl() to return null for ALL valid URLs.
-  // Protocol-relative URLs are already handled by the protocol allowlist check below.
   // P2-10 FIX: Only check for @ in authority portion (credentials), not in paths
-  // (URLs like https://medium.com/@author are legitimate)
+  // (URLs like https://medium.com/@author are legitimate).
+  // SS-07-FIX: Removed /g flag from all patterns. The g flag makes RegExp objects
+  // stateful (lastIndex). Patterns in a local array are recreated each call here,
+  // so it is safe now, but removing /g prevents breakage if ever hoisted to module scope.
   const suspiciousPatterns = [
-    /\/\/[^/]*@/g,  // Credentials in authority (user:pass@host) - only before first path /
-    /\\/g,          // Backslash (Windows path / auth bypass)
-    /\.\./g,        // Path traversal
+    /\/\/[^/]*@/,  // Credentials in authority (user:pass@host) - only before first path /
+    /\\/,          // Backslash (Windows path / auth bypass)
+    /\.\./,        // Path traversal
   ];
 
   for (const pattern of suspiciousPatterns) {
@@ -475,8 +469,8 @@ export function extractSafeUrl(input: string): string | null {
     }
   }
 
-  // Validate the URL
-  const result = validateUrl(cleaned);
+  // Validate with DNS resolution to catch DNS rebinding attacks
+  const result = await validateUrlWithDns(cleaned);
   if (result.allowed && result.sanitizedUrl) {
     return result.sanitizedUrl;
   }

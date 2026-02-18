@@ -116,6 +116,20 @@ export function getRequiredSecretCategories(): SecretCategoryName[] {
     .map(([name]) => name);
 }
 
+// SE-01-FIX: Per-key minimum lengths. The global 8-character floor was cryptographically
+// insufficient for JWT signing keys and encryption secrets. An 8-char string passes
+// validation but has far too little entropy for HMAC-SHA256 (recommended: 32+ bytes).
+const MINIMUM_SECRET_LENGTHS: Record<string, number> = {
+  JWT_KEY_1: 32,
+  JWT_KEY_2: 32,
+  KEY_ENCRYPTION_SECRET: 32,
+  CLERK_SECRET_KEY: 16,
+  STRIPE_SECRET_KEY: 16,
+  STRIPE_WEBHOOK_SECRET: 16,
+};
+
+const DEFAULT_MINIMUM_SECRET_LENGTH = 16;
+
 /**
  * Validate that a secret value meets minimum strength requirements.
  */
@@ -123,8 +137,10 @@ export function validateSecretStrength(
   name: string,
   value: string
 ): { valid: boolean; warning?: string } {
-  if (!value || value.length < 8) {
-    return { valid: false, warning: `${name} is too short (minimum 8 characters)` };
+  const minLen = MINIMUM_SECRET_LENGTHS[name] ?? DEFAULT_MINIMUM_SECRET_LENGTH;
+
+  if (!value || value.length < minLen) {
+    return { valid: false, warning: `${name} is too short (minimum ${minLen} characters)` };
   }
 
   // Check for common weak patterns
@@ -132,12 +148,16 @@ export function validateSecretStrength(
     return { valid: false, warning: `${name} contains a repeated character pattern` };
   }
 
-  if (/(123|abc|password|secret|admin|test)/i.test(value)) {
+  // SE-02-FIX: Use word boundaries so substrings like "contest" or "protest" are not
+  // incorrectly flagged as containing "test". The previous unanchored regex matched
+  // any occurrence of "test" inside a longer word, rejecting legitimate high-entropy
+  // secrets that happen to contain the substring.
+  if (/\b(123|abc|password|secret|admin|test|demo|fake|example)\b/i.test(value)) {
     return { valid: false, warning: `${name} appears to use a common weak pattern` };
   }
 
   // Warn if entropy seems low (all same case, no digits, short)
-  if (value.length < 16 && !/\d/.test(value)) {
+  if (value.length < 24 && !/\d/.test(value)) {
     return { valid: true, warning: `${name} may have low entropy — consider using a longer, more random value` };
   }
 

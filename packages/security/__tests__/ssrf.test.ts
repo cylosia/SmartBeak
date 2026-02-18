@@ -217,29 +217,44 @@ describe('SSRF Protection', () => {
   // extractSafeUrl
   // ============================================================================
 
+  // SS-01-FIX: extractSafeUrl is now async (uses validateUrlWithDns for DNS rebinding
+  // protection). All tests updated to async/await. A beforeEach sets up DNS mocks so
+  // the "valid URL" test case does not depend on real network access.
   describe('extractSafeUrl', () => {
-    it('should extract valid HTTPS URL', () => {
-      const result = extractSafeUrl('https://example.com/page');
+    beforeEach(() => {
+      // Default: hostname resolves to a public, non-internal IP
+      mockResolve4.mockResolvedValue(['93.184.216.34']);
+      mockResolve6.mockResolvedValue([]);
+    });
+
+    it('should extract valid HTTPS URL', async () => {
+      const result = await extractSafeUrl('https://example.com/page');
       expect(result).toBe('https://example.com/page');
     });
 
-    it('should reject URLs with credentials', () => {
-      const result = extractSafeUrl('https://user:pass@example.com/');
+    it('should reject URLs with credentials', async () => {
+      const result = await extractSafeUrl('https://user:pass@example.com/');
       expect(result).toBeNull();
     });
 
-    it('should reject URLs with path traversal', () => {
-      const result = extractSafeUrl('https://example.com/../etc/passwd');
+    it('should reject URLs with path traversal', async () => {
+      const result = await extractSafeUrl('https://example.com/../etc/passwd');
       expect(result).toBeNull();
     });
 
-    it('should reject URLs with backslashes', () => {
-      const result = extractSafeUrl('https://example.com\\@evil.com');
+    it('should reject URLs with backslashes', async () => {
+      const result = await extractSafeUrl('https://example.com\\@evil.com');
       expect(result).toBeNull();
     });
 
-    it('should return null for internal URLs', () => {
-      const result = extractSafeUrl('https://127.0.0.1/admin');
+    it('should return null for internal IP URLs', async () => {
+      const result = await extractSafeUrl('https://127.0.0.1/admin');
+      expect(result).toBeNull();
+    });
+
+    it('should return null when hostname resolves to internal IP (DNS rebinding)', async () => {
+      mockResolve4.mockResolvedValue(['169.254.169.254']); // AWS IMDS
+      const result = await extractSafeUrl('https://evil.com/metadata');
       expect(result).toBeNull();
     });
   });
