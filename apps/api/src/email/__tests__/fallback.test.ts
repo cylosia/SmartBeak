@@ -14,9 +14,13 @@ import {
 } from '../provider/fallback';
 
 // Mock Redis
+// P1 FIX: Include ltrim in the mock. queueForRetry calls redis.ltrim() to cap
+// the queue size. Without this mock, ltrim threw TypeError at runtime, which was
+// silently swallowed by the try-catch in queueForRetry, masking the real failure.
 vi.mock('@kernel/redis', () => ({
   getRedis: vi.fn().mockResolvedValue({
     lpush: vi.fn().mockResolvedValue(1),
+    ltrim: vi.fn().mockResolvedValue('OK'),
   }),
 }));
 
@@ -126,8 +130,12 @@ describe('Email Provider Fallback Tests', () => {
 
     it('should queue failed emails for manual retry', async () => {
       const { getRedis } = await import('@kernel/redis');
+      // P1 FIX: Mock both lpush and ltrim. Previously only lpush was mocked;
+      // queueForRetry also calls ltrim to cap queue size, so the missing mock
+      // caused a silent TypeError that prevented queue size enforcement.
       const mockRedis = {
         lpush: vi.fn().mockResolvedValue(1),
+        ltrim: vi.fn().mockResolvedValue('OK'),
       };
       (getRedis as any).mockResolvedValue(mockRedis);
 
@@ -143,16 +151,20 @@ describe('Email Provider Fallback Tests', () => {
         // Expected to throw
       }
 
-      // P0-3 FIX: queueForRetry now masks PII before storing in Redis.
-      // Verify raw email address is NOT present, and masked form IS present.
+      // P1 FIX: queueForRetry now stores the ORIGINAL recipient address so that
+      // a retry worker can actually re-deliver the email. Previously it stored
+      // maskEmail(to) = "t***@e***.com" which is undeliverable, making the
+      // "retry queue" non-functional.
+      //
+      // PII masking is applied only in log output, not in the retry payload.
+      // The Redis list 'email:failed' must be protected via auth, encryption,
+      // and access control per the data retention policy.
       expect(mockRedis.lpush).toHaveBeenCalledWith(
         'email:failed',
-        expect.not.stringContaining('test@example.com')
+        expect.stringContaining('test@example.com')
       );
-      expect(mockRedis.lpush).toHaveBeenCalledWith(
-        'email:failed',
-        expect.stringContaining('t***@e***.com')
-      );
+      // Verify ltrim is also called to enforce queue size cap
+      expect(mockRedis.ltrim).toHaveBeenCalledWith('email:failed', 0, expect.any(Number));
     });
   });
 

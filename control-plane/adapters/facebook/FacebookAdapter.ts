@@ -126,7 +126,9 @@ export class FacebookAdapter implements PublishAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('publishPagePost', latency, false);
     this.metrics.recordError('publishPagePost', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to publish to Facebook', context, error as Error);
+    // P2 FIX: `error as Error` is an unsafe cast — catch blocks receive `unknown`.
+    // Use instanceof guard so we only pass a real Error to the logger.
+    this.logger.error('Failed to publish to Facebook', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
   }

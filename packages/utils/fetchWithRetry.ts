@@ -48,8 +48,13 @@ export async function waitForPendingCacheWrites(timeoutMs = 30000): Promise<void
 
   logger.debug(`Waiting for ${pendingCacheWrites.size} pending cache writes...`);
 
+  // P2 FIX: Store the timer reference and clear it when writes complete before
+  // the timeout fires. Without clearTimeout, every successful early completion
+  // leaves a dangling timer that blocks Node.js graceful shutdown for up to
+  // timeoutMs (default 30s), defeating the purpose of "graceful shutdown".
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<void>((_, reject) => {
-    setTimeout(() => reject(new Error('Cache write wait timeout')), timeoutMs);
+    timeoutId = setTimeout(() => reject(new Error('Cache write wait timeout')), timeoutMs);
   });
 
   const allWritesPromise = Promise.allSettled([...pendingCacheWrites]).then(() => {
@@ -60,6 +65,8 @@ export async function waitForPendingCacheWrites(timeoutMs = 30000): Promise<void
     await Promise.race([allWritesPromise, timeoutPromise]);
   } catch (err) {
     logger.warn(`Timeout waiting for pending cache writes after ${timeoutMs}ms`);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -92,11 +99,19 @@ function executeCacheWrite(
       }
     }
 
+    // P2 FIX: Store timer reference and clear in finally to prevent dangling
+    // timers when arrayBuffer() resolves before the timeout.
+    let cacheTimeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Cache write timeout')), timeoutMs);
+      cacheTimeoutId = setTimeout(() => reject(new Error('Cache write timeout')), timeoutMs);
     });
 
-    const body = await Promise.race([clonedResponse.arrayBuffer(), timeoutPromise]);
+    let body: ArrayBuffer;
+    try {
+      body = await Promise.race([clonedResponse.arrayBuffer(), timeoutPromise]);
+    } finally {
+      clearTimeout(cacheTimeoutId);
+    }
 
     // P2-7 FIX: Also check actual body size (Content-Length may be absent)
     if (body.byteLength > MAX_CACHEABLE_BODY_SIZE) {
@@ -319,8 +334,13 @@ export async function fetchWithRetry(
           signal: attemptController.signal,
         });
 
-        // Check if response status is retryable
-        if (!response.ok && retryOptions.retryableStatuses.includes(response.status)) {
+        // Check if response status is retryable.
+        // P2 FIX: Use optional chaining + nullish coalescing. If a caller passes
+        // `retry: { retryableStatuses: undefined }`, the object spread produces
+        // `retryOptions.retryableStatuses === undefined`, causing `.includes()` to
+        // throw TypeError. Fall back to the DEFAULT list when undefined.
+        const effectiveStatuses = retryOptions.retryableStatuses ?? DEFAULT_RETRY_OPTIONS.retryableStatuses;
+        if (!response.ok && effectiveStatuses.includes(response.status)) {
           const retryAfter = response.headers.get('retry-after');
           let retryAfterMs: number | undefined;
 
