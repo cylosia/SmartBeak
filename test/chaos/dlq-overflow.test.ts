@@ -128,18 +128,25 @@ describe('DLQ - Overflow & Failure Scenarios', () => {
         dequeue: vi.fn().mockRejectedValue(new Error('Database read failed')),
         peek: vi.fn().mockResolvedValue([]),
         delete: vi.fn().mockResolvedValue(undefined),
-        retry: vi.fn().mockResolvedValue(undefined),
+        // BUG-CHAOS-01 fix: retry() returns Promise<boolean> per the DLQStorage
+        // interface (DLQ-6-FIX); undefined is not assignable to boolean.
+        retry: vi.fn().mockResolvedValue(false),
         count: vi.fn().mockResolvedValue(0),
       };
 
-      setDLQStorage(failingStorage);
+      // BUG-CHAOS-02 fix: wrap in try/finally so storage is always restored.
+      // Previously, if the expect() assertion threw for any reason the
+      // setDLQStorage(originalStorage) on the last line was never reached,
+      // leaving the failing storage in place and poisoning subsequent tests.
+      try {
+        setDLQStorage(failingStorage);
 
-      await expect(
-        sendToDLQ('fail-queue', { data: 'test' }, new Error('original'), 3, 3)
-      ).rejects.toThrow('Database write failed');
-
-      // Restore default storage so subsequent tests work
-      setDLQStorage(originalStorage);
+        await expect(
+          sendToDLQ('fail-queue', { data: 'test' }, new Error('original'), 3, 3)
+        ).rejects.toThrow('Database write failed');
+      } finally {
+        setDLQStorage(originalStorage);
+      }
     });
   });
 
