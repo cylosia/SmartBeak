@@ -26,8 +26,13 @@ export function getEnvVar(name: string): string | undefined {
  */
 export function isPlaceholder(value: string | undefined): boolean {
   if (!value) return true;
-  if (value.length < 3) return true;
-  return PLACEHOLDER_PATTERN.test(value);
+  // P1-FIX: Trim before length check. Without trim, ' a' (2 chars: space + a) would
+  // be flagged as a placeholder (length < 3) even though the actual content 'a' is
+  // the issue, not the whitespace. Also ensures regex tests the actual content,
+  // consistent with parseIntEnv which also trims before evaluation.
+  const trimmed = value.trim();
+  if (trimmed.length < 3) return true;
+  return PLACEHOLDER_PATTERN.test(trimmed);
 }
 
 /**
@@ -55,11 +60,20 @@ export function requireIntEnv(name: string): number {
   if (!value) {
     throw new Error(`Required environment variable ${name} is not set`);
   }
+  // P1-FIX: Trim whitespace before parsing, consistent with parseIntEnv.
+  // Without trim, requireIntEnv('PORT') with PORT='   ' passes the !value check
+  // (whitespace-only strings are truthy), then Number('   ') === 0, and
+  // Number.isInteger(0) === true — silently returning 0. For security-critical
+  // configs this is dangerous: RATE_LIMIT_MAX='  ' would set the limit to 0.
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`Required environment variable ${name} is set but empty`);
+  }
   // P1-TYPE FIX: Use Number() + Number.isInteger() instead of parseInt()
   // parseInt('3.14') silently returns 3, but we want to reject floats
-  const parsed = Number(value);
+  const parsed = Number(trimmed);
   if (!Number.isInteger(parsed)) {
-    throw new Error(`Environment variable ${name} must be a valid integer`);
+    throw new Error(`Environment variable ${name} must be a valid integer, got: ${trimmed}`);
   }
   return parsed;
 }
@@ -89,9 +103,12 @@ export function parseBoolEnv(name: string, defaultValue: boolean): boolean {
   // P1-SECURITY FIX: Only recognize explicit true/false values.
   // Previously, ANY non-"true"/non-"1" string (including typos like "ture", "yes", "on")
   // silently returned false, potentially disabling security features.
-  const normalized = value.toLowerCase();
-  if (normalized === 'true' || value === '1') return true;
-  if (normalized === 'false' || value === '0') return false;
+  // P3-FIX: Trim and normalize before comparison so '  true  ' and ' 1 ' are
+  // treated consistently. Previously `value === '1'` compared the raw untrimmed
+  // value while `normalized === 'true'` used the lowercased version — inconsistent.
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === '0') return false;
   logger.warn('Unrecognized boolean value, using default', { name, value, defaultValue });
   return defaultValue;
 }

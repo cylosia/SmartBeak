@@ -169,7 +169,14 @@ export class EventBus {
         }
 
         return runSafely(plugin, event.name, () => handle(event), async (f) => {
-          this.logger.error('[EventBus] Plugin failure:', f);
+          // P1-FIX: Pass the actual Error as second arg so the logger extracts
+          // the stack trace. Previously `f` (the full {plugin, eventName, error}
+          // object) was passed as the message string arg — all stack traces were
+          // lost in production logs, making post-incident analysis impossible.
+          this.logger.error(
+            `[EventBus] Plugin ${f.plugin} failed for event ${f.eventName}`,
+            f.error instanceof Error ? f.error : new Error(String(f.error)),
+          );
         }).then(() => {
           handlerSpan?.setStatus({ code: SpanStatusCode.OK });
           handlerSpan?.end();

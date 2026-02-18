@@ -9,6 +9,7 @@ import type { FastifyRequest } from 'fastify';
 import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
 import { getErrorMessage, ValidationError } from '@errors';
+import { ZodError } from 'zod';
 
 const logger = getLogger('ExperimentService');
 
@@ -113,6 +114,17 @@ export async function experimentRoutes(app: FastifyInstance) {
       // P1-4 FIX: Route ValidationError to HTTP 400, not 500.
       if (error instanceof ValidationError) {
         return errors.validationFailed(reply, [{ message: error.message, code: 'custom', path: [] }]);
+      }
+      // P1-FIX: ZodError from validateExperiment (VariantsSchema.parse) must also
+      // return HTTP 400, not 500. The route-level Zod schema accepts contentType
+      // as any string, but validateExperiment's internal schema enforces an enum.
+      // An invalid contentType value throws ZodError which is a client error.
+      if (error instanceof ZodError) {
+        return errors.validationFailed(reply, error.issues.map(i => ({
+          message: i.message,
+          code: 'custom' as const,
+          path: i.path,
+        })));
       }
       // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
       logger.error('Error processing experiment request', { message: getErrorMessage(error) });

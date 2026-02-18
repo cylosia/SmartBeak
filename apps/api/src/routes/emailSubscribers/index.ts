@@ -1,9 +1,11 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { getDb } from '../../db';
 import { getLogger } from '@kernel/logger';
 import { authenticate } from './auth';
 import { hashEmail, validateEmailFormat, sanitizeString, escapeLikePattern } from './utils';
+import { csrfProtection } from '../../middleware/csrf';
+import { apiRateLimit } from '../../middleware/rateLimiter';
 
 const logger = getLogger('email-subscribers');
 
@@ -80,6 +82,12 @@ async function canAccessDomain(userId: string, domainId: string, orgId: string):
  * Email subscriber routes
  */
 export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void> {
+  // P1-FIX: Add CSRF protection for state-changing routes (PATCH, DELETE).
+  // csrfProtection() is method-aware — GET/HEAD/OPTIONS pass through immediately.
+  app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply) => Promise<void>);
+  // P1-FIX: Add rate limiting consistent with experiments.ts and exports.ts.
+  app.addHook('onRequest', apiRateLimit() as (req: FastifyRequest, reply: FastifyReply) => Promise<void>);
+
   // GET /api/v1/domains/:domainId/subscribers - List subscribers for a domain
   app.get('/api/v1/domains/:domainId/subscribers', async (req, reply) => {
     try {
@@ -126,8 +134,14 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
         const sanitizedSearch = sanitizeString(search);
         // SECURITY FIX: Properly escape LIKE wildcards and use ESCAPE clause
         const escapedSearch = escapeLikePattern(sanitizedSearch);
+        // P1-FIX: Hash the raw (normalized) search term for email lookup, NOT the
+        // sanitized/truncated version. sanitizeString() truncates to 100 chars and
+        // strips <> characters. hashEmail() uses the full lowercase+trimmed email,
+        // so hashing after sanitizeString() produces a different hash, breaking
+        // email search for addresses > 100 chars or containing < or >.
+        const emailSearchHash = hashEmail(search.toLowerCase().trim());
         query = query.where(function() {
-          void this.where('email_hash', hashEmail(sanitizedSearch))
+          void this.where('email_hash', emailSearchHash)
             .orWhereRaw("first_name ILIKE ? ESCAPE '\\'", [`%${escapedSearch}%`])
             .orWhereRaw("last_name ILIKE ? ESCAPE '\\'", [`%${escapedSearch}%`]);
         });
@@ -205,7 +219,19 @@ export async function emailSubscriberRoutes(app: FastifyInstance): Promise<void>
       }
 
       const { email, firstName, lastName, tags, metadata, source, doubleOptIn } = parseResult.data;
-      
+
+      // P1-FIX: Reject double opt-in requests until confirmation email sending is
+      // implemented. Previously the API inserted the subscriber with status='pending'
+      // and returned "Confirmation email sent" — a lie. The subscriber would be
+      // permanently stuck in 'pending' with no confirmation ever sent, violating
+      // CAN-SPAM / GDPR opt-in consent requirements.
+      if (doubleOptIn) {
+        return reply.status(501).send({
+          error: 'Double opt-in is not yet implemented. Use doubleOptIn: false or omit the field.',
+          code: 'NOT_IMPLEMENTED',
+        });
+      }
+
       if (!validateEmailFormat(email)) {
         return reply.status(400).send({ error: 'Invalid email format' });
       }

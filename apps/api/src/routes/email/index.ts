@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 import { getLogger } from '@kernel/logger';
 import { csrfProtection } from '../../middleware/csrf';
+import { apiRateLimit } from '../../middleware/rateLimiter';
 import { addSecurityHeaders, whitelistFields } from './utils';
 
 const logger = getLogger('EmailService');
@@ -29,6 +30,10 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
   // GET/HEAD/OPTIONS methods (see csrf.ts:137-139), so GET list endpoints
   // are never affected. Mutation endpoints (POST) are protected.
   app.addHook('onRequest', csrfProtection() as (req: FastifyRequest, reply: FastifyReply) => Promise<void>);
+  // P1-FIX: Add rate limiting consistent with experiments.ts and exports.ts.
+  // Without this, an authenticated user can create unlimited resources or spam
+  // the POST /email/send endpoint, abusing downstream email provider quotas.
+  app.addHook('onRequest', apiRateLimit() as (req: FastifyRequest, reply: FastifyReply) => Promise<void>);
 
   // POST /email/lead-magnets - Create lead magnet
   app.post('/email/lead-magnets', async (req, reply) => {
@@ -412,9 +417,20 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
         });
     }
 
-    const { to, subject, body, from: _from, reply_to: _reply_to, cc: _cc, bcc: _bcc } = parseResult.data;
+    // P1-FIX: Destructure contentType so it is explicitly available. When the
+    // actual send layer is wired up, it MUST sanitize HTML when contentType is
+    // 'text/html' (strip <script>, unsafe event handlers, javascript: hrefs).
+    // Currently the send is stubbed (returns 'queued'); add sanitization before
+    // passing body to any email provider.
+    const { to, subject, body, contentType: _contentType, from: _from, reply_to: _reply_to, cc, bcc } = parseResult.data;
 
     const recipients = Array.isArray(to) ? to : [to];
+    // P1-FIX: Count cc/bcc recipients in audit so actual email volume is tracked.
+    // Previously only 'to' recipients were counted; a request with 99 bcc addresses
+    // reported recipient_count=1, causing billing and compliance miscounts.
+    const ccRecipients = Array.isArray(cc) ? cc : (cc ? [cc] : []);
+    const bccRecipients = Array.isArray(bcc) ? bcc : (bcc ? [bcc] : []);
+    const totalRecipientCount = recipients.length + ccRecipients.length + bccRecipients.length;
 
     // Validate each recipient
     for (const email of recipients) {
@@ -436,7 +452,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
         action: 'email_send_attempt',
         entityType: 'email',
         metadata: {
-        recipient_count: recipients.length,
+        recipient_count: totalRecipientCount,
         subject: subject.substring(0, 100),
         body_length: body.length,
         },
@@ -446,7 +462,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     addSecurityHeaders(reply);
     return reply.send({
         status: 'queued',
-        recipients: recipients.length,
+        recipients: totalRecipientCount,
         message: 'Email queued for delivery',
     });
     } catch (error) {

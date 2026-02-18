@@ -115,15 +115,20 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
     return { status: 'already_running', experimentId };
   }
   if (exp.status !== 'ready') {
-    logger.error('Cannot start experiment — not in ready state', undefined, {
+    // P1-FIX: Remove spurious `undefined` second arg to logger.error.
+    // logger.error(message, err?, metadata?) — passing undefined for err is a no-op
+    // but confusing; pass metadata directly as the second argument.
+    logger.error('Cannot start experiment — not in ready state', {
+      experimentId,
       currentStatus: exp.status,
     });
     throw new Error(`Cannot start experiment with status: ${exp.status}`);
   }
 
   if (!exp.variants || exp.variants.length < 2) {
-    logger.error('Experiment must have at least 2 variants', undefined, {
-    variantCount: exp.variants?.length || 0,
+    logger.error('Experiment must have at least 2 variants', {
+      experimentId,
+      variantCount: exp.variants?.length ?? 0,
     });
     throw new Error('Experiment must have at least 2 variants');
   }

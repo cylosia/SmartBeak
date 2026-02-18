@@ -45,21 +45,20 @@ export async function canAccessDomain(
   domainId: string,
   orgId: string
 ): Promise<boolean> {
-  try {
-    const db = await getDb();
-    const row = await db('domain_registry')
+  // P1-FIX: Remove try/catch — DB errors must propagate as 5xx, not be silently
+  // converted to false (→ HTTP 403). A transient DB failure masquerading as
+  // "Access Denied" misleads operators and suppresses 5xx alerts.
+  // P1-FIX: Add .timeout(10000) to prevent connection pool starvation from
+  // hung queries, consistent with experiments.ts and emailSubscribers/index.ts.
+  const db = await getDb();
+  const row = await db('domain_registry')
     .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
     .where('domain_registry.domain_id', domainId)
     .where('memberships.user_id', userId)
     .where('domain_registry.org_id', orgId)
     .select('memberships.role')
+    .timeout(10000)
     .first();
 
-    return !!row;
-  } catch (error) {
-    // P2-MEDIUM FIX: error: unknown with proper type guard
-    const errorMessage = error instanceof Error ? error["message"] : 'Unknown error';
-    logger.error(`Error checking domain access: ${errorMessage}`);
-    return false;
-  }
+  return !!row;
 }
