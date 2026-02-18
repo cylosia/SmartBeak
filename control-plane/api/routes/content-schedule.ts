@@ -26,8 +26,10 @@ const BodySchema = z.object({
 export async function contentScheduleRoutes(app: FastifyInstance) {
   app.post('/content/:id/schedule', async (req, res) => {
   try {
-    // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-    await rateLimit('content', 50);
+    // P0-005 FIX: Rate limit per IP, not per static key.
+    // rateLimit('content', 50) used a single global bucket so one user
+    // could deny scheduling access to all other users simultaneously.
+    await rateLimit(req.ip || 'unknown', 50, 'content.schedule');
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor']);
 

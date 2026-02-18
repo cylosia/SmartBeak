@@ -408,9 +408,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // F21-FIX: For membership events, event.data.id is the MEMBERSHIP ID, not the user ID.
       // The user ID is in event.data.public_user_data.user_id for Clerk membership events.
       const membershipData = event.data as { id: string; organization_id?: string; public_user_data?: { user_id?: string }; role?: string };
-      const userId = membershipData.public_user_data?.user_id || membershipData.id;
+      const clerkUserId = membershipData.public_user_data?.user_id;
       const orgId = membershipData.organization_id;
-      logger.info('User joined org', { userId, orgId });
+
+      // P1-001 FIX: Reject the event if user_id is absent — do NOT fall back to
+      // membershipData.id (the membership ID, not a user ID). Using the membership
+      // ID as user_id inserts a wrong FK causing phantom membership records and
+      // incorrect authorization checks.
+      if (!clerkUserId) {
+        logger.error('organizationMembership.created: missing public_user_data.user_id', { membershipId: membershipData.id });
+        return res.status(400).json({ error: 'Invalid membership event: missing user_id' });
+      }
+
+      logger.info('User joined org', { clerkUserId, orgId });
 
       if (!orgId) {
         logger.warn('Missing organization_id in membership event');
@@ -428,27 +438,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Invalid organization' });
       }
 
-      // Verify user exists in our database
-      const user = await db('users').where({ clerk_id: userId }).first();
+      // Verify user exists in our database; create stub if not present yet
+      let user = await db('users').where({ clerk_id: clerkUserId }).first();
       if (!user) {
-        logger.warn('User not found, creating', { userId });
-        // Create minimal user record to maintain referential integrity
+        logger.warn('User not found, creating', { clerkUserId });
         await db('users').insert({
-          clerk_id: userId,
-          email: `pending_${userId}@clerk.local`,
+          clerk_id: clerkUserId,
+          email: `pending_${clerkUserId}@clerk.local`,
           email_verified: false,
           created_at: new Date(),
           updated_at: new Date(),
         }).onConflict('clerk_id').ignore();
+        // Re-fetch to get the internal UUID after upsert
+        user = await db('users').where({ clerk_id: clerkUserId }).first();
       }
 
+      if (!user?.id) {
+        logger.error('Failed to resolve internal user ID for membership', { clerkUserId });
+        return res.status(500).json({ error: 'Failed to resolve user' });
+      }
+
+      // P1-001 FIX: Use user.id (internal UUID) not clerkUserId (Clerk string)
+      // as the FK into org_memberships. Authorization joins use the internal UUID.
       // F23-FIX: Validate role against allowed values instead of unsafe (event.data as any).role
       const ALLOWED_ROLES = ['admin', 'editor', 'viewer', 'member', 'org:admin', 'org:member'];
       const rawRole = membershipData.role;
       const role = (rawRole && ALLOWED_ROLES.includes(rawRole)) ? rawRole : 'member';
 
       await db('org_memberships').insert({
-        user_id: userId,
+        user_id: user.id,
         org_id: orgId,
         role,
         created_at: new Date(),

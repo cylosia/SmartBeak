@@ -133,35 +133,27 @@ function getWebhookSecretInternal(): string {
 }
 
 /**
-* Lazy getter for webhook secret
-* Returns empty string if not configured (non-critical)
+* Getter for webhook secret.
+* P1-010 FIX: Throws instead of returning empty string when unset.
+* A missing webhook secret causes signature verification to accept any payload.
 */
 export function getClerkWebhookSecret(): string {
-  return getWebhookSecretInternal();
+  const value = getWebhookSecretInternal();
+  if (!value) {
+    throw new Error(
+      'CLERK_WEBHOOK_SECRET is not set. ' +
+      'Please configure your actual webhook secret from https://dashboard.clerk.dev'
+    );
+  }
+  return value;
 }
 
 // Backward compatibility: export a getter that can be called
 export { getClerkWebhookSecret as getWebhookSecret };
 
-/**
-* Legacy exports for backward compatibility
-* These will throw errors if accessed when env vars are not set
-
-*/
-Object.defineProperty(exports, 'CLERK_PUBLISHABLE_KEY', {
-  get: getClerkPublishableKey,
-  enumerable: true,
-  configurable: true,
-});
-
-Object.defineProperty(exports, 'CLERK_SECRET_KEY', {
-  get: getClerkSecretKey,
-  enumerable: true,
-  configurable: true,
-});
-
-Object.defineProperty(exports, 'CLERK_WEBHOOK_SECRET', {
-  get: getClerkWebhookSecret,
-  enumerable: true,
-  configurable: true,
-});
+// P0-006 FIX: Removed Object.defineProperty(exports, ...) blocks.
+// Those were CommonJS syntax that throws ReferenceError in ESM ("type":"module").
+// All three names are already available via the named exports above:
+//   getClerkPublishableKey / getPublishableKey
+//   getClerkSecretKey     / getSecretKey
+//   getClerkWebhookSecret / getWebhookSecret

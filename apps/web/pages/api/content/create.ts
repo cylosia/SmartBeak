@@ -35,6 +35,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const auth = await requireAuth(req, res);
     if (!auth) return; // requireAuth already sent error response
 
+    // P2-037 FIX: Enforce minimum role for content creation.
+    // Viewer-role users should not be able to create content.
+    const CONTENT_CREATE_ROLES: string[] = ['owner', 'admin', 'editor'];
+    const hasRole = auth.roles.some((r: string) => CONTENT_CREATE_ROLES.includes(r));
+    if (!hasRole) {
+      return sendError(res, 403, 'Forbidden. Editor or admin access required to create content.');
+    }
+
     const { domainId, title = '', type = 'article' } = req.body;
 
     // Validate required fields

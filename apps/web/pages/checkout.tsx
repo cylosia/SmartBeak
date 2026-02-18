@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 
 /**
  * P0-2 FIX: Previously this page had:
@@ -11,16 +12,30 @@ import { useEffect, useState } from 'react';
  */
 export default function Checkout() {
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
   let cancelled = false;
 
   async function createSession() {
+    // P1-021 FIX: Read priceId from the URL query parameter.
+    // Previously the POST body was empty — the server always returned 400
+    // because priceId is required, making the checkout page non-functional.
+    const priceId = typeof router.query['priceId'] === 'string'
+      ? router.query['priceId']
+      : null;
+
+    if (!priceId) {
+      setError('No plan selected. Please return to the pricing page and select a plan.');
+      return;
+    }
+
     try {
     const res = await fetch('/api/stripe/create-checkout-session', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId }),
     });
 
     if (!res.ok) {

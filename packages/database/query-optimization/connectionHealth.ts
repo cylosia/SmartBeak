@@ -93,6 +93,15 @@ export class PoolHealthMonitor extends EventEmitter {
 
     this.metrics = this.initializeMetrics();
     this.attachPoolListeners();
+
+    // P1-014 FIX: Register an error listener so unhandled 'error' events from
+    // the pool don't crash the Node.js process. Without this listener, any
+    // pool error emitted via this.emit('error', err) below would throw an
+    // uncaught exception and kill the server.
+    this.on('error', (err: Error) => {
+      // getLogger cannot be imported here without circular deps; use process.stderr
+      process.stderr.write(`[PoolHealthMonitor] Unhandled pool error: ${err.message}\n`);
+    });
   }
 
   private initializeMetrics(): PoolMetrics {
@@ -248,8 +257,12 @@ export class PoolHealthMonitor extends EventEmitter {
   private async adjustPoolSize(utilization: number, waitingClients: number): Promise<void> {
     const currentMax = this.pool.options.max;
 
+    // P1-023 FIX: Removed the erroneous / 100 division. scaleUpThreshold is
+    // already stored as a fraction (0.8 = 80%), not a whole percentage.
+    // Dividing by 100 gave 0.008 (0.8%), causing the pool to scale to maximum
+    // capacity at virtually zero load, exhausting DB connections on every startup.
     // Scale up if high utilization and waiting clients
-    if (utilization > this.config.scaleUpThreshold / 100 && waitingClients > 0) {
+    if (utilization > this.config.scaleUpThreshold && waitingClients > 0) {
       const newMax = Math.min(currentMax + 5, this.config.maxSize);
       if (newMax > currentMax) {
         this.pool.options.max = newMax;
@@ -257,8 +270,8 @@ export class PoolHealthMonitor extends EventEmitter {
       }
     }
 
-    // Scale down if low utilization
-    if (utilization < this.config.scaleDownThreshold / 100 && currentMax > this.config.minSize) {
+    // Scale down if low utilization (same /100 fix as above)
+    if (utilization < this.config.scaleDownThreshold && currentMax > this.config.minSize) {
       const newMax = Math.max(currentMax - 2, this.config.minSize);
       if (newMax < currentMax) {
         // Note: pg Pool doesn't support decreasing max directly

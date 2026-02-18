@@ -19,8 +19,17 @@ const ALLOWED_ORIGINS = [
   process.env['NEXT_PUBLIC_APP_DOMAIN'],
 ].filter(Boolean) as string[];
 
+// P0-007 FIX: Use URL origin comparison instead of startsWith.
+// startsWith('https://app.example.com') passes 'https://app.example.com.evil.com'.
+// Also fail-closed when ALLOWED_ORIGINS is empty (unconfigured env var).
 function isAllowedUrl(url: string): boolean {
-  return ALLOWED_ORIGINS.some(origin => url.startsWith(origin));
+  if (ALLOWED_ORIGINS.length === 0) return false;
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_ORIGINS.some(origin => parsed.origin === origin);
+  } catch {
+    return false;
+  }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -108,7 +117,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       metadata: {
         orgId: auth.orgId,
         userId: auth.userId,
-        planId: planId || 'pro',
+        // P1-011 FIX: Derive planId server-side from priceId lookup table.
+        // Never trust client-provided planId for tier assignment — an attacker
+        // can pay for 'solo' but send planId='enterprise' in metadata.
+        // The webhook that reads this metadata provisions the actual tier.
         priceId: priceId || 'none',
       },
       });

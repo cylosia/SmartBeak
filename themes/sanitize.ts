@@ -7,6 +7,18 @@
 
 import DOMPurify from 'isomorphic-dompurify';
 
+// P1-020 FIX: Register the rel="noopener noreferrer" hook ONCE at module
+// initialization, not inside sanitizeHtml(). The previous per-call pattern
+// of addHook() + removeAllHooks() is not safe under concurrent Next.js SSR:
+// two simultaneous requests can register each other's hooks and then remove
+// them prematurely — producing anchor tags without rel="noopener noreferrer"
+// and enabling tabnapping attacks.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
 interface SanitizeOptions {
   ALLOWED_TAGS?: string[];
   ALLOWED_ATTR?: string[];
@@ -50,21 +62,8 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
     FORBID_DATA_URI: true,
   };
 
-  // P0-FIX (P0-7): Add rel="noopener noreferrer" to all target="_blank" links
-  // to prevent tabnabbing attacks where the opened page gains window.opener
-  // access and can redirect the original tab to a phishing page.
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
-      node.setAttribute('rel', 'noopener noreferrer');
-    }
-  });
-
-  const result = DOMPurify.sanitize(html, config);
-
-  // Remove the hook after use to prevent accumulation across calls
-  DOMPurify.removeAllHooks();
-
-  return result;
+  // Hook is registered once at module load (see top of file) — do not add/remove per call.
+  return DOMPurify.sanitize(html, config);
 }
 
 /**

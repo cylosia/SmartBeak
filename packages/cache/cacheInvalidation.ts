@@ -167,7 +167,11 @@ export class CacheInvalidator {
    * Invalidate by key pattern (supports wildcards)
    */
   async invalidateByPattern(pattern: string): Promise<void> {
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+    // P0-004 FIX: Escape all regex metacharacters before converting glob wildcards.
+    // Without escaping, a pattern like 'user.(org)+' compiles to a ReDoS regex
+    // that can pin the event loop. Escape first, then convert * and ? to .* and .
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp('^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
 
     const keys = this.cache.getL1Keys();
     const toDelete: string[] = [];
@@ -250,7 +254,14 @@ export class CacheInvalidator {
 
     for (const rule of sortedRules) {
       const matchesTags = !rule.tags || rule.tags.some(tag => event.relatedTags?.includes(tag));
-      const matchesEntity = !rule.condition || rule.condition(event.entityType, event.entityId);
+      // P2-010 FIX: The InvalidationRule.condition signature is (key: string, value: unknown).
+      // Previously called with (event.entityType, event.entityId), which passed a
+      // string|undefined as the 'value' argument. Pass entityType as the key and
+      // entityId as the value to match the declared interface contract.
+      const matchesEntity = !rule.condition || rule.condition(
+        event.entityType,
+        event.entityId as unknown
+      );
 
       if (matchesTags && matchesEntity) {
         if (rule.keyPatterns) {

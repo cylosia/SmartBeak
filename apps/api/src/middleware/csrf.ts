@@ -145,12 +145,36 @@ export function csrfProtection(config: CsrfConfig = {}) {
       return;
     }
 
-    // F28-FIX: Derive session ID from authenticated JWT claims, NOT from the
-    // client-controlled x-session-id header. Using a client header allows an
-    // attacker to generate a CSRF token with their own session ID and use it
-    // against a victim's authenticated request, completely bypassing CSRF protection.
+    // P0-002 FIX: Derive sessionId from the Authorization header JWT, not
+    // exclusively from req.auth. At onRequest phase, auth middleware has not
+    // yet run, so req.auth is always undefined — previously causing every
+    // state-changing request to be blocked with 403 CSRF_SESSION_REQUIRED.
+    //
+    // We decode (no verify) the JWT to extract jti/sub as a stable session ID.
+    // The CSRF token stored in Redis under that key is the actual security
+    // guarantee: only the server can issue a valid CSRF token for a sessionId.
+    let sessionId: string | undefined;
+
+    // Prefer req.auth if a prior hook already set it
     const authUser = (req as { auth?: { userId?: string; sessionId?: string } }).auth;
-    const sessionId = authUser?.sessionId || authUser?.userId;
+    sessionId = authUser?.sessionId || authUser?.userId;
+
+    // Fallback: decode (no verify) the Bearer token for session identity
+    if (!sessionId) {
+      const authHeader = req.headers.authorization;
+      if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          try {
+            const payload = JSON.parse(
+              Buffer.from(parts[1]!, 'base64url').toString('utf8')
+            ) as { jti?: string; sub?: string };
+            sessionId = payload.jti || payload.sub;
+          } catch { /* malformed JWT — fall through to rejection */ }
+        }
+      }
+    }
 
     if (!sessionId) {
       return res.status(403).send({

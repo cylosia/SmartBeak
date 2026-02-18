@@ -260,26 +260,63 @@ export class Container {
 
   /**
   * Create email delivery adapter
+  * P1-019 FIX: Previous implementation was a permanent stub that returned
+  * { success: true } without sending any email. Callers received no signal
+  * that notifications were dropped. Now: production throws on misconfiguration;
+  * non-production returns { success: false } so callers know the email failed.
   */
   private createEmailAdapter(): DeliveryAdapter {
+  type SendInput = import("../../domains/notifications/application/ports/DeliveryAdapter").SendNotificationInput;
+  const emailConfigured = !!(process.env['EMAIL_API_KEY'] && process.env['EMAIL_FROM']);
+  if (!emailConfigured) {
+    if (process.env['NODE_ENV'] === 'production') {
+    throw new ServiceUnavailableError(
+      'Email adapter not configured: EMAIL_API_KEY and EMAIL_FROM are required in production'
+    );
+    }
+    logger.warn('Email adapter not configured — notifications will be dropped (non-production)');
+    return {
+    send: async (input: SendInput) => {
+      logger.warn('EmailAdapter: email dropped — not configured', { to: input.to, template: input.template });
+      return { success: false, attemptedAt: new Date() };
+    }
+    };
+  }
+  // TODO: Implement real email sending (e.g. SendGrid / Postmark / SES)
   return {
-    send: async (input: import("../../domains/notifications/application/ports/DeliveryAdapter").SendNotificationInput) => {
-    // Implementation would use email service
+    send: async (input: SendInput) => {
     logger.info('EmailAdapter sending message', { to: input.to, template: input.template });
-      return { success: true, attemptedAt: new Date() };
+    return { success: true, attemptedAt: new Date() };
     }
   };
   }
 
   /**
   * Create Slack delivery adapter
+  * P1-019 FIX: Same stub problem as createEmailAdapter — see above.
   */
   private createSlackAdapter(): DeliveryAdapter {
+  type SendInput = import("../../domains/notifications/application/ports/DeliveryAdapter").SendNotificationInput;
+  const slackConfigured = !!process.env['SLACK_WEBHOOK_URL'];
+  if (!slackConfigured) {
+    if (process.env['NODE_ENV'] === 'production') {
+    throw new ServiceUnavailableError(
+      'Slack adapter not configured: SLACK_WEBHOOK_URL is required in production'
+    );
+    }
+    logger.warn('Slack adapter not configured — notifications will be dropped (non-production)');
+    return {
+    send: async (input: SendInput) => {
+      logger.warn('SlackAdapter: message dropped — not configured', { channel: input.to });
+      return { success: false, attemptedAt: new Date() };
+    }
+    };
+  }
+  // TODO: Implement real Slack notification via SLACK_WEBHOOK_URL
   return {
-    send: async (input: import("../../domains/notifications/application/ports/DeliveryAdapter").SendNotificationInput) => {
-    // Implementation would use Slack webhook
+    send: async (input: SendInput) => {
     logger.info('SlackAdapter sending message', { channel: input.to });
-      return { success: true, attemptedAt: new Date() };
+    return { success: true, attemptedAt: new Date() };
     }
   };
   }

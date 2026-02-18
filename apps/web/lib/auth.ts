@@ -538,8 +538,10 @@ export async function canAccessDomain(userId: string, domainId: string, db: Pool
     return false;
   }
   try {
-    // SECURITY FIX: Check role level in addition to membership
-    const { rows } = await db.query(`SELECT m["role"] FROM domain_registry dr
+    // P1-002 FIX: m["role"] is TypeScript bracket notation, not valid SQL syntax.
+    // PostgreSQL rejected the query, causing every canAccessDomain call to throw
+    // and return false — blocking all legitimate domain access for all users.
+    const { rows } = await db.query(`SELECT m.role FROM domain_registry dr
     JOIN memberships m ON m.org_id = dr.org_id
     WHERE dr.domain_id = $1 AND m.user_id = $2
     LIMIT 1`, [domainId, userId]);

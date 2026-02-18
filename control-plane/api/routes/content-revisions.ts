@@ -20,8 +20,10 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   });
 
   app.get('/content/:id/revisions', async (req, res) => {
-  // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('content', 50);
+  // P0-005 FIX: Rate limit per IP, not per static key 'content'.
+  // rateLimit('content', 50) used a single shared bucket for ALL users,
+  // allowing one user to exhaust the limit for everyone on the platform.
+  await rateLimit(req.ip || 'unknown', 50, 'content.revisions');
   const ctx = getAuthContext(req);
   requireRole(ctx, ['admin','editor','viewer']);
 
