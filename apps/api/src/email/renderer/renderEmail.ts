@@ -8,7 +8,9 @@ const logger = getLogger('EmailRenderer');
 type EmailBlock =
   | { type: 'heading'; level: 1 | 2 | 3; text: string }
   | { type: 'paragraph'; text: string }
-  | { type: 'image'; src: string; alt: string; link?: string | undefined }
+  // P2-FIX: exactOptionalPropertyTypes — remove redundant `| undefined` on
+  // optional prop. `link?: string` is sufficient; the union is already optional.
+  | { type: 'image'; src: string; alt: string; link?: string }
   | { type: 'button'; text: string; url: string }
   | { type: 'divider' };
 
@@ -80,24 +82,31 @@ export function renderEmailHTML(message: EmailMessage): string {
     return `<h${b.level} style="${headingStyle}">${escape(b.text)}</h${b.level}>`;
     }
     case 'paragraph':
-    return `<p style='${style['p']}'>${escape(b.text)}</p>`;
+    // P1-FIX: Use double-quoted attributes throughout for consistency and to
+    // avoid any risk of quote-context confusion when style/href values are
+    // later made dynamic. Single-quoted attributes work, but mixing quote
+    // styles in the same template is error-prone during maintenance.
+    return `<p style="${style['p']}">${escape(b.text)}</p>`;
     case 'image': {
-    const img = `<img src='${sanitizeUrl(b.src)}' alt='${escape(b.alt)}' style='${style['img']}'/>`;
-    return b.link ? `<a href='${sanitizeUrl(b.link)}'>${img}</a>` : img;
+    const img = `<img src="${sanitizeUrl(b.src)}" alt="${escape(b.alt)}" style="${style['img']}" />`;
+    return b.link ? `<a href="${sanitizeUrl(b.link)}">${img}</a>` : img;
     }
     case 'button':
-    return `<a href='${sanitizeUrl(b['url'])}' style='${style['btn']}'>${escape(b.text)}</a>`;
+    // P2-FIX: Use dot notation — after the switch case narrows to 'button',
+    // `b` is { type: 'button'; text: string; url: string } so `.url` is a
+    // concrete typed property, not an index-signature access.
+    return `<a href="${sanitizeUrl(b.url)}" style="${style['btn']}">${escape(b.text)}</a>`;
     case 'divider':
-    return `<hr style='${style['hr']}'/>`;
-  }
+    return `<hr style="${style['hr']}" />`;
+}
   }).join('');
 
   const footer = `
-  <hr style='${style['hr']}'/>
-  <p style='font-size:12px;color:#6b7280;'>
+  <hr style="${style['hr']}" />
+  <p style="font-size:12px;color:#6b7280;">
     ${escape(message.footer.compliance_copy)}<br/>
     ${escape(message.footer.physical_address)}<br/>
-    <a href='${sanitizeUrl(message.footer.unsubscribe_link)}'>Unsubscribe</a>
+    <a href="${sanitizeUrl(message.footer.unsubscribe_link)}">Unsubscribe</a>
   </p>
   `;
 

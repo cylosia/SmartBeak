@@ -67,7 +67,12 @@ export function initializeRateLimiter(redisUrl?: string): void {
 function buildRateLimitKey(identifier: string, namespace: string = 'global'): string {
   // Sanitize inputs to prevent key injection
   const sanitizedNamespace = namespace.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const sanitizedIdentifier = identifier.replace(/[:\s]/g, '_');
+  // P2-FIX: Sanitize to a safe character set instead of only stripping colons
+  // and whitespace. Colons were stripped because they are Redis key separators,
+  // but other characters (newlines, null bytes) can still cause log injection
+  // or Redis key parsing surprises. Allow only alphanumerics, dot, dash, and
+  // underscore — a superset that covers IPs, UUIDs, and user-ID formats.
+  const sanitizedIdentifier = identifier.replace(/[^a-zA-Z0-9._-]/g, '_');
   return `ratelimit:${sanitizedNamespace}:${sanitizedIdentifier}`;
 }
 
@@ -254,7 +259,7 @@ export function rateLimitMiddleware(operation: string = 'api.default', namespace
 * Should be called during application shutdown.
 */
 export function cleanupRateLimit(): void {
-  memoryCounters["clear"]();
+  memoryCounters.clear();
 }
 
 // Re-export types and functions from rate-limiter-redis

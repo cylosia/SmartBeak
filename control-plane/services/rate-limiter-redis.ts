@@ -117,7 +117,7 @@ end
   const key = `ratelimit:${identifier}`;
   const memberId = `${now}-${this.generateUniqueId()}`;
 
-  const result = await this["redis"].eval(
+  const rawResult = await this.redis.eval(
     RedisRateLimiter.CHECK_LIMIT_SCRIPT,
     1,
     key,
@@ -125,7 +125,22 @@ end
     String(config.windowMs),
     String(config.maxRequests),
     memberId
-  ) as [number, number];
+  );
+
+  // P0-FIX: Validate the Lua script response at runtime before trusting it.
+  // Casting to [number, number] without validation silently accepts null, arrays
+  // of the wrong length, or strings, leading to NaN arithmetic downstream.
+  if (
+    !Array.isArray(rawResult) ||
+    rawResult.length < 2 ||
+    typeof rawResult[0] !== 'number' ||
+    typeof rawResult[1] !== 'number'
+  ) {
+    throw new RateLimitError(
+      `Unexpected Lua response from rate-limit script: ${JSON.stringify(rawResult)}`
+    );
+  }
+  const result = rawResult as [number, number];
 
   const allowed = result[0] === 1;
   const newCount = result[1];
@@ -168,7 +183,7 @@ end
   const key = `ratelimit:${identifier}`;
   const memberId = `${now}-${this.generateUniqueId()}`;
 
-  const multi = this["redis"].multi();
+  const multi = this.redis.multi();
   multi.zremrangebyscore(key, 0, windowStart);
   multi.zadd(key, now, memberId);
   multi.pexpire(key, config.windowMs);
@@ -189,10 +204,10 @@ end
   const key = `ratelimit:${identifier}`;
 
   // Clean old entries
-  await this["redis"].zremrangebyscore(key, 0, windowStart);
+  await this.redis.zremrangebyscore(key, 0, windowStart);
 
   // Get count
-  return this["redis"].zcard(key);
+  return this.redis.zcard(key);
   }
 
   /**
@@ -204,7 +219,7 @@ end
   }
 
   const key = `ratelimit:${identifier}`;
-  await this["redis"].del(key);
+  await this.redis.del(key);
   }
 
   /**
@@ -232,7 +247,7 @@ end
   */
   async close(): Promise<void> {
   this.closed = true;
-  await this["redis"].quit();
+  await this.redis.quit();
   }
 }
 
