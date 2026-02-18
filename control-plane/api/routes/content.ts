@@ -138,13 +138,17 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     }
 
     if (search) {
-    // P1-SECURITY-FIX: Escape LIKE wildcards and use ESCAPE clause to prevent injection
+    // P1-SECURITY-FIX: Escape LIKE wildcards and use ESCAPE clause to prevent injection.
     // Escape special characters: \ (backslash), % (percent), _ (underscore)
     const escapedSearch = search
       .replace(/\\/g, '\\\\')   // Escape backslashes first
       .replace(/%/g, '\\%')     // Escape percent wildcards
       .replace(/_/g, '\\_');    // Escape underscore wildcards
-    query += ` AND (c.title ILIKE $${paramIndex} ESCAPE '\\' OR c.body ILIKE $${paramIndex} ESCAPE '\\')`;
+    // PERFORMANCE: Only search `title` here.  Searching `body` (up to 50 KB per row)
+    // with ILIKE '%...%' forces a full sequential scan because ILIKE cannot use a
+    // B-tree index and there is no pg_trgm GIN index on the body column.
+    // Add a GIN trgm index on body and re-enable body search once that migration lands.
+    query += ` AND c.title ILIKE $${paramIndex} ESCAPE '\\'`;
     params.push(`%${escapedSearch}%`);
     paramIndex++;
     }

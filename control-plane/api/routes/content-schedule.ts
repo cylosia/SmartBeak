@@ -47,6 +47,11 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     const { publishAt } = bodyResult.data;
     const publishDate = new Date(publishAt);
 
+    // Reject scheduling in the past (allow up to 30 seconds of clock skew)
+    if (publishDate.getTime() < Date.now() - 30_000) {
+    return errors.badRequest(res, 'publishAt must be in the future', ErrorCodes.INVALID_PARAMS);
+    }
+
     const repo = getContentRepository('content');
 
     // P0-5 FIX: Verify the authenticated user's org owns this content item

@@ -203,12 +203,19 @@ export class CacheWarmer {
     const batchSize = this.options.maxConcurrent;
     for (let i = 0; i < enabledSources.length; i += batchSize) {
       const batch = enabledSources.slice(i, i + batchSize);
+      // warmSource() already calls shouldWarm() internally and returns false when
+      // the condition is unmet.  We track the result here without calling
+      // shouldWarm() a second time (the previous code called it twice, causing
+      // double side-effects and possible inconsistency if the predicate changed
+      // between calls).  A false result is treated as "skipped" if shouldWarm is
+      // defined and as "failed" otherwise to match the original intent.
       const results = await Promise.all(
         batch.map(async source => {
           const success = await this.warmSource(source);
           if (success) {
             this.stats.warmedSuccessfully++;
-          } else if (source.shouldWarm && !(await Promise.resolve(source.shouldWarm()))) {
+          } else if (source.shouldWarm !== undefined) {
+            // warmSource returned false because shouldWarm() gated it
             this.stats.skipped++;
           } else {
             this.stats.failed++;

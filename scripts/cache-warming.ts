@@ -15,11 +15,11 @@ const logger = getLogger('CacheWarming');
 // ============================================================================
 
 const CACHE_WARMING_CONFIG = {
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
-  intervalMs: parseInt(process.env.CACHE_WARM_INTERVAL_MS || '300000', 10), // 5 minutes
+  redisUrl: process.env['REDIS_URL'] || 'redis://localhost:6379',
+  intervalMs: parseInt(process.env['CACHE_WARM_INTERVAL_MS'] || '300000', 10), // 5 minutes
   lowTrafficHours: {
-    start: parseInt(process.env.LOW_TRAFFIC_START_HOUR || '2', 10), // 2 AM
-    end: parseInt(process.env.LOW_TRAFFIC_END_HOUR || '5', 10),     // 5 AM
+    start: parseInt(process.env['LOW_TRAFFIC_START_HOUR'] || '2', 10), // 2 AM
+    end: parseInt(process.env['LOW_TRAFFIC_END_HOUR'] || '5', 10),     // 5 AM
   },
 };
 
@@ -106,8 +106,11 @@ async function initializeCache(): Promise<MultiTierCache> {
     await cache.initializeRedis(CACHE_WARMING_CONFIG.redisUrl);
     logger.info('Redis connection established');
   } catch (error) {
+    // Sanitize the Redis URL before logging to avoid leaking embedded credentials
+    // (e.g. redis://user:password@host:6379).
+    const safeUrl = CACHE_WARMING_CONFIG.redisUrl.replace(/:\/\/[^@]+@/, '://<redacted>@');
     logger.warn('Failed to connect to Redis, using memory cache only', {
-      redisUrl: CACHE_WARMING_CONFIG.redisUrl,
+      redisUrl: safeUrl,
       error: error instanceof Error ? error.message : String(error)
     });
   }
