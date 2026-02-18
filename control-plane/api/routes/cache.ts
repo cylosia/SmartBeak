@@ -66,7 +66,9 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
 
     if (pattern) {
       try {
-        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+        // Escape all regex metacharacters before expanding glob wildcards to prevent ReDoS.
+        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp('^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
         allKeys = allKeys.filter(key => regex.test(key));
       } catch {
         return res.status(400).send({

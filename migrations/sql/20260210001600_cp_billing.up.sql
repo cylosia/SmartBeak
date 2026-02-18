@@ -9,9 +9,10 @@ CREATE TABLE IF NOT EXISTS plans (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
   id TEXT PRIMARY KEY,
-  org_id TEXT REFERENCES organizations(id),
-  plan_id TEXT REFERENCES plans(id),
+  org_id TEXT NOT NULL REFERENCES organizations(id),
+  plan_id TEXT NOT NULL REFERENCES plans(id),
   status TEXT NOT NULL,
   grace_until TIMESTAMP,
-  created_at TIMESTAMP DEFAULT now()
+  created_at TIMESTAMP DEFAULT now(),
+  updated_at TIMESTAMP DEFAULT now()
 );

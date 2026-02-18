@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { GetServerSideProps } from 'next';
+import { getAuth } from '@clerk/nextjs/server';
 
 import { AppShell } from '../../components/AppShell';
 import { authFetch, apiUrl } from '../../lib/api-client';
 import { fetchWithCsrf } from '../../lib/csrf';
+import { getPoolInstance } from '../../lib/db';
 
 interface CacheStats {
   l1Hits: number;
@@ -324,8 +326,22 @@ export default function SystemCache() {
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const { userId } = getAuth(ctx.req);
+  if (!userId) {
+    return { redirect: { destination: '/login', permanent: false } };
+  }
   try {
-    await authFetch(apiUrl('system/health'), { ctx });
+    const pool = await getPoolInstance();
+    const { rows } = await pool.query(
+      `SELECT m.role FROM memberships m
+       JOIN users u ON u.id = m.user_id
+       WHERE u.clerk_id = $1 AND m.role IN ('owner', 'admin')
+       LIMIT 1`,
+      [userId]
+    );
+    if (rows.length === 0) {
+      return { redirect: { destination: '/dashboard', permanent: false } };
+    }
     return { props: {} };
   } catch {
     return { redirect: { destination: '/login', permanent: false } };

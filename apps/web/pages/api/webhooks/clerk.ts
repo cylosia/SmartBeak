@@ -323,64 +323,72 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
         const internalUserId = userRows[0]?.id;
 
+        // Track actual row counts for GDPR audit trail.
+        const deletionCounts: Record<string, number> = {};
+
         if (internalUserId) {
-          // F22-FIX: Use internalUserId (from users table PK) for cascading deletes,
-          // not userId (clerk_id). FK references in related tables point to the
-          // internal user ID, not the external Clerk ID. Using the wrong ID meant
-          // these DELETEs found nothing, violating GDPR Article 17.
-          // SECURITY FIX: Use internalUserId (DB primary key) not userId (Clerk external ID)
-          // Previous code used Clerk ID against internal FK columns, matching zero rows (GDPR violation)
+          // F22-FIX (completed): All FK columns in related tables store the internal
+          // integer/UUID PK from the users table — not the Clerk string ID.
+          // Passing the Clerk string ID in an OR clause against an integer column
+          // silently casts to 0 and matches nothing (GDPR silent no-op).
+          // Use ONLY internalUserId for these deletes.
 
           // 2. Delete org memberships (user removed from all orgs)
-          // Try both internal ID and clerk_id since different tables may use different FK
-          await client.query(
-            'DELETE FROM org_memberships WHERE user_id = $1 OR user_id = $2',
-            [internalUserId, userId]
+          const { rowCount: omCount } = await client.query(
+            'DELETE FROM org_memberships WHERE user_id = $1',
+            [internalUserId]
           );
+          deletionCounts['org_memberships'] = omCount ?? 0;
 
           // 3. Delete user sessions
-          await client.query(
-            'DELETE FROM user_sessions WHERE user_id = $1 OR user_id = $2',
-            [internalUserId, userId]
+          const { rowCount: usCount } = await client.query(
+            'DELETE FROM user_sessions WHERE user_id = $1',
+            [internalUserId]
           );
+          deletionCounts['user_sessions'] = usCount ?? 0;
 
           // 4. Delete refresh tokens
-          await client.query(
-            'DELETE FROM refresh_tokens WHERE user_id = $1 OR user_id = $2',
-            [internalUserId, userId]
+          const { rowCount: rtCount } = await client.query(
+            'DELETE FROM refresh_tokens WHERE user_id = $1',
+            [internalUserId]
           );
+          deletionCounts['refresh_tokens'] = rtCount ?? 0;
 
           // 5. Delete API keys
-          await client.query(
-            'DELETE FROM api_keys WHERE user_id = $1 OR user_id = $2',
-            [internalUserId, userId]
+          const { rowCount: akCount } = await client.query(
+            'DELETE FROM api_keys WHERE user_id = $1',
+            [internalUserId]
           );
+          deletionCounts['api_keys'] = akCount ?? 0;
 
           // 6. Anonymize audit logs (keep structure, remove PII)
-          await client.query(
+          const { rowCount: alCount } = await client.query(
             `UPDATE audit_logs SET
                actor_email = 'deleted_user',
                actor_name = 'Deleted User',
                actor_ip = NULL
-             WHERE actor_id = $1 OR actor_id = $2`,
-            [internalUserId, userId]
+             WHERE actor_id = $1`,
+            [internalUserId]
           );
+          deletionCounts['audit_logs'] = alCount ?? 0;
 
           // 7. Delete email subscriptions
-          await client.query(
-            'DELETE FROM email_subscriptions WHERE user_id = $1 OR user_id = $2',
-            [internalUserId, userId]
+          const { rowCount: esCount } = await client.query(
+            'DELETE FROM email_subscriptions WHERE user_id = $1',
+            [internalUserId]
           );
+          deletionCounts['email_subscriptions'] = esCount ?? 0;
 
           // 8. Delete notification preferences
-          await client.query(
-            'DELETE FROM notification_preferences WHERE user_id = $1 OR user_id = $2',
-            [internalUserId, userId]
+          const { rowCount: npCount } = await client.query(
+            'DELETE FROM notification_preferences WHERE user_id = $1',
+            [internalUserId]
           );
+          deletionCounts['notification_preferences'] = npCount ?? 0;
         }
 
         // 9. Hard-anonymize user record (GDPR: right to erasure)
-        await client.query(
+        const { rowCount: uCount } = await client.query(
           `UPDATE users
            SET deleted_at = NOW(),
                email = $1,
@@ -394,8 +402,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
            WHERE clerk_id = $2`,
           [`deleted_${userId}@anonymized.local`, userId]
         );
+        deletionCounts['users'] = uCount ?? 0;
 
-        logger.info('GDPR deletion completed', { userId, tablesCleared: 9 });
+        logger.info('GDPR deletion completed', { userId, deletionCounts });
       });
     } catch (err) {
       logger.error('Failed to delete user', err instanceof Error ? err : new Error(String(err)));
@@ -408,7 +417,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // F21-FIX: For membership events, event.data.id is the MEMBERSHIP ID, not the user ID.
       // The user ID is in event.data.public_user_data.user_id for Clerk membership events.
       const membershipData = event.data as { id: string; organization_id?: string; public_user_data?: { user_id?: string }; role?: string };
-      const userId = membershipData.public_user_data?.user_id || membershipData.id;
+      // F21-FIX (completed): Never fall back to membershipData.id — it is the membership ID
+      // (mem_xxx), not a user ID. Reject the event if the user ID is absent so that
+      // phantom memberships with wrong IDs are never written to the database.
+      const userId = membershipData.public_user_data?.user_id;
+      if (!userId) {
+        logger.error('Missing public_user_data.user_id in organizationMembership.created', { membershipId: membershipData.id });
+        return res.status(400).json({ error: 'Missing user_id in membership event' });
+      }
       const orgId = membershipData.organization_id;
       logger.info('User joined org', { userId, orgId });
 
