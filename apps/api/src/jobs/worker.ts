@@ -42,12 +42,17 @@ async function gracefulShutdown(signal: string): Promise<void> {
   logger.info(`${signal} received, shutting down gracefully`);
 
   try {
+    // Always clear the timeout timer when the race settles, whether stop() wins or
+    // the timeout wins, so the dangling timer does not hold the event loop open.
+    let shutdownTimerId: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       scheduler.stop(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Shutdown timeout')), SHUTDOWN_TIMEOUT_MS)
-      )
-    ]);
+      new Promise<never>((_, reject) => {
+        shutdownTimerId = setTimeout(() => reject(new Error('Shutdown timeout')), SHUTDOWN_TIMEOUT_MS);
+      }),
+    ]).finally(() => {
+      clearTimeout(shutdownTimerId);
+    });
     logger.info('Worker stopped');
 
     // Flush pending OTel spans

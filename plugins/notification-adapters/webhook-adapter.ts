@@ -133,11 +133,16 @@ export class WebhookAdapter implements DeliveryAdapter {
       const isAllowed = this.allowlist.some(allowed => {
         try {
           const allowedUrl = new URL(allowed);
-          // Match protocol, hostname, and port (if specified)
+          // Normalize ports before comparison: URL.port is "" for default ports
+          // (80 for http, 443 for https), so explicit :443 and implicit must match.
+          const normalizePort = (url: URL): string => {
+            if (url.port !== '') return url.port;
+            return url.protocol === 'https:' ? '443' : url.protocol === 'http:' ? '80' : '';
+          };
           return (
             targetUrl.protocol === allowedUrl.protocol &&
             targetUrl.hostname === allowedUrl.hostname &&
-            targetUrl.port === allowedUrl.port &&
+            normalizePort(targetUrl) === normalizePort(allowedUrl) &&
             // Ensure target path starts with allowed path
             targetUrl.pathname.startsWith(allowedUrl.pathname)
           );
@@ -151,10 +156,11 @@ export class WebhookAdapter implements DeliveryAdapter {
       });
 
       if (!isAllowed) {
+        // Do NOT include the allowlist in the error — it would expose internal endpoint config
         throw new ExternalAPIError(
           `Webhook target not allowed: ${targetUrl.origin}`,
           ErrorCodes.FORBIDDEN,
-          { targetUrl: to, allowedHosts: this.allowlist }
+          { targetUrl: to }
         );
       }
 

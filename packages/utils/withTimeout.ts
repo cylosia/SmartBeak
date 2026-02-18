@@ -15,19 +15,20 @@ export class TimeoutError extends Error {
 /**
 * Wrap a promise with a timeout
 * P1-8 FIX: Added optional AbortController support for cancellation propagation.
-* When the timeout fires, the signal is aborted so the underlying operation can clean up.
+* When the timeout fires, the controller is aborted so the underlying operation can clean up.
 *
 * @param promise - The promise to wrap
 * @param timeoutMs - Timeout in milliseconds
 * @param options - Optional configuration
 * @param options.message - Custom timeout error message
-* @param options.signal - AbortController signal to abort on timeout
+* @param options.controller - AbortController to abort when the timeout fires.
+*   Pass the AbortController (not controller.signal) so we can call .abort() on it.
 * @returns Promise that rejects if timeout is exceeded
 */
 export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  options?: string | { message?: string; signal?: AbortController }
+  options?: string | { message?: string; controller?: AbortController }
 ): Promise<T> {
   // Support legacy string message parameter
   const config = typeof options === 'string'
@@ -36,9 +37,9 @@ export function withTimeout<T>(
 
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      // P1-8 FIX: Abort the signal to propagate cancellation to the underlying operation
-      if (config.signal) {
-        config.signal.abort();
+      // Abort the controller to propagate cancellation to the underlying operation
+      if (config.controller) {
+        config.controller.abort();
       }
       reject(new TimeoutError(config.message || `Operation timed out after ${timeoutMs}ms`));
     }, timeoutMs);
