@@ -40,11 +40,22 @@ function sanitizeUrl(url: string | undefined): string {
     return '#';
   }
 
-  return url;
+  // Return parsed.href (canonicalized/percent-encoded by the URL parser) rather
+  // than the raw input string. The raw string may contain single-quotes, spaces,
+  // or other characters that break out of a single-quoted HTML attribute context,
+  // enabling XSS even after the protocol check passes.
+  return parsed.href;
   } catch {
-  // If URL parsing fails, check if it's a relative path (starts with /)
+  // URL parsing failed — check for a server-relative path (starts with / but
+  // not //, which would be treated as a protocol-relative URL by browsers).
+  // Encode HTML-unsafe characters so the path cannot break out of an attribute.
   if (url.startsWith('/') && !url.startsWith('//')) {
-    return url;
+    return url
+      .replace(/&/g, '&amp;')
+      .replace(/'/g, '&#39;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
   logger.warn(`Blocked invalid URL: ${url}`);
   return '#';

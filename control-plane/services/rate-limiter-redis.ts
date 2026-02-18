@@ -69,8 +69,40 @@ export class RedisRateLimiter {
   }
 
   /**
-  * Check if request should be allowed
-  * Uses Redis sorted sets for sliding window rate limiting
+  * Lua script for atomic sliding-window check-and-increment.
+  *
+  * The previous MULTI/EXEC pipeline unconditionally ran ZADD regardless of
+  * whether the request was allowed. This caused denied requests to be added
+  * to the sorted set, inflating the counter for the remainder of the window
+  * and causing legitimate requests to be rejected sooner than intended.
+  *
+  * This Lua script is atomic: ZADD only runs when the request is allowed.
+  * Returns: [allowed (1|0), newCount]
+  */
+  private static readonly CHECK_LIMIT_SCRIPT = `
+local key        = KEYS[1]
+local now        = tonumber(ARGV[1])
+local windowMs   = tonumber(ARGV[2])
+local maxReqs    = tonumber(ARGV[3])
+local memberId   = ARGV[4]
+local windowStart = now - windowMs
+
+redis.call('ZREMRANGEBYSCORE', key, 0, windowStart)
+local count = redis.call('ZCARD', key)
+
+if count < maxReqs then
+  redis.call('ZADD', key, now, memberId)
+  redis.call('PEXPIRE', key, windowMs)
+  return {1, count + 1}
+else
+  return {0, count}
+end
+`;
+
+  /**
+  * Check if request should be allowed.
+  * Uses an atomic Lua script for sliding-window rate limiting so that denied
+  * requests are NOT added to the sorted set (fixing counter inflation).
   */
   async checkLimit(
   identifier: string,
@@ -81,53 +113,24 @@ export class RedisRateLimiter {
   }
 
   const now = Date.now();
-  const windowStart = now - config.windowMs;
   const resetTime = now + config.windowMs;
   const key = `ratelimit:${identifier}`;
-
   const memberId = `${now}-${this.generateUniqueId()}`;
 
-  // Use Redis multi for atomic operations
-  const multi = this["redis"].multi();
+  const result = await this["redis"].eval(
+    RedisRateLimiter.CHECK_LIMIT_SCRIPT,
+    1,
+    key,
+    String(now),
+    String(config.windowMs),
+    String(config.maxRequests),
+    memberId
+  ) as [number, number];
 
-  // Remove old entries outside the window
-  multi.zremrangebyscore(key, 0, windowStart);
+  const allowed = result[0] === 1;
+  const newCount = result[1];
 
-  // Count current entries in window
-  multi.zcard(key);
-
-  // Add current request with unique member
-  multi.zadd(key, now, memberId);
-
-  // Set expiry on the key
-  multi.pexpire(key, config.windowMs);
-
-  const results = await multi.exec();
-
-  if (!results) {
-    throw new RateLimitError('Redis transaction returned null');
-  }
-
-  // Check for errors in transaction results
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    if (!result) {
-      logger.error(`Transaction error at index ${i}`, new Error('Undefined result'));
-      throw new RateLimitError(`Redis transaction failed: undefined result at index ${i}`);
-    }
-    const [err] = result;
-    if (err) {
-    logger.error(`Transaction error at index ${i}`, err instanceof Error ? err : new Error(String(err)));
-    throw new RateLimitError(`Redis transaction failed: ${err}`);
-    }
-  }
-
-  // Results[1] contains the count before adding current request
-  const currentCount = results[1]![1] as number;
-  const totalCount = currentCount + 1;
-
-  if (currentCount >= config.maxRequests) {
-    // Limit exceeded
+  if (!allowed) {
     return {
     allowed: false,
     remaining: 0,
@@ -138,7 +141,7 @@ export class RedisRateLimiter {
 
   return {
     allowed: true,
-    remaining: Math.max(0, config.maxRequests - totalCount),
+    remaining: Math.max(0, config.maxRequests - newCount),
     resetTime,
     limit: config.maxRequests,
   };

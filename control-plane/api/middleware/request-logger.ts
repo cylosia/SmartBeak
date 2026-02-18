@@ -59,13 +59,19 @@ function sanitizeRequestId(raw: string | undefined): string | undefined {
 }
 
 /**
-* Get client IP from request
+* Get client IP from request.
+*
+* X-Forwarded-For format: "client, proxy1, proxy2"
+* The FIRST element is the originating client IP (added by the first proxy).
+* The LAST element is the most-recent proxy's own IP — not the client.
+* Previous code returned ips[ips.length - 1] (the proxy IP), which caused logs
+* to record the proxy address and defeated IP-based auditing/attribution.
 */
 function getClientIP(req: FastifyRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string') {
   const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
-  return ips[ips.length - 1] || req.ip;
+  return ips[0] || req.ip;
   }
   return req.ip;
 }

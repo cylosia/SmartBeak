@@ -113,36 +113,36 @@ let instance: ResourceMetricsCollector | null = null;
 export function initResourceMetrics(config?: ResourceMetricsConfig): ResourceMetricsCollector {
   instance = new ResourceMetricsCollector(config);
 
-  // Wire hooks into kernel code
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-    const retry = require('@kernel/retry');
-    if (retry.setRetryMetricsHook) {
-      retry.setRetryMetricsHook({
+  // Wire hooks into kernel code using dynamic import() (ESM-compliant).
+  // Previously used CJS require() which throws at runtime in ESM modules
+  // ("type": "module" in package.json). Dynamic import() is the ESM equivalent
+  // and is fire-and-forget here intentionally — failures are logged as warnings
+  // because metrics hooks are non-critical observability infrastructure.
+  void import('@kernel/retry').then((retry) => {
+    if (typeof retry['setRetryMetricsHook'] === 'function') {
+      retry['setRetryMetricsHook']({
         onAttempt: recordRetryAttempt,
         onExhaustion: recordRetryExhaustion,
       });
     }
-    if (retry.setCircuitBreakerMetricsHook) {
-      retry.setCircuitBreakerMetricsHook({
+    if (typeof retry['setCircuitBreakerMetricsHook'] === 'function') {
+      retry['setCircuitBreakerMetricsHook']({
         onStateChange: recordCircuitBreakerStateChange,
         onExecution: recordCircuitBreakerExecution,
         onRejection: recordCircuitBreakerRejection,
       });
     }
-  } catch {
+  }).catch(() => {
     logger.warn('Could not wire retry/circuit breaker metrics hooks');
-  }
+  });
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-    const rateLimiter = require('@kernel/rateLimiterRedis');
-    if (rateLimiter.setRateLimitMetricsHook) {
-      rateLimiter.setRateLimitMetricsHook(recordRateLimitCheck);
+  void import('@kernel/rateLimiterRedis').then((rateLimiter) => {
+    if (typeof rateLimiter['setRateLimitMetricsHook'] === 'function') {
+      rateLimiter['setRateLimitMetricsHook'](recordRateLimitCheck);
     }
-  } catch {
+  }).catch(() => {
     logger.warn('Could not wire rate limit metrics hook');
-  }
+  });
 
   return instance;
 }

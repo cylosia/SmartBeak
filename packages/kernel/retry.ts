@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { getLogger } from '@kernel/logger';
 
 /**
@@ -101,9 +100,6 @@ export interface CircuitBreakerOptions {
 // Constants
 // ============================================================================
 
-// P1-FIX: Maximum items to track for retry history to prevent unbounded memory growth
-const MAX_RETRY_HISTORY = 1000;
-
 const DEFAULT_OPTIONS: RetryOptions = {
   maxRetries: 3,
   initialDelayMs: 1000,
@@ -120,85 +116,6 @@ const DEFAULT_OPTIONS: RetryOptions = {
   'too many requests',
   ],
 };
-
-// ARCH-FIX: Bounded retry history with TTL-based cleanup to prevent memory leaks
-interface RetryHistoryEntry {
-  timestamps: number[];
-  lastAccessed: number;
-}
-
-const retryHistory = new Map<string, RetryHistoryEntry>();
-const HISTORY_TTL_MS = 3600000; // 1 hour TTL for history entries
-const MAX_HISTORY_KEYS = 10000; // Maximum number of keys to track
-
-/**
-* ARCH-FIX: Clean old retry history entries to prevent unbounded growth
-* Implements TTL-based eviction and size limits
-* @param key - History key
-* @param timestamp - Current timestamp
-*/
-function trackRetryAttempt(key: string, timestamp: number): void {
-  const entry = retryHistory.get(key);
-  const history = entry ? entry.timestamps : [];
-  
-  history.push(timestamp);
-
-  // Keep only recent history to prevent memory leak
-  if (history.length > MAX_RETRY_HISTORY) {
-    history.shift();
-  }
-
-  retryHistory.set(key, {
-    timestamps: history,
-    lastAccessed: timestamp,
-  });
-  
-  // ARCH-FIX: Periodic cleanup of old entries
-  if (retryHistory.size > MAX_HISTORY_KEYS) {
-    cleanupOldHistoryEntries(timestamp);
-  }
-}
-
-/**
-* ARCH-FIX: Remove old history entries based on TTL
-*/
-function cleanupOldHistoryEntries(now: number): void {
-  const cutoff = now - HISTORY_TTL_MS;
-  for (const [key, entry] of retryHistory.entries()) {
-    if (entry.lastAccessed < cutoff) {
-      retryHistory.delete(key);
-    }
-  }
-}
-
-/**
-* Clean old retry history entries
-* ARCH-FIX: Uses TTL-based eviction for better memory management
-* @param maxAgeMs - Maximum age of entries to keep
-*/
-export function cleanupRetryHistory(maxAgeMs: number = HISTORY_TTL_MS): void {
-  const now = Date.now();
-  const cutoff = now - maxAgeMs;
-  
-  for (const [key, entry] of retryHistory.entries()) {
-    // Remove entries that haven't been accessed recently
-    if (entry.lastAccessed < cutoff) {
-      retryHistory.delete(key);
-      continue;
-    }
-    
-    // Also filter timestamps within the entry
-    const filtered = entry.timestamps.filter(ts => now - ts < maxAgeMs);
-    if (filtered.length === 0) {
-      retryHistory.delete(key);
-    } else {
-      retryHistory.set(key, {
-        timestamps: filtered,
-        lastAccessed: entry.lastAccessed,
-      });
-    }
-  }
-}
 
 const DEFAULT_CIRCUIT_OPTIONS: CircuitBreakerOptions = {
   failureThreshold: 5,
@@ -297,7 +214,10 @@ export async function withRetry<T>(
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
-  const retryKey = `${fn.name || 'anonymous'}_${Date.now()}_${randomUUID()}`;
+  // Use function name as the operation label for metrics.  Each invocation is
+  // NOT assigned a unique UUID key because the previous retryHistory Map that
+  // stored per-invocation keys was never read and grew without bound (memory leak).
+  const operationName = fn.name || 'anonymous';
 
   for (let attempt = 1; attempt <= opts.maxRetries + 1; attempt++) {
   // Check abort signal before each attempt
@@ -318,16 +238,14 @@ export async function withRetry<T>(
 
     if (isLastAttempt || !isRetryableError(err, opts)) {
     if (isLastAttempt) {
-      _retryMetricsHook?.onExhaustion(retryKey, attempt);
+      _retryMetricsHook?.onExhaustion(operationName, attempt);
     }
     throw err;
     }
 
     const delay = calculateDelay(attempt, opts);
 
-    // P1-FIX: Track retry attempt to prevent unbounded growth
-    trackRetryAttempt(retryKey, Date.now());
-    _retryMetricsHook?.onAttempt(retryKey, attempt, delay);
+    _retryMetricsHook?.onAttempt(operationName, attempt, delay);
 
     logger.warn(`Retry attempt ${attempt}/${opts.maxRetries} after ${delay}ms: ${err["message"]}`, {
     error: err["message"],
