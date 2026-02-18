@@ -23,11 +23,32 @@ function validateOAuthParams(clientId: string, redirectUri: string, state: strin
   if (!/^[a-zA-Z0-9._-]+$/.test(clientId)) {
     throw new ValidationError('Invalid clientId', { code: ErrorCodes.VALIDATION_ERROR });
   }
-  // TODO P2-5: validate against a server-side allowlist of approved redirect URIs,
-  // not just a protocol-prefix check (open redirect risk).
+
+  // P1-FIX (was TODO P2-5): enforce server-side redirect URI allowlist.
+  // A bare `startsWith('https://')` check is insufficient — any HTTPS URL passes,
+  // enabling authorization-code theft via open redirect. An attacker who supplies
+  // redirectUri=https://attacker.com/steal receives the auth code from Google and
+  // can exchange it for tokens tied to the victim's GBP account.
+  // Mirror the pattern already used in linkedin.ts.
   if (!redirectUri.startsWith('https://')) {
     throw new ValidationError('Invalid redirectUri', { code: ErrorCodes.VALIDATION_ERROR });
   }
+  const allowedDomains = (process.env['OAUTH_ALLOWED_REDIRECT_DOMAINS'] ?? '').split(',').filter(Boolean);
+  if (allowedDomains.length > 0) {
+    let redirectHost: string;
+    try {
+      redirectHost = new URL(redirectUri).hostname;
+    } catch {
+      throw new ValidationError('Invalid redirectUri', { code: ErrorCodes.VALIDATION_ERROR });
+    }
+    const allowed = allowedDomains.some(
+      (d) => redirectHost === d.trim() || redirectHost.endsWith(`.${d.trim()}`)
+    );
+    if (!allowed) {
+      throw new ValidationError('Redirect URI domain not in allowlist', { code: ErrorCodes.VALIDATION_ERROR });
+    }
+  }
+
   if (!validateState(state)) {
     throw new ValidationError('Invalid state', { code: ErrorCodes.VALIDATION_ERROR });
   }

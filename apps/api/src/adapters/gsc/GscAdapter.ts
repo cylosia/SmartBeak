@@ -228,14 +228,21 @@ export class GscAdapter {
     requestBody: body,
   });
 
+  // P0-FIX: store timeoutId so clearTimeout() can be called on the success
+  // path. Without this, when fetchPromise resolves before the deadline the
+  // 30-second timer still fires, calls reject() on the settled race promise,
+  // and Node.js emits an unhandledRejection — potentially crashing the process.
+  let timeoutId: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('GSC request timeout')), timeoutMs);
+    timeoutId = setTimeout(() => reject(new Error('GSC request timeout')), timeoutMs);
   });
 
   try {
     const res = await Promise.race([fetchPromise, timeoutPromise]);
+    clearTimeout(timeoutId);
     return res.data as SearchAnalyticsResponse;
   } catch (error) {
+    clearTimeout(timeoutId);
     if (error instanceof Error) {
     throw error;
     }
