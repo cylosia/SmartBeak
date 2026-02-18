@@ -9,6 +9,7 @@ import { getOptionalEnv, getEnvWithDefault } from '@config';
 
 import { ErrorCodes, ExternalAPIError } from '@kernel/validation';
 import { getLogger } from '@kernel/logger';
+import { isInternalIp } from '@security/ssrf';
 
 /**
 * Webhook Notification Adapter
@@ -65,6 +66,15 @@ function getWebhookAllowlist(): string[] {
         logger.warn(`Skipping non-HTTPS URL: ${url}`);
         continue;
       }
+      // P1-SSRF FIX: Reject URLs whose hostname is an internal/private IP address.
+      // An admin could misconfigure ALERT_WEBHOOK_URL=https://10.0.0.1/hook or
+      // https://169.254.169.254/latest/meta-data (AWS metadata endpoint), which
+      // would previously pass the protocol-only check and be added to the allowlist,
+      // enabling SSRF to internal infrastructure.
+      if (isInternalIp(parsed.hostname)) {
+        logger.warn(`Skipping allowlist URL with internal IP hostname: ${parsed.hostname}`);
+        continue;
+      }
       validUrls.push(url);
     } catch (error) {
       logger.warn(`Invalid URL in allowlist: ${url}`, {
@@ -74,7 +84,9 @@ function getWebhookAllowlist(): string[] {
   }
 
   if (validUrls.length === 0) {
-    throw new Error('No valid HTTPS URLs in WEBHOOK_ALLOWLIST');
+    // P2-ERRMSG FIX: Reference the actual env var names being read (not the old
+    // "WEBHOOK_ALLOWLIST" name that no longer exists).
+    throw new Error('No valid HTTPS URLs in ALERT_WEBHOOK_URL or SLACK_WEBHOOK_URL');
   }
 
   return validUrls;
@@ -140,12 +152,24 @@ export class WebhookAdapter implements DeliveryAdapter {
             if (url.port !== '') return url.port;
             return url.protocol === 'https:' ? '443' : url.protocol === 'http:' ? '80' : '';
           };
+          // P1-PATH FIX: Pure startsWith() allows sibling-path bypass:
+          // allowlist "https://api.example.com/webhooks" would match
+          // "https://api.example.com/webhooks-evil" because the string
+          // "/webhooks-evil".startsWith("/webhooks") is true.
+          // Require that the character immediately after the allowed prefix
+          // is either a "/" (subdirectory) or the end of the path (exact match).
+          const targetPath = targetUrl.pathname;
+          const allowedPath = allowedUrl.pathname;
+          const isPathAllowed =
+            targetPath === allowedPath ||
+            (targetPath.startsWith(allowedPath) &&
+              (allowedPath.endsWith('/') || targetPath[allowedPath.length] === '/'));
+
           return (
             targetUrl.protocol === allowedUrl.protocol &&
             targetUrl.hostname === allowedUrl.hostname &&
             normalizePort(targetUrl) === normalizePort(allowedUrl) &&
-            // Ensure target path starts with allowed path
-            targetUrl.pathname.startsWith(allowedUrl.pathname)
+            isPathAllowed
           );
         } catch (error) {
           logger.warn('Error parsing allowlist URL', {
@@ -191,6 +215,11 @@ export class WebhookAdapter implements DeliveryAdapter {
         });
 
         if (!res.ok) {
+          // P1-BODY FIX: Consume the response body before throwing. If the body
+          // is left unconsumed in Node.js fetch (undici), the TCP connection is
+          // held open until the body times out, exhausting the connection pool
+          // under load. Drain with res.text() — ignore any read error.
+          await res.text().catch(() => undefined);
           throw new ExternalAPIError(
             `Webhook failed: ${res.status} ${res.statusText}`,
             ErrorCodes['EXTERNAL_API_ERROR'],

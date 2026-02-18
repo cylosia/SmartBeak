@@ -93,7 +93,16 @@ export async function fetchWithTimeout(
   const safeTimeoutMs = clampTimeout(timeoutMs);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), safeTimeoutMs);
+
+  // P1-ABORT FIX: Track whether the AbortError came from our timeout firing vs
+  // from the caller's own signal. Previously ANY AbortError was converted to a
+  // TimeoutError — including aborts triggered by a pre-cancelled caller signal —
+  // producing a misleading "timed out" message for intentional cancellations.
+  let timeoutFired = false;
+  const timeoutId = setTimeout(() => {
+    timeoutFired = true;
+    controller.abort();
+  }, safeTimeoutMs);
 
   // P1-2 FIX: Honor the caller's existing AbortSignal rather than silently
   // overwriting it. When the caller aborts, we also abort our timeout controller
@@ -118,8 +127,14 @@ export async function fetchWithTimeout(
     return response;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      // P2-14 FIX: Don't leak URL in error message (may contain API keys in query params)
-      throw new TimeoutError(`Request timed out after ${safeTimeoutMs}ms`);
+      if (timeoutFired) {
+        // P2-14 FIX: Don't leak URL in error message (may contain API keys in query params)
+        throw new TimeoutError(`Request timed out after ${safeTimeoutMs}ms`);
+      }
+      // Abort came from the caller's own signal (pre-aborted or fired mid-fetch).
+      // Re-throw the original error so callers can distinguish their own
+      // cancellations from genuine timeouts.
+      throw error;
     }
     throw error;
   } finally {

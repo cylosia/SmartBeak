@@ -208,12 +208,16 @@ export async function createWordPressPost(
 
   const startTime = Date.now();
   try {
+  // P0-IDEMPOTENCY FIX: Do NOT use withRetry for this POST request.
+  // WordPress POST /posts is NOT idempotent — each retry would create an
+  // additional duplicate post if the first attempt reached the server but the
+  // response was lost (network timeout, proxy reset, etc.).  Retrying would
+  // produce N posts for a single logical create operation (silent data duplication).
+  // Use a single attempt with a per-request AbortController for timeout only.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS['medium']);
   // P0-2 FIX: Pass headers to fetch (was missing entirely)
-  // P1-4 FIX: Create AbortController fresh per retry attempt
-  const response = await withRetry(() => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS['medium']);
-    return fetch(url, {
+  const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -224,8 +228,7 @@ export async function createWordPressPost(
       tags: post.tags || [],
     }),
     signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId));
-  }, { maxRetries: 3 });
+  }).finally(() => clearTimeout(timeoutId));
 
   if (!response.ok) {
     throw new Error(`WordPress API error: ${response.status} ${response.statusText}`);
