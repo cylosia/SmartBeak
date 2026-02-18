@@ -173,7 +173,15 @@ export function validateNotificationPayload(payload: unknown): NotificationPaylo
     issues.push('attachments must have at most 10 items');
   } else {
     for (let i = 0; i < p['attachments'].length; i++) {
-    const att = p['attachments'][i] as Record<string, unknown>;
+    // BUG-DS-01 fix: guard against null/non-object array elements before casting.
+    // Previously `p['attachments'][i] as Record<string, unknown>` was an unchecked
+    // cast — a null element would produce a TypeError when accessing properties.
+    const rawAtt = p['attachments'][i];
+    if (rawAtt === null || rawAtt === undefined || typeof rawAtt !== 'object') {
+      issues.push(`attachments[${i}] must be an object`);
+      continue;
+    }
+    const att = rawAtt as Record<string, unknown>;
     if (typeof att['filename'] !== 'string' || (att['filename'] as string).length > 255) {
     issues.push(`attachments[${i}].filename must be a string (max 255 chars)`);
     }
@@ -183,8 +191,15 @@ export function validateNotificationPayload(payload: unknown): NotificationPaylo
     if (typeof att['size'] !== 'number' || att['size'] < 0 || att['size'] > 50 * 1024 * 1024) {
     issues.push(`attachments[${i}].size must be a number (0-50MB)`);
     }
-    if (typeof att['url'] !== 'string' || (att['url'] as string).length > 2000) {
-    issues.push(`attachments[${i}].url must be a URL string (max 2000 chars)`);
+    // BUG-DS-02 fix: validate URL format (not just length). The attachment URL is
+    // used downstream by adapters to fetch content; accepting arbitrary strings
+    // (e.g. javascript:, file://, internal hostnames) is an SSRF vector.
+    if (typeof att['url'] !== 'string') {
+      issues.push(`attachments[${i}].url must be a string`);
+    } else if ((att['url'] as string).length > 2000) {
+      issues.push(`attachments[${i}].url must be at most 2000 characters`);
+    } else if (!isValidUrl(att['url'] as string)) {
+      issues.push(`attachments[${i}].url must be a valid http/https URL`);
     }
     }
   }
@@ -264,15 +279,9 @@ export function validateSearchDocumentFields(fields: unknown): SearchDocumentFie
   throw new SchemaValidationError('Invalid search document fields', 'fields', issues);
   }
 
-  // Type guard to validate SearchDocumentFields
-  function isSearchDocumentFields(obj: Record<string, unknown>): obj is Record<string, unknown> & SearchDocumentFields {
-    return typeof obj['title'] === 'string';
-  }
-
-  if (!isSearchDocumentFields(f)) {
-    throw new SchemaValidationError('Invalid search document fields', 'fields', ['Validation failed type guard']);
-  }
-
+  // BUG-DS-03 fix: removed redundant type guard that checked only `typeof title === 'string'`.
+  // If we reach this point, all validations above have already passed — the guard was
+  // always true and created false confidence (it did NOT enforce length constraints).
   return f as SearchDocumentFields;
 }
 

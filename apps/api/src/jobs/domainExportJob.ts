@@ -402,14 +402,32 @@ function convertToMarkdown(data: ExportData) {
   sections.push(`Version: ${data.version}\n`);
   if (data.content) {
     sections.push(`## Content (${data.content.length} items)\n`);
-    // FIX: Limit to 50 items and process in batches
-    const limitedContent = data.content.slice(0, 50);
+    // BUG-EXP-05 fix: removed silent 50-item hard cap. Previously the function
+    // truncated exports to 50 items with no warning, causing data loss for any
+    // domain with more than 50 content items. Now processes all items in batches
+    // and stops only when the output would exceed MAX_DOWNLOAD_SIZE, logging a
+    // warning so callers know the export was size-bounded (not silently dropped).
     const MARKDOWN_BATCH_SIZE = 10;
-    for (let i = 0; i < limitedContent.length; i += MARKDOWN_BATCH_SIZE) {
-      const batch = limitedContent.slice(i, i + MARKDOWN_BATCH_SIZE);
-      // FIX: Process batch items in parallel using Promise.all
+    let totalSize = 0;
+    let truncatedAt: number | null = null;
+    for (let i = 0; i < data.content.length; i += MARKDOWN_BATCH_SIZE) {
+      const batch = data.content.slice(i, i + MARKDOWN_BATCH_SIZE);
       const batchSections = batch.map(item => formatContentItemMarkdown(item));
+      const batchText = batchSections.join('\n');
+      totalSize += batchText.length;
+      if (totalSize > MAX_DOWNLOAD_SIZE) {
+        truncatedAt = i;
+        break;
+      }
       sections.push(...batchSections);
+    }
+    if (truncatedAt !== null) {
+      logger.warn('Markdown export truncated due to size limit', {
+        totalItems: data.content.length,
+        exportedItems: truncatedAt,
+        maxBytes: MAX_DOWNLOAD_SIZE,
+      });
+      sections.push(`\n> **Note:** Export truncated at ${truncatedAt} of ${data.content.length} items (size limit reached).\n`);
     }
   }
   return sections.join('\n');
