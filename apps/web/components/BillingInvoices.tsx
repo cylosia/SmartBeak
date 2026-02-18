@@ -19,7 +19,7 @@ export function BillingInvoices() {
   if (error) {
   return (
     <EmptyState
-    title={`Error loading invoices: ${error.message}`}
+    title='Unable to load invoices'
     />
   );
   }
@@ -32,8 +32,8 @@ export function BillingInvoices() {
   <div>
     <h2>Invoices & Receipts</h2>
     <ul>
-    {invoices.map((inv) => (
-      <li key={inv.id}>
+    {invoices.map((inv, index) => (
+      <li key={inv.id ?? inv.number ?? String(index)}>
       <a
         href={inv.pdfUrl ?? '#'}
         target='_blank'

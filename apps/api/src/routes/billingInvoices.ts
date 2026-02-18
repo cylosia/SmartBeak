@@ -9,6 +9,7 @@ import { getDb } from '../db';
 import { verifyOrgMembership } from '../services/membership';
 import { errors, sendError } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+import { rateLimitMiddleware } from '../middleware/rateLimiter';
 
 const billingInvoicesLogger = getLogger('billingInvoices');
 
@@ -76,6 +77,9 @@ export interface ErrorResponse {
 }
 
 export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> {
+  // Rate-limit before auth — mirrors billingStripe/billingPaddle/billingInvoiceExport.
+  // Without this an authenticated attacker can exhaust Stripe API quota in a tight loop.
+  app.addHook('onRequest', rateLimitMiddleware('standard'));
 
   app.addHook('onRequest', async (req, reply) => {
   const authHeader = req.headers.authorization;
@@ -195,14 +199,11 @@ export async function billingInvoiceRoutes(app: FastifyInstance): Promise<void> 
   } catch (error) {
     billingInvoicesLogger.error('Error fetching invoices', error instanceof Error ? error : new Error(String(error)));
 
-    if (error instanceof Error) {
-      const errorCode = (error as Error & { code?: string }).code;
-      const isStripeError = errorCode?.startsWith('stripe_') ||
-                  error.message.includes('Stripe') ||
-                  error.name === 'StripeError';
-      if (isStripeError) {
-        return sendError(reply, 502, ErrorCodes.EXTERNAL_API_ERROR, 'Payment provider error');
-      }
+    // Use instanceof for reliable Stripe error detection across all SDK subclasses
+    // (StripeCardError, StripeInvalidRequestError, etc.). The .name check was dead
+    // code: SDK subclasses report their own class name, never the base 'StripeError'.
+    if (error instanceof Stripe.errors.StripeError) {
+      return sendError(reply, 502, ErrorCodes.EXTERNAL_API_ERROR, 'Payment provider error');
     }
 
     return errors.internal(reply);

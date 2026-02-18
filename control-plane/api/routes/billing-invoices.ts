@@ -17,7 +17,7 @@ const logger = getLogger('billing-invoices');
 // credentials immediately at startup instead of on the first billing request.
 import Stripe from 'stripe';
 const stripe = new Stripe(billingConfig.stripeSecretKey, {
-  apiVersion: '2023-10-16',
+  apiVersion: billingConfig.stripeApiVersion,
 });
 
 export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
@@ -43,14 +43,20 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     return { invoices: [] };
     }
 
-    const invoices = await stripe.invoices.list({
-    customer: stripeCustomerId,
-    limit: 50,
-    status: 'paid'
-    });
+    // P2-FIX: Follow has_more pagination — a single page of 50 silently truncates
+    // orgs with more than 50 paid invoices. Cap at 500 to bound memory and latency.
+    const MAX_INVOICES = 500;
+    const allInvoiceData: Stripe.Invoice[] = [];
+    let page = await stripe.invoices.list({ customer: stripeCustomerId, limit: 100, status: 'paid' });
+    allInvoiceData.push(...page.data);
+    while (page.has_more && allInvoiceData.length < MAX_INVOICES) {
+      const lastId = page.data[page.data.length - 1]?.id;
+      page = await stripe.invoices.list({ customer: stripeCustomerId, limit: 100, status: 'paid', starting_after: lastId });
+      allInvoiceData.push(...page.data);
+    }
 
     // Transform to frontend-friendly format with camelCase
-    const formattedInvoices = invoices.data.map(inv => ({
+    const formattedInvoices = allInvoiceData.map(inv => ({
     id: inv["id"],
     number: inv.number,
     amountPaid: inv.amount_paid,

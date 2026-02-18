@@ -59,8 +59,12 @@ describe('Billing Routes Security Tests', () => {
     });
     
     (getDb as jest.Mock).mockResolvedValue(mockMembershipDb);
-    
-    process.env.STRIPE_SECRET_KEY = 'sk_test_xxx';
+
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_xxx';
+  });
+
+  afterEach(() => {
+    delete process.env['STRIPE_SECRET_KEY'];
   });
 
   describe('P1-FIX: Org Membership Verification - billingInvoices', () => {
@@ -114,7 +118,9 @@ describe('Billing Routes Security Tests', () => {
       expect(body['requestId']).toBeDefined();
     });
 
-    it('should skip membership check for user-level billing (no org)', async () => {
+    it('should reject billing access when orgId is missing from JWT', async () => {
+      // InvoiceClaimsSchema requires orgId: z.string().min(1).
+      // A JWT without orgId fails safeParse and the route returns 401.
       (verifyToken as jest.Mock).mockReturnValue({
         sub: 'user-123',
         stripeCustomerId: 'cus_test'
@@ -122,7 +128,7 @@ describe('Billing Routes Security Tests', () => {
       });
 
       await app.register(billingInvoiceRoutes);
-      
+
       const response = await app.inject({
         method: 'GET',
         url: '/billing/invoices',
@@ -131,20 +137,23 @@ describe('Billing Routes Security Tests', () => {
         }
       });
 
-      // Should not check membership when no org context
-      // P2-FIX: Use exact assertion — success must be 200, not merely non-403.
-      expect(response.statusCode).toBe(200);
+      // Missing orgId → InvoiceClaimsSchema.safeParse fails → 401 Unauthorized
+      expect(response.statusCode).toBe(401);
     });
   });
 
   describe('P1-FIX: Org Membership Verification - billingInvoiceExport', () => {
     beforeEach(() => {
-      // Mock JWT verification
-      jest.spyOn(require('jsonwebtoken'), 'verify').mockReturnValue({
-        sub: 'user-123',
-        orgId: 'org-456',
-        stripeCustomerId: 'cus_test'
-      } as any);
+      // billingInvoiceExport uses extractAndVerifyToken from @security/jwt (not raw jsonwebtoken).
+      // Mock the module-level function that the route actually calls.
+      (extractAndVerifyToken as jest.Mock).mockReturnValue({
+        valid: true,
+        claims: {
+          sub: 'user-123',
+          orgId: 'org-456',
+          stripeCustomerId: 'cus_test',
+        },
+      });
     });
 
     it('should verify membership before export', async () => {

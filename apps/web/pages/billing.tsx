@@ -6,7 +6,9 @@ export default function Billing() {
   <AppShell>
     <h1>Billing</h1>
     <p>Manage your subscription via the Stripe customer portal.</p>
-    <a href='/api/stripe/portal'>Open billing portal</a>
+    <form method='post' action='/api/stripe/portal'>
+      <button type='submit'>Open billing portal</button>
+    </form>
   </AppShell>
   );
 }

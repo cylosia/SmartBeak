@@ -20,7 +20,10 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
   const billing = new BillingService(pool);
 
   const SubscribeSchema = z.object({
-  planId: z.string().min(1).max(100),
+  planId: z.string().min(1).max(100).regex(
+    /^[a-zA-Z0-9_-]+$/,
+    'planId must contain only alphanumeric characters, underscores, and hyphens'
+  ),
   }).strict();
 
   app.post('/billing/subscribe', async (req, res) => {

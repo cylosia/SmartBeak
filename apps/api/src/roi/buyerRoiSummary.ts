@@ -70,18 +70,23 @@ export async function generateBuyerRoiSummary(
   // After the null/undefined filter above, TypeScript still infers the fields as
   // `number | undefined` because the interface uses optional properties. The cast
   // was silently accepted even when a DB returns a string or NaN, producing corrupt
-  // ROI figures on buyer reports. Use Number() + isFinite to fail loudly instead.
-  const portfolio = computePortfolioRoi(completeRows.map(r => {
+  // ROI figures on buyer reports. Use Number() + isFinite to skip bad rows and warn
+  // rather than throw — one corrupt row should not abort the entire summary.
+  const numericRows: Array<{ production_cost_usd: number; monthly_revenue_estimate: number }> = [];
+  for (const r of completeRows) {
     const cost = Number(r.production_cost_usd);
     const revenue = Number(r.monthly_revenue_estimate);
     if (!Number.isFinite(cost) || !Number.isFinite(revenue)) {
-      throw new Error(
-        `Non-numeric financial data in ROI row: cost=${String(r.production_cost_usd)}, ` +
+      // Log and skip — do not throw so the rest of the report can proceed.
+      console.warn(
+        `Non-numeric financial data in ROI row (skipped): cost=${String(r.production_cost_usd)}, ` +
         `revenue=${String(r.monthly_revenue_estimate)}`
       );
+      continue;
     }
-    return { production_cost_usd: cost, monthly_revenue_estimate: revenue };
-  }));
+    numericRows.push({ production_cost_usd: cost, monthly_revenue_estimate: revenue });
+  }
+  const portfolio = computePortfolioRoi(numericRows);
   const kw = await keywordCoverageForDomain(input.domain_id);
 
   const notes: string[] = [

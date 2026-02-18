@@ -68,7 +68,6 @@ export function detectBot(headers: Record<string, string | string[] | undefined>
       if (userAgent.includes(pattern)) {
         indicators.push(`suspicious_ua:${pattern}`);
         score += 20;
-        break;
       }
     }
 
