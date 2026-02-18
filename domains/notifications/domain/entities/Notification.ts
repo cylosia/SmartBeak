@@ -9,7 +9,7 @@
 * @module domains/notifications/domain/entities/Notification
 */
 
-export type NotificationStatus = 'pending' | 'sending' | 'delivered' | 'failed';
+export type NotificationStatus = 'pending' | 'sending' | 'delivered' | 'failed' | 'cancelled';
 
 export interface NotificationPayload {
   to?: string;
@@ -21,10 +21,11 @@ export interface NotificationPayload {
 
 // Valid state transitions
 const VALID_TRANSITIONS: Record<NotificationStatus, NotificationStatus[]> = {
-  pending: ['sending'],
-  sending: ['delivered', 'failed'],
+  pending: ['sending', 'cancelled'],
+  sending: ['delivered', 'failed', 'cancelled'],
   delivered: [], // Terminal state
   failed: ['pending'], // Allow retry
+  cancelled: [], // Terminal state
 };
 
 /**
@@ -150,6 +151,23 @@ export class Notification {
   }
 
   /**
+  * Cancel the notification - returns new immutable instance
+  * @returns New Notification with 'cancelled' status
+  */
+  cancel(): Notification {
+  this.validateTransition('cancelled');
+  return new Notification(
+    this["id"],
+    this["orgId"],
+    this.userId,
+    this.channel,
+    this.template,
+    this.payload,
+    'cancelled'
+  );
+  }
+
+  /**
   * Check if notification can be retried
   */
   canRetry(): boolean {
@@ -160,7 +178,7 @@ export class Notification {
   * Check if notification is in terminal state
   */
   isTerminal(): boolean {
-  return this["status"] === 'delivered';
+  return this["status"] === 'delivered' || this["status"] === 'cancelled';
   }
 
   /**

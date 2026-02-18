@@ -172,8 +172,8 @@ export class NotificationService {
     return 'Template must be between 1 and 255 characters';
   }
 
-  // Validate payload size
-  const payloadSize = JSON.stringify(payload).length;
+  // Validate payload size in bytes (Buffer.byteLength counts multibyte chars correctly)
+  const payloadSize = Buffer.byteLength(JSON.stringify(payload), 'utf8');
   if (payloadSize > NotificationService.MAX_PAYLOAD_SIZE) {
     return `Payload size (${payloadSize} bytes) exceeds maximum allowed (${NotificationService.MAX_PAYLOAD_SIZE} bytes)`;
   }
@@ -245,10 +245,18 @@ export class NotificationService {
     sanitized[sanitizedKey] = value;
     } else if (value === null) {
     sanitized[sanitizedKey] = null;
-    } else if (typeof value === 'object' && !Array.isArray(value)) {
+    } else if (Array.isArray(value)) {
+    sanitized[sanitizedKey] = value.map((item: unknown) => {
+      if (typeof item === 'string') return this.sanitizeString(item);
+      if (typeof item === 'number' || typeof item === 'boolean' || item === null) return item;
+      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+      return this.sanitizeObject(item as Record<string, unknown>, depth + 1);
+      }
+      return String(item);
+    });
+    } else if (typeof value === 'object') {
     sanitized[sanitizedKey] = this.sanitizeObject(value as Record<string, unknown>, depth + 1);
     } else {
-    // Arrays and other types - convert to string
     sanitized[sanitizedKey] = String(value);
     }
   }

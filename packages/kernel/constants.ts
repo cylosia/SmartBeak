@@ -374,6 +374,14 @@ export const JOB_STATUS = {
   CANCELLED: 'cancelled',
 } as const;
 
+/** Notification channel whitelist — single source of truth */
+export const NOTIFICATION_CHANNELS = ['email', 'sms', 'push', 'webhook'] as const;
+export type NotificationChannel = typeof NOTIFICATION_CHANNELS[number];
+
+/** Notification frequency whitelist — single source of truth */
+export const NOTIFICATION_FREQUENCIES = ['immediate', 'daily', 'weekly'] as const;
+export type NotificationFrequency = typeof NOTIFICATION_FREQUENCIES[number];
+
 /** Publishing platform enum values - MEDIUM FIX I8 */
 export const PUBLISHING_PLATFORM = {
   WORDPRESS: 'wordpress',

@@ -26,6 +26,7 @@ export default function NotificationSettings() {
   const [preferences, setPreferences] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     // P2-FIX: No longer silently swallowing fetch errors — surface them to the user
@@ -49,16 +50,21 @@ export default function NotificationSettings() {
     setPreferences(prev => ({ ...prev, [channel]: enabled }));
     setSaving(true);
 
+    setSaveError('');
     try {
       // P1-FIX: Use fetchWithCsrf to include X-CSRF-Token header
-      await fetchWithCsrf(apiUrl('notifications/preferences'), {
+      const res = await fetchWithCsrf(apiUrl('notifications/preferences'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ channel, enabled }),
       });
+      if (!res.ok) {
+        throw new Error('Failed to save preference');
+      }
     } catch {
       setPreferences(prev => ({ ...prev, [channel]: !enabled }));
+      setSaveError('Failed to save notification preference. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -67,7 +73,8 @@ export default function NotificationSettings() {
   return (
   <AppShell>
     <h1>Notification Preferences</h1>
-    {loadError && <p style={{ color: 'red' }}>{loadError}</p>}
+    {loadError && <p role="alert" style={{ color: 'red' }}>{loadError}</p>}
+    {saveError && <p role="alert" style={{ color: 'red' }}>{saveError}</p>}
     {CHANNELS.map(ch => (
       <label key={ch.id} style={{ display: 'block', marginBottom: 8 }}>
         <input

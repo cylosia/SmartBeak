@@ -110,8 +110,7 @@ export function registerNotificationsDomain(eventBus: EventBus, pool: Pool): voi
   try {
     // Validate event structure
     if (!validatePublishingFailedEvent(event)) {
-    const timestamp = new Date().toISOString();
-    process.stderr.write(`[${timestamp}] [ERROR] [notifications-hook] Invalid event structure\n`);
+    logger.error('[notifications-hook] Invalid event structure received', new Error('Invalid event structure'));
     return;
     }
 
@@ -141,9 +140,7 @@ export function registerNotificationsDomain(eventBus: EventBus, pool: Pool): voi
       logger["error"]('Failed to create notification: ' + (result["error"] || 'Unknown error'));
     }
   } catch (error) {
-    const timestamp = new Date().toISOString();
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`[${timestamp}] [ERROR] [notifications-hook] Failed to process publishing.failed event: ${errorMessage}\n`);
+    logger.error('[notifications-hook] Failed to process publishing.failed event', error instanceof Error ? error : new Error(String(error)));
     // Don't throw - prevent event bus from crashing
   }
   });

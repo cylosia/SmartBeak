@@ -1,6 +1,6 @@
 
 
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 
 import { getLogger } from '@kernel/logger';
@@ -18,8 +18,9 @@ export class PostgresNotificationDLQRepository {
 
   /**
   * Record a notification in the DLQ
+  * @param client - Optional PoolClient to run within caller's transaction
   */
-  async record(notificationId: string, channel: string, reason: string): Promise<void> {
+  async record(notificationId: string, channel: string, reason: string, client?: PoolClient): Promise<void> {
   // Validate input parameters
   if (!notificationId || typeof notificationId !== 'string') {
     throw new Error('notificationId must be a non-empty string');
@@ -31,8 +32,9 @@ export class PostgresNotificationDLQRepository {
     throw new Error('reason must be a non-empty string');
   }
 
+  const queryable = client ?? this.pool;
   try {
-    await this.pool.query(
+    await queryable.query(
     `INSERT INTO notification_dlq (id, notification_id, channel, reason)
     VALUES ($1, $2, $3, $4)`,
     [randomUUID(), notificationId, channel, reason]

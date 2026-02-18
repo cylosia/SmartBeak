@@ -22,11 +22,13 @@ export interface Notification {
   created_at: Date;
 }
 
+const PREFERENCE_CHANNELS = ['email', 'sms', 'push', 'webhook'] as const;
+
 const PreferenceBodySchema = z.object({
-  channel: z.string().min(1),
+  channel: z.enum(PREFERENCE_CHANNELS),
   enabled: z.boolean(),
   frequency: z.enum(['immediate', 'daily', 'weekly']).optional(),
-});
+}).strict();
 
 export type AuthenticatedRequest = FastifyRequest & {
   auth?: AuthContext | undefined;
@@ -137,8 +139,11 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     if (!rateLimitResult2.allowed) {
     return errors.rateLimited(res, Math.ceil((rateLimitResult2.resetTime - Date.now()) / 1000));
     }
-    const preferences = await prefs.list(ctx.userId);
-    return res.send(preferences);
+    const result = await prefs.list(ctx.userId);
+    if (!result.success) {
+    return errors.internal(res, 'Failed to fetch preferences');
+    }
+    return res.send(result.preferences ?? []);
   } catch (error) {
     logger.error('[notifications/preferences] Error', error instanceof Error ? error : new Error(String(error)));
     // P1-FIX: Removed error.message leak to client
