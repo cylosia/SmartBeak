@@ -18,8 +18,13 @@ import { getLogger, getRequestContext } from '@kernel/logger';
 export interface Metric {
   /** Metric name */
   name: string;
-  /** Optional labels/tags */
-  labels?: Record<string, string | number>;
+  // P1-FIX: Narrowed from `Record<string, string | number>` to
+  // `Record<string, string>` to match the Prometheus/OpenTelemetry label
+  // convention (all label values are strings).  The previous union type
+  // allowed callers to pass numeric values which were implicitly coerced,
+  // producing inconsistent key formats across exporters.
+  /** Optional labels/tags — all values must be strings */
+  labels?: Record<string, string>;
   /** Metric value */
   value?: number;
   /** Timestamp in milliseconds */
@@ -81,13 +86,24 @@ function structuredLoggerHandler(metric: Metric): void {
 * @param handler - Handler function to add
 * @throws Error if maximum handler limit is reached
 */
-export function addMetricHandler(handler: MetricHandler): void {
+/**
+ * Add a metric handler.
+ * P1-FIX: Returns `true` when the handler was registered, `false` when the
+ * MAX_HANDLERS cap was hit and the handler was silently dropped.  The previous
+ * `void` return type left callers with no way to detect the drop, leading to
+ * silent data loss (metrics emitted after the limit would never reach the
+ * dropped handler).
+ */
+export function addMetricHandler(handler: MetricHandler): boolean {
   if (getHandlers().length >= MAX_HANDLERS) {
     const logger = getLogger({ service: 'metrics' });
-    logger['error']('Cannot add metric handler: maximum limit reached', new Error(`Max handlers (${MAX_HANDLERS}) exceeded`));
-    return;
+    // P1-FIX: Use dot notation — `error` is an explicitly declared method on
+    // the logger type, not accessed via an index signature.
+    logger.error('Cannot add metric handler: maximum limit reached', new Error(`Max handlers (${MAX_HANDLERS}) exceeded`));
+    return false;
   }
   getMutableHandlers().push(handler);
+  return true;
 }
 
 /**
@@ -126,13 +142,14 @@ export function emitMetric(metric: Metric): void {
       // If handler returns a Promise, catch its rejection
       if (result != null && typeof (result as Promise<void>).catch === 'function') {
         (result as Promise<void>).catch((error: unknown) => {
+          // P1-FIX: Use dot notation — error is a declared method, not index access
           const logger = getLogger({ service: 'metrics' });
-          logger['error']('Async metric handler failed', error instanceof Error ? error : new Error(String(error)));
+          logger.error('Async metric handler failed', error instanceof Error ? error : new Error(String(error)));
         });
       }
     } catch (error) {
       const logger = getLogger({ service: 'metrics' });
-      logger["error"]('Metric handler failed', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Metric handler failed', error instanceof Error ? error : new Error(String(error)));
     }
   });
 }

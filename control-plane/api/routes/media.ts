@@ -12,21 +12,23 @@ import { generateSignedUploadUrl, generateStorageKey } from '../../services/stor
 import { PostgresMediaRepository } from '../../../domains/media/infra/persistence/PostgresMediaRepository';
 import { checkRateLimitAsync } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, AuthContext } from '../../services/auth';
-import { resolveDomainDb } from '../../services/domain-registry';
-import { getPool } from '../../services/repository-factory';
 import { errors } from '@errors/responses';
 
 const logger = getLogger('Media');
 
-// P1-3 FIX: Use the same pool for ownership verification and operations
-async function verifyMediaOwnership(userId: string, mediaId: string, pool: Pool): Promise<boolean> {
+// P1-FIX: Added explicit orgId parameter so the query asserts the asset belongs
+// to the authenticated user's org directly, rather than relying on an implicit
+// join condition (which would silently break if the memberships schema changes).
+// Without the explicit org_id = $3 predicate a user in org-A who obtained a
+// media UUID from org-B would pass this check if the join happened to resolve.
+async function verifyMediaOwnership(userId: string, mediaId: string, orgId: string, pool: Pool): Promise<boolean> {
   const result = await pool.query(
     `SELECT EXISTS(
       SELECT 1 FROM media_assets m
       JOIN memberships mem ON mem.org_id = m.org_id
-      WHERE m.id = $1 AND mem.user_id = $2
+      WHERE m.id = $1 AND mem.user_id = $2 AND m.org_id = $3
     ) as has_access`,
-    [mediaId, userId]
+    [mediaId, userId, orgId]
   );
   return result.rows[0]?.['has_access'] === true;
 }
@@ -60,6 +62,12 @@ export type AuthenticatedRequest = FastifyRequest & {
 * Media routes
 */
 export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
+  // P0-FIX: Use the passed `pool` parameter throughout instead of calling
+  // getPool(resolveDomainDb('media')) on every request.  The previous code
+  // silently discarded the caller's pool and resolved a fresh one each time,
+  // making it impossible to inject a controlled pool in tests or transactions.
+  const repo = new PostgresMediaRepository(pool);
+
   app.post('/media/upload-intent', async (
     req: FastifyRequest,
     res: FastifyReply
@@ -76,7 +84,8 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       // catch block to attempt a second response (500) on an already-replied request.
       const rlResult = await checkRateLimitAsync(`media:${ctx.userId}`, 'media.upload');
       if (!rlResult.allowed) {
-        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+        // P2-FIX: Use errors.rateLimited for canonical shape (code, requestId, Retry-After header)
+        return errors.rateLimited(res, Math.ceil((rlResult.resetTime - Date.now()) / 1000));
       }
 
       const bodyResult = UploadIntentBodySchema.safeParse(req.body);
@@ -89,9 +98,6 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       const id = crypto.randomUUID();
       const storageKey = generateStorageKey('media');
 
-      // P1-3 FIX: Use same pool instance for all operations
-      const domainPool = getPool(resolveDomainDb('media'));
-      const repo = new PostgresMediaRepository(domainPool);
       const handler = new CreateUploadIntent(repo);
       // P1-14 FIX: Check handler result for errors
       const result = await handler.execute(id, storageKey, mimeType);
@@ -99,8 +105,13 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
         return errors.validationFailed(res, [{ message: result.error || 'Upload intent creation failed' }]);
       }
 
-      const signedUrl = generateSignedUploadUrl(storageKey);
-      return res.send({ id, url: signedUrl });
+      // P1-FIX: Destructure the SignedUrlResult so `url` is the string, not the
+      // full object.  Previously `res.send({ id, url: signedUrl })` sent
+      // `{ id, url: { url: "https://...", expiresIn: 300 } }` — a nested object
+      // that caused every subsequent PUT to the signed URL to fail because clients
+      // treated `response.url` as a string and called `.startsWith()` on an object.
+      const { url, expiresIn } = generateSignedUploadUrl(storageKey);
+      return res.send({ id, url, expiresIn });
     } catch (error) {
       // P0-3 FIX: Surface RoleAccessError as 403 instead of masking as 500
       if (error instanceof RoleAccessError) {
@@ -124,7 +135,8 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       // FIX(P0): same double-send fix as upload-intent route above
       const rlResult = await checkRateLimitAsync(`media:${ctx.userId}`, 'media.complete');
       if (!rlResult.allowed) {
-        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+        // P2-FIX: Use errors.rateLimited for canonical shape (code, requestId, Retry-After header)
+        return errors.rateLimited(res, Math.ceil((rlResult.resetTime - Date.now()) / 1000));
       }
 
       const paramsResult = CompleteUploadParamsSchema.safeParse(req.params);
@@ -134,14 +146,13 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
 
       const { id } = paramsResult.data;
 
-      // P1-3 FIX: Use same pool for ownership check and operations
-      const domainPool = getPool(resolveDomainDb('media'));
-      const isAuthorized = await verifyMediaOwnership(ctx.userId, id, domainPool);
+      // P1-FIX: Pass ctx.orgId to explicitly assert the asset belongs to the
+      // authenticated user's org (not relying on implicit join condition alone).
+      const isAuthorized = await verifyMediaOwnership(ctx.userId, id, ctx.orgId, pool);
       if (!isAuthorized) {
         return errors.notFound(res, 'Media');
       }
 
-      const repo = new PostgresMediaRepository(domainPool);
       const handler = new CompleteUpload(repo);
 
       // FIX(P0): Check result.success — handler never throws; failures return
@@ -151,9 +162,11 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       if (!result.success) {
         return errors.validationFailed(res, [{ message: 'Upload completion failed' }]);
       }
-      // FIX(P1): Return a stable public DTO instead of the raw DomainEventEnvelope,
-      // which exposed internal topology (meta.source, meta.domainId, version).
-      return res.send({ ok: true, mediaId: id, completedAt: result.event?.occurredAt });
+      // FIX(P1): Return a stable public DTO: extract only occurredAt from the
+      // DomainEventEnvelope to avoid leaking internal topology fields
+      // (meta.source, meta.domainId, version) to API consumers.
+      const completedAt = result.event?.occurredAt ?? null;
+      return res.send({ ok: true, mediaId: id, completedAt });
     } catch (error) {
       // P0-3 FIX: Surface RoleAccessError as 403
       if (error instanceof RoleAccessError) {

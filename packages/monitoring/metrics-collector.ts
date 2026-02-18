@@ -162,8 +162,11 @@ export class MetricsCollector extends EventEmitter {
   private readonly keyAccessOrder = new Map<string, true>();
   private keysEvicted = 0;
   private lastAlertTime = 0;
-  // P2-6 FIX: Store previous CPU reading for delta-based calculation
+  // P2-6 FIX: Store previous CPU reading for delta-based calculation (used by getSystemMetrics)
   private previousCpuUsage: { user: number; system: number; timestamp: number } | null = null;
+  // P1-FIX: Separate previous reading for collectSystemMetrics so the two
+  // callers don't corrupt each other's delta window.
+  private previousCpuCollection: { user: number; system: number; timestamp: number } | null = null;
 
   constructor(
     config: Partial<AggregationConfig> = {},
@@ -298,7 +301,8 @@ export class MetricsCollector extends EventEmitter {
     if (utilization >= KEY_ALERT_THRESHOLD && 
         (now - this.lastAlertTime) > ALERT_INTERVAL_MS) {
       this.lastAlertTime = now;
-      logger.error('Metrics collector approaching key limit', undefined, {
+      // P2-FIX: Downgrade to warn — a high-watermark alert is not an error.
+      logger.warn('Metrics collector approaching key limit', {
         keyCount,
         maxKeys: this.config.maxKeys,
         utilization: `${(utilization * 100).toFixed(1)}%`,
@@ -421,8 +425,18 @@ export class MetricsCollector extends EventEmitter {
       metrics.splice(0, firstValidIndex);
     }
 
-    // Emit for real-time processing
-    this.emit('metric', metric);
+    // P0-FIX: Wrap emit() in try/catch. EventEmitter dispatches listeners
+    // synchronously; if any attached listener throws, the exception propagates
+    // here, aborting record() before the metric is pushed to the array and
+    // before eviction runs — silently corrupting the collected data.
+    try {
+      this.emit('metric', metric);
+    } catch (emitErr) {
+      logger.error(
+        'metrics-collector: listener threw during emit("metric")',
+        emitErr instanceof Error ? emitErr : new Error(String(emitErr))
+      );
+    }
   }
 
   // ============================================================================
@@ -552,20 +566,40 @@ export class MetricsCollector extends EventEmitter {
    */
   private collectSystemMetrics(): void {
     // CPU metrics
+    // P1-FIX: Emit delta-based CPU utilisation percentage instead of the raw
+    // cumulative microseconds returned by process.cpuUsage() since process
+    // start.  The raw value is always monotonically increasing (like a counter)
+    // and is meaningless as a gauge for dashboards or alerting thresholds.
     const cpuUsage = process.cpuUsage();
+    const now = Date.now();
+    const cpuCount = os.cpus().length;
     const loadAvg = os.loadavg();
-    
-    this.gauge('system.cpu.user', cpuUsage.user / 1000, {}, 
-      'CPU user time in milliseconds');
-    this.gauge('system.cpu.system', cpuUsage.system / 1000, {},
-      'CPU system time in milliseconds');
+
+    if (this.previousCpuCollection) {
+      const elapsedMs = now - this.previousCpuCollection.timestamp;
+      if (elapsedMs > 0) {
+        const userDelta = cpuUsage.user - this.previousCpuCollection.user;
+        const systemDelta = cpuUsage.system - this.previousCpuCollection.system;
+        // cpuUsage values are in microseconds; elapsedMs is milliseconds
+        const userPercent = (userDelta / 1000 / elapsedMs / cpuCount) * 100;
+        const systemPercent = (systemDelta / 1000 / elapsedMs / cpuCount) * 100;
+        this.gauge('system.cpu.user_percent', userPercent, {},
+          'CPU user utilisation percent since last collection interval', 'percent');
+        this.gauge('system.cpu.system_percent', systemPercent, {},
+          'CPU system utilisation percent since last collection interval', 'percent');
+        this.gauge('system.cpu.total_percent', userPercent + systemPercent, {},
+          'Total CPU utilisation percent since last collection interval', 'percent');
+      }
+    }
+    this.previousCpuCollection = { user: cpuUsage.user, system: cpuUsage.system, timestamp: now };
+
     this.gauge('system.cpu.load_average_1m', loadAvg[0] ?? 0, {},
       '1 minute load average');
     this.gauge('system.cpu.load_average_5m', loadAvg[1] ?? 0, {},
       '5 minute load average');
     this.gauge('system.cpu.load_average_15m', loadAvg[2] ?? 0, {},
       '15 minute load average');
-    this.gauge('system.cpu.count', os.cpus().length, {},
+    this.gauge('system.cpu.count', cpuCount, {},
       'Number of CPU cores');
 
     // Memory metrics
@@ -889,13 +923,15 @@ export class MetricsCollector extends EventEmitter {
     }
 
     try {
+      // P1-FIX: Collect ALL metrics from every key rather than only the last
+      // one per key.  Previously, N-1 data points per key were silently
+      // discarded on every persist cycle — summaries, dashboards, and retention
+      // queries based on individual data points were effectively non-functional.
       const batch: Metric[] = [];
-      
+
       for (const metrics of this.metrics.values()) {
-        // Get last un-persisted metric
-        const lastMetric = metrics[metrics.length - 1];
-        if (lastMetric) {
-          batch.push(lastMetric);
+        for (const m of metrics) {
+          batch.push(m);
         }
       }
 
@@ -948,9 +984,15 @@ export class MetricsCollector extends EventEmitter {
     if (!labels || Object.keys(labels).length === 0) {
       return name;
     }
+    // P1-FIX: Escape label values that contain the delimiter characters used in
+    // the key format (`=`, `,`, `{`, `}`).  Without escaping, a label value
+    // such as `a=b` or `x,y` would produce a key that is structurally identical
+    // to a different label set, allowing collisions between distinct time-series.
+    const escapeLabelValue = (v: string): string =>
+      v.replace(/[\\=,{}]/g, c => `\\${c}`);
     const labelStr = Object.entries(labels)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
+      .map(([k, v]) => `${k}=${escapeLabelValue(v)}`)
       .join(',');
     return `${name}{${labelStr}}`;
   }
@@ -981,6 +1023,15 @@ export function initMetricsCollector(
 ): MetricsCollector {
   if (!globalCollector) {
     globalCollector = new MetricsCollector(config, db);
+  } else if (config !== undefined || db !== undefined) {
+    // P1-FIX: Warn when the caller passes configuration that will be silently
+    // ignored because the singleton is already initialised.  Without this
+    // warning, a second caller (e.g. a test or a lazily-loaded plugin) may
+    // spend hours debugging why their configuration has no effect.
+    logger.warn(
+      'initMetricsCollector: collector already initialised — config and db arguments ignored. ' +
+      'Call resetMetricsCollector() first if you need a reconfigured instance.'
+    );
   }
   return globalCollector;
 }

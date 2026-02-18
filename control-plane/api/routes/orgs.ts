@@ -212,7 +212,11 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     return errors.validationFailed(res, bodyResult.error.issues);
     }
     const { userId, role } = bodyResult.data;
-    await members.addMember(id, userId, role);
+    // P0-FIX: Pass ctx.userId as actorUserId so the service can verify the
+    // actor has sufficient role to assign the requested role. Previously this
+    // call omitted actorUserId, silently bypassing all actor-permission checks
+    // and allowing any admin or owner to assign any role including 'owner'.
+    await members.addMember(id, userId, role, ctx.userId);
     return res.send({ ok: true });
   } catch (error) {
     if (error instanceof AuthError) {

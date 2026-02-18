@@ -12,6 +12,7 @@
  * with automatic timeout handling and max concurrent limits.
  */
 
+import { createHash } from 'node:crypto';
 import { LRUCache } from 'lru-cache';
 import Redis from 'ioredis';
 import { getLogger } from '../kernel/logger';
@@ -181,11 +182,14 @@ export class MultiTierCache {
     const now = Date.now();
     let cleaned = 0;
 
+    // P1-FIX: Use Math.min so the tighter threshold governs regardless of which
+    // limit the caller configured a higher value for (e.g. inFlightTtlMs > MAX).
+    const evictAfterMs = Math.min(this.options.inFlightTtlMs, MAX_IN_FLIGHT_AGE_MS);
+
     for (const [key, entry] of this.inFlightRequests) {
       const age = now - entry.createdAt;
 
-      // P1-9 FIX: Evict entries that exceed either the configured TTL or the hard safety limit
-      if (age > this.options.inFlightTtlMs || age > MAX_IN_FLIGHT_AGE_MS) {
+      if (age > evictAfterMs) {
         if (entry.timeoutId) {
           clearTimeout(entry.timeoutId);
         }
@@ -197,13 +201,15 @@ export class MultiTierCache {
 
     if (cleaned > 0) {
       this.inFlightCleaned += cleaned;
-      logger.error(`Cleaned ${cleaned} stale in-flight requests. Total cleaned: ${this.inFlightCleaned}`);
+      // P1-FIX: Downgrade to warn — routine cleanup is not an error condition.
+      logger.warn(`Cleaned ${cleaned} stale in-flight requests. Total cleaned: ${this.inFlightCleaned}`);
     }
 
     // Check if approaching limit
     const utilization = this.inFlightRequests.size / MAX_IN_FLIGHT_REQUESTS;
     if (utilization >= IN_FLIGHT_ALERT_THRESHOLD) {
-      logger.error(`ALERT: In-flight requests approaching limit`, undefined, {
+      // P1-FIX: Downgrade to warn — a high-watermark alert is not an error.
+      logger.warn('In-flight requests approaching limit', {
         current: this.inFlightRequests.size,
         max: MAX_IN_FLIGHT_REQUESTS,
         utilization: `${(utilization * 100).toFixed(1)}%`,
@@ -216,17 +222,28 @@ export class MultiTierCache {
    * Call this before using L2 cache
    */
   async initializeRedis(redisUrl: string): Promise<void> {
-    this.redis = new Redis(redisUrl, {
+    const client = new Redis(redisUrl, {
       retryStrategy: (times: number) => Math.min(times * 50, 2000),
       maxRetriesPerRequest: 3,
     });
 
-    this.redis.on('error', (err: Error) => {
+    client.on('error', (err: Error) => {
       logger.error('Redis error', err);
     });
 
-    // Test connection
-    await this.redis.ping();
+    // P0-FIX: Test connection BEFORE assigning to this.redis.
+    // Previously this.redis was set first: if ping() threw, the field was left
+    // pointing to a broken/orphaned connection that subsequent L2 operations
+    // would silently attempt to use, causing confusing errors.
+    try {
+      await client.ping();
+    } catch (err) {
+      // Disconnect cleanly to avoid leaking the TCP socket.
+      client.disconnect();
+      throw err;
+    }
+
+    this.redis = client;
   }
 
   /** P2-10 FIX: Dangerous key segments that enable prototype pollution */
@@ -280,7 +297,21 @@ export class MultiTierCache {
           // P2-7 FIX: Wrap JSON.parse in try/catch to handle corrupted Redis data
           let parsed: CacheEntry<T>;
           try {
-            parsed = JSON.parse(l2Value) as CacheEntry<T>;
+            // P0-FIX: Use bigint reviver so bigint values round-trip through Redis
+            // correctly. Without this, bigints serialised with the replacer below
+            // would be returned as plain objects { __bigint: "..." } instead of
+            // the original bigint, silently corrupting consumer data.
+            parsed = JSON.parse(l2Value, (_key, value: unknown) => {
+              if (
+                value !== null &&
+                typeof value === 'object' &&
+                '__bigint' in value &&
+                typeof (value as Record<string, unknown>)['__bigint'] === 'string'
+              ) {
+                return BigInt((value as Record<string, string>)['__bigint']);
+              }
+              return value;
+            }) as CacheEntry<T>;
           } catch (parseError) {
             logger.warn('L2 cache contains corrupted data, treating as miss', {
               key: fullKey,
@@ -349,7 +380,13 @@ export class MultiTierCache {
     // Write to L2 (Redis)
     if (this.redis) {
       try {
-        const serialized = JSON.stringify(entry);
+        // P0-FIX: Use a bigint-safe replacer. JSON.stringify throws a TypeError
+      // when the value graph contains a bigint (e.g. storage usage returned as
+      // bigint from getStorageUsed). The replacer serialises bigints as
+      // { __bigint: "<decimal string>" } which the reviver in get() restores.
+      const serialized = JSON.stringify(entry, (_key, value: unknown) =>
+        typeof value === 'bigint' ? { __bigint: value.toString() } : value
+      );
         const ttlSeconds = options?.l2TtlSeconds ?? this.options.l2TtlSeconds;
         await this.redis.setex(fullKey, ttlSeconds, serialized);
       } catch (error) {
@@ -431,24 +468,35 @@ export class MultiTierCache {
     // Set up automatic cleanup timeout
     const timeoutMs = options?.timeoutMs ?? this.options.inFlightTtlMs;
     entry.timeoutId = setTimeout(() => {
-      if (this.inFlightRequests.has(fullKey)) {
+      const current = this.inFlightRequests.get(fullKey);
+      // P1-FIX: Only evict if the map still holds *this* entry — a replacement
+      // computation may have been registered after this timeout was scheduled.
+      if (current?.promise === computation) {
         this.inFlightRequests.delete(fullKey);
         this.inFlightTimeouts++;
-        logger.error(`In-flight request timed out: ${key}`);
+        // P1-FIX: Downgrade to warn — a timeout is an operational concern, not
+        // an error (the caller receives a rejection, not a silent failure).
+        logger.warn(`In-flight request timed out: ${key}`);
       }
     }, timeoutMs);
-    
+
     this.inFlightRequests.set(fullKey, entry as InFlightEntry<unknown>);
 
     try {
       return await computation;
     } finally {
-      // Clean up in-flight entry and timeout
+      // P1-FIX: Only clean up the entry if it still belongs to *this*
+      // computation.  If the timeout fired first and deleted the entry, a
+      // subsequent getOrCompute call may have already inserted a new entry for
+      // the same key; deleting it unconditionally would orphan that computation
+      // and cause the next caller to start yet another redundant computation.
       const existing = this.inFlightRequests.get(fullKey);
-      if (existing?.timeoutId) {
-        clearTimeout(existing.timeoutId);
+      if (existing?.promise === computation) {
+        if (existing.timeoutId) {
+          clearTimeout(existing.timeoutId);
+        }
+        this.inFlightRequests.delete(fullKey);
       }
-      this.inFlightRequests.delete(fullKey);
     }
   }
 
@@ -760,6 +808,16 @@ let globalCache: MultiTierCache | null = null;
 export function getGlobalCache(options?: MultiTierCacheOptions): MultiTierCache {
   if (!globalCache) {
     globalCache = new MultiTierCache(options);
+  } else if (options && Object.keys(options).length > 0) {
+    // P1-FIX: Warn callers whose options are silently ignored after the first
+    // call.  Previously the singleton was returned without any indication that
+    // the configuration was discarded, leading to hard-to-diagnose behavioural
+    // differences between the first and all subsequent callers.
+    logger.warn(
+      'getGlobalCache: options ignored — global cache already initialised. ' +
+      'Call resetGlobalCache() first if you need a reconfigured instance.',
+      { ignoredOptions: Object.keys(options) }
+    );
   }
   return globalCache;
 }
@@ -779,13 +837,37 @@ export async function resetGlobalCache(): Promise<void> {
 
 /**
  * P2-31 FIX: Sanitize a value for use in a cache key.
- * Replaces dangerous segments and limits total key length to prevent abuse.
+ * Strips prototype-pollution vectors and, when the result exceeds the maximum
+ * safe key length, replaces the excess with a SHA-256 hash to avoid both
+ * truncation-based collisions and excessively long Redis keys.
+ *
+ * P2-FIX: Accepts unknown so callers can pass raw argument arrays without
+ * a separate JSON.stringify step that would throw on bigint values.
  */
 function sanitizeCacheKeyPart(raw: string): string {
   const MAX_KEY_LENGTH = 512;
-  // Strip prototype pollution vectors
   const sanitized = raw.replace(/__proto__|constructor|prototype/g, '_blocked_');
-  return sanitized.length > MAX_KEY_LENGTH ? sanitized.slice(0, MAX_KEY_LENGTH) : sanitized;
+  if (sanitized.length <= MAX_KEY_LENGTH) {
+    return sanitized;
+  }
+  // P2-FIX: Truncation causes hash collisions when two keys share a long
+  // common prefix (they map to the same truncated string).  Instead, keep a
+  // fixed-length prefix for human readability and append a SHA-256 digest of
+  // the full sanitized value so the key remains unique.
+  const PREFIX_LENGTH = 64;
+  const digest = createHash('sha256').update(sanitized).digest('hex');
+  return `${sanitized.slice(0, PREFIX_LENGTH)}__sha256_${digest}`;
+}
+
+/**
+ * Bigint-safe JSON.stringify for use in cache key construction.
+ * Converts bigint values to their decimal string representation instead of
+ * throwing a TypeError.
+ */
+function safeJsonStringify(value: unknown): string {
+  return JSON.stringify(value, (_k, v: unknown) =>
+    typeof v === 'bigint' ? v.toString() : v
+  );
 }
 
 export function Cacheable(options?: {
@@ -807,9 +889,8 @@ export function Cacheable(options?: {
       const cache = getGlobalCache();
 
       // P2-31 FIX: Sanitize the serialised args portion of the cache key.
-      // JSON.stringify(args) can be exploited with crafted objects containing
-      // __proto__ or extremely long values. Sanitize before building the key.
-      const argsPart = sanitizeCacheKeyPart(JSON.stringify(args));
+      // P2-FIX: Use safeJsonStringify to avoid TypeError on bigint arguments.
+      const argsPart = sanitizeCacheKeyPart(safeJsonStringify(args));
       const cacheKey = options?.key
         ? `${options.key}:${argsPart}`
         : `${target.constructor.name}:${propertyKey}:${argsPart}`;

@@ -35,6 +35,10 @@ export function startMetricsFlushing(): void {
   flushInterval = setInterval(() => {
     flushMetrics();
   }, FLUSH_INTERVAL_MS);
+  // P2-FIX: Call unref() so this timer does not prevent the Node.js process
+  // from exiting if stopMetricsFlushing() is never called during graceful
+  // shutdown (e.g. in test environments or abrupt process termination).
+  flushInterval.unref();
 }
 
 /**

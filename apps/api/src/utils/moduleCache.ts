@@ -66,7 +66,16 @@ export class ModuleCache<T> {
 * P1-FIX: Added circuit breaker to prevent cascading failures when loader fails.
 */
 export class ThreadSafeModuleCache<T> {
-  private cache = new LRUCache<string, Promise<T>>({ max: 1000, ttl: 600000 });
+  // P1-FIX: Store completed results (not promises) in the LRU cache so TTL
+  // eviction only removes settled values — never an in-flight promise.
+  // Previously the LRU held Promise<T>: if the TTL (600 s) elapsed while a
+  // load was still running, the entry was silently evicted and the next
+  // concurrent caller launched a duplicate load, breaking deduplication and
+  // creating redundant work / race conditions.
+  private cache = new LRUCache<string, T>({ max: 1000, ttl: 600000 });
+  // In-flight promises are tracked in a plain Map with no TTL so they survive
+  // for the full lifetime of the computation.
+  private inFlight = new Map<string, Promise<T>>();
   private circuitBreaker: CircuitBreaker;
 
   constructor(private loader: (key: string) => Promise<T>) {
@@ -78,36 +87,47 @@ export class ThreadSafeModuleCache<T> {
   }
 
   async get(key: string): Promise<T> {
-    // Return the cached promise if it exists (whether resolved or still pending)
+    // 1. Settled result in LRU cache — fastest path.
     const cached = this.cache.get(key);
-    if (cached) {
+    if (cached !== undefined) {
       return cached;
     }
 
-    // P1-12 FIX: No lock needed — store the promise synchronously so that any
-    // subsequent call within the same microtask tick will see it in the cache.
-    // FIX(P2): Capture promise reference for snapshot comparison in catch handler
+    // 2. In-flight deduplication — join an already-running load.
+    const flying = this.inFlight.get(key);
+    if (flying) {
+      return flying;
+    }
+
+    // 3. No existing load — start one and register it in the inFlight Map
+    //    *synchronously* so any concurrent call arriving before the first
+    //    await will see it.
     const promise: Promise<T> = this.circuitBreaker.execute(() => this.loader(key)).then(
-      (result) => result,
+      (result) => {
+        // Promote the settled value into the LRU cache and retire the in-flight entry.
+        this.cache.set(key, result);
+        this.inFlight.delete(key);
+        return result;
+      },
       (err: unknown) => {
-        // Only delete if our entry is still current (no newer attempt took over)
-        if (this.cache.get(key) === promise) {
-          this.cache.delete(key);
-        }
+        // Remove the in-flight entry so the next caller can retry.
+        this.inFlight.delete(key);
         logger.error(`Module cache load failed for key: ${key}`, err instanceof Error ? err : new Error(String(err)));
         throw err;
       }
     );
 
-    this.cache.set(key, promise);
+    this.inFlight.set(key, promise);
     return promise;
   }
 
   clear(key?: string): void {
     if (key) {
       this.cache.delete(key);
+      this.inFlight.delete(key);
     } else {
       this.cache.clear();
+      this.inFlight.clear();
     }
   }
 }

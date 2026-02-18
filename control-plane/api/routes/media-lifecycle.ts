@@ -20,8 +20,10 @@ export interface LifecycleStats {
 
 // P2-1 FIX: Add .strict() to reject extra properties
 // P2-3 FIX: Removed unused pagination params from GET endpoint that doesn't paginate
+// P2-FIX: min(1) instead of min(0) — days=0 resolves to < NOW() which selects
+// the ENTIRE hot corpus as cold candidates, triggering a mass lifecycle transition.
 const QuerySchema = z.object({
-  days: z.coerce.number().min(0).max(365).optional().default(30),
+  days: z.coerce.number().min(1).max(365).optional().default(30),
 }).strict();
 
 export type AuthenticatedRequest = FastifyRequest & {
@@ -49,7 +51,8 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
       // FIX(P0): Use checkRateLimitAsync to avoid double-send (same issue as media.ts)
       const rlResult = await checkRateLimitAsync(`admin:media:${ctx.userId}`, 'admin.media');
       if (!rlResult.allowed) {
-        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+        // P2-FIX: Use errors.rateLimited for canonical shape (code, requestId, Retry-After header)
+        return errors.rateLimited(res, Math.ceil((rlResult.resetTime - Date.now()) / 1000));
       }
 
       const queryResult = QuerySchema.safeParse(req.query);
@@ -63,9 +66,11 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
       let coldCandidates: number;
 
       try {
-        // FIX(P0): Pass orgId — getHotCount now requires tenant scoping
+        // P0-FIX: Both methods now require orgId to prevent cross-tenant data leakage.
+        // countColdCandidates previously ran a platform-wide aggregate (no org scope),
+        // leaking the total cold-candidate count across all tenants to any org admin.
         hot = await svc.getHotCount(ctx.orgId);
-        coldCandidates = await svc.countColdCandidates(days);
+        coldCandidates = await svc.countColdCandidates(days, ctx.orgId);
       } catch (serviceError) {
         logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
         return errors.serviceUnavailable(res);

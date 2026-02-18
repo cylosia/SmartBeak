@@ -17,12 +17,14 @@ function validateOrgId(orgId: string): void {
 }
 
 /**
- * P2-4 FIX: Validate inputs as positive numbers
+ * P2-4 FIX: Validate inputs as strictly positive numbers (> 0).
+ * Zero is rejected: days=0 resolves to < NOW() which selects the ENTIRE hot
+ * corpus as cold candidates, triggering a mass lifecycle transition.
  */
 function validatePositiveNumber(val: unknown, name: string): number {
   const num = Number(val);
-  if (!Number.isFinite(num) || num < 0) {
-    throw new Error(`${name} must be a non-negative number`);
+  if (!Number.isFinite(num) || num <= 0) {
+    throw new Error(`${name} must be a positive number greater than zero`);
   }
   return num;
 }
@@ -100,28 +102,38 @@ export class MediaLifecycleService {
   }
 
   /**
-   * Count cold candidates without loading all IDs into memory.
+   * Count cold candidates for a specific org without loading all IDs into memory.
+   * P0-FIX: Added required orgId parameter to prevent cross-tenant data leakage.
+   * Previously this method ran an aggregate across ALL tenants and exposed the
+   * result in the /admin/media/lifecycle API response.
    * P2-6 FIX: Use Number() instead of parseInt().
    */
-  async countColdCandidates(days: number): Promise<number> {
+  async countColdCandidates(days: number, orgId: string): Promise<number> {
+    validateOrgId(orgId);
     const safeDays = validatePositiveNumber(days, 'days');
 
     const { rows } = await this.pool.query(
       `SELECT COUNT(*)::int AS count FROM media_assets
        WHERE storage_class = 'hot'
          AND status != 'deleted'
+         AND org_id = $2
          AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)`,
-      [safeDays]
+      [safeDays, orgId]
     );
     return Number(rows[0]?.['count'] ?? 0);
   }
 
   /**
-   * Find cold media candidates.
+   * Find cold media candidates for a specific org.
+   * P0-FIX: Added required orgId parameter to prevent cross-tenant data leakage.
+   * Without org scoping, a lifecycle job calling this method would receive asset
+   * IDs from ALL tenants and feed them into per-org mutation calls, corrupting
+   * other tenants' storage classifications.
    * P2-5 FIX: Add deterministic ORDER BY.
    * FIX(P2): Validate that extracted IDs are non-null strings before returning.
    */
-  async findColdCandidates(days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
+  async findColdCandidates(days: number, orgId: string, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
+    validateOrgId(orgId);
     const safeDays = validatePositiveNumber(days, 'days');
     const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
@@ -129,10 +141,11 @@ export class MediaLifecycleService {
       `SELECT id FROM media_assets
        WHERE storage_class = 'hot'
          AND status != 'deleted'
+         AND org_id = $2
          AND COALESCE(last_accessed_at, created_at) < NOW() - make_interval(days => $1::int)
        ORDER BY COALESCE(last_accessed_at, created_at) ASC
-       LIMIT $2`,
-      [safeDays, safeLimit]
+       LIMIT $3`,
+      [safeDays, orgId, safeLimit]
     );
     return rows.map((r: Record<string, unknown>) => {
       const id = r['id'];
@@ -159,9 +172,14 @@ export class MediaLifecycleService {
     // FIX(P2): Validate each element — garbage IDs pollute audit logs
     validateIdArray(ids, 'ids');
 
+    // P1-FIX: Removed `last_accessed_at = NOW()` — that column records when the
+    // asset was *accessed*, not when it was reclassified.  Setting it here would
+    // reset the cold-candidate clock immediately after a cold transition, so a
+    // subsequent findColdCandidates call would never see these assets again,
+    // corrupting the access-history audit trail.
     const result = await this.pool.query(
       `UPDATE media_assets
-       SET storage_class = 'cold', last_accessed_at = NOW()
+       SET storage_class = 'cold'
        WHERE id = ANY($1) AND org_id = $2 AND status != 'deleted'`,
       [ids, orgId]
     );
@@ -216,9 +234,13 @@ export class MediaLifecycleService {
     // FIX(P2): Validate each element
     validateIdArray(ids, 'ids');
 
+    // P1-FIX: Added `deleted_at = NOW()` to populate the audit timestamp.
+    // Previously deleted_at was always NULL, making GDPR data-retention sweeps,
+    // compliance queries (WHERE deleted_at < NOW() - interval '90 days'), and
+    // audit reports based on deletion time completely non-functional.
     const result = await this.pool.query(
       `UPDATE media_assets
-       SET status = 'deleted', updated_at = NOW()
+       SET status = 'deleted', updated_at = NOW(), deleted_at = NOW()
        WHERE id = ANY($1) AND org_id = $2 AND status != 'deleted'`,
       [ids, orgId]
     );

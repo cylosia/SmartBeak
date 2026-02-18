@@ -15,6 +15,21 @@ import { getDb } from '../db';
 const VALID_ROLES = ['owner', 'admin', 'editor', 'viewer'] as const;
 type Role = typeof VALID_ROLES[number];
 
+// P1-FIX: Validate UUID format before hitting the DB.  Without this, a caller
+// that passes a non-UUID string (e.g. an org slug, a JWT claim from a broken
+// token library, or a path-traversal string such as "../other-org") would:
+// a) Produce a DB row that can never match → silently return false (tolerable
+//    in the happy path but means we don't distinguish "not a member" from
+//    "caller passed garbage"), and
+// b) Expose the Knex query builder to malformed input that could cause driver
+//    errors or, in future, SQL-injection-adjacent bugs if parameterisation is
+//    ever bypassed.
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
 // P1-2 FIX: Role hierarchy for minimum-role checks
 const ROLE_HIERARCHY: Record<Role, number> = {
   owner: 4,
@@ -37,7 +52,16 @@ export async function verifyOrgMembership(
   orgId: string,
   requiredRole?: Role
 ): Promise<boolean> {
-  const db = await getDb();
+  // P1-FIX: Reject malformed IDs early — a non-UUID string can never match a
+  // proper UUID primary key, so skip the DB round-trip entirely and return
+  // false. This also prevents leaking driver error messages to callers.
+  if (!isValidUUID(userId) || !isValidUUID(orgId)) {
+    return false;
+  }
+
+  // P2-FIX: getDb() is synchronous — `await` on a non-Promise is a no-op but
+  // misleads readers into thinking this is an async I/O call.
+  const db = getDb();
   // P0-1 FIX: Use correct table name 'memberships' (not 'org_memberships')
   const membership = await db('memberships')
     .where({ user_id: userId, org_id: orgId })
