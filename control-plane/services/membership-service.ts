@@ -149,17 +149,17 @@ export class MembershipService {
     }
   }
 
-  async addMember(orgId: string, userId: string, role: Role, actorUserId?: string): Promise<void> {
+  // FIX(A-14): actorUserId is now REQUIRED. Previously optional, meaning any
+  // caller that omitted it silently skipped ALL authorization checks — any code
+  // path could add members at any role with zero privilege verification.
+  // Routes must always supply ctx.userId. For system-level bootstrapping
+  // (org creation, migrations) use addMemberSystem() below instead.
+  async addMember(orgId: string, userId: string, role: Role, actorUserId: string): Promise<void> {
     // P2-20 FIX: Validate inputs at method entry
     this.validateId(orgId, 'orgId');
     this.validateId(userId, 'userId');
     this.validateRole(role);
-    // FIX(P2): Validate actorUserId as UUID when provided — a non-UUID string
-    // would be silently forwarded to the DB permission query, potentially
-    // enabling IDOR enumeration via 403/404 differential on malformed inputs.
-    if (actorUserId !== undefined) {
-      this.validateId(actorUserId, 'actorUserId');
-    }
+    this.validateId(actorUserId, 'actorUserId');
 
     const client = await this.pool.connect();
 
@@ -168,11 +168,8 @@ export class MembershipService {
       await client.query('SET LOCAL statement_timeout = $1', [30000]);
 
       // P1-19 FIX: Check actor has permission to assign this role.
-      // When actorUserId is absent this is a system/internal call (e.g., org
-      // bootstrap or migration). Routes MUST always provide actorUserId.
-      if (actorUserId) {
-        await this.checkActorPermission(client, orgId, actorUserId, role);
-      }
+      // actorUserId is now always present (required parameter above).
+      await this.checkActorPermission(client, orgId, actorUserId, role);
 
       // Check for duplicates inside transaction with row locking
       await this.checkDuplicateMember(client, orgId, userId);
