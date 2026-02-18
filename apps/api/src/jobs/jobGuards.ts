@@ -85,14 +85,26 @@ export async function assertOrgCapacity(db: Database, orgId: string): Promise<vo
 }
 
 /**
-* Check if org has capacity without throwing
-*/
+ * Check if org has capacity without throwing on capacity-limit errors.
+ *
+ * P1-FIX: Previously caught ALL exceptions and returned false. A database
+ * connection failure returned false (appearing as "no capacity"), silently
+ * masking outages. Now only capacity-limit errors return false; all other
+ * errors (DB down, query failure, unexpected values) are re-thrown so
+ * callers and alerting systems see them.
+ */
 export async function checkOrgCapacity(db: Database, orgId: string): Promise<boolean> {
   try {
-  await assertOrgCapacity(db, orgId);
-  return true;
-  } catch {
-  return false;
+    await assertOrgCapacity(db, orgId);
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Only treat the specific capacity-limit message as a "false" return.
+    // Everything else (DB errors, NaN counts, etc.) is re-thrown.
+    if (msg === 'Org concurrency limit reached') {
+      return false;
+    }
+    throw err;
   }
 }
 

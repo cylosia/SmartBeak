@@ -32,7 +32,10 @@ const logger = getLogger('jwt');
 // while packages/security/auth.ts had ['viewer', 'editor', 'admin', 'owner']. This drift
 // caused tokens with role:"owner" to be rejected by verifyToken() (Zod validation failure),
 // silently locking org owners out of any code path using jwt.ts for verification.
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner']);
+// P0-FIX: Added 'buyer' to match control-plane/services/jwt.ts signing schema. Without this,
+// tokens signed with role='buyer' pass signature verification but fail Zod validation here,
+// producing opaque auth failures for all buyer-role users.
+export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner', 'buyer']);
 
 export const JwtClaimsSchema = z.object({
   sub: z.string().min(1).max(256),
@@ -118,9 +121,15 @@ const TOKEN_FORMAT_REGEX = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 // ============================================================================
 
 /**
-* Constant-time string comparison to prevent timing attacks
+* Constant-time string comparison to prevent timing attacks.
+* Returns false for empty strings — an empty secret must never match.
 */
 export function constantTimeCompare(a: string, b: string): boolean {
+  // P1-FIX: Reject empty strings explicitly. timingSafeEqual(Buffer.alloc(0), Buffer.alloc(0))
+  // returns true, so without this guard constantTimeCompare('', '') would return true,
+  // allowing an empty secret to "match" an empty challenge.
+  if (a.length === 0 || b.length === 0) return false;
+
   const aBuf = Buffer.from(a, 'utf8');
   const bBuf = Buffer.from(b, 'utf8');
   const maxLen = Math.max(aBuf.length, bBuf.length);
@@ -214,7 +223,17 @@ function getKeys(): string[] {
   const key2 = process.env['JWT_KEY_2'];
   const keys: string[] = [];
 
-  if (key1 && key1.length >= 32) {
+  // P1-FIX: Throw on misconfigured keys instead of silently skipping them.
+  // Previously, a key shorter than 32 chars was silently omitted, so setting a
+  // single weak key produced an empty keys array and a misleading
+  // "JWT signing keys not configured" error at verify time — not at startup.
+  if (key1 !== undefined && key1 !== '') {
+    if (key1.length < 32) {
+      throw new TokenInvalidError(
+        'JWT_KEY_1 must be at least 32 characters long. ' +
+        "Generate with: node -e 'process.stdout.write(require(\"crypto\").randomBytes(32).toString(\"hex\"))'"
+      );
+    }
     if (isPemKey(key1)) {
       throw new TokenInvalidError(
         'JWT_KEY_1 appears to be a PEM-formatted key. ' +
@@ -224,7 +243,12 @@ function getKeys(): string[] {
     }
     keys.push(key1);
   }
-  if (key2 && key2.length >= 32) {
+  if (key2 !== undefined && key2 !== '') {
+    if (key2.length < 32) {
+      throw new TokenInvalidError(
+        'JWT_KEY_2 must be at least 32 characters long.'
+      );
+    }
     if (isPemKey(key2)) {
       throw new TokenInvalidError(
         'JWT_KEY_2 appears to be a PEM-formatted key. ' +
@@ -346,7 +370,9 @@ export function verifyToken(
     } catch (error) {
       // Continue to next key (constant-time behavior)
       if (error instanceof jwt.TokenExpiredError) {
-        lastError = new TokenExpiredError(new Date(error.expiredAt));
+        // Pre-existing TS18046 fix: narrow type after instanceof guard
+        const expiredErr = error as jwt.TokenExpiredError;
+        lastError = new TokenExpiredError(new Date(expiredErr.expiredAt));
       } else if (error instanceof AuthError) {
         lastError = error;
       } else {

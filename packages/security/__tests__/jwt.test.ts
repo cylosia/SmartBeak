@@ -71,6 +71,11 @@ describe('JWT Verification with Key Rotation Tests', () => {
     });
 
     it('should return false for empty strings', () => {
+      // P1-FIX: timingSafeEqual(Buffer.alloc(0), Buffer.alloc(0)) returns true,
+      // so without an explicit guard the function would return true for two empty
+      // strings, allowing an empty secret to "match" an empty challenge. The
+      // implementation now rejects empty strings explicitly; this assertion verifies
+      // that the guard is in place.
       expect(constantTimeCompare('', '')).toBe(false);
     });
 

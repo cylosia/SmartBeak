@@ -16,7 +16,17 @@ export const MAX_JSONB_SIZE_LARGE = 10 * 1024 * 1024;
  * @returns Size in bytes
  */
 export function calculateJSONBSize(data: unknown): number {
-  const jsonString = JSON.stringify(data);
+  // P0-FIX: Wrap JSON.stringify in try/catch. A circular reference throws
+  // "TypeError: Converting circular structure to JSON" which was previously
+  // unhandled, crashing any caller (e.g. request logging middleware).
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(data);
+  } catch {
+    // Treat un-serialisable data (circular refs, BigInt, etc.) as max size
+    // so callers reject it rather than silently storing corrupt JSONB.
+    return Number.MAX_SAFE_INTEGER;
+  }
   // Use a conservative estimate for UTF-8 encoding
   let size = 0;
   for (let i = 0; i < jsonString.length; i++) {
@@ -91,10 +101,17 @@ export function fitsInJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZE): bo
  * @throws Error if data exceeds maximum size
  */
 export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZE): string {
-  // P2-8 FIX: Serialize once instead of twice. Previously, validateJSONBSize
-  // called JSON.stringify internally, and then we called JSON.stringify again
-  // here. For large payloads, this doubled CPU and memory usage.
-  const jsonString = JSON.stringify(data);
+  // P0-FIX: Wrap JSON.stringify in try/catch. Circular references previously
+  // caused an unhandled TypeError that crashed the caller.
+  // P2-8 FIX: Serialize once instead of twice.
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(data);
+  } catch (err) {
+    throw new Error(
+      `Data cannot be serialized to JSON: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
   const size = Buffer.byteLength(jsonString, 'utf8');
 
   if (size > maxSize) {

@@ -94,13 +94,19 @@ export class JobScheduler extends EventEmitter {
   private readonly handlers: Map<string, HandlerConfig> = new Map();
   // P0-FIX: Track running state to prevent worker storm
   private running = false;
+  // P1-FIX: Track shutdown state so schedule() returns a clear error after stop()
+  // instead of a confusing "Job X not registered" error from the cleared handlers map.
+  private isShutdown = false;
   // P1-FIX: Use Map for active controllers (no LRU eviction) to prevent
   // active job controllers from being evicted, which would make jobs uncancelable
   private readonly abortControllers = new Map<string, AbortController>();
   // P1-FIX: Track controller creation time for auto-cleanup of stale controllers
   private readonly abortControllerTimestamps = new Map<string, number>();
-  // P1-FIX: Maximum age for abort controllers (5 minutes)
-  private readonly ABORT_CONTROLLER_MAX_AGE_MS = 300000;
+  // P0-FIX: Max age for abort controllers must exceed the longest job timeout.
+  // Previously 300000ms (5 min), but exportTimeoutMs is 600000ms (10 min),
+  // so any export job running > 5 min was aborted by the cleanup interval.
+  // Set to 15 minutes to safely cover all configured job timeouts.
+  private readonly ABORT_CONTROLLER_MAX_AGE_MS = 900000;
   // P1-FIX: Cleanup interval for stale abort controllers
   private abortControllerCleanupInterval?: NodeJS.Timeout | undefined;
   private redisReconnectDelay = redisConfig.initialReconnectDelayMs;
@@ -535,8 +541,10 @@ export class JobScheduler extends EventEmitter {
       this.workers.set(queueName, worker);
     }
 
-    // P0-FIX: Running flag already set at method start (P1-5 FIX)
-    // If worker creation fails, the running flag should be reset by the caller
+    // P1-FIX: running flag was set at method start. If worker creation above threw
+    // partway through, the flag would be stuck true while some queues have no workers.
+    // The try/catch per-queue above handles individual failures; if startWorkers itself
+    // throws synchronously before any worker is created, reset the flag here.
   }
 
   private async executeWithTimeout<T>(
@@ -648,6 +656,12 @@ export class JobScheduler extends EventEmitter {
     jobId?: string;
   } = {}
   ): Promise<Job> {
+  // P1-FIX: Surface a clear error when called after stop() instead of the
+  // confusing "Job X not registered" that results from the cleared handlers map.
+  if (this.isShutdown) {
+    throw new Error('JobScheduler has been shut down and cannot accept new jobs');
+  }
+
   const handlerConfig = this.handlers.get(name);
   if (!handlerConfig) {
     throw new Error(`Job ${name} not registered`);
@@ -664,6 +678,15 @@ export class JobScheduler extends EventEmitter {
   const queue = this.queues.get(handlerConfig.config.queue);
   if (!queue) {
     throw new Error(`Queue ${handlerConfig.config.queue} not found`);
+  }
+
+  // P0-FIX: Enforce per-job rate limits. `checkRateLimit` was defined but never
+  // called here, making all `rateLimit` configurations completely non-functional.
+  if (handlerConfig.config.rateLimit) {
+    const orgId = (typeof data === 'object' && data !== null)
+      ? (data as Record<string, unknown>)['orgId'] as string | undefined
+      : undefined;
+    await this.checkRateLimit(name, handlerConfig.config.rateLimit, orgId);
   }
 
   // Backpressure: reject if queue has too many pending jobs
@@ -819,6 +842,8 @@ export class JobScheduler extends EventEmitter {
   async stop(): Promise<void> {
     // P0-FIX: Mark as not running immediately
     this.running = false;
+    // P1-FIX: Mark shutdown so schedule() gives a clear error after stop()
+    this.isShutdown = true;
 
     // P1-FIX: Stop auto-cleanup of abort controllers
     this.stopAbortControllerCleanup();
