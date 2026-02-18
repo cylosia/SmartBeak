@@ -343,29 +343,50 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
         try {
           claims = jwt.verify(token, jwtKey2, jwtVerifyOptions) as jwt.JwtPayload;
         } catch (secondaryErr) {
-          const errorMsg = secondaryErr instanceof Error ? secondaryErr['message'] : 'Unknown error';
+          // P25-FIX: Do not embed JWT library error messages in audit events —
+          // they may contain token fragments or key hints.
+          logger.debug('Token verification detail', {
+            errorCode: secondaryErr instanceof Error ? secondaryErr.name : 'unknown',
+          });
           emitAuthAudit({
             timestamp: new Date(),
             type: 'auth.failure',
             ip: clientInfo.ip,
             userAgent: clientInfo.userAgent,
-            reason: `Token verification failed: ${errorMsg}`,
+            reason: 'Token verification failed',
           });
           res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
           throw new AuthError('Token verification failed');
         }
       } else {
-        const errorMsg = primaryErr instanceof Error ? primaryErr['message'] : 'Unknown error';
+        // P26-FIX: Do not embed JWT library error messages in audit events.
+        logger.debug('Token verification detail', {
+          errorCode: primaryErr instanceof Error ? primaryErr.name : 'unknown',
+        });
         emitAuthAudit({
           timestamp: new Date(),
           type: 'auth.failure',
           ip: clientInfo.ip,
           userAgent: clientInfo.userAgent,
-          reason: `Token verification failed: ${errorMsg}`,
+          reason: 'Token verification failed',
         });
         res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
         throw new AuthError('Token verification failed');
       }
+    }
+
+    // P0-8 FIX: Tokens without an exp claim must be rejected — jsonwebtoken only
+    // enforces expiry when exp is present. A token with no exp is valid forever.
+    if (!claims.exp) {
+      emitAuthAudit({
+        timestamp: new Date(),
+        type: 'auth.failure',
+        ip: clientInfo.ip,
+        userAgent: clientInfo.userAgent,
+        reason: 'Token missing exp claim',
+      });
+      res.status(401).json({ error: 'Unauthorized. Token missing expiration.' });
+      throw new AuthError('Token missing exp claim');
     }
 
     if (!claims.sub) {
@@ -419,8 +440,9 @@ export async function requireAuth(req: NextApiRequest, res: NextApiResponse): Pr
       userId: claims.sub,
       orgId: claims["orgId"] as string,
     });
-    // SECURITY FIX: Generate request ID using cryptographically secure randomness
-    const requestId = `req_${Date.now()}_${randomBytes(4).toString('hex')}`;
+    // P30-FIX: Use 16 bytes (128-bit) randomness for collision-resistant request IDs.
+    // 4 bytes was insufficient under high concurrency with same-millisecond timestamps.
+    const requestId = `req_${randomBytes(16).toString('hex')}`;
     return {
       userId: claims.sub,
       orgId: claims["orgId"] as string,
@@ -507,8 +529,9 @@ export async function optionalAuth(req: NextApiRequest): Promise<AuthResult | nu
         return null;
       }
     }
-    // SECURITY FIX: Generate request ID using cryptographically secure randomness
-    const requestId = `req_${Date.now()}_${randomBytes(4).toString('hex')}`;
+    // P30-FIX: Use 16 bytes (128-bit) randomness for collision-resistant request IDs.
+    // 4 bytes was insufficient under high concurrency with same-millisecond timestamps.
+    const requestId = `req_${randomBytes(16).toString('hex')}`;
     return {
       userId: claims.sub,
       orgId: claims["orgId"] as string,
@@ -539,7 +562,7 @@ export async function canAccessDomain(userId: string, domainId: string, db: Pool
   }
   try {
     // SECURITY FIX: Check role level in addition to membership
-    const { rows } = await db.query(`SELECT m["role"] FROM domain_registry dr
+    const { rows } = await db.query(`SELECT m.role FROM domain_registry dr
     JOIN memberships m ON m.org_id = dr.org_id
     WHERE dr.domain_id = $1 AND m.user_id = $2
     LIMIT 1`, [domainId, userId]);
@@ -776,11 +799,12 @@ export function getRateLimitIdentifier(req: NextApiRequest, userId?: string): st
   if (ip.startsWith('::ffff:')) {
     ip = ip.slice(7);
   }
-  // Remove port suffix if present
-  if (ip && ip.includes(':')) {
-    ip = ip.split(':')[0] || ip;
-  }
-  return userId ? `${ip}:${userId}` : ip;
+  // P33-FIX: Do not truncate IPv6 addresses. The previous logic split on ':' and
+  // took the first segment, collapsing all 2001::/16 users into one rate-limit
+  // bucket and enabling cross-user DoS. Wrap IPv6 in brackets to keep it intact.
+  const isIpv6 = ip.includes(':') && !ip.startsWith('::ffff:');
+  const ipKey = isIpv6 ? `[${ip}]` : ip;
+  return userId ? `${ipKey}:${userId}` : ipKey;
 }
 
 export interface WithAuthOptions {

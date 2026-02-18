@@ -15,7 +15,8 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   // GET /attribution/llm - LLM attribution report
   app.get('/attribution/llm', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('attribution', 50);
+  // P1-FIX: Include client IP — static 'attribution' key was a shared global bucket.
+  await rateLimit(`attribution:${req.ip ?? 'unknown'}`, 50);
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
@@ -58,7 +59,8 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   // GET /attribution/buyer-safe - Buyer-safe attribution summary
   app.get('/attribution/buyer-safe', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('attribution', 50);
+  // P1-FIX: Include client IP — static 'attribution' key was a shared global bucket.
+  await rateLimit(`attribution:${req.ip ?? 'unknown'}`, 50);
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 

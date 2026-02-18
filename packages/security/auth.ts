@@ -141,8 +141,9 @@ export async function optionalAuthNextJs(
   try {
   const claims = verifyToken(token);
 
-  // Check expiration explicitly
-  if (claims.exp && claims.exp * 1000 < Date.now()) {
+  // P7-FIX: Reject tokens with no exp claim — they are valid forever.
+  // `claims.exp && ...` allowed tokens without exp to pass silently.
+  if (!claims.exp || claims.exp * 1000 < Date.now()) {
     return null;
   }
 
@@ -199,8 +200,8 @@ export async function optionalAuthFastify(
   try {
     const claims = verifyToken(token);
 
-    // Check expiration explicitly
-    if (claims.exp && claims.exp * 1000 < Date.now()) {
+    // P8-FIX: Reject tokens with no exp claim — they are valid forever.
+    if (!claims.exp || claims.exp * 1000 < Date.now()) {
       return;
     }
 
