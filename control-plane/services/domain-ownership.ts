@@ -98,8 +98,13 @@ export class DomainOwnershipService {
     });
 
     // P1-13 FIX: Retry on serialization failures (PostgreSQL error code 40001)
-    const pgError = error as { code?: string };
-    if (pgError.code === '40001' && attempt < MAX_SERIALIZATION_RETRIES - 1) {
+    // P1-CAST-FIX: Use a proper type guard instead of unsafe `as` cast. The prior
+    // cast accepted any value as `{ code?: string }` — a non-Error thrown value
+    // (e.g. a string) would silently skip the retry and propagate incorrectly.
+    const pgError = error instanceof Error && 'code' in error
+      ? (error as Error & { code?: string })
+      : undefined;
+    if (pgError?.code === '40001' && attempt < MAX_SERIALIZATION_RETRIES - 1) {
       // P2-FIX: Exponential backoff with jitter before retry. Without a delay, all
       // concurrent retries collide again immediately, guaranteeing repeated failures.
       const backoffMs = Math.min(100 * Math.pow(2, attempt), 1000) + Math.random() * 50;

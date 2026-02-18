@@ -55,6 +55,9 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     const domain = rows[0];
 
     // Fetch content stats
+    // P1-IDOR-FIX: Added org_id = $2 filter. Without it, content stats could be
+    // returned for any domain_id — a domain transferred to another org would still
+    // expose its content counts to the previous org via this endpoint.
     const { rows: contentStats } = await pool.query(
     `SELECT
     COUNT(*) as total,
@@ -62,8 +65,8 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     COUNT(*) FILTER (WHERE status = 'draft') as drafts,
     COUNT(*) FILTER (WHERE status = 'archived') as archived
     FROM content_items
-    WHERE domain_id = $1`,
-    [id]
+    WHERE domain_id = $1 AND org_id = $2`,
+    [id, ctx["orgId"]]
     );
 
     return {

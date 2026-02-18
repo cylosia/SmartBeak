@@ -105,9 +105,11 @@ export async function registerDiligenceRoutes(app: FastifyInstance) {
   if (!session) return reply.code(404).send({ error: 'Not found' });
 
   // C02-FIX: Add WHERE domain_id filter to prevent cross-tenant data leakage
-  // Previously returned ALL orgs' affiliate data without filtering
+  // P1-LIMIT-FIX: Added LIMIT 1. The caller returns only rows[0] but without
+  // LIMIT the database fetches all matching rows into memory, enabling a DOS
+  // if a domain accumulates large numbers of affiliate replacement records.
   const res = await appWithDb.db.query(
-    'SELECT domain_id, provider_name, replacement_count, estimated_revenue FROM buyer_affiliate_replacement_summary WHERE domain_id = $1',
+    'SELECT domain_id, provider_name, replacement_count, estimated_revenue FROM buyer_affiliate_replacement_summary WHERE domain_id = $1 LIMIT 1',
     [session.domain_id]
   );
   return res.rows[0] ?? null;
