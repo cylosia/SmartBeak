@@ -124,20 +124,32 @@ export function generateSignedUploadUrl(storageKey: string, expiresInSeconds = 3
   };
 }
 
+// P1-FIX: Use an explicit allowlist with no wildcard prefix fallback.
+// Previously:
+//   1. 'image/svg+xml' was listed — SVG is XML that executes JavaScript, enabling
+//      stored XSS when served from the same origin.
+//   2. mimeType.startsWith('image/') caught any image/* type, including SVG,
+//      defeating the allowlist entirely.
+// Now every accepted MIME type must be explicitly listed.
 const VALID_MIME_TYPES = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-  'video/mp4', 'video/webm', 'video/ogg',
-  'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm',
-  'application/pdf', 'application/json', 'application/xml',
-  'text/plain', 'text/html', 'text/css', 'text/javascript',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+  'audio/webm',
+  'application/pdf',
 ]);
 
 function validateMimeType(mimeType: string): boolean {
   if (!mimeType || typeof mimeType !== 'string') return false;
-  return VALID_MIME_TYPES.has(mimeType.toLowerCase()) ||
-    mimeType.startsWith('image/') ||
-    mimeType.startsWith('video/') ||
-    mimeType.startsWith('audio/');
+  return VALID_MIME_TYPES.has(mimeType.toLowerCase());
 }
 
 export function generateStorageKey(domain: string, mimeType?: string): string {

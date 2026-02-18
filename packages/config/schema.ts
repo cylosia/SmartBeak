@@ -18,7 +18,11 @@ const nonPlaceholder = z.string().min(3).refine(
   { message: 'Value appears to be a placeholder' }
 );
 
-const secretString = nonPlaceholder.pipe(z.string().min(10));
+// P1-FIX: Minimum 32 characters for cryptographic secrets (JWT keys, encryption
+// keys, webhook secrets).  10 chars ≈ 50 bits — brute-forceable.  32 random
+// bytes (base64 ≈ 44 chars, hex ≈ 64 chars) provides 256 bits of entropy.
+// Generate suitable values with: openssl rand -base64 48
+const secretString = nonPlaceholder.pipe(z.string().min(32));
 
 // ============================================================================
 // Environment schema

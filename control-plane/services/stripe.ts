@@ -66,29 +66,36 @@ export class StripePaymentGateway implements PaymentGateway {
     void this.apiKey;
   }
 
-  async createCustomer(orgId: string): Promise<CreateCustomerResult> {
-    // TODO: replace with real Stripe SDK call when stripe package is available
-    // e.g.: const customer = await stripe.customers.create({ metadata: { orgId } });
-    logger.warn('StripePaymentGateway.createCustomer: SDK not wired, returning stub', { orgId });
-    return { customerId: `cus_${orgId}` };
+  async createCustomer(_orgId: string): Promise<CreateCustomerResult> {
+    // TODO: install the `stripe` npm package and wire the SDK call here:
+    // const customer = await new Stripe(this.apiKey, { apiVersion: '2023-10-16' })
+    //   .customers.create({ metadata: { orgId: _orgId } });
+    // return { customerId: customer.id };
+    throw new ServiceUnavailableError(
+      'StripePaymentGateway.createCustomer: Stripe SDK is not yet wired. ' +
+      'Install the stripe package and implement this method before deploying.'
+    );
   }
 
-  async createSubscription(customerId: string, planId: string): Promise<CreateSubscriptionResult> {
-    // TODO: replace with real Stripe SDK call
-    logger.warn('StripePaymentGateway.createSubscription: SDK not wired, returning stub', { customerId, planId });
-    return { subscriptionId: `sub_${customerId}_${planId}` };
+  async createSubscription(_customerId: string, _planId: string): Promise<CreateSubscriptionResult> {
+    // TODO: wire real Stripe SDK call
+    throw new ServiceUnavailableError(
+      'StripePaymentGateway.createSubscription: Stripe SDK is not yet wired.'
+    );
   }
 
-  async cancelSubscription(subscriptionId: string): Promise<boolean> {
-    // TODO: replace with real Stripe SDK call
-    logger.warn('StripePaymentGateway.cancelSubscription: SDK not wired', { subscriptionId });
-    return true;
+  async cancelSubscription(_subscriptionId: string): Promise<boolean> {
+    // TODO: wire real Stripe SDK call
+    throw new ServiceUnavailableError(
+      'StripePaymentGateway.cancelSubscription: Stripe SDK is not yet wired.'
+    );
   }
 
-  async deleteCustomer(customerId: string): Promise<boolean> {
-    // TODO: replace with real Stripe SDK call
-    logger.warn('StripePaymentGateway.deleteCustomer: SDK not wired', { customerId });
-    return true;
+  async deleteCustomer(_customerId: string): Promise<boolean> {
+    // TODO: wire real Stripe SDK call
+    throw new ServiceUnavailableError(
+      'StripePaymentGateway.deleteCustomer: Stripe SDK is not yet wired.'
+    );
   }
 }
 

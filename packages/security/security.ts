@@ -175,10 +175,22 @@ export class SecurityAlertManager extends EventEmitter {
   private readonly logger = getLogger('SecurityAlertManager');
 
   /**
-  * Register an alert handler
-  */
-  onAlert(handler: (alert: SecurityAlert) => void | Promise<void>): void {
-  this.alertHandlers.push(handler);
+   * Register an alert handler.
+   * P1-FIX: Returns a disposal function so callers can remove the handler when
+   * they are torn down, preventing unbounded growth of this.alertHandlers.
+   * Previously there was no way to unregister a handler, causing a memory leak
+   * proportional to the number of register calls over the server's lifetime.
+   *
+   * @returns A zero-argument function that removes the registered handler.
+   */
+  onAlert(handler: (alert: SecurityAlert) => void | Promise<void>): () => void {
+    this.alertHandlers.push(handler);
+    return () => {
+      const idx = this.alertHandlers.indexOf(handler);
+      if (idx !== -1) {
+        this.alertHandlers.splice(idx, 1);
+      }
+    };
   }
 
   /**

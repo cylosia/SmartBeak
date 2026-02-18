@@ -25,16 +25,35 @@ export function escapeLikePattern(pattern: string, escapeChar: string = '\\'): s
 }
 
 /**
- * Build safe ILIKE query with ESCAPE clause
- * SECURITY FIX: Complete protection against LIKE injection
- * @param column - Column name to search
- * @param paramIndex - Parameter index for prepared statement
- * @returns Object with SQL fragment and escaped pattern
+ * Safe PostgreSQL identifier pattern.
+ * Allows letters, digits, and underscores; must start with a letter or underscore.
+ * This matches unquoted identifiers PostgreSQL accepts and prevents SQL injection
+ * via column name interpolation.
+ */
+const SAFE_IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Build safe ILIKE query with ESCAPE clause.
+ * SECURITY FIX (P1-2): Validate the column name against a strict identifier
+ * pattern before interpolating into SQL. Without this check, a caller passing
+ * user-controlled column names could inject arbitrary SQL through the column
+ * position (the LIKE pattern is parameterised, but the column name is not).
+ *
+ * @param column - Column name to search (must match [a-zA-Z_][a-zA-Z0-9_]*)
+ * @param paramIndex - Parameter index for the prepared statement placeholder
+ * @returns Object with SQL fragment and a pattern-wrapping helper
+ * @throws Error if column does not match the safe identifier pattern
  */
 export function buildSafeIlikeQuery(column: string, paramIndex: number): {
   sql: string;
   wrapPattern: (pattern: string) => string;
 } {
+  if (!SAFE_IDENTIFIER_RE.test(column)) {
+    throw new Error(
+      `buildSafeIlikeQuery: unsafe column name '${column}'. ` +
+      'Column names must match [a-zA-Z_][a-zA-Z0-9_]*.'
+    );
+  }
   return {
     sql: `${column} ILIKE $${paramIndex} ESCAPE '\\'`,
     wrapPattern: (pattern: string) => `%${escapeLikePattern(pattern)}%`

@@ -15,12 +15,15 @@
  * MEDIUM FIX E17: Add proper error handling in empty catch blocks
  */
 
-// import { getLogger } from '@kernel/logger';
-const getLogger = (_name: string) => ({
-  debug: (..._args: unknown[]) => {},
-  info: (..._args: unknown[]) => {},
-  warn: (..._args: unknown[]) => {},
-  error: (..._args: unknown[]) => {},
+// P2-FIX: @kernel/logger is not in apps/web dependencies (architectural boundary).
+// Use structured console wrappers so shutdown events are observable in production
+// logs rather than silently swallowed.  Replace with a proper logger if/when the
+// web package takes a dependency on @kernel.
+const getLogger = (name: string) => ({
+  debug: (...args: unknown[]) => console.debug(`[${name}]`, ...args),
+  info:  (...args: unknown[]) => console.info(`[${name}]`, ...args),
+  warn:  (...args: unknown[]) => console.warn(`[${name}]`, ...args),
+  error: (...args: unknown[]) => console.error(`[${name}]`, ...args),
 });
 
 /** Logger instance for shutdown operations */

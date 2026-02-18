@@ -53,18 +53,23 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
   // P0-FIX (P0-7): Add rel="noopener noreferrer" to all target="_blank" links
   // to prevent tabnabbing attacks where the opened page gains window.opener
   // access and can redirect the original tab to a phishing page.
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  //
+  // SECURITY (P0-3): Use try-finally so the hook is always removed even if
+  // sanitize() throws, preventing hook accumulation across calls.
+  // Use removeHook() targeting the specific event instead of removeAllHooks()
+  // to avoid destroying hooks registered by other callers of DOMPurify.
+  const tabnabbingHook = (node: Element) => {
     if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
       node.setAttribute('rel', 'noopener noreferrer');
     }
-  });
+  };
+  DOMPurify.addHook('afterSanitizeAttributes', tabnabbingHook);
 
-  const result = DOMPurify.sanitize(html, config);
-
-  // Remove the hook after use to prevent accumulation across calls
-  DOMPurify.removeAllHooks();
-
-  return result;
+  try {
+    return DOMPurify.sanitize(html, config);
+  } finally {
+    DOMPurify.removeHook('afterSanitizeAttributes');
+  }
 }
 
 /**

@@ -40,7 +40,12 @@ const config: Record<string, Knex.Config> = {
     ...getBaseConfig(),
     connection: {
       connectionString: process.env['CONTROL_PLANE_DB'],
-      ssl: { rejectUnauthorized: process.env['DB_SSL_REJECT_UNAUTHORIZED'] !== 'false' },
+      // P1-FIX: Hardcode rejectUnauthorized: true. Previously the env var
+      // DB_SSL_REJECT_UNAUTHORIZED=false could disable TLS certificate
+      // verification in production, opening connections to MitM attacks.
+      // If you need self-signed certs, provide a CA bundle via the `ca`
+      // field instead of disabling certificate validation.
+      ssl: { rejectUnauthorized: true },
     },
   },
 };

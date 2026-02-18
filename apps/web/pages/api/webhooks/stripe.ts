@@ -113,25 +113,49 @@ function getRedis(): Redis | null {
 }
 
 /**
-* Check if event was already processed (distributed across instances)
-* P0-FIX: Fail closed - no in-memory fallback in serverless
-*/
-async function isDuplicateEvent(eventId: string): Promise<boolean> {
+ * Check if event was already processed (read-only — does NOT mark as processed).
+ * P1-FIX: Separate check from mark so a processing failure does not permanently
+ * prevent retries. Previously isDuplicateEvent() atomically set the Redis key
+ * before processing; a crash mid-handler left the key set and the event
+ * unprocessable on Stripe's retry. Now we check here, then call
+ * markEventProcessed() only after the DB transaction commits successfully.
+ */
+async function isAlreadyProcessed(eventId: string): Promise<boolean> {
   const client = getRedis();
   if (!client) {
-    // P0-FIX: Fail closed - can't verify deduplication
     logger.error('Redis unavailable, cannot verify deduplication');
     throw new Error('Service temporarily unavailable');
   }
 
   const key = `stripe:processed:${eventId}`;
   try {
-    // NX = only set if not exists, EX = expire time
-    const result = await client.set(key, '1', 'EX', EVENT_ID_TTL_SECONDS, 'NX');
-    return result === null; // null means key already existed
+    const exists = await client.exists(key);
+    return exists === 1;
   } catch (error) {
-    logger.error('Redis error, cannot verify deduplication', error as Error);
+    logger.error('Redis error checking deduplication key', error as Error);
     throw new Error('Service temporarily unavailable');
+  }
+}
+
+/**
+ * Mark an event as successfully processed. Call only after the DB transaction
+ * commits so that a processing failure leaves the key unset and Stripe can retry.
+ */
+async function markEventProcessed(eventId: string): Promise<void> {
+  const client = getRedis();
+  if (!client) {
+    logger.error('Redis unavailable, cannot mark event processed');
+    throw new Error('Service temporarily unavailable');
+  }
+
+  const key = `stripe:processed:${eventId}`;
+  try {
+    await client.set(key, '1', 'EX', EVENT_ID_TTL_SECONDS);
+  } catch (error) {
+    // Non-fatal: the event was already processed successfully in the DB.
+    // Log but do not rethrow — a missing Redis key only risks a duplicate
+    // DB attempt on the next retry, which the ON CONFLICT / SELECT guards handle.
+    logger.error('Redis error marking event processed', error as Error, { eventId });
   }
 }
 
@@ -272,8 +296,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Event timestamp too old' });
   }
 
-  // Distributed idempotency check
-  if (await isDuplicateEvent(event.id)) {
+  // P1-FIX: Read-only check first; we write the Redis key only after success.
+  if (await isAlreadyProcessed(event.id)) {
     logger.info('Event already processed, skipping', { eventId: event.id });
     return res.json({ received: true, idempotent: true });
   }
@@ -283,19 +307,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // SECURITY FIX: Issue 17 - Add timeout for event processing
     const processingTimeout = 25000; // 25 seconds (Vercel limit is 30s)
-    
+
     await Promise.race([
       processEvent(event),
-      new Promise<never>((_, reject) => 
+      new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Event processing timeout')), processingTimeout)
       ),
     ]);
+
+    // P1-FIX: Mark processed only after the DB transaction commits successfully.
+    // If this Redis write fails it is non-fatal — the DB-level SELECT guards
+    // prevent duplicate inserts on the next Stripe retry.
+    await markEventProcessed(event.id);
 
     res.json({ received: true, type: event.type });
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error('Error processing event', err, { eventType: event.type, eventId: event.id });
-    
+
     // SECURITY FIX: Don't expose internal errors
     res.status(500).json({
       error: 'Processing error',

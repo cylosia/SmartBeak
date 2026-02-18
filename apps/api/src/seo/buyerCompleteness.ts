@@ -76,7 +76,10 @@ export function computeSeoCompleteness(input: {
   );
   score += validated.updated_ratio * FRESHNESS_WEIGHT;
   score += validated.schema_coverage * SCHEMA_WEIGHT;
-  return Math.round(score);
+  // P2-FIX: Clamp to [0, 100].  If env-supplied weight constants are
+  // misconfigured and sum to more than 100, the raw score would silently
+  // exceed 100 and produce nonsensical buyer reports.
+  return Math.min(100, Math.max(0, Math.round(score)));
 }
 
 // Export schema for reuse in other modules
