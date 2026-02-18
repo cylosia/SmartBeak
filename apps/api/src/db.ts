@@ -61,7 +61,7 @@ const config = {
     reapIntervalMillis: 1000,
     createRetryIntervalMillis: 200,
   },
-  // statement_timeout is already set in connection config (line 65)
+  // Note: statement_timeout is set in the connection config above (idle_in_transaction_session_timeout block).
   acquireConnectionTimeout: isServerless ? 5000 : 60000,
   migrations: {
     tableName: 'schema_migrations',
@@ -227,7 +227,7 @@ async function resetAnalyticsDb(): Promise<void> {
       await oldInstance.destroy();
     }
     catch (err) {
-      logger.error('Error destroying old analytics connection', err as Error);
+      logger.error('Error destroying old analytics connection', err instanceof Error ? err : new Error(String(err)));
     }
   }
   analyticsDbPromise = null;
@@ -422,7 +422,7 @@ export async function testConnection(): Promise<boolean> {
     return true;
   }
   catch (error) {
-    logger.error('Database connection failed', error as Error);
+    logger.error('Database connection failed', error instanceof Error ? error : new Error(String(error)));
     return false;
   }
 }
@@ -489,7 +489,7 @@ export async function closeConnection(): Promise<void> {
       instance.destroy(),
       30000
     ).catch(err => {
-      logger.error('Error closing primary DB connection', err as Error);
+      logger.error('Error closing primary DB connection', err instanceof Error ? err : new Error(String(err)));
     }));
   }
   if (analyticsDbInstance) {
@@ -499,7 +499,7 @@ export async function closeConnection(): Promise<void> {
       instance.destroy(),
       30000
     ).catch(err => {
-      logger.error('Error closing analytics DB connection', err as Error);
+      logger.error('Error closing analytics DB connection', err instanceof Error ? err : new Error(String(err)));
     }));
   }
   await Promise.all(promises);
