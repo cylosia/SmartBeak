@@ -51,11 +51,17 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
 
     const { contentId, targetId, scheduleAt } = parseResult.data;
 
-    // P0-FIX: await the result so the handler returns the resolved value,
-    // not a Promise object serialized as {}, and errors are caught by the
-    // try/catch instead of becoming unhandled promise rejections.
+    // P0-FIX: domainId is optional on the auth context (API tokens may not
+    // carry a domain scope). The prior non-null assertion `ctx["domainId"]!`
+    // silently passed undefined, which would insert a NULL domain_id bypassing
+    // domain isolation entirely. Fail fast with a 400 instead.
+    const domainId = ctx["domainId"];
+    if (!domainId) {
+    return errors.badRequest(res, 'Domain ID is required for publishing jobs', 'REQUIRED_FIELD');
+    }
+
     const result = await svc.createJob({
-    domainId: ctx["domainId"]!,
+    domainId,
     contentId,
     targetId,
     ...(scheduleAt !== undefined && { scheduleAt }),

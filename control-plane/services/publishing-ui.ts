@@ -100,8 +100,12 @@ export class PublishingUIService {
   */
   async getJob(jobId: string, client?: Pool | PoolClient): Promise<PublishingJobRecord | undefined> {
   const db = client || this.pool;
+  // P1-FIX: Replace SELECT * with explicit column list. SELECT * returns every
+  // column, including any sensitive ones (e.g. credentials, config) added in
+  // future migrations, and over-fetches data never used by callers.
   const { rows } = await db.query(
-    `SELECT * FROM publishing_jobs WHERE id=$1`,
+    `SELECT id, content_id, target_id, status, created_at, published_at
+    FROM publishing_jobs WHERE id=$1`,
     [jobId]
   );
   return rows[0];
@@ -113,10 +117,14 @@ export class PublishingUIService {
   * @returns Promise resolving to retry result
   */
   async retryJob(jobId: string): Promise<RetryJobResult> {
-  await this.pool.query(
-    `UPDATE publishing_jobs SET status='pending' WHERE id=$1`,
+  // P1-FIX: Unconditional status reset can restart a running job (causing
+  // two workers to process the same job simultaneously) or re-publish already
+  // succeeded content. Restrict reset to terminal failure states only.
+  const { rowCount } = await this.pool.query(
+    `UPDATE publishing_jobs SET status='pending'
+    WHERE id=$1 AND status IN ('failed', 'cancelled')`,
     [jobId]
   );
-  return { ok: true };
+  return { ok: (rowCount ?? 0) > 0 };
   }
 }

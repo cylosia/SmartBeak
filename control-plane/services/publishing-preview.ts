@@ -65,17 +65,23 @@ export class PublishingPreviewService {
     [contentId]
   );
 
+  // P1-FIX: Replace hardcoded placeholder with configured app URL.
+  // All preview URLs previously pointed to example.com instead of the
+  // actual deployment domain, producing incorrect sharing links.
+  const appBaseUrl = (process.env['APP_BASE_URL'] ?? '').replace(/\/$/, '');
+  const contentUrl = `${appBaseUrl}/content/${contentId}`;
+
   const post = renderFacebookPost({
     title: content.rows[0].title,
     excerpt: seo.rows[0]?.description,
-    url: `https://example.com/content/${contentId}`,
+    url: contentUrl,
     imageUrl: media.rows[0]?.url
   });
 
   return {
     title: content.rows[0].title,
     excerpt: seo.rows[0]?.description,
-    url: `https://example.com/content/${contentId}`,
+    url: contentUrl,
     imageUrl: media.rows[0]?.url,
     rendered: post.message
   };

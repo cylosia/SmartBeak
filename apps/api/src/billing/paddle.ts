@@ -144,11 +144,26 @@ export function processPaddleWebhook(payload: PaddleWebhookPayload): {
 * Normalize subscription data
 
 */
+const VALID_PADDLE_STATUSES: ReadonlySet<PaddleSubscription['status']> = new Set([
+  'active', 'canceled', 'paused', 'past_due',
+]);
+
 function normalizeSubscription(data: Record<string, unknown>): PaddleSubscription {
+  // P2-FIX: Validate status against the known union before casting.
+  // A raw `as PaddleSubscription['status']` would silently accept any string
+  // Paddle may add (e.g. 'trialing'), causing downstream switch statements to
+  // misclassify subscription states and grant/deny access incorrectly.
+  const rawStatus = typeof data['status'] === 'string' ? data['status'] : '';
+  const status: PaddleSubscription['status'] = VALID_PADDLE_STATUSES.has(
+    rawStatus as PaddleSubscription['status']
+  )
+    ? (rawStatus as PaddleSubscription['status'])
+    : 'past_due';
+
   return {
   id: String(data['id'] || ''),
   customerId: String(data['customer_id'] || ''),
-  status: (data['status'] as PaddleSubscription['status']) || 'past_due',
+  status,
   items: Array.isArray(data['items'])
     ? (data['items'] as Record<string, unknown>[]).map((item: Record<string, unknown>) => ({
       priceId: String(item['price_id'] || ''),
@@ -205,22 +220,39 @@ export async function createPaddleCheckout(orgId: string, planId: string): Promi
     throw new Error('PADDLE_API_KEY not configured');
   }
   
-  const response = await fetch(`${API_BASE_URLS.paddle}/transactions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${paddleApiKey}`,
-      'Content-Type': 'application/json',
-      'Idempotency-Key': idempotencyKey,  // <-- ACTUALLY SEND IT
-    },
-    body: JSON.stringify({
-      items: [{ price_id: planId, quantity: 1 }],
-      custom_data: { org_id: orgId },
-    }),
-  });
-  
+  // P1-FIX: Add AbortController timeout so Paddle API degradation cannot
+  // hold connections open indefinitely and exhaust the server's connection pool.
+  const paddleAbortController = new AbortController();
+  const paddleTimeoutId = setTimeout(() => paddleAbortController.abort(), 30000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URLS.paddle}/transactions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${paddleApiKey}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        items: [{ price_id: planId, quantity: 1 }],
+        custom_data: { org_id: orgId },
+      }),
+      signal: paddleAbortController.signal,
+    });
+  } finally {
+    clearTimeout(paddleTimeoutId);
+  }
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`Paddle API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    // P1-FIX: Avoid logging raw errorData which may contain PII or internal IDs.
+    // Log only a safe error code; the full body is not surfaced to callers.
+    const errorData = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const errorObj = errorData['error'];
+    const safeErrorCode = (typeof errorObj === 'object' && errorObj !== null)
+      ? String((errorObj as Record<string, unknown>)['code'] ?? response.status)
+      : String(response.status);
+    throw new Error(`Paddle API error: ${safeErrorCode}`);
   }
   
   const data = await response.json();

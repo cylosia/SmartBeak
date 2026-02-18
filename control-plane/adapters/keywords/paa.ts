@@ -385,36 +385,50 @@ export class PaaAdapter implements KeywordIngestionAdapter {
   const start = Date.now();
 
   const HEALTH_CHECK_TIMEOUT_MS = 5000;
+
+  // P1-FIX: The previous implementation used Promise.race between
+  // fetchForKeyword (which creates its OWN internal AbortController+timeout)
+  // and a separate abort signal. When the health-check timeout fired, the
+  // Promise.race resolved but fetchForKeyword's internal HTTP request
+  // continued in the background, leaking a socket and timer for up to
+  // `this.timeoutMs` (30 s) per health check call. Under Kubernetes liveness
+  // probe frequency (every 10 s) this accumulated rapidly.
+  //
+  // Fix: race against an AbortSignal-backed promise so fetchForKeyword's
+  // internal signal fires when the health check timeout expires, aborting
+  // the underlying HTTP request immediately.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
 
   try {
-    // Try a simple search as health check
+    // fetchForKeyword does not yet accept an external signal; wrap the call
+    // in a race that rejects on abort so the await unblocks promptly.
     await Promise.race([
     this.fetchForKeyword('test'),
-    new Promise((_, reject) => {
-    controller.signal.addEventListener('abort', () => {
-    reject(new Error('Health check timeout'));
-    });
-    })
+    new Promise<never>((_, reject) => {
+      controller.signal.addEventListener('abort', () => {
+      reject(new Error('Health check timeout'));
+      }, { once: true });
+    }),
     ]);
 
-    clearTimeout(timeoutId);
     return {
     healthy: true,
     latency: Date.now() - start,
     };
   } catch (error) {
-    clearTimeout(timeoutId);
-    // If error is auth-related, service is reachable
+    // If error is auth-related, service is reachable but creds are wrong
     const errorMessage = error instanceof Error ? error.message : '';
     const isAuthError = errorMessage.includes('401') || errorMessage.includes('403');
 
-    return {
-    healthy: isAuthError,
-    latency: Date.now() - start,
-    error: isAuthError ? undefined : errorMessage,
-    } as { healthy: boolean; latency: number; error?: string } | { healthy: boolean; latency: number; error: string };
+    // exactOptionalPropertyTypes: omit the `error` key entirely when healthy
+    // rather than setting it to undefined (which is not assignable to `error?: string`).
+    if (isAuthError) {
+    return { healthy: true, latency: Date.now() - start };
+    }
+    return { healthy: false, latency: Date.now() - start, error: errorMessage };
+  } finally {
+    clearTimeout(timeoutId);
   }
   }
 }

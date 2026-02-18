@@ -193,6 +193,10 @@ export class AnalyticsPipeline {
   this.isFlushing.keywords = true;
   const items = this.buffer.keywords.splice(0, this.batchSize);
   try {
+    // P1-FIX: Add ON CONFLICT DO NOTHING so that re-queued items after a
+    // transient DB error (unshift back onto buffer) do not cause duplicate
+    // rows on the next successful flush. Requires uidx_keyword_metrics_dedup
+    // unique index (added in migration 20260619000006).
     // Use unnest for efficient batch insert
     await this.db.query(
     `INSERT INTO keyword_metrics (
@@ -204,7 +208,8 @@ export class AnalyticsPipeline {
     $4::int[], $5::int[], $6::numeric[],
     $7::int[], $8::int[], $9::int[],
     $10::numeric[], $11::timestamp[]
-    )`,
+    )
+    ON CONFLICT (domain_id, keyword, source, timestamp) DO NOTHING`,
     [
     items.map(i => i.keyword),
     items.map(i => i.domainId),

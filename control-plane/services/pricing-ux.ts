@@ -9,8 +9,13 @@ export class PricingUXService {
   ) {}
 
   async getDomainAllowance(orgId: string) {
-  const plan = await this.billing.getActivePlan(orgId);
-  const usage = await this.usage.getUsage(orgId) as Record<string, number>;
+  // P2-FIX: getActivePlan and getUsage are independent; run in parallel to
+  // take max(latencies) instead of accumulating both sequentially.
+  const [plan, usageRaw] = await Promise.all([
+    this.billing.getActivePlan(orgId),
+    this.usage.getUsage(orgId),
+  ]);
+  const usage = usageRaw as Record<string, number>;
 
   // P1-FIX: Split no-plan from unlimited-plan case.
   // Previously !plan fell through to 'Unlimited domains', so users with
