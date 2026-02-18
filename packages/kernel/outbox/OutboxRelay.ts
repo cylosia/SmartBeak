@@ -25,6 +25,8 @@ export interface OutboxRelayOptions {
   batchSize?: number;
   /** Also enqueue events to BullMQ (default: true) */
   publishToQueue?: boolean;
+  /** Maximum backoff in milliseconds when consecutive poll cycles fail (default: 30000) */
+  maxBackoffMs?: number;
 }
 
 interface OutboxRow {
@@ -55,6 +57,17 @@ export class OutboxRelay {
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
   private readonly publishToQueue: boolean;
+  private readonly maxBackoffMs: number;
+
+  /** Tracks whether a poll() call is currently executing, for graceful shutdown. */
+  private pollInFlight = false;
+
+  /**
+   * Current delay before the next scheduled poll.  Starts at pollIntervalMs
+   * and doubles on each consecutive failure (capped at maxBackoffMs).
+   * Resets to pollIntervalMs after a successful cycle.
+   */
+  private currentBackoffMs: number;
 
   constructor(
     private readonly pool: Pool,
@@ -64,6 +77,8 @@ export class OutboxRelay {
     this.pollIntervalMs = options.pollIntervalMs ?? 1000;
     this.batchSize = options.batchSize ?? 50;
     this.publishToQueue = options.publishToQueue ?? true;
+    this.maxBackoffMs = options.maxBackoffMs ?? 30_000;
+    this.currentBackoffMs = this.pollIntervalMs;
   }
 
   /**
@@ -80,7 +95,9 @@ export class OutboxRelay {
   }
 
   /**
-   * Stop the relay and cancel pending polls.
+   * Stop the relay, cancel pending polls, and wait for any in-flight poll
+   * cycle to complete before resolving.  This ensures no open transactions
+   * or connections are leaked on graceful shutdown.
    */
   async stop(): Promise<void> {
     this.running = false;
@@ -88,6 +105,13 @@ export class OutboxRelay {
       clearTimeout(this.pollTimer);
       this.pollTimer = undefined;
     }
+
+    // Wait for any currently executing poll() to finish.  Polling at 10 ms
+    // keeps shutdown latency low while avoiding a busy-spin.
+    while (this.pollInFlight) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+
     logger.info('Outbox relay stopped');
   }
 
@@ -97,6 +121,7 @@ export class OutboxRelay {
   private async poll(): Promise<void> {
     if (!this.running) return;
 
+    this.pollInFlight = true;
     try {
       const client = await this.pool.connect();
 
@@ -118,6 +143,7 @@ export class OutboxRelay {
         if (rows.length === 0) {
           await client.query('COMMIT');
           client.release();
+          this.resetBackoff();
           this.scheduleNext();
           return;
         }
@@ -145,11 +171,13 @@ export class OutboxRelay {
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             failedUpdates.push({ id: row.id, error: errorMsg });
-            logger.error('Failed to publish outbox event', undefined, {
-              id: row.id,
-              eventName: row.event_name,
-              error: errorMsg,
-            });
+            // FIX (P1-logger): pass the actual Error instance so stack traces
+            // are captured; previously undefined was passed which loses context.
+            logger.error(
+              'Failed to publish outbox event',
+              err instanceof Error ? err : new Error(errorMsg),
+              { id: row.id, eventName: row.event_name }
+            );
           }
         }
 
@@ -179,6 +207,8 @@ export class OutboxRelay {
           published: publishedIds.length,
           failed: failedUpdates.length,
         });
+
+        this.resetBackoff();
       } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         client.release(true);
@@ -189,6 +219,12 @@ export class OutboxRelay {
         'Outbox relay poll error',
         err instanceof Error ? err : new Error(String(err))
       );
+      // FIX (P1-backoff): double the delay on each consecutive failure so a
+      // persistent downstream outage (DB down, event bus unavailable) does not
+      // create a tight retry loop that saturates the connection pool.
+      this.increaseBackoff();
+    } finally {
+      this.pollInFlight = false;
     }
 
     this.scheduleNext();
@@ -196,7 +232,15 @@ export class OutboxRelay {
 
   private scheduleNext(): void {
     if (this.running) {
-      this.pollTimer = setTimeout(() => { void this.poll(); }, this.pollIntervalMs);
+      this.pollTimer = setTimeout(() => { void this.poll(); }, this.currentBackoffMs);
     }
+  }
+
+  private resetBackoff(): void {
+    this.currentBackoffMs = this.pollIntervalMs;
+  }
+
+  private increaseBackoff(): void {
+    this.currentBackoffMs = Math.min(this.currentBackoffMs * 2, this.maxBackoffMs);
   }
 }

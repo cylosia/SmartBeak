@@ -22,7 +22,7 @@ const CreateOrgSchema = z.object({
   .max(100, 'Organization name must be 100 characters or less')
   .regex(/^[a-zA-Z0-9\s\-_.]+$/, 'Organization name contains invalid characters')
   .trim(),
-});
+}).strict();
 
 // SECURITY FIX (C01): Validate invite body - prevents privilege escalation and XSS via email
 const InviteSchema = z.object({
@@ -30,7 +30,7 @@ const InviteSchema = z.object({
   role: z.enum(['admin', 'editor', 'viewer'], {
     message: 'Role must be one of: admin, editor, viewer',
   }),
-});
+}).strict();
 
 // SECURITY FIX (C02): Validate add-member body - prevents privilege escalation to owner
 const AddMemberSchema = z.object({
@@ -38,14 +38,22 @@ const AddMemberSchema = z.object({
   role: z.enum(['admin', 'editor', 'viewer'], {
     message: 'Role must be one of: admin, editor, viewer',
   }),
-});
+}).strict();
 
 // SECURITY FIX (H08): Validate org ID route parameter
 const OrgIdParamsSchema = z.object({
   id: z.string().uuid('Invalid organization ID format'),
-});
+}).strict();
 
-export async function orgRoutes(app: FastifyInstance, pool: Pool) {
+// FIX (P2-pagination): Validate pagination query params.  Callers must be
+// able to page beyond the first N members; without this the response was
+// silently truncated at the service default and there was no way to advance.
+const MembersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+}).strict();
+
+export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const orgs = new OrgService(pool);
   const members = new MembershipService(pool);
   const invites = new InviteService(pool);
@@ -66,7 +74,8 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     const { name } = bodyResult.data;
-    return await orgs.createOrg(name, ctx.userId);
+    // FIX (P2-201): Resource creation must return HTTP 201, not the default 200.
+    return res.code(201).send(await orgs.createOrg(name, ctx.userId));
   } catch (error) {
     if (error instanceof AuthError) {
       return error.statusCode === 403
@@ -103,7 +112,15 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return errors.notFound(res, 'Organization');
     }
 
-    return await orgs.listMembers(id);
+    // FIX (P2-pagination): Validate and forward pagination params so callers
+    // can page through orgs with more than the default limit of members.
+    const queryResult = MembersQuerySchema.safeParse(req.query);
+    if (!queryResult.success) {
+    return errors.validationFailed(res, queryResult.error.issues);
+    }
+    const { limit, offset } = queryResult.data;
+
+    return res.send(await orgs.listMembers(id, limit, offset));
   } catch (error) {
     if (error instanceof AuthError) {
       return error.statusCode === 403
@@ -146,7 +163,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     return errors.validationFailed(res, bodyResult.error.issues);
     }
     const { email, role } = bodyResult.data;
-    return await invites.invite(id, email, role);
+    return res.send(await invites.invite(id, email, role));
   } catch (error) {
     if (error instanceof AuthError) {
       return error.statusCode === 403
@@ -190,7 +207,7 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     }
     const { userId, role } = bodyResult.data;
     await members.addMember(id, userId, role);
-    return { ok: true };
+    return res.send({ ok: true });
   } catch (error) {
     if (error instanceof AuthError) {
       return error.statusCode === 403
