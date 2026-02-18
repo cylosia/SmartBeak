@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { DB } from '@kernel/constants';
 
@@ -188,7 +189,7 @@ export class CustomersService {
     VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING id, org_id as "orgId", name, email, status,
         created_at as "createdAt", updated_at as "updatedAt"`,
-    [crypto.randomUUID(), orgId, sanitizedName, sanitizedEmail, 'active', now, now]
+    [randomUUID(), orgId, sanitizedName, sanitizedEmail, 'active', now, now]
     );
 
     return { success: true, customer: this.mapRowToCustomer(rows[0]) };

@@ -256,21 +256,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Continue processing but log warning - can be changed to reject if strict version control is needed
   }
 
-  // P1-FIX: Timestamp validation to prevent replay attacks
-  // Stripe includes 'created' timestamp in event (Unix timestamp)
-  const eventCreated = event.created as number;
-  const now = Math.floor(Date.now() / 1000);
-  const maxAge = 5 * 60; // 5 minutes
-  
-  if (!eventCreated || isNaN(eventCreated)) {
-    logger.warn('Event missing created timestamp');
-    return res.status(400).json({ error: 'Invalid event timestamp' });
-  }
-  
-  if (now - eventCreated > maxAge) {
-    logger.warn('Event too old', { ageSeconds: now - eventCreated, maxAge });
-    return res.status(400).json({ error: 'Event timestamp too old' });
-  }
+  // P0-004-FIX: Removed the 5-minute age check on event.created.
+  // Stripe retries failed webhook deliveries for up to 72 hours.  The
+  // event.created timestamp reflects when Stripe first generated the event,
+  // not when this specific HTTP delivery was made.  Checking
+  // `now - event.created > 300` would reject any retry arriving more than
+  // 5 minutes after event creation — permanently dropping events.
+  //
+  // Replay-attack protection is already provided by two mechanisms:
+  //   1. constructEvent() validates the Stripe-Signature header timestamp
+  //      within a 300-second tolerance (network-level replay window).
+  //   2. isDuplicateEvent() below deduplicates via Redis SET NX (24 h TTL),
+  //      making replayed events with the same ID a safe no-op.
 
   // Distributed idempotency check
   if (await isDuplicateEvent(event.id)) {
@@ -358,29 +355,47 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
     throw new Error('Checkout session missing orgId metadata');
   }
 
+  // P0-008-FIX: Always require a Stripe customer ID for checkout.session.completed.
+  // A subscription-mode checkout always creates a Stripe customer. If customer is
+  // absent something is wrong with the event — reject it rather than skipping the
+  // org-ownership verification (which would allow metadata tampering to upgrade
+  // any org without being tied to a real Stripe customer).
+  const customerId = session.customer as string | null;
+  if (!customerId) {
+    logger.error('Security rejection: checkout.session.completed missing customer ID', undefined, {
+      sessionId: session.id,
+      orgId: orgId.substring(0, 8) + '...',
+    });
+    throw new Error('Checkout session missing Stripe customer ID — event rejected');
+  }
+
   // F20-FIX: Verify orgId belongs to the Stripe customer before processing.
   // Without this check, an attacker who controls checkout metadata can upgrade
-  // any arbitrary org to a paid plan. The Fastify handler had this check but
-  // this Next.js handler did not.
-  const customerId = session.customer as string;
-  if (customerId) {
-    const verifyClient = await pool.connect();
-    try {
-      const { rows: orgRows } = await verifyClient.query(
-        'SELECT id FROM organizations WHERE id = $1 AND stripe_customer_id = $2',
-        [orgId, customerId]
-      );
-      if (orgRows.length === 0) {
-        logger.error('Security violation: orgId does not belong to Stripe customer', undefined, {
-          orgId: orgId.substring(0, 8) + '...',
-          customerId: customerId.substring(0, 8) + '...',
-        });
-        throw new Error('Org verification failed: orgId does not belong to Stripe customer');
-      }
-    } finally {
-      verifyClient.release();
+  // any arbitrary org to a paid plan.
+  const verifyClient = await pool.connect();
+  try {
+    const { rows: orgRows } = await verifyClient.query(
+      'SELECT id FROM organizations WHERE id = $1 AND stripe_customer_id = $2',
+      [orgId, customerId]
+    );
+    if (orgRows.length === 0) {
+      logger.error('Security violation: orgId does not belong to Stripe customer', undefined, {
+        orgId: orgId.substring(0, 8) + '...',
+        customerId: customerId.substring(0, 8) + '...',
+      });
+      throw new Error('Org verification failed: orgId does not belong to Stripe customer');
     }
+  } finally {
+    verifyClient.release();
   }
+
+  // P0-005-FIX: Fetch the Stripe subscription BEFORE opening the DB transaction.
+  // Previously the Stripe API call was inside BEGIN…COMMIT, holding a connection
+  // for the full duration of the network round-trip (potentially several seconds
+  // or minutes under Stripe retries), exhausting the connection pool under load.
+  // All external HTTP calls must be completed before acquiring a DB client.
+  const stripeClient = getStripe();
+  const subscription = await stripeClient.subscriptions.retrieve(session.subscription as string);
 
   const client = await pool.connect();
   try {
@@ -397,9 +412,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
       return;
     }
 
-    const stripeClient = getStripe();
-    const subscription = await stripeClient.subscriptions.retrieve(session.subscription as string);
-
     await client.query(
       `INSERT INTO subscriptions (
         id, org_id, stripe_customer_id, stripe_subscription_id,
@@ -409,7 +421,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session):
       [
         subscription.id,
         orgId,
-        session.customer,
+        customerId,
         subscription.id,
         subscription.status,
         subscription.items.data[0]?.price?.id,

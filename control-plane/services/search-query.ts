@@ -53,6 +53,17 @@ export class SearchQueryService {
     throw new ValidationError('Query must be a non-empty string');
   }
 
+  // P2-016-FIX: Cap query length before passing to plainto_tsquery().
+  // A very long query (e.g. 1 MB of text) is handed to PostgreSQL's FTS
+  // parser which allocates memory proportional to the input size, potentially
+  // causing statement timeouts or OOM on the DB server.  255 characters is
+  // sufficient for any real search query; longer strings are almost always
+  // automated abuse.
+  const MAX_QUERY_LENGTH = 255;
+  if (query.length > MAX_QUERY_LENGTH) {
+    throw new ValidationError(`Search query must be ${MAX_QUERY_LENGTH} characters or fewer`);
+  }
+
   if (limit < 1 || limit > 100) {
     throw new ValidationError('Limit must be between 1 and 100');
   }

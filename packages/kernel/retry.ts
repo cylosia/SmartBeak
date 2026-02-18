@@ -118,6 +118,12 @@ const DEFAULT_OPTIONS: RetryOptions = {
   'timeout',
   'rate limit',
   'too many requests',
+  // P1-005-FIX: PostgreSQL deadlock (40P01) and serialization failure (40001).
+  // Both are transient by definition: the DB aborts one party so the other can
+  // succeed, and the aborted transaction is always safe to retry in full.
+  // Without these entries the retry wrapper surfaces a spurious 500 instead.
+  '40P01',
+  '40001',
   ],
 };
 

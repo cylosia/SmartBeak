@@ -50,8 +50,13 @@ export const envSchema = z.object({
   JWT_KEY_2: secretString,
   KEY_ENCRYPTION_SECRET: secretString,
 
+  // P1-001-FIX: REDIS_URL is required. Redis backs CSRF tokens, BullMQ job queues,
+  // billing idempotency, Stripe webhook deduplication, and rate limiting. Marking
+  // it optional allowed the server to start without Redis, silently disabling those
+  // subsystems and crashing mid-request rather than at startup.
+  REDIS_URL: z.string().url({ message: 'REDIS_URL must be a valid URL (e.g. redis://localhost:6379)' }),
+
   // -- Optional services --
-  REDIS_URL: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(10).optional(),
   STABILITY_API_KEY: z.string().min(10).optional(),
   AHREFS_API_TOKEN: z.string().min(1).optional(),

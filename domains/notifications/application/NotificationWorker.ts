@@ -97,7 +97,12 @@ export class NotificationWorker {
     const attempt = attemptCount + 1;
 
     // Check user preferences
-    const preferences = await this.prefs.getForUser(notification.userId);
+    // P2-015-FIX: Pass the transaction client so this read participates in
+    // the READ COMMITTED transaction started above.  Without the client the
+    // query runs outside the transaction: if another concurrent request
+    // disables the channel between this read and the delivery call, the
+    // worker sends a notification to a user who has since unsubscribed.
+    const preferences = await this.prefs.getForUser(notification.userId, client);
     const pref = preferences.find(p => p.channel === notification.channel);
     if (pref && !pref.isEnabled()) {
     // Skip delivery based on user preference

@@ -139,9 +139,14 @@ export async function createStripeCheckoutSession(
 
   const appUrl = getAppUrl();
 
-  // P0-FIX: Use cryptographically secure random UUID for idempotency key
-  // Date.now() can collide within same millisecond causing double-charges
-  const idempotencyKey = `checkout_${orgId}_${priceId}_${crypto.randomUUID()}`;
+  // P0-007-FIX: Use a deterministic, time-windowed idempotency key.
+  // Using randomUUID() defeats idempotency: each call produces a unique key so
+  // Stripe treats every retry as a fresh request, creating duplicate checkout
+  // sessions and potential double-charges.
+  // A 1-hour window (floor(ms / 3_600_000)) lets users start a new session
+  // after an hour while deduplicating rapid retries within the same window.
+  const hourWindow = Math.floor(Date.now() / 3_600_000);
+  const idempotencyKey = `checkout_${orgId}_${priceId}_${hourWindow}`;
 
   // P0-FIX: Pass idempotencyKey to Stripe API to prevent double-charges on retry
   return withRetry(() =>

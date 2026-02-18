@@ -14,6 +14,7 @@ import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+import { DomainOwnershipService } from '../../services/domain-ownership';
 
 const TargetBodySchema = z.object({
   type: z.enum(['wordpress', 'webhook', 'api']),
@@ -30,6 +31,7 @@ const DomainQuerySchema = z.object({
 
 export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new PublishingUIService(pool);
+  const ownership = new DomainOwnershipService(pool);
 
   app.get('/publishing/targets', async (req, res) => {
   try {
@@ -42,8 +44,18 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
+    // P1-012-FIX: Verify the requested domain belongs to the authenticated org.
+    // Without this check any authenticated user could enumerate publish targets
+    // for any domain UUID (IDOR). The check throws DOMAIN_NOT_OWNED if the
+    // domain does not belong to ctx.orgId.
+    await ownership.assertOrgOwnsDomain(ctx['orgId'], queryResult.data.domainId);
+
     return svc.listTargets(queryResult.data.domainId);
   } catch (error) {
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+      return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
     logger.error('[publishing/targets] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
   }
@@ -60,6 +72,9 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
+    // P1-012-FIX: Verify domain ownership before creating a target.
+    await ownership.assertOrgOwnsDomain(ctx['orgId'], queryResult.data.domainId);
+
     const bodyResult = TargetBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
       return errors.validationFailed(res, bodyResult["error"].issues);
@@ -68,6 +83,10 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
     const { type, config } = bodyResult.data;
     return svc.createTarget(queryResult.data.domainId, type, config);
   } catch (error) {
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+      return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
     logger.error('[publishing/targets] Create error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
   }
@@ -84,8 +103,15 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
+    // P1-012-FIX: Verify domain ownership before listing jobs.
+    await ownership.assertOrgOwnsDomain(ctx['orgId'], queryResult.data.domainId);
+
     return svc.listJobs(queryResult.data.domainId);
   } catch (error) {
+    const errWithCode = error as { code?: string };
+    if (errWithCode.code === 'DOMAIN_NOT_OWNED') {
+      return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
+    }
     logger.error('[publishing/jobs] Error', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(res);
   }
