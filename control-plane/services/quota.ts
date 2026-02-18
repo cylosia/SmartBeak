@@ -2,8 +2,11 @@
 // Valid quota fields — validated against this whitelist before any SQL usage
 import { Pool } from 'pg';
 import type { OrgId } from '@kernel/branded';
+import { getLogger } from '@kernel/logger';
 import { BillingService } from './billing';
 import { UsageService } from './usage';
+
+const logger = getLogger('QuotaService');
 
 const VALID_QUOTA_FIELDS = ['domain_count', 'content_count', 'media_count'] as const;
 export type QuotaField = typeof VALID_QUOTA_FIELDS[number];
@@ -111,8 +114,16 @@ export class QuotaService {
    * concurrent requests can exceed the quota in the window between check and
    * increment. enforceAndIncrement() eliminates this window with a single
    * atomic conditional UPDATE.
+   *
+   * P2-3 FIX: Log a prominent warning at call-time so any remaining caller
+   * appears in application logs and can be tracked down and migrated.
    */
   async enforce(orgId: OrgId, field: QuotaField): Promise<void> {
+  logger.warn(
+    'QuotaService.enforce() is deprecated and contains a TOCTOU race condition. ' +
+    'Migrate this call-site to enforceAndIncrement().',
+    { orgId, field }
+  );
   const { exceeded, current, limit } = await this.check(orgId, field);
 
   if (exceeded && limit !== null) {
@@ -163,8 +174,12 @@ export class QuotaService {
     throw new Error('Valid orgId is required');
   }
 
-  const plan = await this.billing.getActivePlan(orgId);
-  const usage = await this.usage.getUsage(orgId);
+  // P2-2 FIX: Run both independent DB calls in parallel — no data dependency
+  // exists between getActivePlan and getUsage; sequential awaits doubled latency.
+  const [plan, usage] = await Promise.all([
+    this.billing.getActivePlan(orgId),
+    this.usage.getUsage(orgId),
+  ]);
 
   const createQuotaInfo = (field: QuotaField) => {
     const limit = this.getLimitFromPlan(plan, field);

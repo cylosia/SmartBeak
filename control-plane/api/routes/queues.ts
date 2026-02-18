@@ -77,33 +77,30 @@ function withErrorBoundary(
 }
 
 /**
-* Classify error type based on error characteristics
-* MEDIUM FIX E1: Use error codes instead of message sniffing
+* Classify error type based on the error's structural identity (name / code),
+* not its message text.
+*
+* P1-5 FIX: The previous implementation fell back to message.includes() for
+* 'timeout', 'connection', 'unauthorized', and 'forbidden'. This is fragile:
+*   - Library error messages change across versions → silent misclassification.
+*   - A DB error whose message mentions 'unauthorized_access_log' table would
+*     be returned to the client as HTTP 401, blocking legitimate admin access.
+* We now rely exclusively on error.name, which is the idiomatic structural
+* identifier for Error subclasses. Unknown errors fall to INTERNAL_ERROR,
+* which is the safe default — the catch block logs the real cause.
 *
 * @param error - Error to classify
 * @returns Error code
 */
 function classifyError(error: Error): ErrorCode {
-  const message = error.message.toLowerCase();
-
-  // Check for specific error patterns without relying on message sniffing
-  if (error.name === 'UnauthorizedError' || message.includes('unauthorized')) {
-    return ErrorCodes.AUTH_REQUIRED;
+  switch (error.name) {
+    case 'UnauthorizedError': return ErrorCodes.AUTH_REQUIRED;
+    case 'ForbiddenError':    return ErrorCodes.FORBIDDEN;
+    case 'ValidationError':   return ErrorCodes.VALIDATION_ERROR;
+    case 'QueryTimeoutError': return ErrorCodes.QUERY_TIMEOUT;
+    case 'ConnectionError':   return ErrorCodes.CONNECTION_ERROR;
+    default:                  return ErrorCodes.INTERNAL_ERROR;
   }
-  if (error.name === 'ForbiddenError' || message.includes('forbidden')) {
-    return ErrorCodes.FORBIDDEN;
-  }
-  if (error.name === 'ValidationError') {
-    return ErrorCodes.VALIDATION_ERROR;
-  }
-  if (message.includes('timeout')) {
-    return ErrorCodes.QUERY_TIMEOUT;
-  }
-  if (message.includes('connection')) {
-    return ErrorCodes.CONNECTION_ERROR;
-  }
-
-  return ErrorCodes.INTERNAL_ERROR;
 }
 
 /**
@@ -174,10 +171,14 @@ function getUserFriendlyErrorMessage(code: ErrorCode, originalError: Error): str
 * DLQ list query parameters schema
 * MEDIUM FIX I1: Add validation on query parameters
 */
+// P2-6 FIX: Added .strict() — without it, extra query parameters (including
+// prototype-pollution attempts like ?__proto__=x) were silently accepted and
+// stripped. .strict() rejects requests with unknown keys, making typos in
+// param names (e.g. ?statuss=failed) visible to the caller rather than silent.
 const DLQListQuerySchema = PaginationQuerySchema.extend({
   region: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/).optional(),
   status: z.enum(['pending', 'processing', 'failed', 'resolved']).optional(),
-});
+}).strict();
 
 
 /**
