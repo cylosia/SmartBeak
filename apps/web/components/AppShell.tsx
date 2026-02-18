@@ -48,7 +48,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             display: 'block',
             padding: '4px 0',
             fontWeight: pathname === href ? 'bold' : 'normal',
-            outline: 'none',
+            // P1-A11Y-FIX: Removed outline:none. Suppressing the focus ring without
+            // a custom replacement violates WCAG 2.1 SC 2.4.7 (Focus Visible).
+            // The same bug was fixed in DomainTabs.tsx but was missed here,
+            // making all primary nav links invisible to keyboard users.
           }}
         >
           {label}

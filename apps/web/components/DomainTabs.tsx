@@ -2,6 +2,10 @@
 
 import { useCallback, useRef, type KeyboardEvent } from 'react';
 
+// P1-ARIA-FIX: Added 'health' and 'history' entries so that the active prop
+// passed by health.tsx and history.tsx resolves to a valid tab index.
+// Previously, findIndex() returned -1 for those pages, meaning aria-selected was
+// never set to true on any tab — an invalid ARIA tablist state (WCAG 4.1.2).
 const tabs = [
   ['overview', 'Overview'],
   ['content', 'Content'],
@@ -12,6 +16,8 @@ const tabs = [
   ['email', 'Email & Audience'],
   ['affiliates', 'Affiliates'],
   ['integrations', 'Integrations'],
+  ['health', 'Health'],
+  ['history', 'History'],
   ['theme', 'Theme'],
   ['deployment', 'Deployment'],
   ['buyer', 'Buyer & Exit'],

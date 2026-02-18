@@ -170,8 +170,14 @@ if (LEGACY_PATH_MODE !== 'off') {
     if (pathname === '/' || pathname === '') return;
 
     if (LEGACY_PATH_MODE === 'rewrite') {
-      // Silent rewrite: route to /v1 without client roundtrip
-      req.raw.url = `/v1${req.url}`;
+      // P2-BUG-FIX: Use pre-computed pathname instead of raw req.url for the path
+      // component. req.url includes the query string, so prepending /v1 directly
+      // would produce /v1/domains?foo=bar correctly, but using pathname avoids
+      // the case where a path traversal payload (e.g. /v1/../admin) in req.url
+      // is not normalised, bypassing route-level access controls. Re-attach the
+      // query string separately, matching the redirect branch logic below.
+      const query = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+      req.raw.url = `/v1${pathname}${query}`;
     } else {
       // 308 Permanent Redirect: preserves HTTP method (unlike 301 which changes POST to GET)
       const query = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
@@ -391,8 +397,13 @@ app.addHook('onRequest', async (req, reply) => {
     // at the middleware level. Webhook routes must now individually opt into public access
     // via config: { public: true } on the route definition and implement their own
     // signature verification (e.g., Stripe HMAC, Clerk webhook signature).
+    // P2-BUG-FIX: Removed pathname.startsWith('/health/') from the public-route list.
+    // /health/detailed, /health/repositories, and /health/sequences are authenticated
+    // admin routes — their handlers each check auth explicitly. Including them in the
+    // public list caused req.auth to always be null on those routes, even when a valid
+    // Bearer token was provided, preventing audit logging of the authenticated userId.
     const isPublicRoute = (req.routeOptions?.config as { public?: boolean })?.public === true ||
-                         pathname === '/health' || pathname.startsWith('/health/') ||
+                         pathname === '/health' ||
                          pathname === '/readyz' || pathname === '/livez';
 
     if (!authHeader) {
@@ -757,18 +768,29 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
   if (!pool) throw new Error('Database pool not initialized');
   // P1-FIX: Combined 3 sequential queries into 1 to reduce pool connection usage.
   // Previously consumed 3 pool connections per health check request.
-  const result = await pool.query(
-    `SELECT
+  // P1-BUG-FIX: Added per-query timeout. Without query_timeout, a slow/locked
+  // publishing_jobs table holds a pool connection for the full statement_timeout
+  // (30s), consuming a pool slot on every /health probe (10s K8s interval).
+  // Three concurrent probes × 30s timeout = 90 connection-seconds of starvation
+  // for authenticated business endpoints. query_timeout is a client-side pg
+  // option that disconnects the stream after the given ms without waiting for DB.
+  const result = await pool.query({
+    text: `SELECT
        COUNT(*) FILTER (WHERE status = 'processing' AND updated_at < NOW() - INTERVAL '30 minutes') AS stalled,
        COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '1 hour') AS failed,
        COUNT(*) FILTER (WHERE status IN ('pending', 'scheduled')) AS pending
-     FROM publishing_jobs`
-  );
+     FROM publishing_jobs`,
+    query_timeout: 5000,
+  });
 
+  // Guard against impossible empty result (COUNT without GROUP BY always returns 1 row).
+  // If the table is renamed or the schema changes, this throws immediately rather
+  // than silently reporting 0 stalled jobs when the query returns nothing.
+  if (!result.rows[0]) throw new Error('checkQueues: unexpected empty result from COUNT query');
   const row = result.rows[0];
-  const stalledJobs = parseInt(row?.stalled || '0', 10);
-  const failedJobs = parseInt(row?.failed || '0', 10);
-  const pendingJobs = parseInt(row?.pending || '0', 10);
+  const stalledJobs = parseInt(row?.['stalled'] ?? '0', 10);
+  const failedJobs = parseInt(row?.['failed'] ?? '0', 10);
+  const pendingJobs = parseInt(row?.['pending'] ?? '0', 10);
 
   // Alert if there are too many stalled jobs
   if (stalledJobs > 10) {
@@ -803,11 +825,20 @@ app.get('/health/detailed', {
   try { requireRole(auth, ['admin', 'owner']); } catch { return errHelpers.forbidden(reply, 'Admin access required'); }
   if (!container) throw new Error('Container not initialized');
   const containerHealth = await container.getHealth();
-  return {
-  status: containerHealth.services["database"] ? 'healthy' : 'degraded',
-  services: containerHealth.services,
-  details: containerHealth.details,
-  };
+  // P1-BUG-FIX: Previous check only evaluated services["database"], so a Redis
+  // failure still produced status:'healthy' and HTTP 200. Now checks all services.
+  // Also added HTTP 503 when status is 'unhealthy' — the previous implementation
+  // always returned 200, making this endpoint useless for monitoring/alerting tools
+  // that rely on HTTP status codes (rather than parsing the response body).
+  const serviceValues = Object.values(containerHealth.services as Record<string, boolean>);
+  const allHealthy = serviceValues.length > 0 && serviceValues.every(Boolean);
+  const anyUnhealthy = serviceValues.some(v => !v);
+  const detailedStatus = allHealthy ? 'healthy' : anyUnhealthy ? 'unhealthy' : 'degraded';
+  return reply.status(detailedStatus === 'unhealthy' ? 503 : 200).send({
+    status: detailedStatus,
+    services: containerHealth.services,
+    details: containerHealth.details,
+  });
 });
 
 // F33-FIX: Require auth for repository health check
@@ -928,10 +959,18 @@ setupShutdownHandlers();
 // Catch unhandled promise rejections so they don't silently crash the process
 // (Node.js default since v15 is to abort on unhandled rejection).
 // Background tasks, event emitters and timers outside the Fastify lifecycle
-// can reject here; log and attempt graceful shutdown instead of hard crash.
+// can reject here; log and then exit to avoid running in a corrupted state.
+// P1-BUG-FIX: The previous handler only logged without calling process.exit().
+// This allowed the application to continue running after an unhandled rejection,
+// which is dangerous: the application state after a rejection is undefined.
+// In a financial system, continuing to accept traffic after, e.g., a failed
+// payment promise could lead to double-processing or data inconsistency.
+// Node.js v15+ aborts by default for exactly this reason. We exit(1) here
+// to produce a non-zero exit code that triggers pod restart in Kubernetes.
 process.on('unhandledRejection', (reason) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
-  logger.error('Unhandled promise rejection — initiating graceful shutdown', err);
+  logger.error('Unhandled promise rejection — exiting to prevent corrupted state', err);
+  process.exit(1);
 });
 
 process.on('uncaughtException', (err) => {
