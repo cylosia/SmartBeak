@@ -290,10 +290,15 @@ export function getRateLimitConfig(operation: string): RateLimitConfig {
 let globalRateLimiter: RedisRateLimiter | null = null;
 
 /**
-* Initialize global rate limiter
+* Initialize global rate limiter.
+* Idempotent: returns the existing instance if already initialized.
+* Calling this multiple times (e.g. during hot-reload or tests) will NOT
+* leak the previous Redis connection — the existing instance is reused.
 */
 export function initializeRateLimiter(redisUrl?: string): RedisRateLimiter {
-  globalRateLimiter = new RedisRateLimiter(redisUrl);
+  if (!globalRateLimiter) {
+    globalRateLimiter = new RedisRateLimiter(redisUrl);
+  }
   return globalRateLimiter;
 }
 

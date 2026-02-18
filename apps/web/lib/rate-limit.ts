@@ -3,7 +3,16 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 /**
 * Rate Limiting Utility for Next.js API Routes
-* Uses Redis in production, falls back to in-memory for development
+*
+* WARNING: This implementation uses an in-memory LRU cache only.
+* It is NOT distributed — each Next.js instance maintains its own counter.
+* In a scaled deployment (multiple instances behind a load balancer) an
+* attacker can bypass rate limits by distributing requests across instances,
+* effectively multiplying their allowed rate by the number of running pods.
+*
+* For production deployments with horizontal scaling, replace the in-memory
+* counter with a shared Redis-backed store (e.g. @kernel/rateLimiterRedis).
+* This file is intentionally kept simple for single-instance or local dev use.
 */
 
 export interface RateLimitRecord {

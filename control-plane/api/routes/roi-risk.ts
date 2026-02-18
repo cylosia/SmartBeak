@@ -46,7 +46,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     }
     const { assetId } = paramsResult.data;
 
-    const hasAccess = await verifyAssetOwnership(ctx["orgId"], assetId, pool);
+    const hasAccess = await verifyAssetOwnership(ctx.orgId, assetId, pool);
     if (!hasAccess) {
     logger.warn(`[IDOR] User ${ctx.userId} attempted to access ROI/Risk for asset ${assetId} outside their org`);
     return errors.notFound(res, 'Asset');
@@ -62,7 +62,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     FROM assets a
     LEFT JOIN asset_roi ar ON a.id = ar.asset_id
     WHERE a.id = $1 AND a.org_id = $2`,
-    [assetId, ctx["orgId"]]
+    [assetId, ctx.orgId]
     );
 
     if (!assetData) {
@@ -78,7 +78,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     FROM asset_risk_factors arf
     JOIN assets a ON a.id = arf.asset_id
     WHERE arf.asset_id = $1 AND a.org_id = $2`,
-    [assetId, ctx["orgId"]]
+    [assetId, ctx.orgId]
     ),
     pool.query(
     `SELECT ar.recommendation as text
@@ -86,7 +86,7 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     JOIN assets a ON a.id = ar.asset_id
     WHERE ar.asset_id = $1 AND a.org_id = $2
     ORDER BY ar.priority DESC`,
-    [assetId, ctx["orgId"]]
+    [assetId, ctx.orgId]
     )
     ]);
 

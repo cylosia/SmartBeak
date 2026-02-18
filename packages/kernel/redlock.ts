@@ -97,24 +97,25 @@ export async function acquireLock(
 
   const result = await redis.eval(luaAcquire, 2, lockKey, fencingKey, lockValue, String(opts.ttl), String(FENCE_KEY_TTL_MULTIPLIER));
 
-  // P0-FIX: Validate the Lua script response before trusting it.
+  // Validate the Lua script response before trusting it.
   // redis.eval() returns `unknown`. The Lua script returns either -1 (lock not
-  // acquired) or a positive integer fencing token (lock acquired). If the
-  // result is null/undefined/NaN, Number() would silently produce 0 or NaN:
-  //   Number(null)      === 0   → 0 >= 0 is true → spurious lock granted
-  //   Number(undefined) === NaN → NaN >= 0 is false → correct but for wrong reasons
-  //   Number([])        === 0   → same spurious-lock risk as null
-  // We must reject any non-integer result to avoid granting a phantom lock.
-  if (typeof result !== 'number' && !Number.isInteger(result)) {
-    if (result === null || result === undefined || !Number.isFinite(Number(result))) {
-      throw new Error(`Unexpected Lua response type for lock acquire on "${resource}": ${typeof result}`);
-    }
+  // acquired) or a positive integer fencing token (lock acquired).
+  //
+  // Bug in the previous guard: `typeof result !== 'number' && !Number.isInteger(result)`
+  // used `&&`, so a non-integer number like 1.5 bypassed validation entirely:
+  //   typeof 1.5 !== 'number'  → false → && short-circuits → block skipped
+  //   token = Number(1.5) = 1.5, Number.isFinite(1.5) = true → no throw
+  //   1.5 >= 0 → true → phantom lock granted.
+  //
+  // The correct predicate is `!Number.isInteger(result)` which rejects ALL of:
+  //   null, undefined, strings, arrays, floats, Infinity, NaN
+  // because Number.isInteger requires typeof === 'number' AND no fractional part.
+  if (!Number.isInteger(result)) {
+    throw new Error(
+      `Unexpected Lua response for lock acquire on "${resource}": expected integer, got ${typeof result} (${JSON.stringify(result)})`
+    );
   }
-  const token = Number(result);
-  // NaN guard: NaN >= 0 is false, but be explicit to catch it as an error
-  if (!Number.isFinite(token)) {
-    throw new Error(`Non-finite fencing token from Redis for lock "${resource}": ${String(result)}`);
-  }
+  const token = result as number;
 
   if (token >= 0) {
     return {

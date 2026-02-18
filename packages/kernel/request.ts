@@ -125,7 +125,7 @@ export class StructuredLogger {
     level,
     message,
     requestId: context.requestId,
-    correlationId: context["correlationId"],
+    correlationId: context.correlationId,
     adapter: this.adapterName,
     operation: context.operation,
     durationMs: Date.now() - context.startTime,
@@ -323,7 +323,7 @@ export function createRequestHeaders(
 ): Record<string, string> {
   return {
   'X-Request-ID': context.requestId,
-  ...(context["correlationId"] && { 'X-Correlation-ID': context["correlationId"] }),
+  ...(context.correlationId && { 'X-Correlation-ID': context.correlationId }),
   ...additionalHeaders,
   };
 }

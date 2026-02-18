@@ -230,7 +230,7 @@ export class RateLimiter {
   * @param cost - Token cost for this request (default: 1)
   * @returns Rate limit status
   */
-  async checkLimit(provider: string, _cost: number = 1): Promise<RateLimitStatus> {
+  async checkLimit(provider: string, cost: number = 1): Promise<RateLimitStatus> {
   const config = this.configs.get(provider);
   if (!config) {
     // No limit configured, allow
@@ -263,7 +263,7 @@ export class RateLimiter {
     config.tokensPerInterval,
     config.intervalSeconds,
     config.burstSize ?? config.tokensPerInterval,
-    1,
+    cost,
     now,
     ]
   );
