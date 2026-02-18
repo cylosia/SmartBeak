@@ -62,12 +62,16 @@ const SubscriberIdParamsSchema = z.object({
 // Check if user can access domain
 async function canAccessDomain(userId: string, domainId: string, orgId: string): Promise<boolean> {
   const db = await getDb();
+  // P1-SQL FIX: Add .timeout(10000) consistent with experiments.ts canAccessDomain.
+  // Without a timeout, a slow or hung domain_registry/memberships join holds the
+  // connection indefinitely, exhausting the pool and cascading to all routes.
   const row = await db('domain_registry')
     .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
     .where('domain_registry.domain_id', domainId)
     .where('memberships.user_id', userId)
     .where('domain_registry.org_id', orgId)
     .select('memberships.role')
+    .timeout(10000)
     .first();
   return !!row;
 }

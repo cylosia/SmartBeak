@@ -70,7 +70,12 @@ export function requireIntEnv(name: string): number {
 export function parseFloatEnv(name: string, defaultValue: number): number {
   const value = process.env[name];
   if (!value) return defaultValue;
-  const parsed = parseFloat(value);
+  // P3-FIX: Trim whitespace before parsing, consistent with parseIntEnv.
+  // parseFloat('  3.14  ') returns 3.14 (lenient), but ' 0 ' would silently return 0
+  // instead of the default in edge cases. Explicit trim makes behavior predictable.
+  const trimmed = value.trim();
+  if (!trimmed) return defaultValue;
+  const parsed = parseFloat(trimmed);
   return isNaN(parsed) ? defaultValue : parsed;
 }
 

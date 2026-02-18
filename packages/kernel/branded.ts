@@ -12,6 +12,7 @@ export type {
   Branded,
   OrgId,
   UserId,
+  ExperimentId,
   MembershipId,
   DomainId,
   DomainRegistryId,
@@ -51,6 +52,7 @@ export type {
 export {
   createOrgId,
   createUserId,
+  createExperimentId,
   createDomainId,
   createContentId,
   createEmailSubscriberId,

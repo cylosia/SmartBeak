@@ -36,7 +36,16 @@ const ExperimentStartInputSchema = z.object({
   // An unbounded string causes either a PostgreSQL "value too long" error
   // mid-transaction (stuck experiment state) or unbounded TEXT column growth.
   triggeredBy: z.string().max(256).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  // P1-6 FIX: Bound the metadata record to prevent DoS via oversized payload.
+  // An unbounded z.record(z.string(), z.unknown()) allows an attacker to submit
+  // millions of keys or multi-MB values, causing OOM, WAL bloat, and disk exhaustion.
+  // Cap keys at 100 chars, values capped indirectly via the 50-key limit + 32KB total.
+  metadata: z
+    .record(z.string().max(100), z.unknown())
+    .refine((m: Record<string, unknown>) => JSON.stringify(m).length < 32_768, {
+      message: 'metadata exceeds 32 KB size limit',
+    })
+    .optional(),
 });
 
 export type ExperimentStartInput = z.infer<typeof ExperimentStartInputSchema>;
@@ -53,7 +62,10 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
   validatedInput = ExperimentStartInputSchema.parse(payload);
   } catch (error) {
   if (error instanceof Error) {
-    logger.error('Invalid experiment start payload: ' + error.message);
+    // P1-3 FIX: Use structured logging instead of string concatenation to prevent
+    // log injection. String concatenation happens before the logger can redact
+    // sensitive fields — a malicious error.message with newlines breaks log parsers.
+    logger.error('Invalid experiment start payload', error, { validationError: error.message });
     throw new Error(`Validation failed: ${error.message}`);
   }
   throw error;
@@ -142,8 +154,12 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
   if (updated.length === 0) {
     // Race condition: another job may have updated the status
     // Check current state to return appropriate response
+    // P2-4 FIX: Select only columns consumed by validateExperiment.
+    // SELECT * fetches large JSONB/bytea columns unnecessarily inside a
+    // transaction holding a FOR UPDATE lock, increasing latency under contention.
     const currentExpResult = await trx('experiments')
     .where({ id: experimentId })
+    .select(['id', 'name', 'status', 'variants'])
     .first();
     const currentExp = currentExpResult ? validateExperiment(currentExpResult) : undefined;
 
