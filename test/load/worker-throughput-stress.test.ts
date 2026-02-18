@@ -10,7 +10,13 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-vi.mock('../packages/kernel/metrics', () => ({
+// P2-MOCK-PATH FIX: Use the path alias @kernel/metrics so Vitest intercepts
+// the exact module that RegionWorker imports (`import { emitMetric } from '../metrics'`
+// inside packages/kernel/queue/RegionWorker.ts resolves to @kernel/metrics).
+// The previous path '../packages/kernel/metrics' resolved to a non-existent path
+// relative to this test file (test/packages/kernel/metrics) and had no effect
+// on RegionWorker's actual import.
+vi.mock('@kernel/metrics', () => ({
   emitMetric: vi.fn(),
   emitCounter: vi.fn(),
 }));

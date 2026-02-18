@@ -71,6 +71,17 @@ export async function fetchWordPressPosts(
 ): Promise<WordPressPost[]> {
   const { perPage = 10, page = 1 } = options;
 
+  // P2-PAGINATION FIX: Enforce sane bounds so callers cannot DoS a WordPress
+  // server by requesting an astronomically large page (e.g. per_page=100000000).
+  // WordPress enforces a max of 100 server-side, but we validate here too so
+  // errors are caught early with clear messages.
+  if (!Number.isInteger(perPage) || perPage < 1 || perPage > 100) {
+    throw new Error('perPage must be an integer between 1 and 100');
+  }
+  if (!Number.isInteger(page) || page < 1) {
+    throw new Error('page must be a positive integer');
+  }
+
   // URL validation for baseUrl
   if (!config.baseUrl || typeof config.baseUrl !== 'string') {
   throw new Error('Invalid WordPress config: baseUrl is required');
@@ -380,7 +391,18 @@ export function parseWordPressContent(htmlContent: string): { text: string; imag
 
   while ((match = imageRegex.exec(htmlContent)) !== null && iterations < MAX_ITERATIONS) {
   iterations++;
-  images.push(match[1]!);
+  // P3-IMAGE-URL FIX: Only allow http/https URLs extracted from <img src>.
+  // Reject javascript:, data:, file:// and other dangerous schemes that could
+  // cause XSS (if rendered) or SSRF (if fetched) when callers use these URLs.
+  const rawUrl = match[1]!;
+  try {
+    const parsedUrl = new URL(rawUrl);
+    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+      images.push(rawUrl);
+    }
+  } catch {
+    // Malformed URL — skip
+  }
   }
 
   if (iterations >= MAX_ITERATIONS) {

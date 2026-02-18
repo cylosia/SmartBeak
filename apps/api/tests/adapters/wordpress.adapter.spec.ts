@@ -55,9 +55,14 @@ afterEach(() => {
 });
 
 test('creates post successfully', async () => {
+  const responseBody = JSON.stringify({ id: 123 });
   (fetch as any).mockResolvedValue({
     ok: true,
-    json: async () => ({ id: 123 })
+    // Production code calls assertResponseSizeOk(response) → response.headers.get()
+    // then response.text() + JSON.parse() rather than response.json().
+    headers: { get: jest.fn().mockReturnValue(null) },
+    text: async () => responseBody,
+    json: async () => ({ id: 123 }),
   });
 
   const res = await createWordPressPost({
