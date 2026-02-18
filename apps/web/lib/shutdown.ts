@@ -15,13 +15,7 @@
  * MEDIUM FIX E17: Add proper error handling in empty catch blocks
  */
 
-// import { getLogger } from '@kernel/logger';
-const getLogger = (_name: string) => ({
-  debug: (..._args: unknown[]) => {},
-  info: (..._args: unknown[]) => {},
-  warn: (..._args: unknown[]) => {},
-  error: (..._args: unknown[]) => {},
-});
+import { getLogger } from '@kernel/logger';
 
 /** Logger instance for shutdown operations */
 const logger = getLogger('shutdown');
@@ -162,8 +156,12 @@ export async function gracefulShutdown(signal: string): Promise<void> {
     // Sort handlers by priority (lower = earlier)
     const sortedHandlers = [...handlers].sort((a, b) => a.priority - b.priority);
 
-    // Execute all registered handlers in sequence with individual timeouts
-    const handlerPromises = sortedHandlers.map(async (registration, index) => {
+    // Execute all registered handlers sequentially in priority order.
+    // Sequential execution is intentional: handlers may depend on each other
+    // (e.g. flush logs before closing the DB, drain queue before closing Redis).
+    // Promise.all would run them in parallel and break ordering guarantees.
+    for (let index = 0; index < sortedHandlers.length; index++) {
+      const registration = sortedHandlers[index]!;
       const handlerName = registration.name || `handler-${index}`;
       let handlerTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -184,15 +182,13 @@ export async function gracefulShutdown(signal: string): Promise<void> {
 
         logger.debug(`Shutdown handler completed: ${handlerName}`);
       } catch (err) {
-                logger.error(`Shutdown handler ${handlerName} failed:`, err instanceof Error ? err : new Error(String(err)));
+        logger.error(`Shutdown handler ${handlerName} failed:`, err instanceof Error ? err : new Error(String(err)));
       } finally {
-                if (handlerTimer) {
+        if (handlerTimer) {
           clearTimeout(handlerTimer);
         }
       }
-    });
-
-    await Promise.all(handlerPromises);
+    }
 
         cleanupTimers();
 
