@@ -308,7 +308,7 @@ export async function withLock<T, Row extends Record<string, unknown> = Record<s
 
   const { clause: whereClause, params } = buildWhereClause(whereConditions);
 
-  return withTransaction(async (client) => {
+  return withTransaction(async (client, _signal) => {
     let lockClause = 'FOR UPDATE';
 
     if (options.skipLocked) {
@@ -356,7 +356,7 @@ export async function batchInsert<T extends Record<string, unknown>>(
   const validatedColumns = columns.map(col => validateColumnName(col as string));
 
   // P0-FIX: Use transaction for atomic batch insert
-  return withTransaction(async (trx) => {
+  return withTransaction(async (trx, _signal) => {
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
       const values: unknown[] = [];

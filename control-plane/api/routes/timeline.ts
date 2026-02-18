@@ -9,7 +9,7 @@ import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
 
-const _logger = getLogger('timeline');
+const logger = getLogger('timeline');
 
 const DomainParamsSchema = z.object({
   domainId: z.string().uuid(),
@@ -120,7 +120,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
         filters: { startDate, endDate, action, entityType },
       };
     } catch (dbErr) {
-      _logger.error('Timeline org query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+      logger.error('Timeline org query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
       return errors.internal(res, 'Failed to fetch timeline');
     }
   });
@@ -220,7 +220,7 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
         filters: { startDate, endDate, action, entityType },
       };
     } catch (dbErr) {
-      _logger.error('Timeline domain query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
+      logger.error('Timeline domain query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
       return errors.internal(res, 'Failed to fetch timeline');
     }
   });

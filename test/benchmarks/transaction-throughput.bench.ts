@@ -75,7 +75,7 @@ describe('Transaction Throughput Benchmarks', () => {
     const start = performance.now();
 
     for (let i = 0; i < ITERATIONS; i++) {
-      await withTransaction(async (client) => {
+      await withTransaction(async (client, _signal) => {
         await client.query('SELECT 1');
         return { id: i };
       });
@@ -93,7 +93,7 @@ describe('Transaction Throughput Benchmarks', () => {
 
     const start = performance.now();
 
-    await withTransaction(async (client) => {
+    await withTransaction(async (client, _signal) => {
       const values: string[] = [];
       const params: unknown[] = [];
       let paramIdx = 1;
@@ -123,7 +123,7 @@ describe('Transaction Throughput Benchmarks', () => {
     const start = performance.now();
 
     for (let i = 0; i < ITERATIONS; i++) {
-      await withTransaction(async () => {
+      await withTransaction(async (_client, _signal) => {
         // Empty transaction — measures pure framework overhead
         return null;
       });

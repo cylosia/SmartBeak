@@ -68,7 +68,8 @@ export const BulkSubscribeSchema = z.object({
 export const SubscriberQuerySchema = z.object({
   domain_id: z.string().uuid().optional(),
   status: z.enum(['active', 'unsubscribed', 'bounced', 'complained']).optional(),
-  email: z.string().email().optional(),
+  // Use canonical EmailSchema (includes .toLowerCase().trim()) to match storage format
+  email: EmailSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 }).strict();
@@ -124,38 +125,16 @@ export interface AuditEventParams {
 }
 
 /**
-* Subscriber create input
-*/
-export interface SubscriberCreateInput {
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  tags?: string[];
-  metadata?: Record<string, unknown>;
-  source?: string;
-  doubleOptIn?: boolean;
-}
+ * Subscriber create input — inferred from Zod schema to keep types in sync.
+ */
+export type SubscriberCreateInput = z.infer<typeof EmailSubscriberSchema>;
 
 /**
-* Subscriber update input
-*/
-export interface SubscriberUpdateInput {
-  firstName?: string;
-  lastName?: string;
-  tags?: string[];
-  metadata?: Record<string, unknown>;
-  status?: 'active' | 'unsubscribed' | 'bounced' | 'complained';
-}
+ * Subscriber update input — inferred from Zod schema to keep types in sync.
+ */
+export type SubscriberUpdateInput = z.infer<typeof UpdateSubscriberSchema>;
 
 /**
-* Subscriber query parameters
-*/
-export interface SubscriberQueryParams {
-  page?: number;
-  limit?: number;
-  status?: 'active' | 'unsubscribed' | 'bounced' | 'complained' | 'all';
-  tag?: string;
-  search?: string;
-  sortBy?: 'createdAt' | 'email' | 'lastActivity';
-  sortOrder?: 'asc' | 'desc';
-}
+ * Subscriber query parameters — inferred from Zod schema to keep types in sync.
+ */
+export type SubscriberQueryParams = z.infer<typeof SubscriberQuerySchema>;

@@ -76,7 +76,7 @@ describe('Transaction - Failure Scenarios', () => {
     it('should rollback and release connection when timeout is exceeded', async () => {
       await expect(
         withTransaction(
-          async (_client) => {
+          async (_client, _signal) => {
             // Simulate slow query that exceeds timeout
             await new Promise(resolve => setTimeout(resolve, 200));
             return 'should-not-reach';
@@ -110,7 +110,7 @@ describe('Transaction - Failure Scenarios', () => {
       });
 
       await expect(
-        withTransaction(async (client) => {
+        withTransaction(async (client, _signal) => {
           await client.query('SELECT 1');
           return 'result';
         })
@@ -144,14 +144,15 @@ describe('Transaction - Failure Scenarios', () => {
       });
 
       try {
-        await withTransaction(async (client) => {
+        await withTransaction(async (client, _signal) => {
           await client.query('SELECT 1');
           return 'result';
         });
         expect.unreachable('Should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(TransactionError);
-        const txError = error as TransactionError;
+        if (!(error instanceof TransactionError)) throw new Error('Expected TransactionError');
+        const txError = error;
         expect(txError.originalError).toBe(originalError);
         expect(txError.rollbackError).toBe(rollbackError);
         expect(txError.hasRollbackFailure).toBe(true);
@@ -172,7 +173,7 @@ describe('Transaction - Failure Scenarios', () => {
       });
 
       try {
-        await withTransaction(async (client) => {
+        await withTransaction(async (client, _signal) => {
           await client.query('SELECT 1');
           return 'result';
         });
@@ -200,7 +201,7 @@ describe('Transaction - Failure Scenarios', () => {
       });
 
       try {
-        await withTransaction(async (client) => {
+        await withTransaction(async (client, _signal) => {
           await client.query('SELECT * FROM users');
           return 'result';
         });
@@ -217,7 +218,7 @@ describe('Transaction - Failure Scenarios', () => {
     it('should reject invalid isolation levels', async () => {
       await expect(
         withTransaction(
-          async () => 'result',
+          async (_client, _signal) => 'result',
           { isolationLevel: 'INVALID' as unknown as 'READ COMMITTED' }
         )
       ).rejects.toThrow('Invalid isolation level');
@@ -228,7 +229,7 @@ describe('Transaction - Failure Scenarios', () => {
 
       for (const level of levels) {
         const result = await withTransaction(
-          async () => `level-${level}`,
+          async (_client, _signal) => `level-${level}`,
           { isolationLevel: level }
         );
         expect(result).toBe(`level-${level}`);

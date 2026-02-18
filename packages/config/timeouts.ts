@@ -5,6 +5,9 @@
  */
 
 import { parseIntEnv } from './env';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('config:timeouts');
 
 /**
  * FIXED (TIMEOUT-4.1): Guard against zero/negative timeout values.
@@ -15,7 +18,7 @@ import { parseIntEnv } from './env';
 function parsePositiveIntEnv(name: string, defaultValue: number): number {
   const parsed = parseIntEnv(name, defaultValue);
   if (parsed <= 0) {
-    console.warn(`[config] ${name}=${parsed} is not a positive integer; using default ${defaultValue}ms`);
+    logger.warn(`Invalid timeout configuration`, { variable: name, value: parsed, default: defaultValue });
     return defaultValue;
   }
   return parsed;
