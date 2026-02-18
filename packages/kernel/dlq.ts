@@ -135,16 +135,25 @@ class InMemoryDLQStorage implements DLQStorage {
   async enqueue(message: DLQMessage): Promise<void> {
 
   if (this.messages.size >= this.MAX_SIZE) {
-    // Remove oldest message (FIFO)
+    // Remove oldest message (FIFO).
+    // BUG-DLQ-06 fix: skip eviction if the oldest message has an active retry
+    // callback — evicting it would silently drop an in-flight job with no trace.
     const oldestKey = this.messages.keys().next().value;
     if (oldestKey) {
-    this.messages.delete(oldestKey);
-    this.timestamps.delete(oldestKey);
-    this.retryCallbacks.delete(oldestKey);
-    logger.warn('DLQ size limit reached, removed oldest message', {
-    removedId: oldestKey,
-    currentSize: this.messages.size
-    });
+    if (this.retryCallbacks.has(oldestKey)) {
+      logger.warn('DLQ size limit reached; oldest message has active retry — skipping eviction', {
+      skippedId: oldestKey,
+      currentSize: this.messages.size,
+      });
+    } else {
+      this.messages.delete(oldestKey);
+      this.timestamps.delete(oldestKey);
+      this.retryCallbacks.delete(oldestKey);
+      logger.warn('DLQ size limit reached, removed oldest message', {
+      removedId: oldestKey,
+      currentSize: this.messages.size,
+      });
+    }
     }
   }
 
@@ -163,6 +172,10 @@ class InMemoryDLQStorage implements DLQStorage {
   const message = this.messages.get(id);
   if (message) {
     this.messages.delete(id);
+    // BUG-DLQ-01 fix: also remove the associated timestamp and retry callback so
+    // they are not retained for up to 7 days (until the hourly cleanup TTLs them out).
+    this.timestamps.delete(id);
+    this.retryCallbacks.delete(id);
   }
   return message || null;
   }
@@ -179,6 +192,9 @@ class InMemoryDLQStorage implements DLQStorage {
   async delete(id: string): Promise<void> {
   this.messages.delete(id);
   this.retryCallbacks.delete(id);
+  // BUG-DLQ-02 fix: timestamps was not cleaned up here, causing it to grow
+  // unboundedly across purge cycles (up to 10,000 stale entries for 7 days).
+  this.timestamps.delete(id);
   }
 
   async retry(id: string): Promise<void> {
@@ -308,14 +324,18 @@ export async function sendToDLQ(
   attempts: number,
   maxAttempts: number,
   metadata?: Record<string, unknown>
-): Promise<void> {
+// BUG-DLQ-03 fix: return the DLQMessage so callers (e.g. withDLQ) can invoke onDLQ.
+): Promise<DLQMessage> {
 
   const sanitizedError = sanitizeError(error);
 
   // P2-FIX: Persist all metadata keys (not just firstFailedAt) so correlation IDs,
   // user context, and job parameters are available for DLQ investigation. Previously
   // every key in `metadata` except firstFailedAt was silently dropped.
-  const firstFailedAtValue = metadata?.["firstFailedAt"] as string | undefined;
+  // BUG-DLQ-07 fix: validate that firstFailedAt is actually a string before using it;
+  // `as string | undefined` was an unsafe cast on an `unknown` value.
+  const rawFirstFailedAt = metadata?.["firstFailedAt"];
+  const firstFailedAtValue = typeof rawFirstFailedAt === 'string' ? rawFirstFailedAt : undefined;
   let serializedMeta: Record<string, JSONValue> | undefined;
   if (metadata) {
   const { firstFailedAt: _ignored, ...rest } = metadata;
@@ -342,6 +362,7 @@ export async function sendToDLQ(
   };
 
   await getDLQStorageInstance().enqueue(message);
+  return message;
 }
 
 /**
@@ -395,7 +416,9 @@ export function withDLQ<T>(
   onDLQ?: (message: DLQMessage) => void;
   }
 ): (payload: T, attempt?: number) => Promise<void> {
-  const maxAttempts = options?.maxAttempts || 3;
+  // BUG-DLQ-04 fix: use ?? instead of || so maxAttempts: 0 (send to DLQ immediately)
+  // is respected rather than being coerced to 3 by the falsy || operator.
+  const maxAttempts = options?.maxAttempts ?? 3;
 
   return async (payload: T, attempt: number = 1): Promise<void> => {
   try {
@@ -403,7 +426,8 @@ export function withDLQ<T>(
   } catch (error: unknown) {
     if (attempt >= maxAttempts) {
     // Send to DLQ
-    await sendToDLQ(
+    // BUG-DLQ-03 fix: capture the returned DLQMessage so onDLQ can be invoked.
+    const dlqMessage = await sendToDLQ(
       queueName, // H10-FIX: Use actual queue name parameter instead of hardcoded value
       payload,
       error instanceof Error ? error : new Error(String(error)),
@@ -411,6 +435,8 @@ export function withDLQ<T>(
       maxAttempts,
       { firstFailedAt: new Date().toISOString() }
     );
+
+    options?.onDLQ?.(dlqMessage);
 
     // Don't throw - message is now in DLQ
     return;

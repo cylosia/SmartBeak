@@ -84,29 +84,43 @@ export function getDb(): Knex {
     dbInstance = knex(config);
     
     // Handle pool errors to prevent crashes
-    // LOW FIX L4: Use structured logger
-    dbInstance.on('query-error', (error: Error) => {
-      logger.error('Query error', error);
-    });
-
     dbInstance.on('error', (error: Error) => {
       logger.error('Database pool error', error);
     });
 
-    // Track query metrics
-    dbInstance.on('query', () => {
+    // Track query metrics using performance.now() for accurate sub-millisecond durations.
+    // Keyed by Knex's __knexQueryUid to correctly pair query/response/error events.
+    // BUG-DB-01 fix: merged two separate query-error listeners into one to prevent
+    //   double-counting on any re-initialization path.
+    // BUG-DB-02 fix: use performance.now() delta instead of Date.now() - obj.startTime;
+    //   Knex sets obj.startTime via performance.now(), so subtracting Date.now()
+    //   (a Unix epoch in ms) from a process-relative float always produced ~1.7e12ms,
+    //   classifying every query as slow.
+    const queryStartTimes = new Map<string, number>();
+    dbInstance.on('query', (obj: { __knexQueryUid?: string }) => {
       connectionMetrics.totalQueries++;
+      if (obj['__knexQueryUid']) {
+        queryStartTimes.set(obj['__knexQueryUid'], performance.now());
+      }
     });
-    dbInstance.on('query-response', (_response: unknown, obj: { startTime?: number }) => {
-      if (obj.startTime) {
-        const duration = Date.now() - obj.startTime;
-        if (duration > 1000) {
-          connectionMetrics.slowQueries++;
+    dbInstance.on('query-response', (_response: unknown, obj: { __knexQueryUid?: string }) => {
+      const uid = obj['__knexQueryUid'];
+      if (uid) {
+        const start = queryStartTimes.get(uid);
+        if (start !== undefined) {
+          queryStartTimes.delete(uid);
+          if (performance.now() - start > 1000) {
+            connectionMetrics.slowQueries++;
+          }
         }
       }
     });
-    dbInstance.on('query-error', () => {
+    dbInstance.on('query-error', (error: Error, obj: { __knexQueryUid?: string }) => {
+      logger.error('Query error', error);
       connectionMetrics.failedQueries++;
+      if (obj['__knexQueryUid']) {
+        queryStartTimes.delete(obj['__knexQueryUid']);
+      }
     });
   }
   return dbInstance;
@@ -187,24 +201,19 @@ let analyticsDbUrl: string | null = null;
 
 let lastAnalyticsError: number | null = null;
 let analyticsRetryCount = 0;
-const RETRY_DEBOUNCE_MS = 5000; // Wait 5 seconds before allowing retry
 const MAX_RETRY_COUNT = 5;
 /**
- * Calculate backoff delay with exponential backoff + jitter
- */
-function _getRetryBackoff(): number {
-  const baseDelay = Math.min(30000, 1000 * Math.pow(2, analyticsRetryCount));
-  const jitter = Math.random() * 1000;
-  return baseDelay + jitter;
-}
-/**
- * Check if we're in the retry debounce period
+ * Check if we're in the retry debounce period (exponential backoff).
+ * BUG-DB-06 fix: previously used fixed RETRY_DEBOUNCE_MS (5 s) constant.
  */
 function isInRetryDebounce(): boolean {
   if (!lastAnalyticsError)
     return false;
   const elapsed = Date.now() - lastAnalyticsError;
-  return elapsed < RETRY_DEBOUNCE_MS;
+  // Deterministic part of backoff (no jitter) used for comparison so the
+  // window is stable across multiple isInRetryDebounce() calls in one request.
+  const backoffMs = Math.min(30000, 1000 * Math.pow(2, analyticsRetryCount));
+  return elapsed < backoffMs;
 }
 /**
  * Reset analytics DB state (for URL changes or manual reset)
@@ -308,8 +317,9 @@ export async function analyticsDb(): Promise<Knex> {
   const initStartTime = Date.now();
 
   if (isInRetryDebounce()) {
-    const remainingMs = RETRY_DEBOUNCE_MS - (Date.now() - (lastAnalyticsError || 0));
-    logger.warn(`Analytics DB in retry debounce (${Math.ceil(remainingMs / 1000)}s remaining), using primary`);
+    const backoffMs = Math.min(30000, 1000 * Math.pow(2, analyticsRetryCount));
+    const remainingMs = backoffMs - (Date.now() - (lastAnalyticsError || 0));
+    logger.warn(`Analytics DB in retry debounce (${Math.ceil(Math.max(0, remainingMs) / 1000)}s remaining), using primary`);
     return getDb();
   }
 
@@ -457,25 +467,35 @@ export async function checkHealth(): Promise<HealthCheckResult> {
 export async function closeConnection(): Promise<void> {
   logger.info('Closing database connection...');
   const promises: Promise<void>[] = [];
-  // Add timeout to prevent hanging
-  const timeout = (ms: number): Promise<never> => new Promise((_, reject) => setTimeout(() => reject(new Error(`Shutdown timeout after ${ms}ms`)), ms));
+  // BUG-DB-07 fix: clear the timeout after the race settles to prevent a 30-second
+  // timer from firing after clean shutdown and emitting a spurious UnhandledPromiseRejection.
+  // Promise.race() does not cancel the losing promise; the timer must be cleared explicitly.
+  const withShutdownTimeout = (promise: Promise<void>, ms: number): Promise<void> => {
+    let id: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      id = setTimeout(() => reject(new Error(`Shutdown timeout after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+      if (id !== undefined) clearTimeout(id);
+    });
+  };
   // P0-FIX: Use getDb() to ensure lazy initialization and check if initialized
   const instance = dbInstance;
   if (instance) {
-    promises.push(Promise.race([
+    promises.push(withShutdownTimeout(
       instance.destroy(),
-      timeout(30000)
-    ]).catch(err => {
+      30000
+    ).catch(err => {
       logger.error('Error closing primary DB connection', err as Error);
     }));
   }
   if (analyticsDbInstance) {
     const instance = analyticsDbInstance;
     analyticsDbInstance = null;
-    promises.push(Promise.race([
+    promises.push(withShutdownTimeout(
       instance.destroy(),
-      timeout(30000)
-    ]).catch(err => {
+      30000
+    ).catch(err => {
       logger.error('Error closing analytics DB connection', err as Error);
     }));
   }

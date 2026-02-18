@@ -10,6 +10,19 @@ import { getRedis } from '@kernel/redis';
 
 const logger = getLogger('dns-verifier');
 
+/**
+ * BUG-DNS-02 fix: use a dedicated error class for input-validation failures so the
+ * outer catch can reliably suppress duplicate logs without fragile message-string
+ * matching (error.message.includes('Invalid') incorrectly suppressed legitimate
+ * transient DNS errors whose messages happened to contain the word 'Invalid').
+ */
+class DnsValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DnsValidationError';
+  }
+}
+
 // Negative cache: store failed DNS verification results to prevent
 // attackers from hammering the verifier with failing domains.
 const DNS_NEGATIVE_CACHE_TTL_SECONDS = 300; // 5 minutes
@@ -79,33 +92,39 @@ export function generateDnsTokenSafe(): string {
 */
 export async function verifyDnsSafe(domain: string, token: string): Promise<boolean> {
   try {
-  // Validate inputs
-  if (typeof domain !== 'string' || domain.length === 0 || domain.length > 253) {
-    logger.error('Invalid domain for DNS verification', new Error('Validation failed'), {
-    });
-    throw new Error('Invalid domain: must be a valid domain string');
+  // Validate inputs.
+  // BUG-DNS-03 fix: trim before the length check so domains with surrounding whitespace
+  // are not incorrectly rejected (previously domain.length > 253 ran on the raw input
+  // before trim(), rejecting valid domains padded with spaces).
+  if (typeof domain !== 'string') {
+    logger.error('Invalid domain for DNS verification', new Error('Validation failed'), {});
+    throw new DnsValidationError('Invalid domain: must be a valid domain string');
+  }
+  const trimmedDomain = domain.trim();
+  if (trimmedDomain.length === 0 || trimmedDomain.length > 253) {
+    logger.error('Invalid domain for DNS verification', new Error('Validation failed'), {});
+    throw new DnsValidationError('Invalid domain: must be a valid domain string');
   }
 
   if (typeof token !== 'string' || token.length === 0) {
-    logger.error('Invalid token for DNS verification', new Error('Validation failed'), {
-    });
-    throw new Error('Invalid token: must be a non-empty string');
+    logger.error('Invalid token for DNS verification', new Error('Validation failed'), {});
+    throw new DnsValidationError('Invalid token: must be a non-empty string');
   }
 
   // Sanitize domain (basic validation)
-  const sanitizedDomain = domain.trim().toLowerCase();
+  const sanitizedDomain = trimmedDomain.toLowerCase();
   if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(sanitizedDomain)) {
     logger.error('Domain format validation failed', new Error('Validation failed'), {
     domain: sanitizedDomain,
     });
-    throw new Error('Invalid domain format');
+    throw new DnsValidationError('Invalid domain format');
   }
 
   if (isPotentialRebindingAttack(sanitizedDomain)) {
     logger.error('Potential DNS rebinding attack detected', new Error('Security validation failed'), {
     domain: sanitizedDomain,
     });
-    throw new Error('Invalid domain: potential security risk');
+    throw new DnsValidationError('Invalid domain: potential security risk');
   }
 
   // Check negative cache to prevent DNS quota exhaustion from repeated failed lookups
@@ -125,15 +144,28 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
 
   const result = await kernelVerifyDns(sanitizedDomain, token.trim());
 
-  // Cache negative results to prevent DNS quota exhaustion
-  if (!result) {
+  if (result) {
+    // BUG-DNS-01 fix: clear any stale negative cache entry after a successful verification.
+    // Without this, a domain that previously failed (and was cached as 'miss') remains
+    // blocked for up to DNS_NEGATIVE_CACHE_TTL_SECONDS even after the TXT record is added.
     try {
-    const redis = await getRedis();
-    await redis.setex(cacheKey, DNS_NEGATIVE_CACHE_TTL_SECONDS, 'miss');
+      const redis = await getRedis();
+      await redis.del(cacheKey);
+      logger.debug('DNS negative cache cleared after successful verification', { domain: sanitizedDomain });
     } catch (cacheError) {
-    logger.warn('DNS negative cache write failed', {
-      error: cacheError instanceof Error ? cacheError.message : String(cacheError),
-    });
+      logger.warn('Failed to clear DNS negative cache after successful verification', {
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+      });
+    }
+  } else {
+    // Cache negative results to prevent DNS quota exhaustion
+    try {
+      const redis = await getRedis();
+      await redis.setex(cacheKey, DNS_NEGATIVE_CACHE_TTL_SECONDS, 'miss');
+    } catch (cacheError) {
+      logger.warn('DNS negative cache write failed', {
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+      });
     }
   }
 
@@ -144,12 +176,11 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
 
   return result;
   } catch (error) {
-  // Don't log if it's a validation error we already logged
-  // Check for validation error using error code or message pattern
-  const customError = error as Error & { code?: string };
-  const isValidationError = error instanceof Error &&
-    (customError.code === 'VALIDATION_ERROR' || error.message.includes('Invalid'));
-  if (!isValidationError) {
+  // BUG-DNS-02 fix: use instanceof DnsValidationError instead of
+  // error.message.includes('Invalid'), which was a fragile heuristic that could
+  // suppress legitimate transient DNS error logs if the error message happened to
+  // contain the word 'Invalid' (e.g. "Invalid nameserver response").
+  if (!(error instanceof DnsValidationError)) {
     // L04-FIX: Don't log the token value — only log the domain
     logger.error(
     'DNS verification failed',
