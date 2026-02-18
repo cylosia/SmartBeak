@@ -92,8 +92,20 @@ export const CSP_API = [
 /**
  * Build a CSP header for the Next.js web application.
  * Uses a per-request cryptographic nonce for inline scripts and styles.
+ *
+ * @throws Error if nonce contains characters that could break or weaken the CSP header.
+ *   A nonce like `abc' 'unsafe-inline` would produce a CSP header with `'unsafe-inline'`
+ *   injected, disabling the nonce-based script allowlist entirely.
  */
 export function buildWebAppCsp(nonce: string): string {
+  // P0-FIX: Validate nonce before string interpolation into the CSP header.
+  // An attacker who controls the nonce (e.g., via a compromised config source) could
+  // inject CSP directives: nonce="x' 'unsafe-inline" → script-src 'self' 'nonce-x' 'unsafe-inline'
+  // Valid nonces are base64url or base64: A-Z, a-z, 0-9, +, /, =, - and _
+  // The nonce must also be at least 16 bytes (22 base64 chars before padding) to resist brute-force.
+  if (typeof nonce !== 'string' || nonce.length < 22 || !/^[A-Za-z0-9+/=_-]+$/.test(nonce)) {
+    throw new Error('buildWebAppCsp: invalid nonce — must be a base64 string of at least 16 bytes');
+  }
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,

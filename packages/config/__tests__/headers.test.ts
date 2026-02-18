@@ -27,6 +27,9 @@ describe('BASE_SECURITY_HEADERS', () => {
       'X-DNS-Prefetch-Control',
       'Cross-Origin-Opener-Policy',
       'Cross-Origin-Resource-Policy',
+      // P2-FIX: Added COEP — was present in headers.ts but absent from this test,
+      // so accidental removal would not be caught by CI.
+      'Cross-Origin-Embedder-Policy',
     ];
 
     for (const key of requiredKeys) {
@@ -52,6 +55,10 @@ describe('BASE_SECURITY_HEADERS', () => {
 
   it('should set CORP to same-origin', () => {
     expect(BASE_SECURITY_HEADERS['Cross-Origin-Resource-Policy']).toBe('same-origin');
+  });
+
+  it('should set COEP to require-corp', () => {
+    expect(BASE_SECURITY_HEADERS['Cross-Origin-Embedder-Policy']).toBe('require-corp');
   });
 });
 
@@ -96,6 +103,29 @@ describe('CSP_API', () => {
 describe('buildWebAppCsp', () => {
   const testNonce = 'dGVzdC1ub25jZQ==';
   const csp = buildWebAppCsp(testNonce);
+
+  // P0-FIX: Regression tests for nonce injection. An unvalidated nonce containing
+  // special characters could inject 'unsafe-inline' or additional CSP directives,
+  // completely undermining the nonce-based script allowlist.
+  it('should reject nonce with single quote (CSP injection vector)', () => {
+    expect(() => buildWebAppCsp("abc' 'unsafe-inline")).toThrow('invalid nonce');
+  });
+
+  it('should reject nonce with semicolon (directive injection vector)', () => {
+    expect(() => buildWebAppCsp("abc; script-src *")).toThrow('invalid nonce');
+  });
+
+  it('should reject nonce shorter than 22 characters (insufficient entropy)', () => {
+    expect(() => buildWebAppCsp('short')).toThrow('invalid nonce');
+  });
+
+  it('should reject empty nonce', () => {
+    expect(() => buildWebAppCsp('')).toThrow('invalid nonce');
+  });
+
+  it('should accept valid base64 nonce of sufficient length', () => {
+    expect(() => buildWebAppCsp(testNonce)).not.toThrow();
+  });
 
   it('should include nonce in script-src', () => {
     expect(csp).toContain(`'nonce-${testNonce}'`);

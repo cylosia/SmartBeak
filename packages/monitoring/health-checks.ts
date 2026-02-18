@@ -145,6 +145,14 @@ export class HealthChecksRegistry extends EventEmitter {
     super();
     // P2-FIX: Increase maxListeners to prevent warnings with >10 health checks
     this.setMaxListeners(50);
+    // P1-FIX: Register an error handler on the EventEmitter. Without this, if any
+    // listener throws an 'error' event, Node.js will crash the process (the default
+    // EventEmitter behavior for unhandled 'error' events). The try/catch around
+    // emit() in runCheck() guards against listener throw in user code, but the
+    // 'error' event itself is a special case that bypasses that guard.
+    this.on('error', (err: unknown) => {
+      logger.error('HealthChecksRegistry EventEmitter error', { error: err instanceof Error ? err.message : String(err) });
+    });
     this.version = version;
     this.environment = environment;
     this.startTime = Date.now();
@@ -583,11 +591,54 @@ export function createRedisHealthCheck(
 }
 
 /**
+ * Validate that a health check URL is safe to fetch.
+ * Blocks the most common SSRF vectors: loopback, link-local (cloud metadata),
+ * and RFC-1918 private ranges. This is a static/lexical check — DNS rebinding
+ * is not prevented here (use @security/ssrf for full DNS-resolution protection).
+ */
+function validateHealthCheckUrl(url: string, name: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`createExternalApiHealthCheck [${name}]: invalid URL "${url}"`);
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`createExternalApiHealthCheck [${name}]: URL must use http: or https: (got ${parsed.protocol})`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') {
+    throw new Error(`createExternalApiHealthCheck [${name}]: URL targets loopback — SSRF blocked`);
+  }
+
+  if (hostname === '169.254.169.254' || hostname.startsWith('169.254.')) {
+    throw new Error(`createExternalApiHealthCheck [${name}]: URL targets link-local address — SSRF blocked`);
+  }
+
+  if (
+    hostname.startsWith('10.') ||
+    hostname.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+  ) {
+    throw new Error(`createExternalApiHealthCheck [${name}]: URL targets private IP range — SSRF blocked`);
+  }
+}
+
+/**
  * Create an external API health check
  */
 export function createExternalApiHealthCheck(
   options: ExternalApiHealthOptions
 ): HealthCheckFn {
+  // P1-FIX: Validate URL at registration time so misconfigured URLs fail fast
+  // at startup rather than silently on first probe. An unvalidated URL passed to
+  // fetch() enables SSRF: e.g., http://169.254.169.254/latest/meta-data/ would
+  // exfiltrate cloud credentials on every health check interval.
+  validateHealthCheckUrl(options.url, options.name);
+
   return async (): Promise<HealthCheckResult> => {
     const start = Date.now();
     const controller = new AbortController();
@@ -679,7 +730,12 @@ export function createDiskHealthCheck(
 
       const stats = await fs.statfs('/');
       const totalBytes = stats.blocks * stats.bsize;
-      const freeBytes = stats.bfree * stats.bsize;
+      // P1-FIX: Clamp freeBytes to [0, totalBytes]. On certain virtual filesystems
+      // bfree can exceed blocks (e.g., overlayfs with quota accounting), which would
+      // produce a negative usedPercent and report the disk as "healthy" when it is
+      // actually at capacity. Math.min prevents freeBytes > totalBytes; Math.max
+      // prevents a negative result if bfree is somehow reported as a large integer.
+      const freeBytes = Math.min(Math.max(stats.bfree * stats.bsize, 0), totalBytes);
       const usedPercent = totalBytes > 0 ? ((totalBytes - freeBytes) / totalBytes) * 100 : 0;
       const latencyMs = Date.now() - start;
 

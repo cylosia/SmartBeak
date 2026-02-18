@@ -82,6 +82,7 @@ export const ErrorCodes = {
   INTENT_RETRIEVAL_FAILED: 'INTENT_RETRIEVAL_FAILED',
   BILLING_ERROR: 'BILLING_ERROR',
   QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+  BUDGET_EXCEEDED: 'BUDGET_EXCEEDED',
 
   // Method Errors
   METHOD_NOT_ALLOWED: 'METHOD_NOT_ALLOWED',
@@ -553,7 +554,8 @@ export function getStatusCodeForErrorCode(code: ErrorCode): number {
   case ErrorCodes.UNSUPPORTED_MEDIA_TYPE:
     return 415;
   case ErrorCodes.QUOTA_EXCEEDED:
-    return 402; // M6-FIX: QUOTA_EXCEEDED → 402 Payment Required
+  case ErrorCodes.BUDGET_EXCEEDED:
+    return 402; // M6-FIX: QUOTA_EXCEEDED/BUDGET_EXCEEDED → 402 Payment Required
   case ErrorCodes.RATE_LIMIT_EXCEEDED:
     return 429;
   case ErrorCodes.SERVICE_UNAVAILABLE:
@@ -680,6 +682,7 @@ export const {
   INTENT_RETRIEVAL_FAILED,
   BILLING_ERROR,
   QUOTA_EXCEEDED,
+  BUDGET_EXCEEDED,
   METHOD_NOT_ALLOWED,
   PAYLOAD_TOO_LARGE,
   JSONB_SIZE_EXCEEDED,

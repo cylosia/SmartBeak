@@ -219,7 +219,8 @@ app.addHook('preValidation', async (request, reply) => {
 
   const contentType = request.headers['content-type'] ?? '';
   if (!contentType.startsWith('application/json')) {
-    const requestId = (request.headers['x-request-id'] as string) || '';
+    const rawId = request.headers['x-request-id'];
+    const requestId = Array.isArray(rawId) ? (rawId[0] ?? '') : (rawId ?? '');
     return reply.status(415).send({
       error: 'Unsupported Media Type: Content-Type must be application/json',
       code: ErrorCodes.UNSUPPORTED_MEDIA_TYPE,
@@ -236,6 +237,20 @@ app.addHook('preValidation', async (request, reply) => {
 const PROBE_RATE_LIMIT_WINDOW_MS = 60_000;
 const PROBE_RATE_LIMIT_MAX = 60;
 const probeRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+// P0-FIX: Prevent unbounded Map growth. Without cleanup, every unique source IP
+// that hits /health creates an entry that is never deleted, accumulating indefinitely.
+// On a public-facing cluster with rotating attacker IPs this causes OOM within hours.
+// Clean up every 5 minutes, removing all entries whose window has already expired.
+const PROBE_MAP_CLEANUP_INTERVAL_MS = 5 * 60_000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of probeRateLimitMap) {
+    if (now >= entry.resetAt) {
+      probeRateLimitMap.delete(ip);
+    }
+  }
+}, PROBE_MAP_CLEANUP_INTERVAL_MS).unref();
 
 app.addHook('onRequest', async (request, reply) => {
   const url = request.url ?? '';
@@ -429,8 +444,9 @@ app.addHook('preSerialization', async (_request, _reply, payload) => {
 // Global error handler — produces the canonical ErrorResponse shape for all errors.
 // Shape: { error, code, requestId, details?, retryAfter? }
 app.setErrorHandler((error: unknown, request, reply) => {
-  const requestId = (request.headers['x-request-id'] as string) || '';
-  app.log["error"](error);
+  const rawId = request.headers['x-request-id'];
+  const requestId = Array.isArray(rawId) ? (rawId[0] ?? '') : (rawId ?? '');
+  app.log.error(error);
 
   // 1. AppError subclasses carry their own code + statusCode
   if (error instanceof AppError) {
@@ -452,7 +468,11 @@ app.setErrorHandler((error: unknown, request, reply) => {
   }
 
   // 2. Fastify validation errors + generic errors with statusCode
-  const errObj = error as { statusCode?: number; code?: string; message?: string; validation?: unknown };
+  // P1-FIX: Guard that error is an object before casting — thrown strings/numbers
+  // are valid in JS and would produce undefined for all property accesses without this guard.
+  const errObj = (typeof error === 'object' && error !== null)
+    ? error as { statusCode?: number; code?: string; message?: string; validation?: unknown }
+    : {} as { statusCode?: number; code?: string; message?: string; validation?: unknown };
   let statusCode = errObj.statusCode ?? 500;
   let errorCode: string = ErrorCodes.INTERNAL_ERROR;
 
@@ -468,7 +488,7 @@ app.setErrorHandler((error: unknown, request, reply) => {
   } else if (statusCode === 400) {
     errorCode = ErrorCodes.VALIDATION_ERROR;
   } else if (statusCode === 402) {
-    errorCode = 'BUDGET_EXCEEDED';
+    errorCode = ErrorCodes.BUDGET_EXCEEDED;
   } else if (statusCode === 409) {
     errorCode = ErrorCodes.CONFLICT;
   } else if (statusCode === 429) {
@@ -491,7 +511,8 @@ app.setErrorHandler((error: unknown, request, reply) => {
 
 // 404 handler — canonical shape
 app.setNotFoundHandler((request, reply) => {
-  const requestId = (request.headers['x-request-id'] as string) || '';
+  const rawId = request.headers['x-request-id'];
+  const requestId = Array.isArray(rawId) ? (rawId[0] ?? '') : (rawId ?? '');
   void reply.status(404).send({ error: 'Route not found', code: ErrorCodes.NOT_FOUND, requestId });
 });
 
@@ -683,8 +704,11 @@ async function checkDatabase(): Promise<{ latency: number }> {
     }, TIMEOUT_MS);
   });
 
-  // Ensure orphaned connections are released if timeout fires first
-  connectPromise.then(c => {
+  // Ensure orphaned connections are released if timeout fires first.
+  // P1-FIX: void the promise chain explicitly — the floating .then() was neither
+  // awaited nor voided, which violates no-floating-promises. The catch() is required
+  // to silence the rejection that happens when pool.connect() fails after timeout.
+  void connectPromise.then(c => {
     if (timedOut) c.release();
   }).catch(() => { /* pool.connect() failure already handled by Promise.race */ });
 
@@ -890,7 +914,7 @@ async function start(): Promise<void> {
     logger.info('Telemetry shutdown complete');
   });
   } catch (error) {
-  logger["error"]('Failed to start server', error instanceof Error ? error : new Error(String(error)));
+  logger.error('Failed to start server', error instanceof Error ? error : new Error(String(error)));
   process.exit(1);
   }
 }

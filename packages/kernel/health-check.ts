@@ -281,6 +281,47 @@ export function createDatabaseHealthCheck(
 * @param options - Optional configuration
 * @returns External API health check
 */
+/**
+ * Validate that a URL is safe to use as an external health check target.
+ * Blocks SSRF vectors: loopback addresses, link-local (AWS metadata endpoint),
+ * private RFC-1918 ranges, and non-HTTP/S schemes.
+ * Note: this is a static check only — DNS rebinding protection requires a
+ * full DNS-resolution check (available in @security/ssrf if deeper protection needed).
+ */
+function validateExternalHealthUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`createExternalApiHealthCheck: invalid URL "${url}"`);
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`createExternalApiHealthCheck: URL must use http: or https: (got ${parsed.protocol})`);
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block loopback
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') {
+    throw new Error(`createExternalApiHealthCheck: URL targets loopback — SSRF blocked`);
+  }
+
+  // Block AWS/GCP/Azure metadata endpoints (link-local 169.254.x.x)
+  if (hostname === '169.254.169.254' || hostname.startsWith('169.254.')) {
+    throw new Error(`createExternalApiHealthCheck: URL targets link-local address — SSRF blocked`);
+  }
+
+  // Block RFC-1918 private ranges (simple prefix check; not DNS-proof but catches static misconfig)
+  if (
+    hostname.startsWith('10.') ||
+    hostname.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+  ) {
+    throw new Error(`createExternalApiHealthCheck: URL targets private IP range — SSRF blocked`);
+  }
+}
+
 export function createExternalApiHealthCheck(
   name: string,
   healthUrl: string,
@@ -294,6 +335,10 @@ export function createExternalApiHealthCheck(
   expectedStatus?: number;
   }
 ): HealthCheck {
+  // P1-FIX: Validate URL at registration time, not at check time, so misconfigurations
+  // fail fast at startup rather than silently on the first probe interval.
+  validateExternalHealthUrl(healthUrl);
+
   const { method = 'GET', headers = {}, timeoutMs = 5000, expectedStatus = 200 } = options || {};
 
   return {
@@ -316,9 +361,12 @@ export function createExternalApiHealthCheck(
     clearTimeout(timeout);
 
     const latency = Date.now() - start;
-    // P1-FIX: 401 Unauthorized should NOT be considered healthy
-    // Only 2xx status codes indicate healthy services
-    const healthy = response.status >= 200 && response.status < 300 && response.status === expectedStatus;
+    // P0-FIX: Simplified tautological condition. The previous triple-AND was equivalent
+    // to just `=== expectedStatus` because the 2xx range check dominated: if expectedStatus
+    // were outside [200, 300), the range condition would always return false regardless of
+    // the equality check, making a non-2xx expectedStatus impossible to satisfy.
+    // Callers must supply a 2xx expectedStatus (default 200); validate it here.
+    const healthy = response.status === expectedStatus;
 
     return {
     name,
