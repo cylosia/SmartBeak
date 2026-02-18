@@ -1,3 +1,5 @@
+import { isValidEmail as kernelIsValidEmail } from '@kernel/validation';
+
 /**
 * Interface for email provider adapter implementations.
 * Defines the contract for managing email lists, sequences, and subscribers.
@@ -127,9 +129,8 @@ export function validateEmailSequence(sequence: unknown): { valid: boolean; erro
  * @returns Whether the email format is valid
  */
 export function validateEmail(email: string): boolean {
-  // Avoid circular dependency: import at call site rather than module level.
-  // Callers should prefer `import { isValidEmail } from '@kernel/validation'` directly.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require('@kernel/validation') as { isValidEmail: (e: string) => boolean };
-  return mod.isValidEmail(email);
+  // P0-FIX: Replace CommonJS require() (crashes in ESM) with a static import
+  // hoisted to the top of the module. The circular-dependency concern was
+  // unfounded — @kernel/validation does not import from this file.
+  return kernelIsValidEmail(email);
 }

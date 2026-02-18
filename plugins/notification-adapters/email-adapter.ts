@@ -383,12 +383,17 @@ export class EmailAdapter implements DeliveryAdapter {
         deliveryId: `email_${crypto.randomUUID()}`
       };
     } catch (error) {
+      // P1-FIX: Do not propagate ExternalAPIError.message to callers.
+      // sendWithSES / sendWithSMTP embed the raw SDK error message (which can
+      // contain IAM ARNs, account IDs, server hostnames) into their ExternalAPIError.
+      // ExternalAPIError extends DeliveryAdapterError, so the previous branch
+      // `error instanceof DeliveryAdapterError ? error.message` exposed those
+      // internal details to every caller of send(). Return a generic message;
+      // the full error is already logged by the provider-specific method.
       return {
         success: false,
         attemptedAt,
-        // P2-SECURITY FIX: Never surface raw internal error messages.
-        // AWS SDK errors contain IAM ARNs; SMTP errors contain server hostnames.
-        error: error instanceof DeliveryAdapterError ? error.message : 'Email delivery failed',
+        error: `${this.provider} delivery failed`,
         errorCode: error instanceof DeliveryAdapterError ? error.code : 'UNKNOWN_ERROR'
       };
     }

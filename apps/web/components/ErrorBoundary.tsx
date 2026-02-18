@@ -32,9 +32,12 @@ export class ErrorBoundary extends React.Component<
     // is already rendered), and we log a dev-only warning.
     const payload = JSON.stringify({
       message: error.message,
-      // Only include stack in non-production to limit exposure in transit
+      // Only include stack and componentStack in non-production to limit
+      // exposure in transit. componentStack reveals internal React component
+      // names and nesting hierarchy which assists reverse-engineering of
+      // minified production bundles.
       ...(process.env['NODE_ENV'] !== 'production' && { stack: error.stack }),
-      componentStack: info.componentStack,
+      ...(process.env['NODE_ENV'] !== 'production' && { componentStack: info.componentStack }),
     });
     window
       .fetch('/api/v1/client-errors', {

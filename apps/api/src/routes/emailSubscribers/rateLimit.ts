@@ -79,35 +79,34 @@ export async function checkRateLimitAsync(ip: string): Promise<{ allowed: boolea
 * Rate limit middleware
 * Now delegates to kernel's distributed Redis rate limiter.
 */
-export function rateLimitMiddleware(
+// P1-FIX: Convert to async to eliminate the floating promise.
+// The previous void checkRateLimitRedis(...).then().catch() pattern detached
+// the async work from the calling frame. Any exception after .catch()
+// (e.g., from res.status().send() itself) became an unhandled rejection that
+// crashes Node.js under --unhandled-rejections=throw (Node 15+ default).
+export async function rateLimitMiddleware(
   req: { ip?: string; socket?: { remoteAddress?: string } },
   res: { status: (code: number) => { send: (body: unknown) => void } },
   next: () => void
-): void {
+): Promise<void> {
   const ip = req.ip || req.socket?.remoteAddress || 'unknown';
 
-  // Use async kernel rate limiter
-  void checkRateLimitRedis(`emailsub:${ip}`, {
-    maxRequests: securityConfig.rateLimitMaxRequests,
-    windowMs: securityConfig.rateLimitWindowMs,
-    keyPrefix: 'ratelimit:emailsub',
-  }).then(result => {
+  try {
+    const result = await checkRateLimitRedis(`emailsub:${ip}`, {
+      maxRequests: securityConfig.rateLimitMaxRequests,
+      windowMs: securityConfig.rateLimitWindowMs,
+      keyPrefix: 'ratelimit:emailsub',
+    });
     if (!result.allowed) {
       const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000);
-      res.status(429).send({
-        error: 'Rate limit exceeded',
-        retryAfter,
-      });
+      res.status(429).send({ error: 'Rate limit exceeded', retryAfter });
       return;
     }
     next();
-  }).catch(() => {
+  } catch {
     // Fail closed: deny on error
-    res.status(429).send({
-      error: 'Rate limit exceeded',
-      retryAfter: 60,
-    });
-  });
+    res.status(429).send({ error: 'Rate limit exceeded', retryAfter: 60 });
+  }
 }
 
 /**
