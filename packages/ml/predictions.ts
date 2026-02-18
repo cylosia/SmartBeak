@@ -77,9 +77,9 @@ export class MLPredictionEngine extends EventEmitter {
     SUM(clicks) as total_clicks
     FROM keyword_metrics
     WHERE domain_id = $1 AND keyword = $2
-    AND date >= CURRENT_DATE - INTERVAL '90 days'
-    GROUP BY date
-    ORDER BY date`,
+    AND timestamp >= NOW() - INTERVAL '90 days'
+    GROUP BY DATE(timestamp)
+    ORDER BY DATE(timestamp)`,
     [domainId, keyword]
   );
 
@@ -398,12 +398,12 @@ export class MLPredictionEngine extends EventEmitter {
   switch (metric) {
     case 'traffic':
     query = `
-    SELECT date, SUM(page_views) as value
+    SELECT DATE(timestamp) as date, SUM(page_views) as value
     FROM content_performance
     WHERE domain_id = $1
-    AND date >= CURRENT_DATE - INTERVAL '90 days'
-    GROUP BY date
-    ORDER BY date
+    AND timestamp >= NOW() - INTERVAL '90 days'
+    GROUP BY DATE(timestamp)
+    ORDER BY DATE(timestamp)
     `;
     break;
     case 'rankings':
@@ -486,11 +486,13 @@ export class MLPredictionEngine extends EventEmitter {
     [domainId]
   );
 
-  const baseline = dowRows.reduce((sum, r) => sum + parseFloat(r.avg_views), 0) / 7;
+  const total = dowRows.reduce((sum: number, r: Record<string, unknown>) => sum + parseFloat(String(r['avg_views'] ?? 0)), 0);
+  // Guard against division by zero when there is no traffic data at all.
+  const baseline = total > 0 ? total / 7 : 1;
 
   return {
-    dayOfWeekPattern: dowRows.map(r => parseFloat(r.avg_views) / baseline),
-    monthlyPattern: monthRows.map(r => parseFloat(r.avg_views) / baseline),
+    dayOfWeekPattern: dowRows.map((r: Record<string, unknown>) => parseFloat(String(r['avg_views'] ?? 0)) / baseline),
+    monthlyPattern: monthRows.map((r: Record<string, unknown>) => parseFloat(String(r['avg_views'] ?? 0)) / baseline),
   };
   }
 }

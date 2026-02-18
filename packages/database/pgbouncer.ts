@@ -184,14 +184,19 @@ export async function checkPgBouncerHealth(pool: Pool): Promise<{
   try {
     const client = await pool.connect();
     try {
-      const result = await client.query('SHOW STATS');
-      const stats = result.rows[0];
+      // SHOW POOLS returns cl_active, cl_waiting, sv_active, sv_idle per pool.
+      // Sum across all pools to get cluster-wide metrics.
+      const result = await client.query('SHOW POOLS');
+      const rows = result.rows;
+      const active = rows.reduce((s: number, r: Record<string, unknown>) => s + (parseInt(String(r['cl_active'] ?? 0), 10) || 0), 0);
+      const waiting = rows.reduce((s: number, r: Record<string, unknown>) => s + (parseInt(String(r['cl_waiting'] ?? 0), 10) || 0), 0);
+      const svActive = rows.reduce((s: number, r: Record<string, unknown>) => s + (parseInt(String(r['sv_active'] ?? 0), 10) || 0), 0);
 
       return {
         healthy: true,
-        availableConnections: parseInt(stats?.cl_active, 10) || 0,
-        totalConnections: parseInt(stats?.cl_waiting, 10) || 0,
-        queueDepth: parseInt(stats?.sv_active, 10) || 0,
+        availableConnections: active,
+        totalConnections: active + waiting,
+        queueDepth: waiting + svActive,
       };
     } finally {
       client.release();
