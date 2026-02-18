@@ -23,6 +23,12 @@ const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024; // 10MB
 * Required because bodyParser is disabled for webhook signature verification
 * SECURITY FIX: P1 - Track payload size and reject if exceeded
 */
+// Sentinel error class so the outer handler can distinguish a payload-too-large
+// rejection (response already sent) from a generic read failure.
+class PayloadTooLargeError extends Error {
+  constructor() { super('Payload too large'); this.name = 'PayloadTooLargeError'; }
+}
+
 async function getRawBody(req: NextApiRequest, res: NextApiResponse): Promise<string> {
   const chunks: Buffer[] = [];
   let totalSize = 0;
@@ -31,10 +37,11 @@ async function getRawBody(req: NextApiRequest, res: NextApiResponse): Promise<st
   req.on('data', (chunk: Buffer) => {
     totalSize += chunk.length;
     if (totalSize > MAX_PAYLOAD_SIZE) {
+      // Send the 413 here and use a typed sentinel so the outer handler knows
+      // NOT to send another response (which would cause "headers already sent").
       res.status(413).json({ error: 'Payload too large' });
       req.destroy();
-      // P1-2 FIX: Reject the promise so the caller doesn't hang indefinitely
-      reject(new Error('Payload too large'));
+      reject(new PayloadTooLargeError());
       return;
     }
     chunks.push(chunk);
@@ -473,9 +480,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     case 'organizationMembership.deleted': {
-      // F21-FIX: Same as created - use public_user_data.user_id for membership events
+      // F21-FIX: Same as created - use public_user_data.user_id for membership events.
+      // NEVER fall back to deleteMembershipData.id — that is the MEMBERSHIP ID
+      // (mem_xxx), not the user ID.  Using it would delete the wrong user's membership
+      // or silently no-op when user_id is missing.
       const deleteMembershipData = event.data as { id: string; organization_id?: string; public_user_data?: { user_id?: string } };
-      const userId = deleteMembershipData.public_user_data?.user_id || deleteMembershipData.id;
+      const userId = deleteMembershipData.public_user_data?.user_id;
+      if (!userId) {
+        logger.error('Missing public_user_data.user_id in organizationMembership.deleted', { membershipId: deleteMembershipData.id });
+        return res.status(400).json({ error: 'Missing user_id in membership event' });
+      }
       const orgId = deleteMembershipData.organization_id;
       logger.info('User left org', { userId, orgId });
       
@@ -516,6 +530,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     id: event.data["id"],
   });
   } catch (error: unknown) {
+  // PayloadTooLargeError means getRawBody already sent a 413 response.
+  // Do NOT send another response here or Node.js will warn "headers already sent".
+  if (error instanceof PayloadTooLargeError) {
+    return;
+  }
+
   logger.error('Error processing webhook', error instanceof Error ? error : new Error(String(error)));
 
   const err = error instanceof Error ? error : new Error(String(error));

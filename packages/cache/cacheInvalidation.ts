@@ -164,10 +164,29 @@ export class CacheInvalidator {
   }
 
   /**
-   * Invalidate by key pattern (supports wildcards)
+   * Invalidate by key pattern (glob-style wildcards: * and ?).
+   *
+   * SECURITY: Escape all regex metacharacters in the literal portions of the
+   * pattern BEFORE expanding glob wildcards.  Without escaping, a pattern like
+   * `user.(123)*` would be compiled as-is into a regex, causing unexpected
+   * matches and potential ReDoS with catastrophic backtracking.
    */
   async invalidateByPattern(pattern: string): Promise<void> {
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+    // Step 1: split on glob wildcards to isolate literal segments
+    // Step 2: escape regex metacharacters in each literal segment
+    // Step 3: reassemble with .* (for *) or . (for ?)
+    const escaped = pattern
+      .split(/(\*|\?)/)
+      .map((segment, i) => {
+        // Odd-indexed segments are the captured wildcard tokens themselves
+        if (i % 2 === 1) {
+          return segment === '*' ? '.*' : '.';
+        }
+        // Even-indexed segments are literal text — escape metacharacters
+        return segment.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      })
+      .join('');
+    const regex = new RegExp('^' + escaped + '$');
 
     const keys = this.cache.getL1Keys();
     const toDelete: string[] = [];

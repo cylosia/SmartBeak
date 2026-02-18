@@ -12,11 +12,13 @@
 * Lazy validation state
 */
 let envValidated = false;
-let _envValidationError: Error | null = null;
+// Stores validation errors detected during first access so they can be
+// surfaced to the caller rather than silently swallowed.
+let envValidationError: Error | null = null;
 
 /**
-* Perform environment validation on first use
-* Does not throw at module load - only when values are actually accessed
+* Perform environment validation on first use.
+* Does not throw at module load - only when values are actually accessed.
 */
 function performEnvValidation(): void {
   if (envValidated) return;
@@ -28,19 +30,21 @@ function performEnvValidation(): void {
   }
 
   try {
-  // Check existence without throwing - actual access will throw if missing
   const secretKey = process.env['CLERK_SECRET_KEY'];
   const publishableKey = process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'];
 
   if (!secretKey || !publishableKey) {
-    _envValidationError = new Error(
+    envValidationError = new Error(
     'Missing required Clerk environment variables: ' +
     (!secretKey ? 'CLERK_SECRET_KEY ' : '') +
     (!publishableKey ? 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY' : '')
     );
+    // Throw immediately so production starts fail fast with a clear message.
+    throw envValidationError;
   }
   } catch (error) {
-  _envValidationError = error as Error;
+  envValidationError = error as Error;
+  throw envValidationError;
   }
 }
 
@@ -143,25 +147,14 @@ export function getClerkWebhookSecret(): string {
 // Backward compatibility: export a getter that can be called
 export { getClerkWebhookSecret as getWebhookSecret };
 
-/**
-* Legacy exports for backward compatibility
-* These will throw errors if accessed when env vars are not set
-
-*/
-Object.defineProperty(exports, 'CLERK_PUBLISHABLE_KEY', {
-  get: getClerkPublishableKey,
-  enumerable: true,
-  configurable: true,
-});
-
-Object.defineProperty(exports, 'CLERK_SECRET_KEY', {
-  get: getClerkSecretKey,
-  enumerable: true,
-  configurable: true,
-});
-
-Object.defineProperty(exports, 'CLERK_WEBHOOK_SECRET', {
-  get: getClerkWebhookSecret,
-  enumerable: true,
-  configurable: true,
-});
+// NOTE: Legacy CJS Object.defineProperty(exports, ...) blocks were removed.
+// This is an ESM module ("type": "module") and `exports` is not defined in ESM.
+// Those blocks caused `ReferenceError: exports is not defined` at runtime.
+// Consumers should import the named getters directly:
+//   import { getClerkPublishableKey, getClerkSecretKey } from './clerk';
+//
+// The named aliases below provide drop-in backward compat for any site that
+// imported CLERK_PUBLISHABLE_KEY / CLERK_SECRET_KEY / CLERK_WEBHOOK_SECRET.
+export const CLERK_PUBLISHABLE_KEY = getClerkPublishableKey;
+export const CLERK_SECRET_KEY = getClerkSecretKey;
+export const CLERK_WEBHOOK_SECRET = getClerkWebhookSecret;

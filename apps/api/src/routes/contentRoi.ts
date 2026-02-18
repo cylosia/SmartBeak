@@ -86,7 +86,17 @@ async function verifyAuth(req: { headers: { authorization?: string } }): Promise
   }
 }
 
-async function canAccessDomain(userId: string, domainId: string, orgId: string): Promise<boolean> {
+/**
+ * Fetch the user's role for the given domain in a single query.
+ * Returns the role string if the user is a member, or null otherwise.
+ * This replaces the previous canAccessDomain + canModifyContent pair which
+ * issued two separate round-trips to the database for the same information.
+ */
+async function getUserRoleForDomain(
+  userId: string,
+  domainId: string,
+  orgId: string,
+): Promise<string | null> {
   try {
     const db = await getDb();
     const row = await db('domain_registry')
@@ -95,31 +105,11 @@ async function canAccessDomain(userId: string, domainId: string, orgId: string):
       .where('memberships.user_id', userId)
       .where('domain_registry.org_id', orgId)
       .select('memberships.role')
-      .first();
-    return !!row;
-  }
-  catch (error) {
-    logger.error('Error checking domain access', error instanceof Error ? error : new Error(String(error)));
-    return false;
-  }
-}
-
-async function canModifyContent(userId: string, domainId: string, orgId: string): Promise<boolean> {
-  try {
-    const db = await getDb();
-    const row = await db('domain_registry')
-      .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
-      .where('domain_registry.domain_id', domainId)
-      .where('memberships.user_id', userId)
-      .where('domain_registry.org_id', orgId)
-      .whereIn('memberships.role', ['admin', 'editor'])
-      .select('memberships.role')
-      .first();
-    return !!row;
-  }
-  catch (error) {
-    logger.error('Error checking content modification access', error instanceof Error ? error : new Error(String(error)));
-    return false;
+      .first() as { role: string } | undefined;
+    return row?.role ?? null;
+  } catch (error) {
+    logger.error('Error fetching user role for domain', error instanceof Error ? error : new Error(String(error)));
+    return null;
   }
 }
 
@@ -171,14 +161,15 @@ export async function contentRoiRoutes(app: FastifyInstance): Promise<void> {
       }
       const { domain_id, content_id, production_cost_usd, monthly_traffic, conversion_rate, revenue_per_conversion } = parseResult.data;
 
-      const hasAccess = await canAccessDomain(auth.userId, domain_id, auth.orgId);
-      if (!hasAccess) {
+      // Single DB round-trip: fetch the user's role, then derive both access and
+      // modification checks from the result (previously two separate queries).
+      const userRole = await getUserRoleForDomain(auth.userId, domain_id, auth.orgId);
+      if (!userRole) {
         logger.warn('Unauthorized access attempt', { userId: auth.userId, domainId: domain_id, action: 'access_roi' });
         return errors.forbidden(reply, 'Access denied to domain');
       }
 
-      const canModify = await canModifyContent(auth.userId, domain_id, auth.orgId);
-      if (!canModify) {
+      if (!['admin', 'editor'].includes(userRole)) {
         logger.warn('Unauthorized modification attempt', { userId: auth.userId, domainId: domain_id, action: 'create_roi' });
         return errors.forbidden(reply, 'Editor or admin access required');
       }

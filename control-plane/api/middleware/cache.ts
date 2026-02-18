@@ -92,10 +92,16 @@ export function withETagCache(
 
   // Check if client has fresh content
   if (isETagMatch(req, etag)) {
+    // RFC 7232 §4.1: 304 responses MUST include the ETag so the client can
+    // update its stored value for future conditional requests.
+    void res.header('ETag', etag);
     return res.status(304).send();
   }
 
+  // Send ETag + cache directives on every 2xx response so the client can
+  // use the ETag for conditional requests on the next poll.
   setCacheHeaders(res, {
+    etag,
     maxAge: options.maxAge,
     private: true, // Default to private for API responses
   });

@@ -243,28 +243,31 @@ export class PoolHealthMonitor extends EventEmitter {
   }
 
   /**
-   * Adjust pool size based on load
+   * Emit pool-sizing recommendations based on current utilization.
+   *
+   * NOTE: `pg.Pool` does NOT support live resizing — setting `pool.options.max`
+   * on a running Pool has NO effect (the pool reads the option only at
+   * construction time).  Emitting events lets the application layer decide
+   * whether to drain and recreate the pool or simply log the advisory.
+   * The previous code set `this.pool.options.max = newMax` and called the
+   * event 'pool:scaledUp', giving a false impression that resizing had occurred.
    */
   private async adjustPoolSize(utilization: number, waitingClients: number): Promise<void> {
     const currentMax = this.pool.options.max;
 
-    // Scale up if high utilization and waiting clients.
-    // Thresholds are stored as fractions (0–1); compare directly without dividing.
+    // Scale-up advisory: high utilization with queued clients
     if (utilization > this.config.scaleUpThreshold && waitingClients > 0) {
-      const newMax = Math.min(currentMax + 5, this.config.maxSize);
-      if (newMax > currentMax) {
-        this.pool.options.max = newMax;
-        this.emit('pool:scaledUp', { from: currentMax, to: newMax });
+      const recommendedMax = Math.min(currentMax + 5, this.config.maxSize);
+      if (recommendedMax > currentMax) {
+        this.emit('pool:scaleUpRecommended', { current: currentMax, recommended: recommendedMax });
       }
     }
 
-    // Scale down if low utilization
+    // Scale-down advisory: sustained low utilization
     if (utilization < this.config.scaleDownThreshold && currentMax > this.config.minSize) {
-      const newMax = Math.max(currentMax - 2, this.config.minSize);
-      if (newMax < currentMax) {
-        // Note: pg Pool doesn't support decreasing max directly
-        // In production, you'd need to drain and recreate the pool
-        this.emit('pool:scaleDownRecommended', { current: currentMax, recommended: newMax });
+      const recommendedMax = Math.max(currentMax - 2, this.config.minSize);
+      if (recommendedMax < currentMax) {
+        this.emit('pool:scaleDownRecommended', { current: currentMax, recommended: recommendedMax });
       }
     }
   }

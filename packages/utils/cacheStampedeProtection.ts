@@ -91,13 +91,21 @@ class CacheStampedeProtector {
   timeoutMs: number
   ): Promise<T> {
   try {
-    // P1-FIX: Wrap factory with timeout
+    // Wrap factory with a timeout.  The timer handle is captured so it can be
+    // cleared as soon as the factory resolves, preventing a dangling setTimeout
+    // from firing (and rejecting an already-settled promise) after completion.
+    let timerId: ReturnType<typeof setTimeout> | undefined;
     const result = await Promise.race([
     factory(),
-    new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`Cache computation timeout for key: ${key}`)), timeoutMs)
-    ),
-    ]);
+    new Promise<never>((_, reject) => {
+      timerId = setTimeout(
+      () => reject(new Error(`Cache computation timeout for key: ${key}`)),
+      timeoutMs,
+      );
+    }),
+    ]).finally(() => {
+    if (timerId !== undefined) clearTimeout(timerId);
+    });
 
     // P1-FIX: Cache the result
     if (cacheSetter) {

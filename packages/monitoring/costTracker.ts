@@ -23,8 +23,7 @@ export interface CostEntry {
   currency: string;
   tokens?: number;
   requestId?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   timestamp: Date;
 }
 
@@ -67,13 +66,17 @@ export class CostTracker extends EventEmitter {
   }
 
   /**
-  * Stop the tracker
+  * Stop the tracker and flush remaining entries.
+  * Returns a Promise so callers can await it for graceful shutdown.
+  * Previously used `void this.flush()` (floating promise) which caused
+  * buffered cost entries to be silently dropped on process exit.
   */
-  stop(): void {
+  async stop(): Promise<void> {
   if (this.flushTimer) {
     clearInterval(this.flushTimer);
+    this.flushTimer = undefined;
   }
-  void this.flush();
+  await this.flush();
   }
 
   /**
@@ -505,25 +508,38 @@ export class CostTracker extends EventEmitter {
   * Should be called at application startup.
   */
   async loadBudgetsFromDb(): Promise<void> {
+  // Page through org_llm_prefs in batches to prevent loading the entire table
+  // into memory at once.  An unbounded SELECT would OOM for large tenants.
+  const PAGE_SIZE = 1000;
+  let offset = 0;
+  let loaded = 0;
+
   try {
-    const { rows } = await this.db.query(
-    `SELECT org_id, preferences FROM org_llm_prefs`
-    );
-    let loaded = 0;
-    for (const row of rows) {
-    const prefs = row.preferences;
-    if (prefs?.costLimits) {
-      const monthly = prefs.costLimits.monthly ?? 0;
-      const daily = prefs.costLimits.daily ?? (monthly > 0 ? monthly / 30 : 0);
-      if (monthly > 0 || daily > 0) {
-      this.setBudget(row.org_id, daily, monthly);
-      loaded++;
+    while (true) {
+      const { rows } = await this.db.query(
+        `SELECT org_id, preferences FROM org_llm_prefs ORDER BY org_id LIMIT $1 OFFSET $2`,
+        [PAGE_SIZE, offset]
+      );
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        const prefs = row.preferences;
+        if (prefs?.costLimits) {
+          const monthly = prefs.costLimits.monthly ?? 0;
+          const daily = prefs.costLimits.daily ?? (monthly > 0 ? monthly / 30 : 0);
+          if (monthly > 0 || daily > 0) {
+            this.setBudget(row.org_id, daily, monthly);
+            loaded++;
+          }
+        }
       }
+
+      offset += PAGE_SIZE;
+      if (rows.length < PAGE_SIZE) break; // Last page
     }
-    }
+
     logger.info(`Loaded budgets for ${loaded} organizations`);
   } catch (error) {
     logger["error"]('Failed to load budgets from database', error instanceof Error ? error : new Error(String(error)));
   }
   }
-}

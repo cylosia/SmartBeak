@@ -2,12 +2,12 @@ import { Pool } from 'pg';
 
 import { DLQService, RegionWorker } from '@kernel/queue';
 import { EventBus } from '@kernel/event-bus';
-import { getLogger } from '../../packages/kernel/logger';
+import { getLogger } from '@kernel/logger';
 import { ServiceUnavailableError } from '@errors';
 
 import { BillingService } from './billing';
 import { createPaymentGateway } from './stripe';
-import { CostTracker } from '../../packages/monitoring/costTracker';
+import { CostTracker } from '@monitoring';
 import { DeliveryAdapter } from '../../domains/notifications/application/ports/DeliveryAdapter';
 import { DomainOwnershipService } from './domain-ownership';
 import { FacebookAdapter } from '../adapters/facebook/FacebookAdapter';

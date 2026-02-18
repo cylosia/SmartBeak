@@ -68,23 +68,49 @@ export async function generateCsrfToken(sessionId: string): Promise<string> {
 }
 
 /**
- * P1-FIX: Validate a CSRF token using Redis
+ * Lua script for atomic CSRF token validation + deletion.
+ *
+ * SECURITY: A plain GET → compare → DEL sequence has a TOCTOU race window:
+ * two concurrent requests carrying the same token can both pass the GET before
+ * either DEL fires, allowing the token to be used twice.  The Lua script runs
+ * atomically on the Redis server — no other command can interleave between the
+ * GET and the DEL.
+ *
+ * Returns the stored token string, or null if the key does not exist.
+ * The key is ALWAYS deleted (single-use) regardless of whether the token
+ * matches; this prevents an attacker from probing the stored value by sending
+ * intentionally wrong tokens without consuming it.
+ */
+const GET_AND_DELETE_LUA = `
+local val = redis.call('GET', KEYS[1])
+if val ~= false then
+  redis.call('DEL', KEYS[1])
+end
+return val
+`;
+
+/**
+ * P1-FIX: Validate a CSRF token using an atomic Redis Lua script.
+ * The token is consumed (deleted) atomically during validation to prevent
+ * replay attacks and TOCTOU races.
  */
 export async function validateCsrfToken(
-  sessionId: string, 
+  sessionId: string,
   providedToken: string
 ): Promise<boolean> {
   const redis = await getRedis();
   const key = `${CSRF_KEY_PREFIX}${sessionId}`;
-  
-  const stored = await redis.get(key);
+
+  // Atomically retrieve and delete the stored token.
+  // ioredis.Redis.eval(script, numkeys, ...keys): returns the stored value or null.
+  const stored = await redis.eval(GET_AND_DELETE_LUA, 1, key) as string | null;
+
   if (!stored) {
     return false;
   }
 
-  // P1-FIX: Use crypto.timingSafeEqual with Buffer padding for true constant-time
-  // comparison. The previous implementation had an early return on length mismatch
-  // (stored.length !== providedToken.length) that leaked token length via timing.
+  // Constant-time comparison with Buffer padding to prevent timing attacks
+  // that leak token length via early exit.
   const storedBuf = Buffer.from(stored, 'utf8');
   const providedBuf = Buffer.from(providedToken, 'utf8');
   const maxLen = Math.max(storedBuf.length, providedBuf.length);
@@ -95,16 +121,8 @@ export async function validateCsrfToken(
   const providedPadded = Buffer.alloc(maxLen, 0);
   storedBuf.copy(storedPadded);
   providedBuf.copy(providedPadded);
-  const isValid = timingSafeEqual(storedPadded, providedPadded) && storedBuf.length === providedBuf.length;
-
-  // F27-FIX: Invalidate token after successful validation. Previously the token
-  // remained valid for the full 1-hour TTL, allowing unlimited replay attacks.
-  // CSRF tokens MUST be single-use.
-  if (isValid) {
-    await redis.del(key);
-  }
-
-  return isValid;
+  // Also verify equal lengths to reject padded-match false positives.
+  return timingSafeEqual(storedPadded, providedPadded) && storedBuf.length === providedBuf.length;
 }
 
 /**

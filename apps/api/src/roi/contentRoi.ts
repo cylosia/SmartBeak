@@ -12,9 +12,12 @@ export type ContentRoiOutput = {
 };
 
 export function computeContentRoi(input: ContentRoiInput): ContentRoiOutput {
+  // conversion_rate is stored as a percentage (0–100), so divide by 100 to get
+  // the decimal rate before multiplying traffic × rate × revenue_per_conversion.
+  // Without this division the revenue figure is 100× too high.
   const monthly_revenue =
   input.monthly_traffic *
-  input.conversion_rate *
+  (input.conversion_rate / 100) *
   input.revenue_per_conversion;
 
   // FIX: Division by zero protection
