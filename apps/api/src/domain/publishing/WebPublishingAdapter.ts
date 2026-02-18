@@ -317,7 +317,7 @@ export class WebPublishingAdapter extends PublishingAdapter {
 
         return {
           success: true,
-          publishedId: responseData.id,
+          publishedId: responseData['id'],
           publishedUrl: responseData['url'],
           timestamp: new Date(),
           requestId, // Include requestId for potential cancellation

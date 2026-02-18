@@ -17,6 +17,10 @@ import { DEFAULT_TIMEOUTS } from '@config';
 const logger = getLogger('WordPressAdapter');
 const metrics = new MetricsCollector('WordPressAdapter');
 
+// P2-RESPONSE-SIZE FIX: Cap inbound response bodies to prevent OOM from a
+// hostile or misconfigured WordPress endpoint sending gigabyte payloads.
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 // Define WordPress post type
 export interface WordPressPost {
   id: number;
@@ -37,7 +41,25 @@ export interface WordPressConfig {
   baseUrl: string;
   username?: string;
   password?: string;
+  // apiVersion controls the WP REST API path segment (default: "v2").
   apiVersion?: string;
+}
+
+/**
+ * Throw if the response Content-Length exceeds MAX_RESPONSE_BYTES.
+ * HEAD responses legitimately have no body but may still include a Content-Length
+ * that tells us how large a subsequent GET would be.
+ */
+function assertResponseSizeOk(response: Response): void {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null) {
+    const bytes = parseInt(contentLength, 10);
+    if (!Number.isNaN(bytes) && bytes > MAX_RESPONSE_BYTES) {
+      throw new Error(
+        `WordPress response too large: ${bytes} bytes exceeds limit of ${MAX_RESPONSE_BYTES} bytes`
+      );
+    }
+  }
 }
 
 /**
@@ -54,7 +76,6 @@ export async function fetchWordPressPosts(
   throw new Error('Invalid WordPress config: baseUrl is required');
   }
 
-  // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
   // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
@@ -68,7 +89,8 @@ export async function fetchWordPressPosts(
 
   // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
   const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
-  const url = new URL(`${baseUrl}/wp-json/wp/v2/posts`);
+  const apiVersion = config.apiVersion || 'v2';
+  const url = new URL(`${baseUrl}/wp-json/wp/${apiVersion}/posts`);
   url.searchParams.set('per_page', String(perPage));
   url.searchParams.set('page', String(page));
 
@@ -86,7 +108,7 @@ export async function fetchWordPressPosts(
   try {
   const response = await withRetry(() => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS['medium']);
     return fetch(url.toString(), { headers, signal: controller.signal })
     .finally(() => clearTimeout(timeoutId));
   }, { maxRetries: 3 });
@@ -94,6 +116,9 @@ export async function fetchWordPressPosts(
   if (!response.ok) {
     throw new Error(`WordPress API error: ${response.status} ${response.statusText}`);
   }
+
+  // P2-RESPONSE-SIZE FIX: Reject oversized responses before buffering the body.
+  assertResponseSizeOk(response);
 
   const rawData = await response.json();
   if (!Array.isArray(rawData)) {
@@ -103,7 +128,7 @@ export async function fetchWordPressPosts(
   return posts;
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('WordPress API error', err, { context: 'WordPressAdapter.fetchPosts', status: (error as { status?: number }).status });
+  logger.error('WordPress API error', err, { context: 'WordPressAdapter.fetchPosts', status: (error as { status?: number })['status'] });
   metrics.recordError('fetchPosts', err.name);
   throw new Error('Failed to fetch WordPress posts');
   } finally {
@@ -130,7 +155,6 @@ export async function createWordPressPost(
   throw new Error('Invalid WordPress config: baseUrl is required');
   }
 
-  // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
   // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
@@ -144,7 +168,8 @@ export async function createWordPressPost(
 
   // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
   const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
-  const url = `${baseUrl}/wp-json/wp/v2/posts`;
+  const apiVersion = config.apiVersion || 'v2';
+  const url = `${baseUrl}/wp-json/wp/${apiVersion}/posts`;
 
   const headers: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -162,7 +187,7 @@ export async function createWordPressPost(
   // P1-4 FIX: Create AbortController fresh per retry attempt
   const response = await withRetry(() => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS.medium);
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUTS['medium']);
     return fetch(url, {
     method: 'POST',
     headers,
@@ -181,6 +206,9 @@ export async function createWordPressPost(
     throw new Error(`WordPress API error: ${response.status} ${response.statusText}`);
   }
 
+  // P2-RESPONSE-SIZE FIX: Reject oversized responses before buffering the body.
+  assertResponseSizeOk(response);
+
   const rawData = await response.json();
   if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
     throw new Error('Invalid response format: expected object');
@@ -189,7 +217,7 @@ export async function createWordPressPost(
   return created;
   } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('WordPress API error', err, { context: 'WordPressAdapter.createPost', status: (error as { status?: number }).status });
+  logger.error('WordPress API error', err, { context: 'WordPressAdapter.createPost', status: (error as { status?: number })['status'] });
   metrics.recordError('createPost', err.name);
   throw new Error('Failed to create WordPress post');
   } finally {
@@ -215,7 +243,6 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   };
   }
 
-  // P0-1 SECURITY FIX: SSRF protection with DNS rebinding detection
   // P0-1 SECURITY FIX: SSRF protection using centralized utility with DNS rebinding prevention
   const urlCheck = await validateUrlWithDns(config.baseUrl, { requireHttps: false, allowHttp: true });
   if (!urlCheck.allowed) {
@@ -232,7 +259,8 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
   try {
   // TOCTOU FIX: Use sanitizedUrl from validation result for constructing API URL
   const baseUrl = urlCheck.sanitizedUrl || config.baseUrl;
-  const url = `${baseUrl}/wp-json/wp/v2/posts?per_page=1`;
+  const apiVersion = config.apiVersion || 'v2';
+  const url = `${baseUrl}/wp-json/wp/${apiVersion}/posts?per_page=1`;
   const headers: Record<string, string> = {
     'Accept': 'application/json',
   };
@@ -250,21 +278,23 @@ export async function healthCheck(config: WordPressConfig): Promise<{ healthy: b
     method: 'HEAD'
   });
 
-  const _latency = Date.now() - start;
+  // P2-LATENCY FIX: Capture latency at response receipt (not after subsequent ops)
+  // and reuse the value in the return object instead of recomputing it.
+  const latency = Date.now() - start;
 
   // Only 200-299 status codes indicate a healthy service
   const healthy = response.ok;
 
   return {
     healthy,
-    latency: Date.now() - start,
+    latency,
     error: healthy ? undefined : `WordPress API returned status ${response.status}`,
   };
   } catch (error) {
   return {
     healthy: false,
     latency: Date.now() - start,
-    error: error instanceof Error ? error["message"] : 'Unknown error',
+    error: error instanceof Error ? error['message'] : 'Unknown error',
   };
   } finally {
   clearTimeout(timeoutId);

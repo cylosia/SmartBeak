@@ -23,6 +23,10 @@ jest.mock('@kernel/redis', () => ({
   }),
 }));
 
+// P2-ESM-REQUIRE FIX: Import the mocked getDb at module scope so it is
+// available inside beforeEach without using CommonJS require().
+import { getDb } from '../../src/db';
+
 describe('Webhook Processing Flow Integration Tests', () => {
   let mockDb: any;
 
@@ -33,8 +37,8 @@ describe('Webhook Processing Flow Integration Tests', () => {
     jest.clearAllMocks();
 
     // P3-2 FIX: Save env vars that tests may modify
-    originalEnv['PADDLE_WEBHOOK_SECRET'] = process.env.PADDLE_WEBHOOK_SECRET;
-    originalEnv['CLERK_WEBHOOK_SECRET'] = process.env.CLERK_WEBHOOK_SECRET;
+    originalEnv['PADDLE_WEBHOOK_SECRET'] = process.env['PADDLE_WEBHOOK_SECRET'];
+    originalEnv['CLERK_WEBHOOK_SECRET'] = process.env['CLERK_WEBHOOK_SECRET'];
 
     mockDb = {
       where: jest.fn().mockReturnThis(),
@@ -46,8 +50,8 @@ describe('Webhook Processing Flow Integration Tests', () => {
       count: jest.fn().mockReturnThis(),
     };
 
-    const { getDb } = require('../../src/db');
-    (getDb as any).mockResolvedValue(mockDb);
+    // P2-ESM-REQUIRE FIX: Use the top-level ESM import instead of require().
+    (getDb as jest.MockedFunction<typeof getDb>).mockResolvedValue(mockDb);
   });
 
   // P3-2 FIX: Restore env vars after each test to prevent pollution

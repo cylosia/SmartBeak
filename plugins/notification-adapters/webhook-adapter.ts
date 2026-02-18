@@ -1,15 +1,14 @@
-import fetch from 'node-fetch';
 import crypto from 'crypto';
-import {
+import type {
   DeliveryAdapter,
   SendNotificationInput,
   DeliveryResult,
-  DeliveryAdapterError
-} from '../../packages/types/notifications.js';
-import { getOptionalEnv, getEnvWithDefault } from '../../packages/config';
+} from '@types/notifications';
+import { DeliveryAdapterError } from '@types/notifications';
+import { getOptionalEnv, getEnvWithDefault } from '@config';
 
-import { ErrorCodes, ExternalAPIError } from '../../packages/kernel/validation';
-import { getLogger } from '../../packages/kernel/logger';
+import { ErrorCodes, ExternalAPIError } from '@kernel/validation';
+import { getLogger } from '@kernel/logger';
 
 /**
 * Webhook Notification Adapter
@@ -21,6 +20,8 @@ import { getLogger } from '../../packages/kernel/logger';
 * MEDIUM FIX M6: Extract magic numbers to constants
 * MEDIUM FIX M16: Add JSDoc comments
 * MEDIUM FIX R1: Fix AbortController cleanup
+* P2-IMPORT FIX: Replaced relative ../../packages/... paths with path aliases
+*   and removed the node-fetch dependency (native fetch is available in Node 18+).
 */
 
 const logger = getLogger('WebhookAdapter');
@@ -67,7 +68,7 @@ function getWebhookAllowlist(): string[] {
       validUrls.push(url);
     } catch (error) {
       logger.warn(`Invalid URL in allowlist: ${url}`, {
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error['message'] : String(error),
       });
     }
   }
@@ -114,7 +115,7 @@ export class WebhookAdapter implements DeliveryAdapter {
   */
   async send({ channel: _channel, to, template: _template, payload }: SendNotificationInput): Promise<DeliveryResult> {
     const attemptedAt = new Date();
-    
+
     try {
       // Validate target URL
       let targetUrl: URL;
@@ -123,7 +124,7 @@ export class WebhookAdapter implements DeliveryAdapter {
       } catch (error) {
         throw new ExternalAPIError(
           `Invalid webhook target URL: ${to}`,
-          ErrorCodes.INVALID_URL,
+          ErrorCodes['INVALID_URL'],
           { targetUrl: to },
           error instanceof Error ? error : undefined
         );
@@ -149,7 +150,7 @@ export class WebhookAdapter implements DeliveryAdapter {
         } catch (error) {
           logger.warn('Error parsing allowlist URL', {
             allowed,
-            error: error instanceof Error ? error.message : String(error),
+            error: error instanceof Error ? error['message'] : String(error),
           });
           return false;
         }
@@ -159,7 +160,7 @@ export class WebhookAdapter implements DeliveryAdapter {
         // Do NOT include the allowlist in the error — it would expose internal endpoint config
         throw new ExternalAPIError(
           `Webhook target not allowed: ${targetUrl.origin}`,
-          ErrorCodes.FORBIDDEN,
+          ErrorCodes['FORBIDDEN'],
           { targetUrl: to }
         );
       }
@@ -170,7 +171,7 @@ export class WebhookAdapter implements DeliveryAdapter {
       if (payloadSize > MAX_WEBHOOK_PAYLOAD_SIZE) {
         throw new ExternalAPIError(
           `Webhook payload exceeds maximum size of ${MAX_WEBHOOK_PAYLOAD_SIZE} bytes`,
-          ErrorCodes.INVALID_LENGTH,
+          ErrorCodes['INVALID_LENGTH'],
           { payloadSize, maxSize: MAX_WEBHOOK_PAYLOAD_SIZE }
         );
       }
@@ -192,7 +193,7 @@ export class WebhookAdapter implements DeliveryAdapter {
         if (!res.ok) {
           throw new ExternalAPIError(
             `Webhook failed: ${res.status} ${res.statusText}`,
-            ErrorCodes.EXTERNAL_API_ERROR,
+            ErrorCodes['EXTERNAL_API_ERROR'],
             { status: res.status, statusText: res.statusText, targetUrl: to }
           );
         }
@@ -212,8 +213,8 @@ export class WebhookAdapter implements DeliveryAdapter {
       return {
         success: false,
         attemptedAt,
-        error: error instanceof Error ? error.message : String(error),
-        errorCode: error instanceof DeliveryAdapterError ? (error as DeliveryAdapterError).code : 'UNKNOWN_ERROR'
+        error: error instanceof Error ? error['message'] : String(error),
+        errorCode: error instanceof DeliveryAdapterError ? error['code'] : 'UNKNOWN_ERROR'
       };
     }
   }
