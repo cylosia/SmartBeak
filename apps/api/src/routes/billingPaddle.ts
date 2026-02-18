@@ -19,23 +19,9 @@ const billingPaddleLogger = getLogger('billingPaddle');
 const ALLOWED_PADDLE_FIELDS = ['planId'] as const;
 const ALLOWED_PLAN_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
 
-/**
-
-* Prevents mass assignment vulnerabilities
-*/
-function whitelistFields<T extends Record<string, unknown>>(
-  input: T,
-  allowed: readonly string[]
-): Partial<T> {
-  const result: Partial<T> = {};
-  for (const key of allowed) {
-    if (key in input) {
-    const k = key as keyof T;
-    result[k] = input[k];
-    }
-  }
-  return result;
-}
+// P2-FIX: Import shared whitelistFields — previously duplicated verbatim here
+// and in billingStripe.ts. Single canonical source prevents divergence.
+import { whitelistFields } from '../utils/validation';
 
 export interface CheckoutBody {
   planId?: unknown;
@@ -151,11 +137,12 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
         return errors.badRequest(reply, 'Invalid organization ID', ErrorCodes.INVALID_UUID);
     }
 
-    // P1-1 FIX: Wrap checkout in a transaction to ensure atomicity of DB writes
-    const db = await getDb();
-    const session = await db.transaction(async (_trx: import('knex').Knex.Transaction) => {
-      return createPaddleCheckout(orgId, planId);
-    });
+    // P1-FIX: Removed the db.transaction() wrapper. createPaddleCheckout is a
+    // Paddle HTTP API call — it never used the transaction client (_trx was unused
+    // and prefixed with _ to signal that). The wrapper added transaction overhead
+    // for zero benefit: no DB writes occurred inside it, and a rolled-back
+    // transaction around a Paddle call cannot undo the external side-effect.
+    const session = await createPaddleCheckout(orgId, planId);
     if (!session['url']) {
       return reply.status(502).send({ error: 'Payment provider unavailable', code: 'PROVIDER_ERROR' });
     }

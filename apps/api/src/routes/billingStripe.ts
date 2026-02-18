@@ -89,23 +89,9 @@ type AuthenticatedRequest = FastifyRequest & {
   };
 };
 
-/**
-
-* Prevents mass assignment vulnerabilities
-*/
-function whitelistFields<T extends Record<string, unknown>>(
-  input: T,
-  allowed: readonly string[]
-): Partial<T> {
-  const result: Partial<T> = {};
-  for (const key of allowed) {
-    if (key in input) {
-    const k = key as keyof T;
-    result[k] = input[k];
-    }
-  }
-  return result;
-}
+// P2-FIX: Import shared whitelistFields — previously duplicated verbatim in
+// both billingStripe.ts and billingPaddle.ts, creating a divergence risk.
+import { whitelistFields } from '../utils/validation';
 
 export interface CheckoutBody {
   priceId?: unknown;
@@ -116,13 +102,11 @@ export interface CheckoutRouteParams {
   Body: CheckoutBody;
 }
 
-function _validatePriceId(priceId: string): boolean {
-  return ALLOWED_PRICE_ID_PATTERN.test(priceId);
-}
+// P3-FIX: Removed _validatePriceId — dead code; the CheckoutBodySchema regex
+// below performs identical validation via Zod and is the only call site.
 
 /**
-
-* Additional validation beyond basic schema
+* Request body schema with strict mode to reject unknown fields
 */
 const CheckoutBodySchema = z.object({
   priceId: z.string().min(1).max(100).regex(
@@ -220,16 +204,17 @@ export async function billingStripeRoutes(app: FastifyInstance): Promise<void> {
       return errors.unauthorized(reply);
     }
 
-    // SECURITY FIX: Issue 13 - Validate CSRF token
-    // CRITICAL-FIX: Now properly awaits async validation
-    const isValidCsrf = await validateBillingCsrfToken(csrfToken, orgId);
-    if (!isValidCsrf) {
-        return errors.forbidden(reply, 'Invalid or expired CSRF token');
-    }
-
+    // P2-FIX: Validate orgId format BEFORE using it in the CSRF token lookup.
+    // Previously the UUID check came after validateBillingCsrfToken(), meaning
+    // a malformed orgId was passed into the Redis key construction first.
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(orgId)) {
         return errors.badRequest(reply, 'Invalid organization ID');
+    }
+
+    const isValidCsrf = await validateBillingCsrfToken(csrfToken, orgId);
+    if (!isValidCsrf) {
+        return errors.forbidden(reply, 'Invalid or expired CSRF token');
     }
 
     const session = await createStripeCheckoutSession(orgId, priceId);

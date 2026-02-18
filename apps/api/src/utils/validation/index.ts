@@ -23,6 +23,7 @@ export {
   validateNonEmptyString,
   validateUrl,
   validateArray,
+  whitelistFields,
 } from './core';
 
 // ============================================================================

@@ -61,8 +61,14 @@ export function assertBillingConfig(): void {
   if (!stripeKey) {
     throw new Error('FATAL: STRIPE_SECRET_KEY environment variable is required');
   }
-  if (!stripeKey.startsWith('sk_')) {
-    throw new Error('FATAL: STRIPE_SECRET_KEY must begin with "sk_" — check that it is a Stripe secret key, not a publishable key');
+  // P3-FIX: Validate the full Stripe key format, not just the 'sk_' prefix.
+  // 'sk_' alone (3 chars) passes the old check. Real keys are:
+  //   sk_live_<40+ alphanumeric chars>  or  sk_test_<40+ alphanumeric chars>
+  if (!/^sk_(live|test)_[A-Za-z0-9]{40,}$/.test(stripeKey)) {
+    throw new Error(
+      'FATAL: STRIPE_SECRET_KEY does not match expected Stripe key format ' +
+      '(sk_live_... or sk_test_... followed by at least 40 alphanumeric chars)'
+    );
   }
 
   const paddleKey = process.env['PADDLE_API_KEY'];

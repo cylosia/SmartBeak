@@ -13,6 +13,24 @@ import { MetricsCollector, getMetricsCollector } from './metrics-collector';
 
 const logger = getLogger('business-kpis');
 
+// P1-FIX: Whitelist metric label values to prevent Prometheus cardinality explosion.
+// User-controlled strings used as label values (e.g. error messages as `reason`,
+// arbitrary platform names) create a unique time-series per label combination.
+// At scale this exhausts monitoring memory and makes range queries unusably slow.
+// Any value not in the whitelist is normalised to 'other'.
+const KNOWN_PLATFORMS = new Set(['twitter', 'facebook', 'linkedin', 'instagram', 'tiktok', 'youtube', 'pinterest', 'web']);
+const KNOWN_SOURCES = new Set(['rss', 'api', 'manual', 'webhook', 'scheduled', 'bulk']);
+const KNOWN_CHANNELS = new Set(['email', 'push', 'sms', 'slack', 'webhook', 'in_app']);
+const KNOWN_PROVIDERS = new Set(['stripe', 'paddle', 'internal', 'webhook']);
+const KNOWN_FAILURE_REASONS = new Set([
+  'timeout', 'auth_error', 'rate_limited', 'not_found',
+  'server_error', 'validation_error', 'quota_exceeded', 'network_error',
+]);
+
+function safeLabel(value: string, whitelist: Set<string>): string {
+  return whitelist.has(value) ? value : 'other';
+}
+
 // ============================================================================
 // Business KPI Tracker
 // ============================================================================
@@ -42,13 +60,15 @@ export class BusinessKpiTracker {
   // ==========================================================================
 
   recordPublishAttempt(platform: string): void {
-    this.collector.counter('kpi.publishing.attempts_total', 1, { platform });
-    this.ensureCounter(this.publishCounters, platform);
+    const p = safeLabel(platform, KNOWN_PLATFORMS);
+    this.collector.counter('kpi.publishing.attempts_total', 1, { platform: p });
+    this.ensureCounter(this.publishCounters, p);
   }
 
   recordPublishSuccess(platform: string): void {
-    this.collector.counter('kpi.publishing.success_total', 1, { platform });
-    const c = this.ensureCounter(this.publishCounters, platform);
+    const p = safeLabel(platform, KNOWN_PLATFORMS);
+    this.collector.counter('kpi.publishing.success_total', 1, { platform: p });
+    const c = this.ensureCounter(this.publishCounters, p);
     c.successes++;
     c.timestamps.push(Date.now());
     // Eagerly trim to prevent unbounded growth between evaluate() cycles.
@@ -61,8 +81,10 @@ export class BusinessKpiTracker {
   }
 
   recordPublishFailure(platform: string, reason: string): void {
-    this.collector.counter('kpi.publishing.failures_total', 1, { platform, reason });
-    const c = this.ensureCounter(this.publishCounters, platform);
+    const p = safeLabel(platform, KNOWN_PLATFORMS);
+    const r = safeLabel(reason, KNOWN_FAILURE_REASONS);
+    this.collector.counter('kpi.publishing.failures_total', 1, { platform: p, reason: r });
+    const c = this.ensureCounter(this.publishCounters, p);
     c.failures++;
   }
 
@@ -71,21 +93,24 @@ export class BusinessKpiTracker {
   // ==========================================================================
 
   recordIngestionAttempt(source: string): void {
-    this.collector.counter('kpi.ingestion.attempts_total', 1, { source });
-    this.ensureCounter(this.ingestionCounters, source);
+    const s = safeLabel(source, KNOWN_SOURCES);
+    this.collector.counter('kpi.ingestion.attempts_total', 1, { source: s });
+    this.ensureCounter(this.ingestionCounters, s);
   }
 
   recordIngestionSuccess(source: string, count: number): void {
-    this.collector.counter('kpi.ingestion.success_total', 1, { source });
-    this.collector.counter('kpi.ingestion.items_total', count, { source, status: 'success' });
-    const c = this.ensureCounter(this.ingestionCounters, source);
+    const s = safeLabel(source, KNOWN_SOURCES);
+    this.collector.counter('kpi.ingestion.success_total', 1, { source: s });
+    this.collector.counter('kpi.ingestion.items_total', count, { source: s, status: 'success' });
+    const c = this.ensureCounter(this.ingestionCounters, s);
     c.successes++;
   }
 
   recordIngestionFailure(source: string, count: number): void {
-    this.collector.counter('kpi.ingestion.failures_total', 1, { source });
-    this.collector.counter('kpi.ingestion.items_total', count, { source, status: 'failed' });
-    const c = this.ensureCounter(this.ingestionCounters, source);
+    const s = safeLabel(source, KNOWN_SOURCES);
+    this.collector.counter('kpi.ingestion.failures_total', 1, { source: s });
+    this.collector.counter('kpi.ingestion.items_total', count, { source: s, status: 'failed' });
+    const c = this.ensureCounter(this.ingestionCounters, s);
     c.failures++;
   }
 
@@ -94,24 +119,29 @@ export class BusinessKpiTracker {
   // ==========================================================================
 
   recordNotificationAttempt(channel: string): void {
-    this.collector.counter('kpi.notification.attempts_total', 1, { channel });
-    this.ensureCounter(this.notificationCounters, channel);
+    const ch = safeLabel(channel, KNOWN_CHANNELS);
+    this.collector.counter('kpi.notification.attempts_total', 1, { channel: ch });
+    this.ensureCounter(this.notificationCounters, ch);
   }
 
   recordNotificationDelivered(channel: string): void {
-    this.collector.counter('kpi.notification.delivered_total', 1, { channel });
-    const c = this.ensureCounter(this.notificationCounters, channel);
+    const ch = safeLabel(channel, KNOWN_CHANNELS);
+    this.collector.counter('kpi.notification.delivered_total', 1, { channel: ch });
+    const c = this.ensureCounter(this.notificationCounters, ch);
     c.successes++;
   }
 
   recordNotificationFailed(channel: string): void {
-    this.collector.counter('kpi.notification.failed_total', 1, { channel });
-    const c = this.ensureCounter(this.notificationCounters, channel);
+    const ch = safeLabel(channel, KNOWN_CHANNELS);
+    this.collector.counter('kpi.notification.failed_total', 1, { channel: ch });
+    const c = this.ensureCounter(this.notificationCounters, ch);
     c.failures++;
   }
 
   recordNotificationSkipped(channel: string, reason: string): void {
-    this.collector.counter('kpi.notification.skipped_total', 1, { channel, reason });
+    const ch = safeLabel(channel, KNOWN_CHANNELS);
+    const r = safeLabel(reason, KNOWN_FAILURE_REASONS);
+    this.collector.counter('kpi.notification.skipped_total', 1, { channel: ch, reason: r });
   }
 
   // ==========================================================================
@@ -119,19 +149,22 @@ export class BusinessKpiTracker {
   // ==========================================================================
 
   recordWebhookProcessed(provider: string): void {
-    this.collector.counter('kpi.webhook.processed_total', 1, { provider });
-    const c = this.ensureCounter(this.webhookCounters, provider);
+    const pv = safeLabel(provider, KNOWN_PROVIDERS);
+    this.collector.counter('kpi.webhook.processed_total', 1, { provider: pv });
+    const c = this.ensureCounter(this.webhookCounters, pv);
     c.successes++;
   }
 
   recordWebhookFailed(provider: string): void {
-    this.collector.counter('kpi.webhook.failed_total', 1, { provider });
-    const c = this.ensureCounter(this.webhookCounters, provider);
+    const pv = safeLabel(provider, KNOWN_PROVIDERS);
+    this.collector.counter('kpi.webhook.failed_total', 1, { provider: pv });
+    const c = this.ensureCounter(this.webhookCounters, pv);
     c.failures++;
   }
 
   recordWebhookDuplicate(provider: string): void {
-    this.collector.counter('kpi.webhook.duplicate_total', 1, { provider });
+    const pv = safeLabel(provider, KNOWN_PROVIDERS);
+    this.collector.counter('kpi.webhook.duplicate_total', 1, { provider: pv });
   }
 
   // ==========================================================================

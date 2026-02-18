@@ -167,66 +167,94 @@ export class BillingService {
 
     await this.setIdempotencyStatus(key, 'processing');
 
-    const client = await this.pool.connect();
+    // P0-FIX: Validate plan and check for a pre-existing subscription BEFORE opening
+    // a DB transaction or calling Stripe. This keeps external HTTP calls out of any
+    // transaction boundary, eliminating connection-pool exhaustion when Stripe is slow.
+    const { rows: planRows } = await this.pool.query<Plan>(
+      `SELECT id, name, price_cents, interval, features, max_domains, max_content
+       FROM plans WHERE id = $1`,
+      [planId]
+    );
+    if (planRows.length === 0) {
+      const errorMessage = `Plan not found: ${planId}`;
+      await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    const { rows: existingSubRows } = await this.pool.query(
+      `SELECT id FROM subscriptions WHERE org_id = $1 AND status = $2 LIMIT 1`,
+      [orgId, 'active']
+    );
+    if (existingSubRows.length > 0) {
+      const errorMessage = 'Organization already has an active subscription';
+      await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    // P0-FIX: Stripe API calls are now OUTSIDE any DB transaction.
+    // A slow or retried Stripe network call no longer holds a connection open.
     let stripeCustomerId: string | undefined;
     let stripeSubscriptionId: string | undefined;
+    try {
+      const { customerId } = await this.stripe.createCustomer(orgId);
+      if (!customerId) throw new Error('Stripe customer creation returned no ID');
+      stripeCustomerId = customerId;
 
+      const { subscriptionId } = await this.stripe.createSubscription(customerId, planId);
+      if (!subscriptionId) throw new Error('Stripe subscription creation returned no ID');
+      stripeSubscriptionId = subscriptionId;
+    } catch (stripeError) {
+      await this.compensateStripe(stripeCustomerId, stripeSubscriptionId);
+      const errorMessage = stripeError instanceof Error ? stripeError.message : String(stripeError);
+      await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
+      logger.error('Stripe error during plan assignment', stripeError instanceof Error ? stripeError : new Error(String(stripeError)));
+      throw new Error(`Failed to assign plan: ${errorMessage}`);
+    }
+
+    // Short DB transaction — only inserts, no external calls, no long waits.
+    const client = await this.pool.connect();
     try {
     await client.query('BEGIN');
-    await client.query('SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE');
-    await client.query('SET LOCAL statement_timeout = $1', [60000]);
+    await client.query('SET LOCAL statement_timeout = $1', [10000]);
 
-    const planResult = await client.query<Plan>(
-        'SELECT * FROM plans WHERE id = $1',
-        [planId]
+    // TOCTOU guard: re-check inside the transaction so a concurrent request that
+    // raced past the pre-flight check above does not create a duplicate subscription.
+    const { rows: recheckRows } = await client.query(
+      `SELECT id FROM subscriptions WHERE org_id = $1 AND status = $2 LIMIT 1`,
+      [orgId, 'active']
     );
-
-    if (planResult.rows.length === 0) {
-        throw new Error(`Plan not found: ${planId}`);
+    if (recheckRows.length > 0) {
+      await client.query('ROLLBACK');
+      await this.compensateStripe(stripeCustomerId, stripeSubscriptionId);
+      const errorMessage = 'Organization already has an active subscription';
+      await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
+      throw new Error(errorMessage);
     }
-
-    const existingSub = await client.query(
-        'SELECT stripe_subscription_id FROM subscriptions WHERE org_id = $1 AND status = $2',
-        [orgId, 'active']
-    );
-
-    if (existingSub.rows.length > 0) {
-        throw new Error('Organization already has an active subscription');
-    }
-
-    const { customerId } = await this.stripe.createCustomer(orgId);
-    if (!customerId) {
-        throw new Error('Stripe customer creation returned no ID');
-    }
-    stripeCustomerId = customerId;
-
-    const { subscriptionId } = await this.stripe.createSubscription(customerId, planId);
-    if (!subscriptionId) {
-        throw new Error('Stripe subscription creation returned no ID');
-    }
-    stripeSubscriptionId = subscriptionId;
 
     const dbSubscriptionId = randomUUID();
     await client.query(
         `INSERT INTO subscriptions (id, org_id, plan_id, status, stripe_customer_id, stripe_subscription_id, created_at, updated_at)
         VALUES ($1, $2, $3, 'active', $4, $5, NOW(), NOW())`,
-        [dbSubscriptionId, orgId, planId, customerId, subscriptionId]
+        [dbSubscriptionId, orgId, planId, stripeCustomerId, stripeSubscriptionId]
+    );
+
+    // P2-FIX: Persist audit event inside the same transaction — atomically committed
+    // with the subscription row. Logger-only audit trails are ephemeral and violate
+    // compliance requirements (SOC 2, PCI-DSS).
+    await client.query(
+      `INSERT INTO audit_events (id, org_id, actor_type, action, entity_type, entity_id, metadata, created_at)
+       VALUES ($1, $2, 'service', 'subscription_created', 'subscription', $3, $4, NOW())`,
+      [randomUUID(), orgId, dbSubscriptionId, JSON.stringify({ planId, stripeCustomerId, stripeSubscriptionId })]
     );
 
     await client.query('COMMIT');
-    await this.setIdempotencyStatus(key, 'completed', { subscriptionId });
-
-    await this.auditLog('subscription_created', orgId, { planId, subscriptionId });
-
+    await this.setIdempotencyStatus(key, 'completed', { subscriptionId: dbSubscriptionId });
     logger.info(`Assigned plan ${planId} to org ${orgId}`);
     } catch (error) {
     await client.query('ROLLBACK');
-
     await this.compensateStripe(stripeCustomerId, stripeSubscriptionId);
-
     const errorMessage = error instanceof Error ? error.message : String(error);
     await this.setIdempotencyStatus(key, 'failed', undefined, errorMessage);
-
     logger.error('Error assigning plan', error instanceof Error ? error : new Error(String(error)));
     throw new Error(`Failed to assign plan: ${errorMessage}`);
     } finally {
@@ -240,8 +268,11 @@ export class BillingService {
     }
 
     try {
+    // P2-FIX: Enumerate columns explicitly instead of SELECT *.
     const { rows } = await this.pool.query<ActivePlanResult>(
-        `SELECT p.*, s.id as subscription_id, s.status as subscription_status
+        `SELECT p.id, p.name, p.price_cents, p.interval, p.features,
+                p.max_domains, p.max_content, p.max_media,
+                s.id as subscription_id, s.status as subscription_status
         FROM subscriptions s
         JOIN plans p ON p.id = s.plan_id
         WHERE s.org_id = $1
@@ -284,7 +315,14 @@ export class BillingService {
         throw new Error('No active subscription found');
     }
 
-    await this.auditLog('grace_period_entered', orgId, { days });
+    // P2-FIX: Audit event written INSIDE the transaction, BEFORE COMMIT.
+    // Previously the audit call came before COMMIT, but it only wrote to the
+    // logger — now it persists to the DB atomically with the grace-period update.
+    await client.query(
+      `INSERT INTO audit_events (id, org_id, actor_type, action, entity_type, entity_id, metadata, created_at)
+       VALUES ($1, $2, 'service', 'grace_period_entered', 'subscription', NULL, $3, NOW())`,
+      [randomUUID(), orgId, JSON.stringify({ days })]
+    );
 
     await client.query('COMMIT');
 
@@ -326,10 +364,11 @@ export class BillingService {
         throw new Error('No active subscription found');
     }
 
-    if (subscription['stripe_subscription_id']) {
-        await this.stripe.cancelSubscription(subscription['stripe_subscription_id']);
-    }
-
+    // P0-FIX: Commit the DB status change BEFORE calling Stripe.
+    // Old order (Stripe cancel → DB update) was irrecoverable on DB failure:
+    // Stripe showed 'cancelled', DB still showed 'active', no retry possible.
+    // New order: DB is the source of truth. If the post-commit Stripe call fails,
+    // the subscription is already locked in our system; ops can retry Stripe manually.
     await client.query(
         `UPDATE subscriptions
         SET status = 'cancelled',
@@ -339,11 +378,35 @@ export class BillingService {
         [subscription['id']]
     );
 
-    await this.auditLog('subscription_cancelled', orgId, { subscriptionId: subscription['id'] });
+    // P2-FIX: Persist audit event to DB inside the transaction.
+    await client.query(
+      `INSERT INTO audit_events (id, org_id, actor_type, action, entity_type, entity_id, metadata, created_at)
+       VALUES ($1, $2, 'service', 'subscription_cancelled', 'subscription', $3, $4, NOW())`,
+      [randomUUID(), orgId, subscription['id'],
+       JSON.stringify({ stripeSubscriptionId: subscription['stripe_subscription_id'] })]
+    );
 
     await client.query('COMMIT');
-
     logger.info(`Cancelled subscription for org ${orgId}`);
+
+    // Stripe cancellation fires AFTER commit. If this fails, the subscription is
+    // correctly cancelled in our DB. Log at error level so ops can reconcile.
+    if (subscription['stripe_subscription_id']) {
+        try {
+          await this.stripe.cancelSubscription(subscription['stripe_subscription_id']);
+        } catch (stripeError) {
+          logger.error(
+            'STRIPE CANCEL FAILED AFTER DB COMMIT — manual Stripe reconciliation required',
+            {
+              orgId,
+              subscriptionId: subscription['id'],
+              stripeSubscriptionId: subscription['stripe_subscription_id'],
+              error: stripeError instanceof Error ? stripeError.message : String(stripeError),
+            }
+          );
+          // Do NOT rethrow — the subscription is correctly cancelled in our DB.
+        }
+    }
     } catch (error) {
     await client.query('ROLLBACK');
     logger.error('Error cancelling subscription', error instanceof Error ? error : new Error(String(error)));
@@ -383,7 +446,12 @@ export class BillingService {
         throw new Error('Subscription not found');
     }
 
-    await this.auditLog('subscription_status_updated', subscriptionId, { status });
+    await client.query(
+      `INSERT INTO audit_events (id, org_id, actor_type, action, entity_type, entity_id, metadata, created_at)
+       VALUES ($1, (SELECT org_id FROM subscriptions WHERE id = $2 LIMIT 1),
+               'service', 'subscription_status_updated', 'subscription', $2, $3, NOW())`,
+      [randomUUID(), subscriptionId, JSON.stringify({ status })]
+    );
 
     await client.query('COMMIT');
 
@@ -403,8 +471,12 @@ export class BillingService {
     }
 
     try {
+    // P2-FIX: Enumerate columns explicitly — SELECT * silently pulls in new columns
+    // added to the table, breaking the typed Subscription interface contract.
     const { rows } = await this.pool.query<Subscription>(
-        `SELECT * FROM subscriptions
+        `SELECT id, org_id, plan_id, status, stripe_customer_id, stripe_subscription_id,
+                created_at, updated_at, grace_until, cancelled_at
+        FROM subscriptions
         WHERE org_id = $1
         ORDER BY created_at DESC`,
         [orgId]
@@ -417,7 +489,4 @@ export class BillingService {
     }
   }
 
-  private async auditLog(action: string, entityId: string, details: Record<string, unknown>): Promise<void> {
-    logger.info(`[AUDIT][billing] ${action}`, { entityId, ...details, timestamp: new Date().toISOString() });
-  }
 }

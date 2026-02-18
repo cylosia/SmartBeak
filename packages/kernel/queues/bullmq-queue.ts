@@ -43,8 +43,20 @@ export const eventQueue = new Queue('events', {
     attempts: 5,
     backoff: { type: 'exponential', delay: 2_000 },
     removeOnComplete: { count: 1_000 },
-    removeOnFail: false,
+    // P1-FIX: Bound failed-job retention. removeOnFail: false kept all failed jobs
+    // in Redis permanently — under sustained downstream failures this exhausts Redis
+    // memory, eventually making the queue unavailable. Retain the 5 000 most recent
+    // failures for post-mortem debugging while bounding memory usage.
+    removeOnFail: { count: 5_000 },
   },
+});
+
+// P1-FIX: Handle the 'error' event on the Queue instance. In Node.js, an
+// EventEmitter with no 'error' listener throws synchronously, crashing the
+// process. Redis disconnects, TLS errors, and serialization failures all emit
+// this event. Without a handler, any Redis blip kills the application.
+eventQueue.on('error', (err) => {
+  logger.error('BullMQ queue error', { err });
 });
 
 eventQueue.on('failed', (job, err) => {

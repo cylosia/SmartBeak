@@ -53,20 +53,41 @@ export interface BuyerRoiSummary {
 export async function generateBuyerRoiSummary(
   input: BuyerRoiSummaryInput
 ): Promise<BuyerRoiSummary> {
-  const portfolio = computePortfolioRoi(input.roi_rows.map(r => ({
-    production_cost_usd: r.production_cost_usd ?? 0,
-    monthly_revenue_estimate: r.monthly_revenue_estimate ?? 0,
+  // P2-FIX: Do NOT default missing financial fields to 0.
+  // A missing production_cost_usd defaulting to $0 makes the ROI appear infinite,
+  // which is materially misleading for buyers making acquisition decisions.
+  // Filter to rows that have both fields, and surface the data-quality count.
+  const completeRows = input.roi_rows.filter(
+    r =>
+      r.production_cost_usd !== undefined &&
+      r.production_cost_usd !== null &&
+      r.monthly_revenue_estimate !== undefined &&
+      r.monthly_revenue_estimate !== null
+  );
+  const missingDataCount = input.roi_rows.length - completeRows.length;
+
+  const portfolio = computePortfolioRoi(completeRows.map(r => ({
+    production_cost_usd: r.production_cost_usd as number,
+    monthly_revenue_estimate: r.monthly_revenue_estimate as number,
   })));
   const kw = await keywordCoverageForDomain(input.domain_id);
+
+  const notes: string[] = [
+    'ROI figures are advisory estimates based on historical performance and assumptions.',
+    'Keyword coverage indicates how many known keywords have at least one page targeting them.',
+  ];
+  if (missingDataCount > 0) {
+    notes.push(
+      `Data quality: ${missingDataCount} of ${input.roi_rows.length} content items excluded from ROI ` +
+      `calculation due to missing cost or revenue data.`
+    );
+  }
 
   return {
   domain: input.domain,
   total_content_items: input.roi_rows.length,
   portfolio_roi: portfolio,
   keyword_coverage: kw,
-  notes: [
-    'ROI figures are advisory estimates based on historical performance and assumptions.',
-    'Keyword coverage indicates how many known keywords have at least one page targeting them.'
-  ]
+  notes,
   };
 }
