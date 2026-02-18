@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ValidationError } from '@errors';
 
 const VariantSchema = z.object({
   intent: z.string().min(1).max(200),
@@ -29,13 +30,13 @@ export function validateExperiment(variants: unknown[]): void {
   // Business rule: Variants in an experiment must target the same intent.
   // Different intents should be modeled as separate experiments.
   if (intents.size > 1) {
-    throw new Error('All variants must share the same intent');
+    throw new ValidationError('All variants must share the same intent');
   }
 
   // Business rule: Variants must share the same content type.
   // The experiment varies other dimensions (tone, structure, targeting) while
   // holding intent and content type constant for fair comparison.
   if (types.size > 1) {
-    throw new Error('All variants must share the same content type');
+    throw new ValidationError('All variants must share the same content type');
   }
 }

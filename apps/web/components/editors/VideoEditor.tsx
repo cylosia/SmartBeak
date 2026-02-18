@@ -58,7 +58,7 @@ export function VideoEditor() {
     <h4>Video</h4>
     <input
     value={url}
-    onChange={(e) => setUrl((e.target as HTMLInputElement).value)}
+    onChange={(e) => setUrl(e.currentTarget.value)}
     placeholder='YouTube URL (https://youtube.com/watch?v=... or https://youtu.be/...)'
     aria-label='YouTube video URL'
     aria-describedby={hasError ? errorId : undefined}
@@ -75,8 +75,8 @@ export function VideoEditor() {
       height='315'
       src={embedUrl}
 
-      sandbox='allow-scripts allow-same-origin allow-presentation'
-
+      sandbox='allow-scripts allow-presentation'
+      referrerPolicy='no-referrer'
       allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
       title='YouTube Video'
     />

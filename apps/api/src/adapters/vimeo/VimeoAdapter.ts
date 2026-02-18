@@ -5,8 +5,6 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '@kerne
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 
-import { AbortController } from 'abort-controller';
-
 
 /**
 * Vimeo Publishing Adapter
@@ -146,7 +144,7 @@ export class VimeoAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('updateMetadata', latency, false);
     this.metrics.recordError('updateMetadata', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to update Vimeo metadata', context, error as Error);
+    this.logger.error('Failed to update Vimeo metadata', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -167,6 +165,7 @@ export class VimeoAdapter {
 
   const videoUri = videoId.startsWith('/videos/') ? videoId : `/videos/${encodeURIComponent(videoId)}`;
 
+  const startTime = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -204,12 +203,16 @@ export class VimeoAdapter {
     }
     const data = rawData;
 
+    const latency = Date.now() - startTime;
+    this.metrics.recordLatency('getVideo', latency, true);
     this.metrics.recordSuccess('getVideo');
 
     return data;
   } catch (error) {
+    const latency = Date.now() - startTime;
+    this.metrics.recordLatency('getVideo', latency, false);
     this.metrics.recordError('getVideo', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to get Vimeo video', context, error as Error);
+    this.logger.error('Failed to get Vimeo video', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);

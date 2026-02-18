@@ -149,7 +149,9 @@ export function validateConfig(): ValidationResult {
     const result = envSchema.safeParse(process.env);
     if (!result.success) {
       for (const issue of result.error.issues) {
-        const key = issue.path[0] as string;
+        const rawKey = issue.path[0];
+        if (typeof rawKey !== 'string') continue;
+        const key: string = rawKey;
         // Only report errors for required vars in the invalid array
         if (REQUIRED_ENV_VARS.includes(key as RequiredEnvVar)) {
           // Avoid duplicates

@@ -121,18 +121,15 @@ export class VaultClient {
     logger.debug('Secret retrieved for org [REDACTED]');
     return secret;
   } catch (error) {
-    // Log and re-throw with context - check for specific error using error code or message
-    const vaultError = error as Error & { code?: string };
-    const isNotFoundError = error instanceof Error &&
-    (vaultError.code === 'SECRET_NOT_FOUND' || error["message"].includes('Secret not found'));
-    if (isNotFoundError) {
-    throw error;
+    // Re-throw not-found errors directly — they are already well-formed and logged above.
+    if (error instanceof Error && error['message'].startsWith('Secret not found')) {
+      throw error;
     }
 
     // P1-FIX: Secret Leakage - Redact sensitive info in error logs
     logger.error('Error retrieving secret for org [REDACTED]', undefined, {
     error: error instanceof Error ? '[REDACTED_ERROR]' : 'Unknown error' });
-    throw new Error(`Failed to retrieve secret: ${error instanceof Error ? error["message"] : 'Unknown error'}`);
+    throw new Error(`Failed to retrieve secret: ${error instanceof Error ? error['message'] : 'Unknown error'}`);
   }
   }
 

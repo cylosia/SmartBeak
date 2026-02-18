@@ -301,6 +301,14 @@ export async function analyzeTable(
   } catch (error) {
     const duration = Date.now() - startTime;
 
+    await logMaintenanceOperation(knex, {
+      table_name: tableName,
+      operation: 'analyze',
+      duration_ms: duration,
+      success: false,
+      error_message: error instanceof Error ? error.message : String(error),
+    });
+
     return {
       success: false,
       operation: 'ANALYZE',
@@ -509,8 +517,11 @@ export async function runVacuumMaintenance(
   const includeHighChurn = options.includeHighChurn ?? true;
   const dryRun = options.dryRun ?? false;
 
-  // Get tables needing vacuum
-  const tablesNeedingVacuum = await getTablesNeedingVacuum(knex, minRatio);
+  // Get tables needing vacuum and overall stats in parallel
+  const [tablesNeedingVacuum, allStats] = await Promise.all([
+    getTablesNeedingVacuum(knex, minRatio),
+    getVacuumStatistics(knex),
+  ]);
 
   // Add high-churn tables if requested
   const tablesToVacuum = new Set(tablesNeedingVacuum.map(t => t.table_name));
@@ -536,7 +547,7 @@ export async function runVacuumMaintenance(
 
   return {
     checked_at: new Date(),
-    tables_checked: (await getVacuumStatistics(knex)).length,
+    tables_checked: allStats.length,
     tables_needing_vacuum: tablesNeedingVacuum.length,
     results,
   };

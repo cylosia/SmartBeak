@@ -5,8 +5,6 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '@kerne
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
-import { AbortController } from 'abort-controller';
-
 
 /**
 * Vercel Deployment Adapter
@@ -135,7 +133,7 @@ export class VercelAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('triggerDeploy', latency, false);
     this.metrics.recordError('triggerDeploy', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to trigger Vercel deployment', context, error as Error);
+    this.logger.error('Failed to trigger Vercel deployment', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -180,7 +178,7 @@ export class VercelAdapter {
     }, { maxRetries: 3 });
 
     const rawData = await res.json();
-    if (!rawData || typeof rawData !== 'object' || !(rawData as { id?: unknown }).id) {
+    if (!rawData || typeof rawData !== 'object' || typeof (rawData as { id?: unknown }).id !== 'string') {
     throw new ApiError('Invalid response format from Vercel API', 500);
     }
     const data = rawData as VercelDeployResponse;
@@ -190,7 +188,7 @@ export class VercelAdapter {
     return data;
   } catch (error) {
     this.metrics.recordError('getDeployment', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to get Vercel deployment', context, error as Error);
+    this.logger.error('Failed to get Vercel deployment', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);
@@ -236,7 +234,7 @@ export class VercelAdapter {
     this.metrics.recordSuccess('cancelDeployment');
   } catch (error) {
     this.metrics.recordError('cancelDeployment', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to cancel Vercel deployment', context, error as Error);
+    this.logger.error('Failed to cancel Vercel deployment', context, error instanceof Error ? error : new Error(String(error)));
     throw error;
   } finally {
     clearTimeout(timeoutId);
