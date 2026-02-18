@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
-import { rateLimit } from '../../services/rate-limit';
+import { checkRateLimitAsync } from '../../services/rate-limit';
 import { requireRole, RoleAccessError } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
@@ -26,9 +26,19 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // GET /roi-risk/:assetId - Get ROI and risk analysis for an asset
   app.get('/roi-risk/:assetId', async (req, res) => {
   try {
-    await rateLimit('roi-risk', 50, req, res);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+
+    // Rate-limit per user (not globally). Using the authenticated userId as the
+    // key prevents a single user or coordinated attack from exhausting the
+    // shared quota for the entire application.
+    const rateLimitResult = await checkRateLimitAsync(ctx.userId, 'roi-risk', 'api');
+    if (!rateLimitResult.allowed) {
+      return res.status(429).send({
+        error: 'Too many requests',
+        retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
+      });
+    }
 
     const paramsResult = AssetParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {

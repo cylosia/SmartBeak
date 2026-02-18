@@ -93,34 +93,7 @@ function buildRateLimitKey(identifier: string, namespace: string = 'global'): st
 * }
 * ```
 */
-export function rateLimit(identifier: string, limit?: number, namespace?: string): void;
-export function rateLimit(identifier: string, limit: number, req: unknown, res: unknown): Promise<void>;
-export function rateLimit(identifier: string, limit = DEFAULT_RATE_LIMIT, namespaceOrReq?: string | unknown, res?: unknown): void | Promise<void> {
-  // P0-FIX: 4-argument overload was a no-op. Now actually enforces rate limiting.
-  if (arguments.length >= 3 && res !== undefined) {
-    const key = buildRateLimitKey(identifier, 'api');
-    const now = Date.now();
-    const entry = memoryCounters.get(key) ?? { count: 0, reset: now + DEFAULT_WINDOW_MS };
-
-    if (now > entry.reset) {
-      entry.count = 0;
-      entry.reset = now + DEFAULT_WINDOW_MS;
-    }
-
-    entry.count++;
-    memoryCounters.set(key, entry);
-
-    if (entry.count > limit) {
-      const response = res as { status: (code: number) => { send: (data: Record<string, unknown>) => void } };
-      response.status(429).send({
-        error: 'Too many requests',
-        retryAfter: Math.ceil((entry.reset - now) / 1000),
-      });
-      return Promise.reject(new Error('Rate limit exceeded'));
-    }
-    return Promise.resolve();
-  }
-  const namespace = typeof namespaceOrReq === 'string' ? namespaceOrReq : 'global';
+export function rateLimit(identifier: string, limit?: number, namespace?: string): void {
   const now = Date.now();
   // SECURITY FIX: Issue 3 - Add namespace prefix to prevent key collision attacks
   const key = buildRateLimitKey(identifier, namespace);

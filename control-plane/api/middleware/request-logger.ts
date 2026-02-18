@@ -44,6 +44,21 @@ function generateRequestId(): string {
 }
 
 /**
+ * Validate and sanitize a client-supplied X-Request-ID header value.
+ *
+ * An attacker can send arbitrary bytes in X-Request-ID to inject newlines
+ * into structured log entries (log-injection), poison distributed-trace
+ * correlation IDs in SIEM systems, or forge audit-trail entries by spoofing
+ * a known request ID. Only accept UUIDs or bounded alphanumeric-dash strings;
+ * anything else is discarded and a fresh server-generated ID is used instead.
+ */
+const SAFE_REQUEST_ID_RE = /^[a-zA-Z0-9_\-]{1,128}$/;
+function sanitizeRequestId(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  return SAFE_REQUEST_ID_RE.test(raw) ? raw : undefined;
+}
+
+/**
 * Get client IP from request
 */
 function getClientIP(req: FastifyRequest): string {
@@ -63,7 +78,7 @@ export async function requestLoggerMiddleware(
   res: FastifyReply
 ) {
   const startTime = Date.now();
-  const requestId = (req.headers['x-request-id'] as string) || generateRequestId();
+  const requestId = sanitizeRequestId(req.headers['x-request-id'] as string | undefined) ?? generateRequestId();
   const auth = (req as AuthenticatedRequest).auth;
 
   const requestContext = createRequestContext({
@@ -210,7 +225,7 @@ export function logRequest(
   metadata?: Record<string, unknown>
 ) {
   const auth = (req as AuthenticatedRequest).auth;
-  const requestId = (req.headers['x-request-id'] as string);
+  const requestId = sanitizeRequestId(req.headers['x-request-id'] as string | undefined);
 
   // Sanitize metadata if provided
   const safeMetadata = metadata ? sanitizeQueryParams(metadata) : undefined;

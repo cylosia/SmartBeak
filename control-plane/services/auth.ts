@@ -5,7 +5,7 @@ import {
   TokenRevokedError as KernelTokenRevokedError,
 } from '@kernel/auth';
 
-export type Role = 'admin' | 'editor' | 'viewer' | 'owner';
+export type Role = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
 
 // P1-AUDIT-FIX: Removed dual role/roles fields. Previously had both `role?: Role` and
 // `roles?: string[]`, but authFromHeader only set `roles`. Functions like requireRole
