@@ -17,13 +17,21 @@ const logger = getLogger('DomainTransfer');
  */
 
 // Zod schema — .strict() blocks prototype-poisoned extra keys, .uuid() enforces format
+// FIXED (TRANSFER-XOR): Enforce EXACTLY one of targetUserId or targetOrgId (not both, not neither).
+// Previously only checked "at least one", allowing both to be provided simultaneously, creating
+// ambiguous transfer state (which recipient wins?) and potential data integrity issues.
 const TransferBodySchema = z.object({
   domainId: z.string().uuid('domainId must be a valid UUID'),
   targetUserId: z.string().uuid('targetUserId must be a valid UUID').optional(),
   targetOrgId: z.string().uuid('targetOrgId must be a valid UUID').optional(),
 }).strict().refine(
-  (d) => d.targetUserId !== undefined || d.targetOrgId !== undefined,
-  { message: 'targetUserId or targetOrgId is required' }
+  (d) => {
+    const hasUserId = d.targetUserId !== undefined;
+    const hasOrgId = d.targetOrgId !== undefined;
+    // XOR: exactly one must be set
+    return hasUserId !== hasOrgId;
+  },
+  { message: 'Exactly one of targetUserId or targetOrgId must be provided (not both, not neither)' }
 );
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -46,7 +54,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // SECURITY FIX T-8: Enforce Content-Type before body parse
-    if (!req.headers['content-type']?.includes('application/json')) {
+    // FIXED (TRANSFER-CT): Use exact regex match instead of .includes() to reject subtypes
+    // like 'application/json-patch+json' or charset-prefixed variants that could slip through.
+    const contentType = req.headers['content-type'] ?? '';
+    if (!/^application\/json(;\s*charset=.+)?$/i.test(contentType)) {
       return sendError(res, 415, 'Content-Type must be application/json');
     }
 

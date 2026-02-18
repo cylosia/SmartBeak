@@ -81,8 +81,14 @@ export interface TelemetryConfig {
 export interface SpanAnnotation {
   /** Event name */
   name: string;
-  /** Event attributes */
-  attributes?: Record<string, unknown>;
+  /**
+   * Event attributes — low-cardinality primitives only, no PII.
+   * FIXED (TELEMETRY-SPAN-ANNOTATION): Narrowed from Record<string, unknown> to AttributeValue
+   * to prevent PII leakage (email, user ID, request body) into OTelemetry backends accessible
+   * to SRE/observability teams. NEVER include: passwords, tokens, email, IP addresses, user IDs.
+   * SAFE: error codes, operation names, HTTP status codes, boolean flags.
+   */
+  attributes?: Record<string, AttributeValue>;
   /** Event timestamp */
   timestamp?: number;
 }
@@ -95,8 +101,13 @@ export interface TracedOperationOptions {
   spanName: string;
   /** Span kind */
   kind?: 'internal' | 'server' | 'client' | 'producer' | 'consumer';
-  /** Initial attributes */
-  attributes?: Record<string, unknown>;
+  /**
+   * Initial span attributes — low-cardinality primitives only, no PII.
+   * FIXED (TELEMETRY-TRACED-OP): Narrowed from Record<string, unknown> to AttributeValue
+   * to prevent cardinality explosion and PII leakage into distributed tracing backends.
+   * High-cardinality values (user IDs, request UUIDs, timestamps) MUST NOT be used as keys.
+   */
+  attributes?: Record<string, AttributeValue>;
   /** Parent context (for cross-service propagation) */
   parentContext?: Context;
 }
@@ -350,7 +361,7 @@ export function startSpan(
   name: string,
   options?: {
     kind?: TracedOperationOptions['kind'];
-    attributes?: Record<string, unknown>;
+    attributes?: Record<string, AttributeValue>;
     parentContext?: Context;
   }
 ): Span {
@@ -381,7 +392,7 @@ export async function withSpan<T>(
   options: TracedOperationOptions,
   fn: (span: Span) => Promise<T>
 ): Promise<T> {
-  const spanOptions: { kind?: TracedOperationOptions['kind']; attributes?: Record<string, unknown>; parentContext?: Context } = {};
+  const spanOptions: { kind?: TracedOperationOptions['kind']; attributes?: Record<string, AttributeValue>; parentContext?: Context } = {};
   if (options.kind !== undefined) spanOptions.kind = options.kind;
   if (options.attributes !== undefined) spanOptions.attributes = options.attributes;
   if (options.parentContext !== undefined) spanOptions.parentContext = options.parentContext;
@@ -422,19 +433,23 @@ export function addSpanAnnotation(annotation: SpanAnnotation): void {
 
 /**
  * Add attributes to current span
- * @param attributes - Attributes to add
+ * @param attributes - Attributes to add (low-cardinality primitives only, no PII)
  */
-export function addSpanAttributes(attributes: Record<string, unknown>): void {
+export function addSpanAttributes(attributes: Record<string, AttributeValue | null | undefined>): void {
   const span = trace.getSpan(context.active());
   if (!span) {
     logger.debug('No active span for attributes');
     return;
   }
 
+  // FIXED (TELEMETRY-ATTR-SKIP): Log skipped null/undefined attributes so callers are aware
+  // their attributes were dropped (previously silent, making debugging harder).
   Object.entries(attributes).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      span.setAttribute(key, value as AttributeValue);
+    if (value === undefined || value === null) {
+      logger.debug('Skipping null/undefined span attribute', { key });
+      return;
     }
+    span.setAttribute(key, value);
   });
 }
 
@@ -445,7 +460,7 @@ export function addSpanAttributes(attributes: Record<string, unknown>): void {
  */
 export function recordSpanException(
   error: Error,
-  attributes?: Record<string, unknown>
+  attributes?: Record<string, AttributeValue>
 ): void {
   const span = trace.getSpan(context.active());
   if (!span) {

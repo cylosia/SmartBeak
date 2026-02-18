@@ -1,35 +1,38 @@
 /**
  * CRITICAL: Transaction Error Handling Tests
- * 
+ *
  * Tests for rollback failure scenarios and error chaining.
  * Ensures original errors are preserved when rollback fails.
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Pool, PoolClient } from 'pg';
 import { withTransaction, TransactionError } from '../transactions';
 // FIXED (Issue 1.1): Renamed from non-existent `withPgBouncerTransaction` to actual export
 import { transactionWithPgBouncer } from '../pgbouncer';
 
 // Mock the logger
-jest.mock('@kernel/logger', () => ({
-  getLogger: jest.fn(() => ({
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+// FIXED (TEST-FRAMEWORK): Switched from jest.mock() to vi.mock() for consistency with the
+// rest of packages/database/__tests__/ which use vitest (transactions.test.ts, etc.).
+vi.mock('@kernel/logger', () => ({
+  getLogger: vi.fn(() => ({
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   })),
 }));
 
 // Mock the pool
-const mockQuery = jest.fn();
-const mockRelease = jest.fn();
-const mockConnect = jest.fn();
+const mockQuery = vi.fn();
+const mockRelease = vi.fn();
+const mockConnect = vi.fn();
 
-jest.mock('../pool', () => ({
-  getPool: jest.fn(() => ({
+vi.mock('../pool', () => ({
+  getPool: vi.fn(() => ({
     connect: mockConnect,
   })),
-  getConnectionMetrics: jest.fn(() => ({
+  getConnectionMetrics: vi.fn(() => ({
     totalConnections: 10,
     idleConnections: 5,
     waitingClients: 0,
@@ -40,13 +43,13 @@ describe('Transaction Error Handling', () => {
   let mockClient: Partial<PoolClient>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    
+    vi.clearAllMocks();
+
     mockClient = {
       query: mockQuery,
       release: mockRelease,
     };
-    
+
     mockConnect.mockResolvedValue(mockClient);
   });
 
@@ -63,7 +66,10 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackError); // ROLLBACK also fails
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as ReturnType<typeof vi.fn> & {
+        error: ReturnType<typeof vi.fn>;
+        warn: ReturnType<typeof vi.fn>;
+      };
 
       await expect(
         withTransaction(async () => {
@@ -89,22 +95,25 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as ReturnType<typeof vi.fn> & {
+        error: ReturnType<typeof vi.fn> & { mock: { calls: unknown[][] } };
+      };
 
       try {
         await withTransaction(async () => {
           throw originalError;
         });
       } catch (e) {
-        // Expected to throw
+        // Expected: original error is re-thrown
+        expect(e).toBe(originalError);
       }
 
       // Verify the rollback failure was logged
       const rollbackLogCall = mockLogger.error.mock.calls.find(
-        (call: any[]) => call[0] === 'Rollback failed'
+        (call: unknown[]) => call[0] === 'Rollback failed'
       );
       expect(rollbackLogCall).toBeDefined();
-      expect(rollbackLogCall[1]).toBe(rollbackError);
+      expect(rollbackLogCall?.[1]).toBe(rollbackError);
     });
   });
 
@@ -160,7 +169,7 @@ describe('Transaction Error Handling', () => {
       }
 
       const chainedError = new ChainedError('Operation failed', originalError);
-      
+
       mockQuery.mockReset();
       mockQuery
         .mockResolvedValueOnce({}) // SET statement_timeout
@@ -192,7 +201,8 @@ describe('Transaction Error Handling', () => {
           throw originalError;
         });
       } catch (e) {
-        // Expected
+        // FIXED (TEST-CATCH): Verify error type instead of silently swallowing
+        expect(e).toBe(originalError);
       }
 
       // When rollback fails, client should be released with error=true
@@ -213,7 +223,8 @@ describe('Transaction Error Handling', () => {
           throw originalError;
         });
       } catch (e) {
-        // Expected
+        // FIXED (TEST-CATCH): Verify error type instead of silently swallowing
+        expect(e).toBe(originalError);
       }
 
       // When rollback succeeds, client should be released normally
@@ -227,7 +238,9 @@ describe('Transaction Error Handling', () => {
         .mockResolvedValueOnce({}); // COMMIT
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as ReturnType<typeof vi.fn> & {
+        warn: ReturnType<typeof vi.fn>;
+      };
 
       await withTransaction(async () => {
         return 'success';
@@ -257,8 +270,10 @@ describe('Transaction Error Handling', () => {
 
       // Get logger for verification
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:pgbouncer') as jest.Mocked<any>;
-      const loggerSpy = jest.spyOn(mockLogger, 'error').mockImplementation();
+      const mockLogger = getLogger('database:pgbouncer') as ReturnType<typeof vi.fn> & {
+        error: ReturnType<typeof vi.fn>;
+      };
+      const loggerSpy = vi.spyOn(mockLogger, 'error').mockImplementation(() => undefined);
 
       await expect(
         transactionWithPgBouncer(mockPool, async () => {
@@ -308,7 +323,9 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackError); // ROLLBACK fails with string
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as ReturnType<typeof vi.fn> & {
+        error: ReturnType<typeof vi.fn>;
+      };
 
       await expect(
         withTransaction(async () => {
@@ -334,7 +351,7 @@ describe('Transaction Error Handling', () => {
         .mockRejectedValueOnce(rollbackTimeoutError); // ROLLBACK times out
 
       const startTime = Date.now();
-      
+
       await expect(
         withTransaction(async () => {
           throw originalError;
@@ -362,7 +379,9 @@ describe('Transaction Error Handling', () => {
       });
 
       const { getLogger } = await import('@kernel/logger');
-      const mockLogger = getLogger('database:transactions') as jest.Mocked<any>;
+      const mockLogger = getLogger('database:transactions') as ReturnType<typeof vi.fn> & {
+        error: ReturnType<typeof vi.fn>;
+      };
 
       await expect(
         withTransaction(async () => {
@@ -406,11 +425,11 @@ describe('Transaction Error Handling', () => {
       );
 
       const serialized = JSON.stringify(transactionError);
-      const parsed = JSON.parse(serialized);
+      const parsed = JSON.parse(serialized) as { message: string; originalError: string; rollbackError: string };
 
-      expect(parsed.message).toBe('Transaction failed');
-      expect(parsed.originalError).toBe('Original error message');
-      expect(parsed.rollbackError).toBe('Rollback error message');
+      expect(parsed['message']).toBe('Transaction failed');
+      expect(parsed['originalError']).toBe('Original error message');
+      expect(parsed['rollbackError']).toBe('Rollback error message');
     });
   });
 });

@@ -5,6 +5,7 @@
     "outDir": "./dist"
   },
   "include": ["./**/*.ts"],
+  "exclude": ["**/*.test.ts", "**/*.spec.ts", "__tests__/**/*", "node_modules", "dist"],
   "references": [
     { "path": "../kernel" },
     { "path": "../config" }

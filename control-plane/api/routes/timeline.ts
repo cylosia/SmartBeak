@@ -39,7 +39,7 @@ const TimelineQuerySchema = z.object({
     return true;
   },
   { message: 'Date range cannot exceed 365 days' }
-);
+).strict();
 
 export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
   // GET /timeline - Get organization-wide timeline
@@ -102,8 +102,14 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     params.push(limit);
 
     // FIXED (TIMELINE-ROUTE-2): Wrap DB query in try/catch to prevent raw pg errors leaking
+    // FIXED (TIMELINE-TIMEOUT-1): Race against 30 s wall-clock to prevent connection pool
+    // exhaustion from slow/hung PostgreSQL backends.
     try {
-      const { rows } = await pool.query(`SELECT ${query}`, params);
+      const queryPromise = pool.query(`SELECT ${query}`, params);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeline query timeout after 30s')), 30000)
+      );
+      const { rows } = await Promise.race([queryPromise, timeoutPromise]);
 
       return {
         events: rows.map(row => ({
@@ -205,8 +211,14 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     // FIXED (TIMELINE-ROUTE-2): Wrap DB query in try/catch to prevent raw pg errors leaking
     // FIXED (TIMELINE-ROUTE-4): metadata column removed from SELECT — raw JSONB must not be
     //   returned to API consumers without schema validation (XSS and info-disclosure risk).
+    // FIXED (TIMELINE-TIMEOUT-2): Race against 30 s wall-clock to prevent connection pool
+    // exhaustion from slow/hung PostgreSQL backends.
     try {
-      const { rows } = await pool.query(`SELECT ${query}`, params);
+      const queryPromise = pool.query(`SELECT ${query}`, params);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Domain timeline query timeout after 30s')), 30000)
+      );
+      const { rows } = await Promise.race([queryPromise, timeoutPromise]);
 
       return {
         events: rows.map(row => ({
