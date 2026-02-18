@@ -18,6 +18,17 @@ const FORMS_BASE_URL = cdnConfig.formsBaseUrl;
 
 export function OptinEmbedSnippet({ formId }: { formId: string }) {
 
+  // Guard against misconfigured CDN/Forms URLs — rendering snippets with
+  // literal "undefined" in the URL silently produces broken embeds.
+  if (!CDN_BASE_URL || !FORMS_BASE_URL) {
+  return (
+    <div>
+    <h3>Embed Opt-in Form</h3>
+    <p style={{ color: 'red' }}>Embed configuration error: CDN URLs are not configured.</p>
+    </div>
+  );
+  }
+
   if (!formId || !isValidFormId(formId)) {
   return (
     <div>

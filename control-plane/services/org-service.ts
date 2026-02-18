@@ -29,10 +29,12 @@ export class OrgService {
   }
   }
 
-  async listMembers(orgId: string) {
+  async listMembers(orgId: string, limit = 100, offset = 0) {
+  // Bounded result set prevents OOM for large orgs.
+  // Callers paginate by incrementing offset in steps of limit.
   const { rows } = await this.pool.query(
-    'SELECT user_id, role FROM memberships WHERE org_id=$1',
-    [orgId]
+    'SELECT user_id, role FROM memberships WHERE org_id=$1 ORDER BY user_id ASC LIMIT $2 OFFSET $3',
+    [orgId, limit, offset]
   );
   return rows;
   }

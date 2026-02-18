@@ -19,7 +19,6 @@ export interface OrgFactoryOptions {
 }
 
 export function createOrganization(options: OrgFactoryOptions = {}) {
-  const _timestamp = Date.now();
   const randomSuffix = crypto.randomBytes(4).toString('hex');
   const name = options.name || `Test Organization ${randomSuffix}`;
 
@@ -66,9 +65,6 @@ export interface MembershipFactoryOptions {
 }
 
 export function createMembership(options: MembershipFactoryOptions = {}) {
-  const _timestamp = Date.now();
-  const _randomSuffix = crypto.randomBytes(4).toString('hex');
-
   return {
     // FIX (M15): Use UUID format to match production
     id: options.id || crypto.randomUUID(),

@@ -6,7 +6,7 @@ import { StructuredLogger, createRequestContext, MetricsCollector } from '@kerne
 import { validateNonEmptyString } from '../../utils/validation';
 import { withRetry } from '../../utils/retry';
 
-import { AbortController } from 'abort-controller';
+// AbortController is a Node.js global since Node 18 (LTS). No polyfill needed.
 
 /**
  * OpenAI DALL-E Image Generation Adapter
@@ -18,6 +18,22 @@ import { AbortController } from 'abort-controller';
 
 /** OpenAI DALL-E 2 image upload limit: 4MB */
 const MAX_IMAGE_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Maximum prompt length enforced client-side before hitting the API.
+ * OpenAI limits: DALL-E 2 → 1,000 chars; DALL-E 3 → 4,000 chars.
+ */
+const MAX_PROMPT_LENGTH: Record<string, number> = {
+  'dall-e-2': 1_000,
+  'dall-e-3': 4_000,
+};
+
+/**
+ * Maximum number of characters of an OpenAI error body to include in a
+ * thrown Error message.  Truncating prevents sensitive prompt/moderation
+ * details from propagating up the call stack and into logs or client responses.
+ */
+const MAX_ERROR_BODY_LENGTH = 200;
 
 /**
  * API Error with status code and retry information
@@ -132,7 +148,16 @@ export class OpenAIImageAdapter {
       quality = 'standard',
       style = 'vivid',
       n = 1,
+      user,
     } = options;
+
+    // Validate prompt length before hitting the API to surface clear errors early.
+    const maxPromptLen = MAX_PROMPT_LENGTH[model] ?? 1_000;
+    if (prompt.length > maxPromptLen) {
+      throw new Error(
+        `Prompt length ${prompt.length} exceeds the ${maxPromptLen}-character limit for ${model}`
+      );
+    }
 
     // Validate model-specific constraints
     if (model === 'dall-e-3' && n > 1) {
@@ -171,6 +196,9 @@ export class OpenAIImageAdapter {
               style,
               n,
               response_format: 'url',
+              // Pass user identifier to OpenAI for per-user rate limiting and
+              // abuse tracking. Omitted when undefined to keep payloads minimal.
+              ...(user !== undefined ? { user } : {}),
             }),
             signal: controller.signal,
           });
@@ -181,8 +209,11 @@ export class OpenAIImageAdapter {
               throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
             }
 
-            const errorText = await response.text();
-            throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+            // Truncate the error body to prevent sensitive prompt content or
+            // moderation details from propagating into logs or client responses.
+            const rawError = await response.text();
+            const safeError = rawError.slice(0, MAX_ERROR_BODY_LENGTH);
+            throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${safeError}`);
           }
 
           const rawData = await response.json();
@@ -297,8 +328,9 @@ export class OpenAIImageAdapter {
               throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
             }
 
-            const errorText = await response.text();
-            throw new Error(`OpenAI edit error: ${response.status} - ${errorText}`);
+            const rawError = await response.text();
+            const safeError = rawError.slice(0, MAX_ERROR_BODY_LENGTH);
+            throw new Error(`OpenAI edit error: ${response.status} - ${safeError}`);
           }
 
           const rawData = await response.json();
@@ -391,8 +423,9 @@ export class OpenAIImageAdapter {
               throw new ApiError(`OpenAI rate limited: ${response.status}`, response.status, retryAfter);
             }
 
-            const errorText = await response.text();
-            throw new Error(`OpenAI variation error: ${response.status} - ${errorText}`);
+            const rawError = await response.text();
+            const safeError = rawError.slice(0, MAX_ERROR_BODY_LENGTH);
+            throw new Error(`OpenAI variation error: ${response.status} - ${safeError}`);
           }
 
           const rawData = await response.json();

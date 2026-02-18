@@ -10,6 +10,27 @@ import { PoolClient } from 'pg';
 import { DomainEventEnvelope } from '@packages/types/domain-event';
 
 /**
+ * PostgreSQL supports at most 65,535 bind parameters per query ($1 … $65535).
+ * Each event occupies 5 parameters (name, version, payload, meta, occurred_at),
+ * so a single batch INSERT must not exceed 65535 / 5 = 13,107 events.
+ * We use a conservative 1,000-event ceiling to keep individual statements fast
+ * and to leave headroom for future schema additions.
+ */
+const MAX_BATCH_SIZE = 1_000;
+
+/**
+ * JSON replacer that converts BigInt values to strings so that
+ * JSON.stringify never throws "TypeError: Do not know how to serialize a BigInt".
+ * Callers that need to reconstruct BigInt on the consumer side should document
+ * which payload fields carry BigInt semantics.
+ */
+function safeStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    typeof v === 'bigint' ? v.toString() : v
+  );
+}
+
+/**
  * Write a single event to the outbox table within an existing transaction.
  * The outbox relay will poll and publish this event later.
  *
@@ -26,8 +47,8 @@ export async function writeToOutbox(
     [
       event.name,
       event.version,
-      JSON.stringify(event.payload),
-      JSON.stringify(event.meta),
+      safeStringify(event.payload),
+      safeStringify(event.meta),
       event.occurredAt,
     ]
   );
@@ -39,12 +60,22 @@ export async function writeToOutbox(
  *
  * @param client - The PoolClient participating in the caller's transaction
  * @param events - Array of domain event envelopes to persist
+ * @throws Error if events.length exceeds MAX_BATCH_SIZE (1,000). Split into
+ *         multiple calls for larger batches to stay within PostgreSQL's 65,535
+ *         parameter limit and to keep individual statements fast.
  */
 export async function writeMultipleToOutbox(
   client: PoolClient,
   events: DomainEventEnvelope<unknown>[]
 ): Promise<void> {
   if (events.length === 0) return;
+
+  if (events.length > MAX_BATCH_SIZE) {
+    throw new Error(
+      `writeMultipleToOutbox: batch size ${events.length} exceeds maximum ${MAX_BATCH_SIZE}. ` +
+      `Split into smaller batches to stay within PostgreSQL's 65,535 parameter limit.`
+    );
+  }
 
   const values: unknown[] = [];
   const placeholders: string[] = [];
@@ -57,8 +88,8 @@ export async function writeMultipleToOutbox(
     values.push(
       event.name,
       event.version,
-      JSON.stringify(event.payload),
-      JSON.stringify(event.meta),
+      safeStringify(event.payload),
+      safeStringify(event.meta),
       event.occurredAt
     );
   }
