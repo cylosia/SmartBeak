@@ -103,7 +103,9 @@ export function createMockDatabase(options: MockDbOptions = {}) {
     options: { max: 10 },
   };
 
-  const knexBuilder = (_tableName: string) => ({
+  // P2-FIX: Was `_tableName` (underscore prefix) but the closure body referenced
+  // `tableName` (no underscore) — ReferenceError on every Knex-style mock call.
+  const knexBuilder = (tableName: string) => ({
     where: vi.fn().mockReturnThis(),
     whereIn: vi.fn().mockReturnThis(),
     select: vi.fn().mockImplementation(async () => {

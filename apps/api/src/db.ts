@@ -283,13 +283,21 @@ export async function analyticsDb(): Promise<Knex> {
   }
 
   if (replicaUrl !== analyticsDbUrl) {
-    // P1-FIX #13: Set analyticsDbUrl synchronously BEFORE the async reset to prevent
-    // concurrent calls from both entering this block and creating duplicate connections.
+    // P0-FIX: Capture the stale instance BEFORE nulling it.
+    // resetAnalyticsDb() checks `if (analyticsDbInstance)` to destroy the old pool —
+    // nulling it first causes the old Knex connection pool to leak on every URL change
+    // (e.g. replica failover), eventually exhausting Postgres max_connections.
+    const staleInstance = analyticsDbInstance;
     analyticsDbUrl = replicaUrl;
-    // P1-12 FIX: Also null out instance synchronously to prevent concurrent calls from
-    // returning the stale instance while resetAnalyticsDb() is awaiting async destruction.
     analyticsDbInstance = null;
-    await resetAnalyticsDb();
+    analyticsDbPromise = null;
+    lastAnalyticsError = null;
+    analyticsRetryCount = 0;
+    if (staleInstance) {
+      await staleInstance.destroy().catch((err: unknown) => {
+        logger.error('Failed to destroy stale analytics DB instance', err instanceof Error ? err : new Error(String(err)));
+      });
+    }
   }
   // Return existing instance if available
   if (analyticsDbInstance) {

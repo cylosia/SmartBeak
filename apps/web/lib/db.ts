@@ -8,13 +8,10 @@
  */
 
 import { registerShutdownHandler, setupShutdownHandlers } from './shutdown';
-// import { getLogger } from '@kernel/logger';
-const getLogger = (_name: string) => ({
-  debug: (..._args: unknown[]) => {},
-  info: (..._args: unknown[]) => {},
-  warn: (..._args: unknown[]) => {},
-  error: (..._args: unknown[]) => {},
-});
+// P1-FIX: Restored real structured logger. The no-op stub that replaced it caused all
+// database errors (pool close failures, shutdown errors) to be silently discarded,
+// leaving on-call engineers completely blind to web-tier DB failures in production.
+import { getLogger } from '@kernel/logger';
 
 // Re-export everything from the shared database package
 export {
@@ -67,7 +64,7 @@ export {
 // Import for shutdown handler registration
 import { getPoolInstance as getPool } from '@database';
 
-const logger = getLogger('database:web') as ReturnType<typeof getLogger>;
+const logger = getLogger('database:web');
 
 // Register shutdown handlers for the web app
 let shutdownHandlersRegistered = false;

@@ -36,8 +36,12 @@ function isPotentialRebindingAttack(domain: string): boolean {
   return REBINDING_PATTERNS.some(pattern => pattern.test(domain));
 }
 
-// Re-export from kernel
-export { generateDnsToken, verifyDns } from '@kernel/dns';
+// Re-export the token generator only.
+// P1-FIX: verifyDns is intentionally NOT re-exported here. The raw kernel function
+// has no DNS rebinding protection (localhost, 127.x, 10.x, 192.168.x, RFC-1918 ranges).
+// All callers must use verifyDnsSafe() below which enforces the rebinding check and
+// prevents SSRF via DNS rebinding attacks.
+export { generateDnsToken } from '@kernel/dns';
 
 // Import for wrapper functions
 import {

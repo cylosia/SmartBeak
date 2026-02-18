@@ -26,7 +26,14 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
       return errors.badRequest(res, 'Invalid token format');
     }
     const { token } = tokenResult.data;
-    await rateLimit('diligence', 30);
+    // P1-FIX: Key on client IP, not a shared literal. A global 'diligence' key means
+    // any single user can exhaust the limit for ALL buyers — trivial DoS during M&A.
+    const clientIp = String(
+      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+      ?? req.ip
+      ?? 'unknown'
+    );
+    await rateLimit(`diligence:${clientIp}`, 30);
     // Validate token and get domain info
     const { rows } = await pool.query(
     'SELECT domain_id, expires_at FROM diligence_tokens WHERE token = $1 AND expires_at > NOW()',
@@ -99,7 +106,12 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
       return errors.badRequest(res, 'Invalid token format');
     }
     const { token } = tokenResult.data;
-    await rateLimit('diligence', 30);
+    const clientIp = String(
+      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+      ?? req.ip
+      ?? 'unknown'
+    );
+    await rateLimit(`diligence:${clientIp}`, 30);
     // Validate token
     const { rows } = await pool.query(
     'SELECT domain_id FROM diligence_tokens WHERE token = $1 AND expires_at > NOW()',

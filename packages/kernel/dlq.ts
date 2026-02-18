@@ -168,9 +168,12 @@ class InMemoryDLQStorage implements DLQStorage {
   }
 
   async peek(limit: number): Promise<DLQMessage[]> {
-  return [...this.messages.values()]
-    .sort((a, b) => new Date(b.failedAt).getTime() - new Date(a.failedAt).getTime())
-    .slice(0, limit);
+  // P2-FIX: Pre-compute timestamps before sort. The old comparator created a new Date
+  // on every comparison call — O(n log n) Date constructions. For 10,000 entries this
+  // created ~130,000 Date objects and spiked GC on every DLQ management operation.
+  const withTs = [...this.messages.values()].map(m => ({ m, t: Date.parse(m.failedAt) }));
+  withTs.sort((a, b) => b.t - a.t);
+  return withTs.slice(0, limit).map(x => x.m);
   }
 
   async delete(id: string): Promise<void> {
@@ -309,6 +312,22 @@ export async function sendToDLQ(
 
   const sanitizedError = sanitizeError(error);
 
+  // P2-FIX: Persist all metadata keys (not just firstFailedAt) so correlation IDs,
+  // user context, and job parameters are available for DLQ investigation. Previously
+  // every key in `metadata` except firstFailedAt was silently dropped.
+  const firstFailedAtValue = metadata?.["firstFailedAt"] as string | undefined;
+  let serializedMeta: Record<string, JSONValue> | undefined;
+  if (metadata) {
+  const { firstFailedAt: _ignored, ...rest } = metadata;
+  const entries = Object.entries(rest);
+  if (entries.length > 0) {
+    serializedMeta = {};
+    for (const [k, v] of entries) {
+    serializedMeta[k] = toJSONValue(v);
+    }
+  }
+  }
+
   const message: DLQMessage = {
   id: generateDLQId(),
   originalQueue,
@@ -317,8 +336,9 @@ export async function sendToDLQ(
   attempts,
   maxAttempts,
   failedAt: new Date().toISOString(),
-  firstFailedAt: (metadata?.["firstFailedAt"] as string | undefined) || new Date().toISOString(),
+  firstFailedAt: firstFailedAtValue || new Date().toISOString(),
   requestId: getRequestId(),
+  ...(serializedMeta !== undefined ? { metadata: serializedMeta } : {}),
   };
 
   await getDLQStorageInstance().enqueue(message);
