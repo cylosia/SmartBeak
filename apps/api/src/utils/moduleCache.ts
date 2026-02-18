@@ -16,35 +16,37 @@ export class ModuleCache<T> {
   private loader: () => Promise<T>;
 
   constructor(loader: () => Promise<T>) {
-  this.loader = loader;
+    this.loader = loader;
   }
 
   async get(): Promise<T> {
-  // P1-FIX: Atomic check-and-set pattern prevents race condition
-  // If promise already exists, return it immediately (shared by all concurrent calls)
-  if (this.promise) {
+    // P1-FIX: Atomic check-and-set pattern prevents race condition
+    // If promise already exists, return it immediately (shared by all concurrent calls)
+    if (this.promise) {
+      return this.promise;
+    }
+
+    // FIX(P2): Use snapshot comparison to null out the promise safely.
+    // Previously `this.promise = null` was inside the `.catch()` chain return,
+    // meaning callers retrying immediately after rejection received the already-
+    // settled rejected promise if the microtask queue hadn't drained yet.
+    // Now we capture `p` and only clear `this.promise` when it still points to
+    // this specific load attempt (not a newer one).
+    const p: Promise<T> = this.loader().then(
+      (result) => result,
+      (err: unknown) => {
+        logger.error('Loader failed', err instanceof Error ? err : new Error(String(err)));
+        // Only clear if no newer load has started since this one failed
+        if (this.promise === p) this.promise = null;
+        throw err;
+      }
+    );
+    this.promise = p;
     return this.promise;
   }
 
-  // P2-19 FIX: Removed dead code branch — the previous `if (this.isLoading && this.promise)`
-  // check was unreachable because `this.promise` being truthy is already handled above.
-  // P1-10 FIX: The `isLoading` flag is also removed; the promise itself is the
-  // synchronization primitive. No busy-wait loops are needed.
-
-  // Create the promise — this is the single synchronization point
-  this.promise = this.loader().catch((err) => {
-    // P1-FIX: Log the error instead of silently suppressing
-    logger.error('Loader failed', err instanceof Error ? err : new Error(String(err)));
-    // Clear cache on error to allow retry
-    this.promise = null;
-    throw err;
-  });
-
-  return this.promise;
-  }
-
   clear(): void {
-  this.promise = null;
+    this.promise = null;
   }
 }
 
@@ -76,31 +78,37 @@ export class ThreadSafeModuleCache<T> {
   }
 
   async get(key: string): Promise<T> {
-  // Return the cached promise if it exists (whether resolved or still pending)
-  const cached = this.cache.get(key);
-  if (cached) {
-    return cached;
-  }
+    // Return the cached promise if it exists (whether resolved or still pending)
+    const cached = this.cache.get(key);
+    if (cached) {
+      return cached;
+    }
 
-  // P1-12 FIX: No lock needed — store the promise synchronously so that any
-  // subsequent call within the same microtask tick will see it in the cache.
-  const promise = this.circuitBreaker.execute(() => this.loader(key)).catch((err) => {
-    // Clear on error so the next call retries
-    this.cache.delete(key);
-    logger.error(`Module cache load failed for key: ${key}`, err instanceof Error ? err : new Error(String(err)));
-    throw err;
-  });
+    // P1-12 FIX: No lock needed — store the promise synchronously so that any
+    // subsequent call within the same microtask tick will see it in the cache.
+    // FIX(P2): Capture promise reference for snapshot comparison in catch handler
+    const promise: Promise<T> = this.circuitBreaker.execute(() => this.loader(key)).then(
+      (result) => result,
+      (err: unknown) => {
+        // Only delete if our entry is still current (no newer attempt took over)
+        if (this.cache.get(key) === promise) {
+          this.cache.delete(key);
+        }
+        logger.error(`Module cache load failed for key: ${key}`, err instanceof Error ? err : new Error(String(err)));
+        throw err;
+      }
+    );
 
-  this.cache.set(key, promise);
-  return promise;
+    this.cache.set(key, promise);
+    return promise;
   }
 
   clear(key?: string): void {
-  if (key) {
-    this.cache.delete(key);
-  } else {
-    this.cache.clear();
-  }
+    if (key) {
+      this.cache.delete(key);
+    } else {
+      this.cache.clear();
+    }
   }
 }
 

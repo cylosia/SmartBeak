@@ -67,13 +67,13 @@ export type Metric = {
   timestamp?: number;
 };
 
-export function getRateLimitStatus() {
+export function getRateLimitStatus(): { count: number; windowStart: number } {
   return { count: metricsInWindow, windowStart };
 }
 /**
  * MEDIUM FIX M3: Validate metric name
  */
-function validateMetricName(name: string) {
+function validateMetricName(name: string): void {
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     throw new Error('Invalid metric name: must be a non-empty string');
   }
@@ -88,7 +88,7 @@ function validateMetricName(name: string) {
 /**
  * MEDIUM FIX M3: Validate metric labels
  */
-function validateLabels(labels: Record<string, string> | undefined) {
+function validateLabels(labels: Record<string, string> | undefined): void {
   if (labels === undefined)
     return;
   if (typeof labels !== 'object' || labels === null) {
@@ -116,7 +116,7 @@ function validateLabels(labels: Record<string, string> | undefined) {
 /**
  * MEDIUM FIX M4: Check rate limit
  */
-function checkRateLimit() {
+function checkRateLimit(): boolean {
   const now = Date.now();
   // Reset window if needed
   if (now - windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -133,7 +133,7 @@ function checkRateLimit() {
  * Emit a metric with validation and rate limiting
  * @param metric - Metric to emit
  */
-export function emitMetric(metric: Metric) {
+export function emitMetric(metric: Metric): void {
   try {
         validateMetricName(metric.name);
     validateLabels(metric.labels);
@@ -168,9 +168,26 @@ export function emitMetric(metric: Metric) {
   }
 }
 /**
+ * FIX(P2): Reset all module-level state for test isolation.
+ * Without this, module-level singletons (metricBuffer, metricsInWindow,
+ * windowStart, flushInterval) persist between Jest test files in the same
+ * worker, causing cross-test pollution.
+ */
+export function resetMetricsState(): void {
+  metricBuffer.metrics = [];
+  metricBuffer.lastFlush = Date.now();
+  metricsInWindow = 0;
+  windowStart = Date.now();
+  if (flushInterval !== null) {
+    clearInterval(flushInterval);
+    flushInterval = null;
+  }
+}
+
+/**
  * MEDIUM FIX M4: Flush buffered metrics
  */
-function flushMetrics() {
+function flushMetrics(): void {
   if (metricBuffer.metrics.length === 0)
     return;
   try {

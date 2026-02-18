@@ -7,6 +7,7 @@
 
 
 import { withTransaction, query as _query } from '@database/transactions';
+import { getPool } from '@database/pool';
 import { getRedis } from '@kernel/redis';
 import { checkRateLimit } from '@kernel/rateLimiterRedis';
 import { getAuthContext } from '@security/jwt';
@@ -26,6 +27,18 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
   let mockClient: any;
   let mockRedis: any;
   let tenantData: Map<string, Map<string, any>>;
+
+  // FIX(P2): Set JWT_KEY_1 once per suite in beforeAll/afterAll instead of
+  // inside individual test helper functions. Setting process.env inside a test
+  // closure mutates the environment for the entire Jest worker process, causing
+  // cross-test-file pollution when tests run sequentially in the same worker.
+  beforeAll(() => {
+    process.env['JWT_KEY_1'] = 'test-secret-key-minimum-32-characters-long';
+  });
+
+  afterAll(() => {
+    delete process.env['JWT_KEY_1'];
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -52,8 +65,10 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
       on: jest.fn(),
     };
 
-    const { getPool } = require('@database/pool');
-    (getPool as any).mockResolvedValue(mockPool);
+    // FIX(P2): Use jest.mocked() on the ESM import instead of require().
+    // require() in an ESM module bypasses Jest's module registry interception,
+    // meaning the mock declared above may not be applied to this reference.
+    jest.mocked(getPool).mockResolvedValue(mockPool);
 
     // Setup mock Redis with tenant isolation
     const tenantCaches = new Map<string, Map<string, string>>();
@@ -248,14 +263,16 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
   });
 
   describe('Authentication Context Isolation', () => {
+    // FIX(P2): Removed process.env mutation from inside the helper — env is now
+    // set once in the outer beforeAll/afterAll hooks. Mutating process.env per
+    // test call pollutes the worker environment for all subsequent test files.
     const createTenantToken = (tenantId: string): string => {
-      process.env.JWT_KEY_1 = 'test-secret-key-minimum-32-characters-long';
-      
+      const secret = process.env['JWT_KEY_1']!;
       return jwt.sign({
         sub: 'user-123',
         orgId: tenantId,
         role: 'admin',
-      }, process.env.JWT_KEY_1, {
+      }, secret, {
         algorithm: 'HS256',
       });
     };

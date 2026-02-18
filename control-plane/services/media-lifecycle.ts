@@ -27,6 +27,19 @@ function validatePositiveNumber(val: unknown, name: string): number {
   return num;
 }
 
+/**
+ * FIX(P2): Validate that each ID in a bulk array is a properly-formed UUID.
+ * Without this, nulls or garbage strings from the caller propagate into ANY($1)
+ * and corrupt audit logs even though they silently match nothing in the DB.
+ */
+function validateIdArray(ids: string[], name: string): void {
+  for (const id of ids) {
+    if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
+      throw new Error(`${name} contains invalid UUID: ${String(id)}`);
+    }
+  }
+}
+
 export interface MediaAsset {
   id: string;
   org_id: string;
@@ -73,11 +86,15 @@ export class MediaLifecycleService {
 
   /**
    * Get count of "hot" (recently-accessed) media assets.
+   * FIX(P0): Require orgId to prevent cross-tenant data leakage. Previously
+   * this method returned an aggregate spanning ALL tenants.
    */
-  async getHotCount(): Promise<number> {
+  async getHotCount(orgId: string): Promise<number> {
+    validateOrgId(orgId);
     const { rows } = await this.pool.query(
       `SELECT COUNT(*)::int AS count FROM media_assets
-       WHERE storage_class = 'hot' AND status != 'deleted'`
+       WHERE storage_class = 'hot' AND status != 'deleted' AND org_id = $1`,
+      [orgId]
     );
     return Number(rows[0]?.['count'] ?? 0);
   }
@@ -102,6 +119,7 @@ export class MediaLifecycleService {
   /**
    * Find cold media candidates.
    * P2-5 FIX: Add deterministic ORDER BY.
+   * FIX(P2): Validate that extracted IDs are non-null strings before returning.
    */
   async findColdCandidates(days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
     const safeDays = validatePositiveNumber(days, 'days');
@@ -116,17 +134,30 @@ export class MediaLifecycleService {
        LIMIT $2`,
       [safeDays, safeLimit]
     );
-    return rows.map((r: Record<string, unknown>) => r['id'] as string);
+    return rows.map((r: Record<string, unknown>) => {
+      const id = r['id'];
+      if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
+        throw new Error(`Invalid UUID returned from DB: ${String(id)}`);
+      }
+      return id;
+    });
   }
 
   /**
    * Transition media assets to cold storage.
    * P1-17 FIX: Requires org_id for tenant scoping.
    * P2-4 FIX: Return count of rows updated.
+   * FIX(P1): Enforce array size cap and per-element UUID validation.
    */
   async markCold(ids: string[], orgId: string): Promise<number> {
     validateOrgId(orgId);
     if (!Array.isArray(ids) || ids.length === 0) return 0;
+    // FIX(P1): Unbounded ANY($1) arrays OOM the PostgreSQL backend
+    if (ids.length > DEFAULT_QUERY_LIMIT) {
+      throw new Error(`markCold: ids array exceeds maximum size of ${DEFAULT_QUERY_LIMIT}`);
+    }
+    // FIX(P2): Validate each element — garbage IDs pollute audit logs
+    validateIdArray(ids, 'ids');
 
     const result = await this.pool.query(
       `UPDATE media_assets
@@ -140,34 +171,50 @@ export class MediaLifecycleService {
   /**
    * Find orphaned media assets (not linked to any content).
    * P2-5 FIX: Add deterministic ORDER BY.
+   * FIX(P0): Require orgId — previously scanned ALL tenants' assets.
    */
-  async findOrphaned(days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
+  async findOrphaned(orgId: string, days: number, limit: number = DEFAULT_QUERY_LIMIT): Promise<string[]> {
+    validateOrgId(orgId);
     const safeDays = validatePositiveNumber(days, 'days');
     const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
     const { rows } = await this.pool.query(
       `SELECT ma.id FROM media_assets ma
        WHERE ma.status = 'uploaded'
-         AND ma.created_at < NOW() - make_interval(days => $1::int)
+         AND ma.org_id = $1
+         AND ma.created_at < NOW() - make_interval(days => $2::int)
          AND NOT EXISTS (
            SELECT 1 FROM content_media_links cml
            WHERE cml.media_id = ma.id
          )
        ORDER BY ma.created_at ASC
-       LIMIT $2`,
-      [safeDays, safeLimit]
+       LIMIT $3`,
+      [orgId, safeDays, safeLimit]
     );
-    return rows.map((r: Record<string, unknown>) => r['id'] as string);
+    return rows.map((r: Record<string, unknown>) => {
+      const id = r['id'];
+      if (typeof id !== 'string' || !UUID_REGEX.test(id)) {
+        throw new Error(`Invalid UUID returned from DB: ${String(id)}`);
+      }
+      return id;
+    });
   }
 
   /**
    * Soft-delete media assets.
    * P1-17 FIX: Requires org_id for tenant scoping.
    * P1-18 FIX: Use soft-delete instead of hard DELETE.
+   * FIX(P1): Enforce array size cap and per-element UUID validation.
    */
   async delete(ids: string[], orgId: string): Promise<number> {
     validateOrgId(orgId);
     if (!Array.isArray(ids) || ids.length === 0) return 0;
+    // FIX(P1): Unbounded ANY($1) arrays OOM the PostgreSQL backend
+    if (ids.length > DEFAULT_QUERY_LIMIT) {
+      throw new Error(`delete: ids array exceeds maximum size of ${DEFAULT_QUERY_LIMIT}`);
+    }
+    // FIX(P2): Validate each element
+    validateIdArray(ids, 'ids');
 
     const result = await this.pool.query(
       `UPDATE media_assets
@@ -181,29 +228,37 @@ export class MediaLifecycleService {
   /**
    * Find media assets by storage class.
    * P2-5 FIX: Add ORDER BY clause.
+   * FIX(P0): Require orgId — previously returned cross-tenant asset lists.
    */
   async findByStorageClass(
     storageClass: 'hot' | 'cold' | 'frozen',
+    orgId: string,
     limit: number = DEFAULT_QUERY_LIMIT
   ): Promise<MediaAsset[]> {
+    validateOrgId(orgId);
     const safeLimit = Math.min(Math.max(1, limit), DEFAULT_QUERY_LIMIT);
 
     const { rows } = await this.pool.query(
       `SELECT id, org_id, size_bytes, created_at, last_accessed_at, storage_class, status
        FROM media_assets
-       WHERE storage_class = $1 AND status != 'deleted'
+       WHERE storage_class = $1 AND org_id = $2 AND status != 'deleted'
        ORDER BY created_at DESC
-       LIMIT $2`,
-      [storageClass, safeLimit]
+       LIMIT $3`,
+      [storageClass, orgId, safeLimit]
     );
+    // The local MediaAsset is an interface (plain object shape), not the domain
+    // entity class. The pg rows satisfy this interface directly.
     return rows as MediaAsset[];
   }
 
   /**
    * Get total storage used by organization.
-   * P2-6 FIX: Use Number() instead of parseInt().
+   * FIX(P1): PostgreSQL returns bigint SUM as a string via the pg driver to
+   * avoid JS number precision loss (Number.MAX_SAFE_INTEGER ≈ 9PB). We return
+   * bigint so callers can handle large orgs correctly. Callers doing arithmetic
+   * must use BigInt operations.
    */
-  async getStorageUsed(orgId: string): Promise<number> {
+  async getStorageUsed(orgId: string): Promise<bigint> {
     validateOrgId(orgId);
 
     const { rows } = await this.pool.query(
@@ -212,6 +267,7 @@ export class MediaLifecycleService {
        WHERE org_id = $1 AND status != 'deleted'`,
       [orgId]
     );
-    return Number(rows[0]?.['total'] ?? 0);
+    // The pg driver returns bigint columns as strings to preserve precision
+    return BigInt(String(rows[0]?.['total'] ?? 0));
   }
 }

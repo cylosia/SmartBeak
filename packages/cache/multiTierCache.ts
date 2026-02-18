@@ -550,12 +550,33 @@ export class MultiTierCache {
 
   /**
    * Delete multiple keys
+   * FIX(P2): Previously called this.delete(key) per key, which issued one Redis
+   * DEL command per key over N separate round-trips. Now deletes all keys from
+   * L1 in a single loop and issues a single Redis DEL with all full keys per
+   * batch — reducing N Redis round-trips to ceil(N/BATCH_SIZE) round-trips.
    */
   async deleteMany(keys: string[]): Promise<void> {
-    const BATCH_SIZE = 50;
-    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
-      const batch = keys.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(key => this.delete(key)));
+    if (keys.length === 0) return;
+
+    // Build full keys and evict from L1 in one pass
+    const fullKeys: string[] = [];
+    for (const key of keys) {
+      const fullKey = this.buildKey(key);
+      this.l1Cache.delete(fullKey);
+      fullKeys.push(fullKey);
+    }
+
+    if (!this.redis) return;
+
+    // Batch delete from L2 with a single DEL command per batch
+    const BATCH_SIZE = 1000; // Redis DEL accepts multiple keys in one command
+    try {
+      for (let i = 0; i < fullKeys.length; i += BATCH_SIZE) {
+        const batch = fullKeys.slice(i, i + BATCH_SIZE);
+        await this.redis.del(...batch);
+      }
+    } catch (error) {
+      logger.error('L2 deleteMany error', error instanceof Error ? error : new Error(String(error)));
     }
   }
 

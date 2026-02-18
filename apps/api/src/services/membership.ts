@@ -47,7 +47,14 @@ export async function verifyOrgMembership(
 
   // P1-2 FIX: Check role level if a minimum role is required
   if (requiredRole) {
-    const memberRole = membership['role'] as Role;
+    // FIX(P2): Validate the role from DB before casting — Knex first() returns
+    // `any`, so membership['role'] is untyped. A corrupt/migrated row with an
+    // unexpected value would silently pass or throw deep inside business logic.
+    const rawRole = membership['role'];
+    if (typeof rawRole !== 'string' || !VALID_ROLES.includes(rawRole as Role)) {
+      return false;
+    }
+    const memberRole = rawRole as Role;
     const memberLevel = ROLE_HIERARCHY[memberRole] ?? 0;
     const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 0;
     return memberLevel >= requiredLevel;

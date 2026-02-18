@@ -19,14 +19,20 @@ export function MediaAnalyticsDashboard({ data }: { data: MediaMetrics[] }) {
       </tr>
     </thead>
     <tbody>
+      {/* FIX(P2): Wrap inner map in Fragment with key — without it, the outer
+          map returns an unwrapped array of arrays, causing React to use the
+          inner tr keys for the outer array elements, producing key warnings
+          and potentially broken rowSpan rendering. */}
       {data.map(d => (
-      Object.entries(d.metrics).map(([k, v], index) => (
+      <React.Fragment key={d.platform}>
+        {Object.entries(d.metrics).map(([k, v], index) => (
         <tr key={`${d.platform}-${k}`}>
-        {index === 0 && <th scope='row' rowSpan={Object.keys(d.metrics).length}>{d.platform}</th>}
-        <td>{k}</td>
-        <td>{v}</td>
+          {index === 0 && <th scope='row' rowSpan={Object.keys(d.metrics).length}>{d.platform}</th>}
+          <td>{k}</td>
+          <td>{v}</td>
         </tr>
-      ))
+        ))}
+      </React.Fragment>
       ))}
     </tbody>
     </table>

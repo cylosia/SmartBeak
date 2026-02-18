@@ -7,16 +7,19 @@ import { BASE_SECURITY_HEADERS, buildWebAppCsp, PERMISSIONS_POLICY_WEB_APP } fro
 // P2-11 FIX: Edge-compatible logger with PII redaction
 const REDACT_KEYS = new Set(['token', 'password', 'secret', 'apikey', 'authorization', 'cookie', 'sessiontoken']);
 
+// FIX(P2): Recursive sanitization — previously only redacted top-level keys,
+// allowing nested PII (e.g. { user: { password: '...' } }) to leak through.
 function sanitizeArg(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== 'object') return obj;
   if (obj instanceof Error) return { message: obj.message, name: obj.name };
+  if (Array.isArray(obj)) return obj.map(sanitizeArg);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
     if (REDACT_KEYS.has(key.toLowerCase())) {
       result[key] = '[REDACTED]';
     } else {
-      result[key] = value;
+      result[key] = sanitizeArg(value);
     }
   }
   return result;
@@ -96,6 +99,17 @@ export default clerkMiddleware(async (auth: any, req: any) => {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
+  // FIX(P2): Generate nonce at the top of the handler so it can be shared
+  // with ALL response paths (redirect and pass-through) and propagated to
+  // both the request headers (for server components via x-nonce) and the
+  // response CSP header. Previously generated inside addSecurityHeaders,
+  // preventing propagation to the request.
+  const nonce = generateCspNonce();
+
+  // Propagate nonce to request headers so Next.js server components can read it
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+
   // Protect routes that require authentication
   if (isProtectedRoute(req)) {
     try {
@@ -104,26 +118,28 @@ export default clerkMiddleware(async (auth: any, req: any) => {
       // P1-11 FIX: Redirect to hardcoded origin, not req.url
       const loginUrl = new URL('/login', getAppOrigin());
       const response = NextResponse.redirect(loginUrl);
-      addSecurityHeaders(response);
+      addSecurityHeaders(response, nonce);
       return response;
     }
   }
 
-  // Add security headers to all responses
-  const response = NextResponse.next();
-  addSecurityHeaders(response);
+  // Add security headers to response, passing the request nonce through
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  addSecurityHeaders(response, nonce);
   return response;
 });
 
 /**
 * Add security headers to response
 * P2-15 FIX: Add Vary header to prevent CDN caching per-request nonces
+* FIX(P2): Accept nonce as a parameter — nonce is now generated once at the
+* middleware level and shared with both the request (x-nonce) and the response
+* CSP, so server components and the browser CSP use the same value.
 */
-function addSecurityHeaders(response: NextResponse): void {
+function addSecurityHeaders(response: NextResponse, nonce: string): void {
   for (const [key, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
     response.headers.set(key, value);
   }
-  const nonce = generateCspNonce();
   response.headers.set('Content-Security-Policy', buildWebAppCsp(nonce));
   // P2-15 FIX: Vary header prevents CDN from caching per-request nonce
   response.headers.set('Vary', 'Cookie');

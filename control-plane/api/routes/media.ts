@@ -10,7 +10,7 @@ import { CompleteUpload } from '../../../domains/media/application/handlers/Comp
 import { CreateUploadIntent } from '../../../domains/media/application/handlers/CreateUploadIntent';
 import { generateSignedUploadUrl, generateStorageKey } from '../../services/storage';
 import { PostgresMediaRepository } from '../../../domains/media/infra/persistence/PostgresMediaRepository';
-import { rateLimit } from '../../services/rate-limit';
+import { checkRateLimitAsync } from '../../services/rate-limit';
 import { requireRole, RoleAccessError, AuthContext } from '../../services/auth';
 import { resolveDomainDb } from '../../services/domain-registry';
 import { getPool } from '../../services/repository-factory';
@@ -71,8 +71,13 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       }
       // P0-3 FIX: Catch RoleAccessError before generic catch
       requireRole(ctx, ['admin', 'editor']);
-      // P1-16 FIX: Per-user rate limiting
-      await rateLimit(`media:${ctx.userId}`, 20, req, res);
+      // FIX(P0): Use checkRateLimitAsync to avoid double-send: the legacy 4-arg
+      // rateLimit overload sends 429 directly then rejects, which caused the outer
+      // catch block to attempt a second response (500) on an already-replied request.
+      const rlResult = await checkRateLimitAsync(`media:${ctx.userId}`, 'media.upload');
+      if (!rlResult.allowed) {
+        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+      }
 
       const bodyResult = UploadIntentBodySchema.safeParse(req.body);
       if (!bodyResult.success) {
@@ -116,7 +121,11 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
         return errors.unauthorized(res);
       }
       requireRole(ctx, ['admin', 'editor']);
-      await rateLimit(`media:${ctx.userId}`, 20, req, res);
+      // FIX(P0): same double-send fix as upload-intent route above
+      const rlResult = await checkRateLimitAsync(`media:${ctx.userId}`, 'media.complete');
+      if (!rlResult.allowed) {
+        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+      }
 
       const paramsResult = CompleteUploadParamsSchema.safeParse(req.params);
       if (!paramsResult.success) {
@@ -135,8 +144,16 @@ export async function mediaRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       const repo = new PostgresMediaRepository(domainPool);
       const handler = new CompleteUpload(repo);
 
-      const event = await handler.execute(id);
-      return res.send({ ok: true, event });
+      // FIX(P0): Check result.success — handler never throws; failures return
+      // { success: false, error: '...' }. Previously a failed completion would
+      // still return { ok: true, event: undefined } to the caller.
+      const result = await handler.execute(id);
+      if (!result.success) {
+        return errors.validationFailed(res, [{ message: 'Upload completion failed' }]);
+      }
+      // FIX(P1): Return a stable public DTO instead of the raw DomainEventEnvelope,
+      // which exposed internal topology (meta.source, meta.domainId, version).
+      return res.send({ ok: true, mediaId: id, completedAt: result.event?.occurredAt });
     } catch (error) {
       // P0-3 FIX: Surface RoleAccessError as 403
       if (error instanceof RoleAccessError) {
