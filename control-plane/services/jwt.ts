@@ -23,7 +23,8 @@ const logger = getLogger('JwtService');
 
 // Type exports at top level
 // P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
-export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner';
+// SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
+export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
 export interface JwtClaims {
   sub: string;
   role: UserRole;
@@ -48,7 +49,7 @@ export {
 
 // P0-FIX: Added 'owner' to match packages/security/jwt.ts and prevent Zod validation
 // failures when creating tokens for org owners.
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner']);
+export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner', 'buyer']);
 
 export const JwtClaimsInputSchema = z.object({
   sub: z.string().min(1).max(256),

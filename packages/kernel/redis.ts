@@ -6,36 +6,49 @@
  */
 
 import Redis from 'ioredis';
+import { Mutex } from 'async-mutex';
 import { getLogger } from './logger';
 
 // Global Redis instance
 let redis: Redis | null = null;
+// Mutex prevents concurrent callers from each creating their own Redis
+// connection during cold-start or post-error recovery, which would leave
+// orphaned connections that are never closed.
+const redisMutex = new Mutex();
 
 const logger = getLogger('RedisClient');
 
 /**
  * Get Redis connection
- * Creates a new connection if one doesn't exist
+ * Creates a new connection if one doesn't exist.
+ * The mutex ensures only one connection is ever created, even under
+ * concurrent initialisation (e.g. Lambda cold-start or post-error reset).
  */
 export async function getRedis(): Promise<Redis> {
-  if (!redis) {
+  // Fast path — connection already established
+  if (redis) return redis;
+
+  return redisMutex.runExclusive(async () => {
+    // Re-check inside the lock: another waiter may have initialised it
+    if (redis) return redis;
+
     const redisUrl = process.env['REDIS_URL'];
     if (!redisUrl) {
       throw new Error('REDIS_URL environment variable is required');
     }
-    
+
     // SECURITY FIX (Finding 11): Add environment-based key prefix to prevent
     // cross-environment key collisions when prod/staging share the same Redis
     const env = process.env['NODE_ENV'] || 'development';
     const prefix = process.env['CACHE_PREFIX'] || 'cache';
 
-    redis = new Redis(redisUrl, {
+    const newRedis = new Redis(redisUrl, {
       keyPrefix: `${env}:${prefix}:`,
       retryStrategy: (times: number): number => Math.min(times * 50, 2000),
       maxRetriesPerRequest: 3,
     });
 
-    redis.on('error', (err: Error) => {
+    newRedis.on('error', (err: Error) => {
       logger.error('Connection error', err);
       // AUDIT-FIX P1-04: On fatal connection errors, reset the singleton
       // so the next getRedis() call creates a fresh connection instead
@@ -46,9 +59,10 @@ export async function getRedis(): Promise<Redis> {
         redis = null;
       }
     });
-  }
-  
-  return redis;
+
+    redis = newRedis;
+    return redis;
+  });
 }
 
 /**

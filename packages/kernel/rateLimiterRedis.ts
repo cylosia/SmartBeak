@@ -177,30 +177,47 @@ export async function checkRateLimit(
     const now = Date.now();
     const windowStart = now - config.windowMs;
 
-    // Step 1: Clean old entries and get current count BEFORE adding
-    const pipeline = redis.pipeline();
-    pipeline.zremrangebyscore(redisKey, 0, windowStart);
-    pipeline.zcard(redisKey);
+    // Atomic sliding-window check-and-increment via Lua script.
+    // All reads and the conditional write execute inside a single Redis
+    // command, eliminating the TOCTOU race between zcard and zadd that
+    // existed with the previous pipeline + separate zadd approach.
+    //
+    // Returns: [allowed (0|1), newCount, windowMs]
+    const luaScript = `
+local key        = KEYS[1]
+local now        = tonumber(ARGV[1])
+local windowMs   = tonumber(ARGV[2])
+local maxReqs    = tonumber(ARGV[3])
+local memberId   = ARGV[4]
+local windowStart = now - windowMs
 
-    const results = await pipeline.exec();
+redis.call('ZREMRANGEBYSCORE', key, 0, windowStart)
+local count = redis.call('ZCARD', key)
 
-    if (!results) {
-      // Pipeline returned null -- treat as Redis failure
-      throw new Error('Redis pipeline returned null');
-    }
+if count < maxReqs then
+  redis.call('ZADD', key, now, memberId)
+  redis.call('PEXPIRE', key, windowMs)
+  return {1, count + 1}
+else
+  return {0, count}
+end
+`;
+    const memberId = `${now}-${randomBytes(8).toString('hex')}`;
+    const result = await redis.eval(
+      luaScript,
+      1,
+      redisKey,
+      String(now),
+      String(config.windowMs),
+      String(config.maxRequests),
+      memberId
+    ) as [number, number];
 
-    const currentCount = results[1]![1] as number;
-    const allowed = currentCount < config.maxRequests;
-    const remaining = Math.max(0, config.maxRequests - currentCount - (allowed ? 1 : 0));
+    const allowedFlag = result[0];
+    const newCount = result[1];
+    const allowed = allowedFlag === 1;
+    const remaining = Math.max(0, config.maxRequests - newCount);
     const resetTime = now + config.windowMs;
-
-    // Step 2: Only add the request if allowed (fixes P0-03 race condition)
-    if (allowed) {
-      // AUDIT-FIX P0-02: Use crypto.randomBytes instead of Math.random for member uniqueness
-      const memberId = `${now}-${randomBytes(8).toString('hex')}`;
-      await redis.zadd(redisKey, now, memberId);
-      await redis.pexpire(redisKey, config.windowMs);
-    }
 
     cbRecordSuccess();
 

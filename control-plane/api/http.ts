@@ -8,7 +8,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
-import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
+import { registerShutdownHandler, setupShutdownHandlers, getIsShuttingDown } from '@shutdown';
 import { validateEnv, assertBillingConfig } from '@config';
 import { AppError, ErrorCodes, RateLimitError } from '@errors';
 import { errors as errHelpers } from '@errors/responses';
@@ -844,6 +844,26 @@ async function start(): Promise<void> {
   process.exit(1);
   }
 }
+
+// Wire SIGTERM/SIGINT to invoke all registered shutdown handlers (including
+// app.close() and DB pool drain). Without this call the handlers stored by
+// registerShutdownHandler() are never triggered on process termination,
+// causing every Kubernetes rolling deploy to drop in-flight requests with TCP RST.
+setupShutdownHandlers();
+
+// Catch unhandled promise rejections so they don't silently crash the process
+// (Node.js default since v15 is to abort on unhandled rejection).
+// Background tasks, event emitters and timers outside the Fastify lifecycle
+// can reject here; log and attempt graceful shutdown instead of hard crash.
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error('Unhandled promise rejection — initiating graceful shutdown', err);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception — initiating graceful shutdown', err);
+  process.exit(1);
+});
 
 void start();
 

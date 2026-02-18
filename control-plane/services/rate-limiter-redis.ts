@@ -252,6 +252,9 @@ export const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   // Strict limits for expensive operations
   'ai.generate': { maxRequests: RATE_LIMIT_AI_GENERATE, windowMs: ONE_MINUTE_MS },
   'export.large': { maxRequests: RATE_LIMIT_EXPORT_LARGE, windowMs: ONE_MINUTE_MS },
+
+  // ROI/Risk analysis — per-user limit (50 req/min per user)
+  'roi-risk': { maxRequests: 50, windowMs: ONE_MINUTE_MS },
 };
 
 /**

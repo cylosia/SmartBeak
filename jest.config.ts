@@ -46,7 +46,11 @@ const config: Config = {
       moduleNameMapper: sharedModuleNameMapper,
       setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
       transform: sharedTransform,
-      testPathIgnorePatterns: ['/node_modules/', '/dist/', '/.next/', 'test/a11y/'],
+      // rateLimiterRedis.test.ts uses Vitest API (vi.mock/vi.fn).
+      // Jest picks it up via __tests__/**/*.test.ts but cannot run Vitest mocks,
+      // so the rate-limiter tests silently pass without actually exercising
+      // the production code. Exclude here; Vitest covers it via vitest.config.ts.
+      testPathIgnorePatterns: ['/node_modules/', '/dist/', '/.next/', 'test/a11y/', 'packages/kernel/__tests__/rateLimiterRedis.test.ts'],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       clearMocks: true,
       restoreMocks: true,
@@ -85,6 +89,11 @@ const config: Config = {
   collectCoverageFrom: [
     'apps/**/*.{ts,tsx}',
     'packages/**/*.{ts,tsx}',
+    // control-plane contains all Fastify route handlers, auth middleware, and
+    // billing logic. It was previously excluded so any broken change could ship
+    // with a green coverage gate. domains/ holds DDD use-cases and repositories.
+    'control-plane/**/*.{ts,tsx}',
+    'domains/**/*.{ts,tsx}',
     '!**/node_modules/**',
     '!**/dist/**',
     '!**/*.d.ts',
@@ -110,6 +119,20 @@ const config: Config = {
       functions: 80,
       lines: 85,
       statements: 85,
+    },
+    // control-plane route handlers, auth middleware, and billing must also
+    // meet an enforced minimum floor (previously uncovered entirely).
+    './control-plane/api/routes/**/*.ts': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+    './control-plane/api/middleware/**/*.ts': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
     },
   },
 
