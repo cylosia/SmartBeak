@@ -57,9 +57,12 @@ const SHUTDOWN_TIMEOUT_MS = 10000; // 10 second max shutdown time for scheduler
 const TELEMETRY_SHUTDOWN_MS = 5000; // 5 second max for telemetry flush
 
 // P0-HEARTBEAT FIX: Write heartbeat file so the K8s liveness probe can detect
-// a live process. The probe checks that /tmp/worker-heartbeat was modified
+// a live process. The probe checks that /tmp/worker-heartbeat-<pid> was modified
 // within the last 120 seconds; we update it every 30 seconds.
-const HEARTBEAT_FILE = '/tmp/worker-heartbeat';
+// P2-HEARTBEAT-PID FIX: Include the PID in the filename so that multiple worker
+// processes running in the same container (e.g. during rolling restarts or
+// dev environments) do not race to overwrite the same file.
+const HEARTBEAT_FILE = `/tmp/worker-heartbeat-${process.pid}`;
 const HEARTBEAT_INTERVAL_MS = 30000;
 
 function writeHeartbeat(): void {

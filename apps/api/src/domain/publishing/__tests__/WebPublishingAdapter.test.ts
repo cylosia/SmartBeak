@@ -17,9 +17,20 @@ import {
 } from '../WebPublishingAdapter';
 import type { PublishingContent, PublishingTarget } from '../PublishingAdapter';
 
-// Mock SSRF validation
+// Mock SSRF validation (both sync validateUrl used in validateConfig and
+// async validateUrlWithDns used in publish())
 vi.mock('@security/ssrf', () => ({
   validateUrl: vi.fn((url: string, _opts?: Record<string, unknown>) => {
+    if (url.includes('internal') || url.includes('127.0.0.1')) {
+      return { allowed: false, reason: 'Internal IP addresses not allowed' };
+    }
+    if (!url.startsWith('https://')) {
+      return { allowed: false, reason: 'HTTPS required' };
+    }
+    return { allowed: true, sanitizedUrl: url };
+  }),
+  // P1-SSRF FIX: publish() now uses validateUrlWithDns (async, DNS-resolving).
+  validateUrlWithDns: vi.fn(async (url: string, _opts?: Record<string, unknown>) => {
     if (url.includes('internal') || url.includes('127.0.0.1')) {
       return { allowed: false, reason: 'Internal IP addresses not allowed' };
     }
@@ -54,11 +65,16 @@ describe('WebPublishingAdapter', () => {
   beforeEach(() => {
     adapter = new WebPublishingAdapter();
     vi.clearAllMocks();
-    // Mock global fetch
+    // Mock global fetch — must include headers and text() because publish()
+    // now checks Content-Length via response.headers.get() and reads via response.text()
+    // before parsing (P1-RESPONSE-SIZE FIX).
+    const responseBody = JSON.stringify({ id: 'pub-123', url: 'https://example.com/post/123' });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
+      headers: { get: vi.fn().mockReturnValue(null) },
+      text: async () => responseBody,
       json: async () => ({ id: 'pub-123', url: 'https://example.com/post/123' }),
     });
   });

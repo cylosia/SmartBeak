@@ -45,10 +45,14 @@ vi.mock('../../../utils/retry', () => ({
 describe('WordPressAdapter SSRF Protection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Production code calls assertResponseSizeOk(response) → response.headers.get()
+    // then reads response.text() + JSON.parse() rather than response.json() directly.
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
+      headers: { get: vi.fn().mockReturnValue(null) },
+      text: async () => JSON.stringify([]),
       json: async () => ([]),
     });
   });
@@ -94,9 +98,12 @@ describe('WordPressAdapter SSRF Protection', () => {
 
   describe('createWordPressPost', () => {
     it('should reject DNS rebinding URLs', async () => {
+      const postBody = { id: 1, title: { rendered: 'Test' }, content: { rendered: '' }, date: '', modified: '', status: 'draft', author: 1 };
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: true, status: 201, statusText: 'Created',
-        json: async () => ({ id: 1, title: { rendered: 'Test' }, content: { rendered: '' }, date: '', modified: '', status: 'draft', author: 1 }),
+        headers: { get: vi.fn().mockReturnValue(null) },
+        text: async () => JSON.stringify(postBody),
+        json: async () => postBody,
       });
 
       await expect(createWordPressPost(
@@ -106,9 +113,12 @@ describe('WordPressAdapter SSRF Protection', () => {
     });
 
     it('should allow legitimate URLs', async () => {
+      const postBody = { id: 1, title: { rendered: 'Test' }, content: { rendered: '' }, date: '', modified: '', status: 'draft', author: 1 };
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: true, status: 201, statusText: 'Created',
-        json: async () => ({ id: 1, title: { rendered: 'Test' }, content: { rendered: '' }, date: '', modified: '', status: 'draft', author: 1 }),
+        headers: { get: vi.fn().mockReturnValue(null) },
+        text: async () => JSON.stringify(postBody),
+        json: async () => postBody,
       });
 
       const result = await createWordPressPost(

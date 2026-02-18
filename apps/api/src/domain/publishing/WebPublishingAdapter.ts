@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 
 import { PublishingAdapter, PublishingContent, PublishingTarget, PublishResult } from './PublishingAdapter';
-import { validateUrl } from '@security/ssrf';
+import { validateUrl, validateUrlWithDns } from '@security/ssrf';
 
 /**
 * Web Publishing Adapter
@@ -10,6 +10,28 @@ import { validateUrl } from '@security/ssrf';
 
 // SECURITY FIX: Request timeout configuration
 const PUBLISHING_TIMEOUT_MS = 30000; // 30 seconds
+
+// P1-RESPONSE-SIZE FIX: Cap inbound response bodies to prevent OOM from a
+// hostile or misconfigured webhook endpoint sending gigabyte payloads.
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Headers that must not be settable by user-controlled config.headers.
+ * Allowing these enables Host-header SSRF bypass, HTTP request smuggling, and
+ * connection hijacking (Transfer-Encoding, Connection, TE, Trailer, Upgrade).
+ */
+const FORBIDDEN_REQUEST_HEADERS = new Set([
+  'host',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'te',
+  'trailer',
+  'upgrade',
+  'keep-alive',
+  'proxy-authorization',
+  'proxy-connection',
+]);
 
 /**
  * Error thrown when fetch request times out
@@ -227,8 +249,10 @@ export class WebPublishingAdapter extends PublishingAdapter {
       auth: rawConfig["auth"] as WebhookConfig['auth'],
     };
 
-    // SECURITY FIX: Issue 1 - SSRF protection using centralized utility
-    const urlValidation = validateUrl(config.url, { requireHttps: true });
+    // P1-SSRF FIX: Use DNS-aware validation (validateUrlWithDns) to prevent DNS
+    // rebinding attacks. validateUrl() only checks hostname strings; an attacker
+    // can register a domain that resolves to 127.0.0.1 to bypass it.
+    const urlValidation = await validateUrlWithDns(config.url, { requireHttps: true });
     if (!urlValidation.allowed) {
       return {
         success: false,
@@ -240,11 +264,22 @@ export class WebPublishingAdapter extends PublishingAdapter {
     const payload = this.buildPayload(content);
 
     try {
-      // P1-1 FIX: Spread config.headers first, then pin Content-Type so that
+      // P1-HEADER-INJECTION FIX: Strip forbidden headers from user-controlled
+      // config.headers before merging. Allowing Host/Transfer-Encoding/Connection
+      // enables Host-header SSRF bypass and HTTP request smuggling.
+      const safeConfigHeaders: Record<string, string> = {};
+      if (config.headers) {
+        for (const [key, value] of Object.entries(config.headers)) {
+          if (!FORBIDDEN_REQUEST_HEADERS.has(key.toLowerCase())) {
+            safeConfigHeaders[key] = value;
+          }
+        }
+      }
+      // P1-1 FIX: Spread safe headers first, then pin Content-Type so that
       // user-controlled headers cannot override the JSON content type and
       // potentially confuse server-side parsers or bypass WAF rules.
       const headers: Record<string, string> = {
-        ...config.headers,
+        ...safeConfigHeaders,
         'Content-Type': 'application/json',
       };
 
@@ -339,7 +374,23 @@ export class WebPublishingAdapter extends PublishingAdapter {
           };
         }
 
-        const responseData = await response.json() as { id?: string; url?: string };
+        // P1-RESPONSE-SIZE FIX: Check Content-Length header before buffering.
+        const contentLength = response.headers.get('content-length');
+        if (contentLength !== null) {
+          const bytes = parseInt(contentLength, 10);
+          if (!Number.isNaN(bytes) && bytes > MAX_RESPONSE_BYTES) {
+            throw new Error(
+              `Webhook response too large: ${bytes} bytes exceeds limit of ${MAX_RESPONSE_BYTES} bytes`
+            );
+          }
+        }
+        // Read as text to enforce actual body size even when Content-Length is absent
+        // (e.g. chunked transfer encoding from a hostile endpoint).
+        const responseText = await response.text();
+        if (Buffer.byteLength(responseText, 'utf8') > MAX_RESPONSE_BYTES) {
+          throw new Error(`Webhook response body too large: exceeds ${MAX_RESPONSE_BYTES} bytes`);
+        }
+        const responseData = JSON.parse(responseText) as { id?: string; url?: string };
 
         return {
           success: true,
