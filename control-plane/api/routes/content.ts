@@ -407,11 +407,18 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
     // Soft delete — anchor to org_id to prevent cross-org TOCTOU after ownership check
-    await pool.query(
+    const { rowCount } = await pool.query(
     `UPDATE content_items SET status = $1, archived_at = NOW(), updated_at = NOW()
     WHERE id = $2 AND domain_id IN (SELECT id FROM domains WHERE org_id = $3)`,
     ['archived', params.id, ctx.orgId]
     );
+
+    // P1-FIX: If the domain was transferred between the ownership check and the UPDATE,
+    // rowCount will be 0. Return a clear error instead of silently reporting success.
+    if ((rowCount ?? 0) === 0) {
+    logger.warn('[content] Soft delete affected 0 rows — possible TOCTOU domain transfer', { id: params.id, orgId: ctx.orgId });
+    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
+    }
 
     return { success: true, id: params.id, deleted: true };
   } catch (error: unknown) {

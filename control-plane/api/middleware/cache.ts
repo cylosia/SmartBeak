@@ -42,14 +42,14 @@ export function setCacheHeaders(
   }
 ) {
   if (options.noCache) {
-  void res.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  void res.header('Pragma', 'no-cache');
-  void res.header('Expires', '0');
+  res.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.header('Pragma', 'no-cache');
+  res.header('Expires', '0');
   return;
   }
 
   if (options.etag) {
-  void res.header('ETag', options.etag);
+  res.header('ETag', options.etag);
   }
 
   const directives: string[] = [];
@@ -67,7 +67,7 @@ export function setCacheHeaders(
   directives.push(`stale-while-revalidate=${options.staleWhileRevalidate}`);
   }
 
-  void res.header('Cache-Control', directives.join(', '));
+  res.header('Cache-Control', directives.join(', '));
 }
 
 /**
@@ -94,7 +94,7 @@ export function withETagCache(
   if (isETagMatch(req, etag)) {
     // RFC 7232 §4.1: 304 responses MUST include the ETag so the client can
     // update its stored value for future conditional requests.
-    void res.header('ETag', etag);
+    res.header('ETag', etag);
     return res.status(304).send();
   }
 

@@ -103,7 +103,10 @@ export async function validateCsrfToken(
 
   // Atomically retrieve and delete the stored token.
   // ioredis.Redis.eval(script, numkeys, ...keys): returns the stored value or null.
-  const stored = await redis.eval(GET_AND_DELETE_LUA, 1, key) as string | null;
+  // P2-FIX: Validate the eval result type instead of blindly casting — Redis can
+  // return Buffer, number, or string depending on client configuration.
+  const evalResult = await redis.eval(GET_AND_DELETE_LUA, 1, key);
+  const stored: string | null = typeof evalResult === 'string' ? evalResult : null;
 
   if (!stored) {
     return false;
@@ -234,7 +237,9 @@ export async function setCsrfCookie(
   // SECURITY FIX: Remove HttpOnly so client JS can read the token to send in x-csrf-token header.
   // HttpOnly prevented JS from reading the cookie, breaking the double-submit CSRF pattern entirely.
   // SameSite=Strict + Secure still protect against cross-origin cookie submission.
-  void res.header('Set-Cookie',
+  // P2-FIX: Remove misleading `void` — res.header() is synchronous and returns
+  // FastifyReply for chaining, not a Promise. `void` implied async intent where none exists.
+  res.header('Set-Cookie',
     `${mergedConfig.cookieName}=${token}; Secure; SameSite=Strict; Path=/; Max-Age=3600`
   );
 

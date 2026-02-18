@@ -72,7 +72,12 @@ export class PoolHealthMonitor extends EventEmitter {
   private metrics: PoolMetrics;
   private healthCheckInterval: NodeJS.Timeout | null = null;
   private connectionHealth = new Map<string, ConnectionHealth>();
+  // P1-FIX: Fixed-size circular buffer replaces growable array + O(n) shift().
+  // Array.shift() reindexes every element — O(n) per call after capacity.
+  // The circular buffer keeps the 1000 most recent samples in O(1) per insert.
   private queryTimes: number[] = [];
+  private queryTimesIndex = 0;
+  private readonly MAX_QUERY_TIMES = 1000;
   private queryCount = 0;
   private slowQueryCount = 0;
 
@@ -149,6 +154,23 @@ export class PoolHealthMonitor extends EventEmitter {
       this.healthCheckInterval = null;
     }
     this.emit('monitoring:stopped');
+  }
+
+  /**
+   * P2-FIX: Destroy the monitor and remove all pool event listeners.
+   *
+   * Without this, each PoolHealthMonitor instance permanently attaches four
+   * listeners to the underlying Pool. Creating and discarding monitor instances
+   * (common in tests) causes listener accumulation and memory leaks.
+   * Call destroy() when the monitor is no longer needed.
+   */
+  destroy(): void {
+    this.stop();
+    this.pool.removeAllListeners('connect');
+    this.pool.removeAllListeners('acquire');
+    this.pool.removeAllListeners('remove');
+    this.pool.removeAllListeners('error');
+    this.removeAllListeners();
   }
 
   /**
@@ -300,15 +322,17 @@ export class PoolHealthMonitor extends EventEmitter {
    */
   recordQueryTime(durationMs: number): void {
     this.queryCount++;
-    this.queryTimes.push(durationMs);
 
     if (durationMs > 1000) {
       this.slowQueryCount++;
     }
 
-    // Keep only recent query times
-    if (this.queryTimes.length > 1000) {
-      this.queryTimes.shift();
+    // P1-FIX: Circular buffer — O(1) insert regardless of buffer size.
+    if (this.queryTimes.length < this.MAX_QUERY_TIMES) {
+      this.queryTimes.push(durationMs);
+    } else {
+      this.queryTimes[this.queryTimesIndex] = durationMs;
+      this.queryTimesIndex = (this.queryTimesIndex + 1) % this.MAX_QUERY_TIMES;
     }
   }
 
