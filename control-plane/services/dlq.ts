@@ -131,14 +131,21 @@ export interface DLQStats {
 * @returns DLQ statistics
 * @throws Error if stats retrieval fails
 */
-export async function getDLQStatsSafe(service: KernelDLQService): Promise<DLQStats> {
+// P1-TENANT-FIX: Added orgId parameter to match DLQService.getStats() signature change.
+// getStats() now requires orgId to prevent cross-tenant data leakage.
+export async function getDLQStatsSafe(service: KernelDLQService, orgId: string): Promise<DLQStats> {
   try {
   if (!service || typeof service.getStats !== 'function') {
     logger["error"]('Invalid DLQ service provided', new Error('Validation failed'));
     throw new Error('Invalid DLQ service: getStats method not found');
   }
 
-  const stats = await service.getStats();
+  if (typeof orgId !== 'string' || orgId.length === 0) {
+    logger["error"]('Invalid orgId for DLQ stats', new Error('Validation failed'), { orgId });
+    throw new Error('Invalid orgId: must be a non-empty string');
+  }
+
+  const stats = await service.getStats(orgId);
 
   logger.info('DLQ stats retrieved', {
     total: stats.total,

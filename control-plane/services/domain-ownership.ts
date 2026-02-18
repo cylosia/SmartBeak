@@ -21,8 +21,15 @@ export class DomainOwnershipService {
 
   async assertOrgOwnsDomain(orgId: string, domainId: string, client?: PoolClient) {
   const db = client || this.pool;
+  // P1-TOCTOU-FIX: Added FOR UPDATE when running inside a transaction (client provided).
+  // Without the lock, a concurrent transferDomain() could change ownership between
+  // this SELECT and the callback in withOwnershipCheck(), allowing the callback to
+  // operate on a domain the org no longer owns (silent authorization bypass).
+  // When called without a client (pool.query), no locking is applied since we're
+  // outside a transaction and FOR UPDATE requires an active transaction.
+  const lockClause = client ? 'FOR UPDATE' : '';
   const { rows } = await db.query(
-    'SELECT 1 FROM domain_registry WHERE id=$1 AND org_id=$2',
+    `SELECT 1 FROM domain_registry WHERE id=$1 AND org_id=$2 ${lockClause}`,
     [domainId, orgId]
   );
   if (rows.length === 0) {
@@ -91,8 +98,13 @@ export class DomainOwnershipService {
     });
 
     // P1-13 FIX: Retry on serialization failures (PostgreSQL error code 40001)
-    const pgError = error as { code?: string };
-    if (pgError.code === '40001' && attempt < MAX_SERIALIZATION_RETRIES - 1) {
+    // P1-CAST-FIX: Use a proper type guard instead of unsafe `as` cast. The prior
+    // cast accepted any value as `{ code?: string }` — a non-Error thrown value
+    // (e.g. a string) would silently skip the retry and propagate incorrectly.
+    const pgError = error instanceof Error && 'code' in error
+      ? (error as Error & { code?: string })
+      : undefined;
+    if (pgError?.code === '40001' && attempt < MAX_SERIALIZATION_RETRIES - 1) {
       // P2-FIX: Exponential backoff with jitter before retry. Without a delay, all
       // concurrent retries collide again immediately, guaranteeing repeated failures.
       const backoffMs = Math.min(100 * Math.pow(2, attempt), 1000) + Math.random() * 50;

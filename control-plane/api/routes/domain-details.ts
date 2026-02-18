@@ -35,13 +35,16 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     // Fetch domain details
     // C03-FIX: Removed dr.buyer_token from SELECT — secret must not be exposed to viewers
     // A02-FIX: Fixed d["id"] → d.id (invalid PostgreSQL array subscript syntax)
+    // P1-ARCHIVED-FIX: Added AND d.archived_at IS NULL to exclude soft-deleted domains.
+    // Without this filter, a deleted domain could still be fetched by ID, exposing
+    // its config and theme to users who should only see active domains.
     const { rows } = await pool.query(
     `SELECT
     d.id, d.name, d.status, d.created_at, d.updated_at,
     dr.theme_id, dr.custom_config
     FROM domains d
     LEFT JOIN domain_registry dr ON d.id = dr.id
-    WHERE d.id = $1 AND d.org_id = $2`,
+    WHERE d.id = $1 AND d.org_id = $2 AND d.archived_at IS NULL`,
     [id, ctx["orgId"]]
     );
 
@@ -52,6 +55,9 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     const domain = rows[0];
 
     // Fetch content stats
+    // P1-IDOR-FIX: Added org_id = $2 filter. Without it, content stats could be
+    // returned for any domain_id — a domain transferred to another org would still
+    // expose its content counts to the previous org via this endpoint.
     const { rows: contentStats } = await pool.query(
     `SELECT
     COUNT(*) as total,
@@ -59,8 +65,8 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     COUNT(*) FILTER (WHERE status = 'draft') as drafts,
     COUNT(*) FILTER (WHERE status = 'archived') as archived
     FROM content_items
-    WHERE domain_id = $1`,
-    [id]
+    WHERE domain_id = $1 AND org_id = $2`,
+    [id, ctx["orgId"]]
     );
 
     return {

@@ -10,6 +10,9 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('domain-ownership-routes');
 
 export async function domainOwnershipRoutes(app: FastifyInstance, pool: Pool) {
   const svc = new DomainOwnershipService(pool);
@@ -74,6 +77,13 @@ export async function domainOwnershipRoutes(app: FastifyInstance, pool: Pool) {
         if (error.code === 'DOMAIN_NOT_OWNED') {
           return errors.forbidden(res, 'Domain not owned by source organization', ErrorCodes.DOMAIN_NOT_OWNED);
         }
+        // P1-LOG-FIX: Log unexpected DomainError codes so they are not silently swallowed.
+        logger.error('Unexpected DomainError code during transfer', error, { code: error.code });
+      } else {
+        // P1-LOG-FIX: Log all non-DomainError unexpected errors. Previously these fell
+        // through silently to errors.internal with no structured log entry, making
+        // database errors, network failures, and pool exhaustion invisible in production.
+        logger.error('Unexpected error during domain transfer', error instanceof Error ? error : new Error(String(error)));
       }
       return errors.internal(res, 'Failed to transfer domain');
     }

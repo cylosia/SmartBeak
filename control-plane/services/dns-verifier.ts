@@ -250,6 +250,18 @@ export async function verifyDnsMultiSafe(
   }
 
   const sanitizedDomain = domain.trim().toLowerCase();
+
+  // P1-REBINDING-FIX: Added DNS rebinding check. verifyDnsSafe() had this check but
+  // verifyDnsMultiSafe() and getDnsTxtRecordsSafe() did not, creating an inconsistent
+  // security posture — attackers could bypass the rebinding protection by using the
+  // multi-method or TXT lookup APIs to resolve internal IP ranges.
+  if (isPotentialRebindingAttack(sanitizedDomain)) {
+    logger.error('Potential DNS rebinding attack detected in multi-verify', new Error('Security validation failed'), {
+    domain: sanitizedDomain,
+    });
+    throw new DnsValidationError('Invalid domain: potential security risk');
+  }
+
   const sanitizedMethods = methods.map((m) => ({
     type: m.type as 'txt',
     record: m.record.trim(),
@@ -291,6 +303,14 @@ export async function getDnsTxtRecordsSafe(domain: string): Promise<string[]> {
   }
 
   const sanitizedDomain = domain.trim().toLowerCase();
+
+  // P1-REBINDING-FIX: Added DNS rebinding check (same rationale as verifyDnsMultiSafe fix).
+  if (isPotentialRebindingAttack(sanitizedDomain)) {
+    logger.error('Potential DNS rebinding attack detected in TXT lookup', new Error('Security validation failed'), {
+    domain: sanitizedDomain,
+    });
+    throw new DnsValidationError('Invalid domain: potential security risk');
+  }
 
   const records = await kernelGetDnsTxtRecords(sanitizedDomain);
 
