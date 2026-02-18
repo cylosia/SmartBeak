@@ -59,9 +59,24 @@ async function fetchWithTimeout(
  * Default query function with timeout and error handling
  */
 const defaultQueryFn = async ({ queryKey, signal }: QueryFunctionContext) => {
-  const [url, params] = queryKey as [string, Record<string, unknown>?];
-  
-  const queryString = params 
+  // P1-2 FIX: Replace unsafe `as` cast with runtime validation. The previous cast
+  // silently retyped whatever was in queryKey[1]; if a caller passed null or a
+  // primitive, Object.entries() would throw a TypeError at runtime and crash the
+  // component tree. We now validate the shape explicitly.
+  const [rawUrl, rawParams] = queryKey;
+  if (typeof rawUrl !== 'string') {
+    throw new Error(`queryKey[0] must be a string URL, got: ${typeof rawUrl}`);
+  }
+  const url = rawUrl;
+  const params =
+    rawParams !== null &&
+    rawParams !== undefined &&
+    typeof rawParams === 'object' &&
+    !Array.isArray(rawParams)
+      ? (rawParams as Record<string, unknown>)
+      : undefined;
+
+  const queryString = params
     ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : '';
   

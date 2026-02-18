@@ -84,12 +84,20 @@ export interface SlowQueryReport {
 // ============================================================================
 
 /**
- * Validate that a query is a safe read-only SELECT before passing to EXPLAIN.
+ * Validate that a query is a safe read-only SELECT (or CTE) before passing to EXPLAIN.
  * SECURITY FIX P0-1: Prevents SQL injection via EXPLAIN ANALYZE which actually executes queries.
+ *
+ * P1-6 FIX: The previous regex /^\s*SELECT\b/ rejected all CTE queries because
+ * CTEs begin with the WITH keyword, not SELECT. CTEs are pure read operations
+ * (assuming the DML-in-CTE syntax is not used), and blocking them made the
+ * query plan analyser useless for complex reporting queries. We now allow WITH
+ * as a valid opener and rely on the semicolon guard to block multi-statement
+ * injections such as:
+ *   WITH x AS (SELECT 1) SELECT 1; DROP TABLE users;
  */
 function validateSelectOnly(query: string): void {
-  if (!/^\s*SELECT\b/i.test(query)) {
-    throw new Error('Only SELECT queries can be analyzed. EXPLAIN ANALYZE executes the query.');
+  if (!/^\s*(?:SELECT|WITH)\b/i.test(query)) {
+    throw new Error('Only SELECT queries (including CTEs starting with WITH) can be analyzed. EXPLAIN ANALYZE executes the query.');
   }
   // Block semicolons to prevent multi-statement injection
   if (query.includes(';')) {

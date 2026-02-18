@@ -412,22 +412,38 @@ export class QueryCache {
   }
 
   /**
-   * Invalidate a specific cached query.
+   * Invalidate a specific cached query across all version keys.
    *
    * P1-8 FIX: Entries are stored under versioned keys ("query:h1:h2:vN").
    * The previous implementation deleted the base key ("query:h1:h2"), which
-   * was never stored — making this method a silent no-op. We now reconstruct
-   * the current versioned key and delete that entry.
+   * was never stored — making this method a silent no-op.
+   *
+   * P2-5 FIX: The corrected implementation only invalidated the 'default'
+   * version key, which is used only by queries with no dependsOn. Queries
+   * cached with dependsOn: ['table_a'] use a different version key
+   * ("table_a") and were never invalidated — stale entries persisted
+   * indefinitely.
+   *
+   * We now iterate every known version key and delete the versioned entry for
+   * this base key under each one. This ensures that regardless of which
+   * dependsOn combination was used when the query was cached, the entry is
+   * evicted. For targeted table-level invalidation, prefer invalidateTable().
    */
   async invalidateQuery(query: string, params: unknown[] = []): Promise<void> {
     const baseKey = this.generateKey(query, params);
-    // The version key for a query with no dependsOn is 'default'.
-    // For queries cached via execute() with dependsOn, the caller should
-    // use invalidateTable() instead. This method handles the 'default' version
-    // (queries without declared table dependencies).
-    const version = this.getQueryVersion('default');
-    const versionedKey = `${baseKey}:v${version}`;
-    await this.cache.delete(versionedKey);
+    const deletePromises: Promise<boolean>[] = [];
+
+    // Delete the entry under every known version key (covers all dependsOn combos).
+    for (const [, entry] of this.queryVersions) {
+      deletePromises.push(this.cache.delete(`${baseKey}:v${entry.version}`));
+    }
+
+    // Also always attempt the 'default' version for queries with no dependsOn,
+    // even if queryVersions is empty (e.g., 'default' was never accessed yet).
+    const defaultVersion = this.getQueryVersion('default');
+    deletePromises.push(this.cache.delete(`${baseKey}:v${defaultVersion}`));
+
+    await Promise.all(deletePromises);
   }
 
   /**
@@ -505,8 +521,9 @@ export class PostgresQueryAnalyzer implements QueryAnalyzer {
 
   async analyze(query: string, params?: unknown[]): Promise<QueryPlan> {
     // SECURITY FIX P0-1/P2-14: Validate SELECT-only to prevent SQL injection via EXPLAIN ANALYZE
-    if (!/^\s*SELECT\b/i.test(query)) {
-      throw new Error('Only SELECT queries can be analyzed. EXPLAIN ANALYZE executes the query.');
+    // P1-6 FIX (mirror): Allow CTEs (WITH ... SELECT) — same fix as queryPlan.ts.
+    if (!/^\s*(?:SELECT|WITH)\b/i.test(query)) {
+      throw new Error('Only SELECT queries (including CTEs starting with WITH) can be analyzed. EXPLAIN ANALYZE executes the query.');
     }
     if (query.includes(';')) {
       throw new Error('Query must not contain semicolons. Multi-statement queries are not allowed.');
@@ -627,8 +644,17 @@ export function CachedQuery(options?: QueryCacheOptions) {
     descriptor.value = async function (...args: unknown[]) {
       // Access cache from this context (assuming it has a cache property)
       const cache = (this as { queryCache?: QueryCache }).queryCache;
-      
+
       if (!cache) {
+        // P2-7 FIX: Previously a silent no-op. If a class uses @CachedQuery
+        // but never sets this.queryCache, every call bypasses the cache with
+        // zero indication — a performance regression invisible in monitoring.
+        // Log a warning so the misconfiguration surfaces during development.
+        logger.warn(
+          `[CachedQuery] ${String(target.constructor.name)}.${propertyKey}: ` +
+          'this.queryCache is not set on the instance; cache bypassed. ' +
+          'Assign a QueryCache instance to this.queryCache to enable caching.'
+        );
         return originalMethod.apply(this, args);
       }
 

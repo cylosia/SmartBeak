@@ -120,29 +120,33 @@ export class DbQueryCache {
   }
 
   /**
-   * Extract table names from query
+   * Extract table names from query.
+   *
+   * P1-1 FIX: The previous regex /FROM\s+(\w+)/ stopped at the first dot in a
+   * schema-qualified name, extracting "public" instead of "users" from
+   * "FROM public.users". This meant invalidateTable('users') never evicted
+   * cache entries for schema-qualified queries — stale data served indefinitely.
+   *
+   * Also handled: subquery markers like "FROM (" are skipped because "(" is
+   * not matched by [a-zA-Z_]\w*, so the token fails the identifier check.
    */
   private extractTables(query: string): string[] {
     const tables: string[] = [];
-    
-    // Match FROM clause
-    const fromMatch = query.match(/FROM\s+(\w+)/gi);
-    if (fromMatch) {
-      fromMatch.forEach(m => {
-        const table = m.replace(/FROM\s+/i, '');
-        if (table) tables.push(table.toLowerCase());
-      });
+
+    // Match FROM and JOIN clauses, allowing optional schema prefix (schema.table).
+    const TOKEN_RE = /(?:FROM|JOIN)\s+([\w]+(?:\.[\w]+)?)/gi;
+    let match: RegExpExecArray | null;
+
+    while ((match = TOKEN_RE.exec(query)) !== null) {
+      const raw = match[1]!;
+      // Strip schema prefix: "public.users" → "users"
+      const table = raw.includes('.') ? raw.split('.').pop()! : raw;
+      // Only keep valid SQL identifiers; rejects "(", CTEs aliases, etc.
+      if (/^[a-zA-Z_]\w*$/.test(table)) {
+        tables.push(table.toLowerCase());
+      }
     }
-    
-    // Match JOIN clauses
-    const joinMatch = query.match(/JOIN\s+(\w+)/gi);
-    if (joinMatch) {
-      joinMatch.forEach(m => {
-        const table = m.replace(/JOIN\s+/i, '');
-        if (table) tables.push(table.toLowerCase());
-      });
-    }
-    
+
     return [...new Set(tables)];
   }
 
@@ -428,6 +432,15 @@ let globalDbCache: DbQueryCache | null = null;
 export function getGlobalDbCache(options?: DbQueryCacheOptions): DbQueryCache {
   if (!globalDbCache) {
     globalDbCache = new DbQueryCache(options);
+  } else if (options) {
+    // P1-3 FIX: Previously, options passed to subsequent calls were silently
+    // discarded. Callers that assumed their maxSize/defaultTtlMs was applied
+    // would get a misconfigured cache. Log a warning so misconfiguration is
+    // surfaced immediately during development.
+    logger.warn(
+      '[DbQueryCache] getGlobalDbCache called with options after initialization; options ignored — configure before first use',
+      { ignoredOptions: options }
+    );
   }
   return globalDbCache;
 }
