@@ -94,23 +94,31 @@ export class UsageService {
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
-  // P1-FIX: Reject negative values to prevent bypassing GREATEST(0, ...) floor in decrement()
-  if (typeof by !== 'number' || !Number.isInteger(by) || by < 0) {
-    throw new Error('Increment value must be a non-negative integer');
+  // P1-FIX: Reject non-positive values — by=0 is a wasted DB round-trip that stamps
+  // updated_at without changing any counter. Reject values exceeding PostgreSQL INTEGER
+  // max (2,147,483,647) to prevent integer overflow errors on the DB side.
+  if (typeof by !== 'number' || !Number.isInteger(by) || by < 1 || by > 2_147_483_647) {
+    throw new Error('Increment value must be a positive integer no greater than 2,147,483,647');
   }
 
   if (!this.knownOrgs.has(orgId)) {
     // Coalesce concurrent first-time calls for the same org into one DB round-trip.
     if (!this.pendingEnsureOrg.has(orgId)) {
-      const p = this.ensureOrg(orgId).then(() => {
-        this.knownOrgs.add(orgId);
-        // Simple cap — evict the entire set rather than implementing an LRU to
-        // keep the code dependency-free. The next request re-warms the cache.
-        if (this.knownOrgs.size > UsageService.MAX_KNOWN_ORGS) {
-          this.knownOrgs.clear();
-        }
-        this.pendingEnsureOrg.delete(orgId);
-      });
+      // P1-FIX: On rejection, remove the entry so the next call can retry rather than
+      // awaiting the same permanently-rejected Promise (which would permanently break
+      // usage tracking for this org until the process restarts).
+      const p = this.ensureOrg(orgId)
+        .then(() => {
+          this.knownOrgs.add(orgId);
+          // Simple cap — evict the entire set rather than implementing an LRU to
+          // keep the code dependency-free. The next request re-warms the cache.
+          if (this.knownOrgs.size > UsageService.MAX_KNOWN_ORGS) {
+            this.knownOrgs.clear();
+          }
+        })
+        .finally(() => {
+          this.pendingEnsureOrg.delete(orgId);
+        });
       this.pendingEnsureOrg.set(orgId, p);
     }
     await this.pendingEnsureOrg.get(orgId);
@@ -183,8 +191,9 @@ export class UsageService {
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
-  if (typeof by !== 'number' || !Number.isInteger(by) || by < 0) {
-    throw new Error('Decrement value must be a non-negative integer');
+  // P1-FIX: Match increment() validation — positive integer, capped at PG INTEGER max.
+  if (typeof by !== 'number' || !Number.isInteger(by) || by < 1 || by > 2_147_483_647) {
+    throw new Error('Decrement value must be a positive integer no greater than 2,147,483,647');
   }
 
   const { rowCount } = await this.pool.query(
@@ -218,19 +227,25 @@ export class UsageService {
   if (!orgId || typeof orgId !== 'string') {
     throw new Error('Valid orgId is required');
   }
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error('Value must be a non-negative integer');
+  // P1-FIX: Cap at PG INTEGER max to prevent overflow errors on the DB side.
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 2_147_483_647) {
+    throw new Error('Value must be a non-negative integer no greater than 2,147,483,647');
   }
 
   if (!this.knownOrgs.has(orgId)) {
     if (!this.pendingEnsureOrg.has(orgId)) {
-      const p = this.ensureOrg(orgId).then(() => {
-        this.knownOrgs.add(orgId);
-        if (this.knownOrgs.size > UsageService.MAX_KNOWN_ORGS) {
-          this.knownOrgs.clear();
-        }
-        this.pendingEnsureOrg.delete(orgId);
-      });
+      // P1-FIX: Use .finally() so the entry is removed on both success and rejection,
+      // allowing retry on transient DB errors instead of caching the failure forever.
+      const p = this.ensureOrg(orgId)
+        .then(() => {
+          this.knownOrgs.add(orgId);
+          if (this.knownOrgs.size > UsageService.MAX_KNOWN_ORGS) {
+            this.knownOrgs.clear();
+          }
+        })
+        .finally(() => {
+          this.pendingEnsureOrg.delete(orgId);
+        });
       this.pendingEnsureOrg.set(orgId, p);
     }
     await this.pendingEnsureOrg.get(orgId);

@@ -59,7 +59,10 @@ export function useTimelineEvents(domainId: string | undefined, filters?: { type
       if (filters?.type) params.append('type', filters.type);
       if (filters?.from) params.append('from', filters.from);
       if (filters?.to) params.append('to', filters.to);
-      const response = await api.get(`/domains/${domainId}/timeline?${params.toString()}`);
+      // P2-FIX: Only append the query string when there are actual parameters;
+      // otherwise the URL ends with a bare '?' which some servers handle differently.
+      const qs = params.toString();
+      const response = await api.get(`/domains/${domainId}/timeline${qs ? `?${qs}` : ''}`);
       return response.data as unknown as TimelineEvent[];
     },
     enabled: !!domainId,

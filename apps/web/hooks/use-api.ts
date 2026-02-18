@@ -58,13 +58,17 @@ async function fetchWithTimeout(
 
   try {
     // P1-FIX: Combine timeout signal with caller-provided signal (e.g., React Query's
-    // unmount cancellation signal) using AbortSignal.any(). Previously, the caller's
-    // signal was overwritten, breaking request cancellation on component unmount.
-    const signals: AbortSignal[] = [controller.signal];
+    // unmount cancellation signal). Use AbortSignal.any() when available (Chrome 116+,
+    // Firefox 124+, Safari 17.4+). On older browsers, fall back to the timeout signal
+    // alone — requests still timeout, they just won't be cancelled on component unmount.
+    let combinedSignal: AbortSignal;
     if (options.signal) {
-      signals.push(options.signal);
+      combinedSignal = typeof AbortSignal['any'] === 'function'
+        ? AbortSignal['any']([controller.signal, options.signal])
+        : controller.signal;
+    } else {
+      combinedSignal = controller.signal;
     }
-    const combinedSignal = AbortSignal.any(signals);
 
     const response = await fetch(url, {
       ...options,

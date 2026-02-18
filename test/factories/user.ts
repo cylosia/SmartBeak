@@ -57,7 +57,14 @@ export function createUserList(count: number, options: UserFactoryOptions = {}) 
     // Without this, all users share the same email and integration tests fail.
     let email: string;
     if (options.email) {
-      const [local, domain] = options.email.split('@');
+      // P2-FIX: Guard against emails missing '@'. Array destructuring under
+      // noUncheckedIndexedAccess types both elements as `string | undefined`,
+      // so a missing '@' would silently produce addresses like "user+0@undefined"
+      // that fail DB unique constraints in integration tests.
+      const atIndex = options.email.indexOf('@');
+      if (atIndex < 1) throw new Error(`createUserList: base email '${options.email}' has no '@'`);
+      const local = options.email.slice(0, atIndex);
+      const domain = options.email.slice(atIndex + 1);
       email = `${local}+${index}@${domain}`;
     } else {
       email = `user${index}@example.com`;

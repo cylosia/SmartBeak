@@ -14,7 +14,8 @@ const logger = getLogger('content:unarchive');
 * Restores archived content back to draft status.
 * Requires: contentId
 * SECURITY FIX: P1-HIGH Issue 4 - IDOR in Content Access
-* Verifies org_id matches for all content access
+* Verifies domain membership for all content access (content_items has no org_id column;
+* org scope is enforced through the domain_id → memberships → domain_registry join).
 */
 
 // UUID validation regex
@@ -61,19 +62,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       await client.query('BEGIN');
 
-      // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify org_id matches for all content access
+      // SECURITY FIX: P1-HIGH Issue 4 - IDOR fix: Verify domain membership for content access.
+      // content_items has no org_id column; access is scoped by verifying that the item's
+      // domain_id is reachable through the current user's org memberships.
+      // P0-FIX: ci["id"] was invalid PostgreSQL syntax (array subscript); corrected to ci.id.
       const { rows } = await client.query(
-        `SELECT ci["id"], ci.title, ci.status, ci.org_id
+        `SELECT ci.id, ci.title, ci.status
          FROM content_items ci
-         WHERE ci["id"] = $1
-         AND ci.org_id = $2
+         WHERE ci.id = $1
          AND ci.domain_id IN (
            SELECT domain_id FROM memberships m
            JOIN domain_registry dr ON dr.org_id = m.org_id
-           WHERE m.user_id = $3
+           WHERE m.user_id = $2
          )
          FOR UPDATE`,
-        [contentId, auth["orgId"], auth.userId]
+        [contentId, auth.userId]
       );
 
       if (rows.length === 0) {
@@ -86,35 +89,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const content = rows[0];
 
       // Can only unarchive archived content
-      if (content.status !== 'archived') {
+      if (content['status'] !== 'archived') {
         await client.query('ROLLBACK');
-        return sendError(res, 409, `Cannot unarchive content with status '${content.status}'. Only archived content can be restored.`);
+        return sendError(res, 409, `Cannot unarchive content with status '${content['status']}'. Only archived content can be restored.`);
       }
 
       const now = new Date();
+      const restoreReason = reason || 'User initiated restore';
 
-      // Restore to draft status with org_id verification
+      // Restore to draft status.
+      // P0-FIX: Removed restored_at and restored_reason — those columns do not exist
+      // in content_items. Removed AND org_id = $4 — content_items has no org_id column.
       await client.query(
         `UPDATE content_items
         SET status = 'draft',
-          restored_at = $1,
-          restored_reason = $2,
           updated_at = $1,
           archived_at = NULL
-        WHERE id = $3 AND org_id = $4`,
-        [now, reason || 'User initiated restore', contentId, auth["orgId"]]
+        WHERE id = $2`,
+        [now, contentId]
       );
 
       // Record unarchive action in audit log.
+      // The content_archive_audit table exists and has: content_id, action, reason,
+      // performed_by, performed_at. There is no org_id column on this table.
       // Only ignore error 42P01 (undefined_table) — the table may not yet exist
       // in environments where the migration hasn't run. Any other failure
       // (permissions, constraint violation, disk full) re-throws so the
       // transaction is rolled back and no unarchive occurs without a trace.
       try {
         await client.query(
-          `INSERT INTO content_archive_audit (content_id, action, reason, performed_at, org_id)
+          `INSERT INTO content_archive_audit (content_id, action, reason, performed_by, performed_at)
           VALUES ($1, $2, $3, $4, $5)`,
-          [contentId, 'unarchived', reason || 'User initiated restore', now, auth['orgId']]
+          [contentId, 'unarchived', restoreReason, auth.userId, now]
         );
       } catch (auditError: unknown) {
         const err = auditError as { code?: string };
