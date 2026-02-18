@@ -1,14 +1,20 @@
 
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { getDb } from '../db';
 import { JobScheduler } from './JobScheduler';
+// P1-CORRECTNESS FIX: Tighten variant schema from `z.unknown()` to at least
+// require each variant to be a non-null object, preventing nonsensical data
+// (e.g., a variant that is a number or null) from passing validation.
+const ExperimentVariantSchema = z.object({}).passthrough();
+
 const ExperimentSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   status: z.enum(['draft', 'ready', 'running', 'completed', 'cancelled']),
-  variants: z.array(z.unknown()).optional(),
+  variants: z.array(ExperimentVariantSchema).optional(),
 });
 
 export type Experiment = z.infer<typeof ExperimentSchema>;
@@ -62,10 +68,12 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
 
   // Lock in consistent order: runs -> experiments to avoid deadlock with concurrent jobs
   // This also prevents race conditions when multiple concurrent jobs try to start the same experiment
+  // P1-SQL FIX: Select only the id column for the lock query — SELECT * fetches all columns
+  // unnecessarily and is expensive if experiment_runs has large JSONB/bytea columns.
   await trx('experiment_runs')
     .where({ experiment_id: experimentId })
     .forUpdate()
-    .select('*');
+    .select('id');
 
   // Fetch experiment with row-level locking to prevent concurrent modifications
   // Lock acquired AFTER runs lock to maintain consistent locking order
@@ -103,15 +111,24 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
 
   // The WHERE clause ensures we only update if status is still not 'running'
   // This prevents multiple concurrent jobs from starting the same experiment
+  // F-4.8 FIX: Build the update payload conditionally to avoid NULL overwrite.
+  // With `exactOptionalPropertyTypes`, passing `metadata: undefined` to Knex causes
+  // `UPDATE experiments SET metadata = NULL` — silently erasing existing metadata
+  // on any retry that omits the metadata field. Only include metadata in the SET
+  // clause when the caller explicitly provides it.
+  const updatePayload: Record<string, unknown> = {
+    status: 'running',
+    started_at: new Date(),
+    started_by: triggeredBy ?? null,
+  };
+  if (metadata !== undefined) {
+    updatePayload['metadata'] = JSON.stringify(metadata);
+  }
+
   const updated = await trx('experiments')
     .where({ id: experimentId })
     .whereNotIn('status', ['running', 'completed', 'cancelled'])  // Only update valid states
-    .update({
-    status: 'running',
-    started_at: new Date(),
-    started_by: triggeredBy,
-    metadata: metadata ? JSON.stringify(metadata) : undefined,
-    })
+    .update(updatePayload)
     .returning(['id']);
 
   if (updated.length === 0) {
@@ -130,11 +147,15 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
     throw new Error('Failed to update experiment status - experiment may have invalid state');
   }
 
-  // Also create experiment run record for audit trail within same transaction
+  // Also create experiment run record for audit trail within same transaction.
+  // P1-CORRECTNESS FIX: Include explicit `id` to avoid failure when the table
+  // has a UUID primary key without a DB-level default (gen_random_uuid() requires PG13+
+  // and is not guaranteed to be set in all environments).
   await trx('experiment_runs').insert({
+    id: randomUUID(),
     experiment_id: experimentId,
     started_at: new Date(),
-    started_by: triggeredBy,
+    started_by: triggeredBy ?? null,
     status: 'running',
   });
 

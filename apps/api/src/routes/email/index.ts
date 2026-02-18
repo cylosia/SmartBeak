@@ -417,8 +417,11 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     for (const email of recipients) {
         const emailValidation = EmailSchema.safeParse(email);
         if (!emailValidation.success) {
+        // P1-SECURITY FIX: Do not reflect the submitted email address back in the error
+        // response. Reflecting user-supplied input risks XSS in HTML-rendered error pages
+        // and leaks PII in logs and downstream systems.
         return reply.status(400).send({
-            error: `Invalid recipient email: ${email}`,
+            error: 'Invalid recipient email address',
             code: 'VALIDATION_ERROR',
         });
         }

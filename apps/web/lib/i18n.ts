@@ -25,22 +25,37 @@ const translations: Record<Locale, NestedRecord> = {
   en: en as NestedRecord,
 };
 
-let currentLocale: Locale = 'en';
+// P1-SECURITY FIX: Removed module-level mutable `currentLocale` variable.
+// In Next.js SSR, modules are loaded once and shared across all concurrent
+// requests. A mutable singleton locale means one request calling setLocale()
+// would corrupt the locale for all concurrent requests (request-context pollution).
+// Since only 'en' is supported, the locale is now a read-only constant.
+const DEFAULT_LOCALE: Locale = 'en';
 
 /**
- * Set the active locale
+ * @deprecated setLocale() is a no-op. With a single supported locale ('en'),
+ * locale switching is not needed. When multi-locale support is added, use a
+ * request-scoped context (e.g., React Context or Next.js cookies) instead of
+ * module-level mutable state to avoid SSR request-context pollution.
  */
-export function setLocale(locale: Locale): void {
-  if (SUPPORTED_LOCALES.includes(locale)) {
-    currentLocale = locale;
-  }
+export function setLocale(_locale: Locale): void {
+  // Intentional no-op: see comment above on SSR singleton pollution.
 }
 
 /**
- * Get the active locale
+ * Get the active locale.
  */
 export function getLocale(): Locale {
-  return currentLocale;
+  return DEFAULT_LOCALE;
+}
+
+/**
+ * Escape a string for safe use as a literal in a RegExp pattern.
+ * P1-SECURITY FIX: `paramKey` from caller-supplied params could contain
+ * regex metacharacters (e.g., "." or "+"), causing incorrect matches or ReDoS.
+ */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -54,7 +69,7 @@ export function getLocale(): Locale {
  */
 export function t(key: string, params?: Record<string, string | number>): string {
   const parts = key.split('.');
-  let current: string | NestedRecord = translations[currentLocale];
+  let current: string | NestedRecord = translations[DEFAULT_LOCALE];
 
   for (const part of parts) {
     if (typeof current !== 'object' || current === null) {
@@ -70,7 +85,9 @@ export function t(key: string, params?: Record<string, string | number>): string
   let result = current;
   if (params) {
     for (const [paramKey, value] of Object.entries(params)) {
-      result = result.replace(new RegExp(`\\{\\{${paramKey}\\}\\}`, 'g'), String(value));
+      // P1-SECURITY FIX: Escape paramKey before building the RegExp to prevent
+      // regex injection via caller-supplied parameter names.
+      result = result.replace(new RegExp(`\\{\\{${escapeRegExp(paramKey)}\\}\\}`, 'g'), String(value));
     }
   }
 
@@ -106,5 +123,5 @@ export function formatDate(date: Date | string): string {
  * making future migration straightforward.
  */
 export function useTranslation() {
-  return { t, locale: currentLocale, setLocale, formatCurrency, formatDate };
+  return { t, locale: DEFAULT_LOCALE, setLocale, formatCurrency, formatDate };
 }

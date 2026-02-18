@@ -20,8 +20,11 @@ export function isTest(): boolean {
 // Previously, isProduction/isDevelopment/isTest were computed once at module load
 // and became stale if NODE_ENV changed (e.g., between test suites).
 export const envConfig = {
+  // P0-SECURITY FIX: Default to 'production' when NODE_ENV is unset.
+  // Previously defaulted to 'development', which disables security controls
+  // (CSP, detailed error suppression, secure cookies) in misconfigured deployments.
   /** Current environment */
-  get nodeEnv() { return process.env['NODE_ENV'] || 'development'; },
+  get nodeEnv() { return process.env['NODE_ENV'] || 'production'; },
 
   /** Is production environment */
   get isProduction() { return isProduction(); },

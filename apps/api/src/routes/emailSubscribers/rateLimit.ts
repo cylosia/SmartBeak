@@ -30,33 +30,49 @@ export class LRURateLimitStore {
 }
 
 /**
-* Check rate limit for an IP
-* Now delegates to kernel's distributed Redis rate limiter.
-* @param ip - Client IP address
-* @returns Rate limit check result
-*/
-export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
-  // Synchronous wrapper: kick off the async check but return a synchronous result.
-  // Since this function was always synchronous, we maintain the interface by
-  // using the kernel's in-memory fallback path synchronously.
-  //
-  // For callers that can go async, use checkRateLimitRedis() directly.
+ * @deprecated Use `checkRateLimitAsync` or the Fastify `preHandler` hook instead.
+ *
+ * P0-SECURITY FIX: This function was a no-op that always returned `{ allowed: true }`,
+ * providing zero rate-limit protection. It is now fail-closed to force migration.
+ *
+ * @throws Error unconditionally — migrate to `checkRateLimitAsync(ip)`.
+ */
+export function checkRateLimit(_ip: string): { allowed: boolean; retryAfter?: number } {
+  throw new Error(
+    'checkRateLimit() is deprecated and was a no-op. ' +
+    'Use checkRateLimitAsync() or the rateLimitMiddleware Fastify preHandler instead.'
+  );
+}
+
+/**
+ * Async rate limit check that actually enforces limits via Redis.
+ * Use this in Fastify `preHandler` hooks or directly in route handlers.
+ *
+ * @param ip - Client IP address
+ * @returns Rate limit result — callers MUST deny the request when `allowed` is false.
+ */
+export async function checkRateLimitAsync(ip: string): Promise<{ allowed: boolean; retryAfter?: number }> {
   const windowMs = securityConfig.rateLimitWindowMs;
   const maxRequests = securityConfig.rateLimitMaxRequests;
 
-  // Fire-and-forget the Redis check for future accuracy,
-  // but use a synchronous in-memory approximation for this call.
-  // The kernel's checkRateLimit handles Redis + in-memory fallback.
-  void checkRateLimitRedis(`emailsub:${ip}`, {
-    maxRequests,
-    windowMs,
-    keyPrefix: 'ratelimit:emailsub',
-  });
+  try {
+    const result = await checkRateLimitRedis(`emailsub:${ip}`, {
+      maxRequests,
+      windowMs,
+      keyPrefix: 'ratelimit:emailsub',
+    });
 
-  // Return a synchronous result using a simple check.
-  // The kernel's in-memory fallback will enforce distributed limits
-  // on subsequent async callers.
-  return { allowed: true };
+    if (!result.allowed) {
+      const retryAfter = Math.ceil((result.resetTime - Date.now()) / 1000);
+      return { allowed: false, retryAfter };
+    }
+
+    return { allowed: true };
+  } catch {
+    // Fail closed: if rate limiter is unavailable, deny the request
+    logger.warn('Rate limiter unavailable; failing closed', { ipPrefix: ip.substring(0, 8) });
+    return { allowed: false, retryAfter: 60 };
+  }
 }
 
 /**

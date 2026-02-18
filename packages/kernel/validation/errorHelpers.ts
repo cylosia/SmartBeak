@@ -6,6 +6,10 @@
  */
 
 import { ValidationError, ErrorCode, ErrorCodes } from './types-base';
+// P1-CORRECTNESS FIX: Import AppError to detect structured errors before converting them.
+// Without this, normalizeError() blindly wraps all Error subclasses (including AuthError,
+// which yields HTTP 401) as ValidationError (HTTP 400/500 in some callers).
+import { AppError } from '@errors';
 
 // ============================================================================
 // Types
@@ -61,15 +65,26 @@ export function createValidationError(
 }
 
 /**
- * Normalize any error into a ValidationError
+ * Normalize any error into a ValidationError.
+ *
+ * P1-CORRECTNESS FIX: Preserve the error code from structured AppError subclasses.
+ * Previously, any Error (including AuthError → 401, ForbiddenError → 403) was
+ * unconditionally wrapped as VALIDATION_ERROR, causing callers to return the
+ * wrong HTTP status code and masking the real error type.
  */
 export function normalizeError(error: unknown): ValidationError {
   if (error instanceof ValidationError) {
     return error;
   }
 
+  // Preserve the code from structured AppError subclasses so callers can
+  // map to the correct HTTP status (e.g., AUTH_ERROR → 401, NOT_FOUND → 404).
+  if (error instanceof AppError) {
+    return new ValidationError(error.message, undefined, error.code as ErrorCode);
+  }
+
   if (error instanceof Error) {
-    return new ValidationError(error.message, undefined, ErrorCodes.VALIDATION_ERROR);
+    return new ValidationError(error.message, undefined, ErrorCodes.INTERNAL_ERROR);
   }
 
   if (typeof error === 'string') {
