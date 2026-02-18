@@ -7,7 +7,8 @@
 
 import { Pool, PoolClient } from 'pg';
 import { withTransaction, TransactionError } from '../transactions';
-import { withPgBouncerTransaction } from '../pgbouncer';
+// FIXED (Issue 1.1): Renamed from non-existent `withPgBouncerTransaction` to actual export
+import { transactionWithPgBouncer } from '../pgbouncer';
 
 // Mock the logger
 jest.mock('@kernel/logger', () => ({
@@ -260,7 +261,7 @@ describe('Transaction Error Handling', () => {
       const loggerSpy = jest.spyOn(mockLogger, 'error').mockImplementation();
 
       await expect(
-        withPgBouncerTransaction(mockPool, async () => {
+        transactionWithPgBouncer(mockPool, async () => {
           throw originalError;
         })
       ).rejects.toBe(originalError);
@@ -288,7 +289,7 @@ describe('Transaction Error Handling', () => {
         .mockResolvedValueOnce({}); // ROLLBACK succeeds
 
       await expect(
-        withPgBouncerTransaction(mockPool, async () => {
+        transactionWithPgBouncer(mockPool, async () => {
           throw originalError;
         })
       ).rejects.toBe(originalError);

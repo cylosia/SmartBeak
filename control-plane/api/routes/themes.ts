@@ -56,52 +56,48 @@ function getDefaultThemes() {
 export async function themeRoutes(app: FastifyInstance, pool: Pool) {
   // GET /themes - List available themes
   app.get('/themes', async (req, res) => {
+    // FIXED (THEMES-7): Auth and rate-limit calls moved OUTSIDE the outer try/catch.
+    // When these were inside try/catch, AuthError (→ 401) and RateLimitError (→ 429)
+    // were swallowed by the catch block and returned as 500 Internal Server Error.
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+    await rateLimit(`themes:${ctx.orgId}`, 100);
+
+    // Fetch themes from database or use configuration
+    let themes = [];
+    let degraded = false;
     try {
-      // P1-1 FIX: Use getAuthContext() which properly validates auth presence
-      const ctx = getAuthContext(req);
-      requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-
-      // P1-2 FIX: Per-org rate limiting instead of global key
-      await rateLimit(`themes:${ctx.orgId}`, 100);
-
-      // Fetch themes from database or use configuration
-      let themes = [];
-      let degraded = false;
-      try {
-        const result = await pool.query(
-          `SELECT id, name, description, preview_url as preview, colors, is_default, is_active
-           FROM themes
-           WHERE is_active = true
-           ORDER BY is_default DESC, name`
-        );
-        themes = result.rows.map(row => ({
-          id: row["id"],
-          name: row.name,
-          description: row.description,
-          preview: row.preview,
-          colors: row.colors || {
-            primary: '#007bff',
-            secondary: '#6c757d',
-            background: '#ffffff',
-          },
-          isDefault: row.is_default,
-        }));
-      } catch (dbError) {
-        // P2-10 FIX: Log at error level, don't include raw error message
-        logger.error('[themes] Database unavailable, using defaults', dbError instanceof Error ? dbError : new Error(String(dbError)));
-        themes = getDefaultThemes();
-        degraded = true;
-      }
-
-      // If no themes in DB, use defaults
-      if (themes.length === 0) {
-        themes = getDefaultThemes();
-      }
-
-      return { themes, ...(degraded && { degraded: true }) };
-    } catch (error) {
-      logger.error('[themes] Error', error instanceof Error ? error : new Error(String(error)));
-      return errors.internal(res, 'Failed to fetch themes');
+      const result = await pool.query(
+        `SELECT id, name, description, preview_url as preview, colors, is_default, is_active
+         FROM themes
+         WHERE is_active = true
+         ORDER BY is_default DESC, name`
+      );
+      // FIXED (THEMES-7): Use bracket notation for all row property access
+      // (noPropertyAccessFromIndexSignature requires bracket notation on index-typed objects).
+      themes = result.rows.map(row => ({
+        id: row['id'],
+        name: row['name'],
+        description: row['description'],
+        preview: row['preview'],
+        colors: row['colors'] || {
+          primary: '#007bff',
+          secondary: '#6c757d',
+          background: '#ffffff',
+        },
+        isDefault: row['is_default'],
+      }));
+    } catch (dbError) {
+      logger.error('[themes] Database unavailable, using defaults', dbError instanceof Error ? dbError : new Error(String(dbError)));
+      themes = getDefaultThemes();
+      degraded = true;
     }
+
+    // If no themes in DB, use defaults
+    if (themes.length === 0) {
+      themes = getDefaultThemes();
+    }
+
+    return { themes, ...(degraded && { degraded: true }) };
   });
 }
