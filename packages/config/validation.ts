@@ -257,9 +257,12 @@ export function validateStartup(): void {
   const securityErrors: string[] = [];
 
   // Check bcrypt rounds in production
+  // P1-FIX: parseInt('abc', 10) returns NaN, and NaN < 10 is false, bypassing this check.
+  // Use Number.isFinite() to reject NaN/Infinity before the numeric comparison.
   const bcryptRounds = process.env['BCRYPT_ROUNDS'];
   if (process.env['NODE_ENV'] === 'production') {
-    if (!bcryptRounds || parseInt(bcryptRounds, 10) < 10) {
+    const bcryptRoundsNum = parseInt(bcryptRounds ?? '', 10);
+    if (!bcryptRounds || !Number.isFinite(bcryptRoundsNum) || bcryptRoundsNum < 10) {
       securityErrors.push('BCRYPT_ROUNDS must be at least 10 in production');
     }
   }
