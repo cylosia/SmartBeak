@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { writeFileSync } from 'fs';
 import { initializeJobScheduler } from './index';
 // P1-9 FIX: Import from shared package instead of cross-app import from apps/web
 import { validateEnv } from '@config/validation';
@@ -38,8 +39,32 @@ logger.info('Waiting for jobs...');
 // P1-10 FIX: Shared shutdown function with timeout protection
 const SHUTDOWN_TIMEOUT_MS = 10000; // 10 second max shutdown time
 
+// P0-HEARTBEAT FIX: Write heartbeat file so the K8s liveness probe can detect
+// a live process. The probe checks that /tmp/worker-heartbeat was modified
+// within the last 120 seconds; we update it every 30 seconds.
+const HEARTBEAT_FILE = '/tmp/worker-heartbeat';
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+function writeHeartbeat(): void {
+  try {
+    writeFileSync(HEARTBEAT_FILE, String(Date.now()));
+  } catch (err) {
+    logger.warn('Failed to write heartbeat file', {
+      error: err instanceof Error ? err['message'] : String(err),
+    });
+  }
+}
+
+// Write an initial heartbeat immediately so the probe passes during warm-up.
+writeHeartbeat();
+const heartbeatInterval = setInterval(writeHeartbeat, HEARTBEAT_INTERVAL_MS);
+heartbeatInterval.unref();
+
 async function gracefulShutdown(signal: string): Promise<void> {
   logger.info(`${signal} received, shutting down gracefully`);
+
+  // Stop heartbeat writes so the probe detects a dead worker if shutdown hangs.
+  clearInterval(heartbeatInterval);
 
   try {
     // Always clear the timeout timer when the race settles, whether stop() wins or
@@ -62,16 +87,23 @@ async function gracefulShutdown(signal: string): Promise<void> {
     logger.error('Forced shutdown due to timeout or error',
       shutdownError instanceof Error ? shutdownError : new Error(String(shutdownError))
     );
+    // Re-throw so callers can distinguish clean vs forced shutdown.
+    throw shutdownError;
   }
 }
 
 // P1-15 FIX: All signal handlers wrapped in try-catch to handle synchronous throws
-// from gracefulShutdown() in addition to async rejection handling
+// from gracefulShutdown() in addition to async rejection handling.
+// P0-EXIT-CODE FIX: Exit with code 1 when graceful shutdown fails so that
+// Kubernetes (and monitoring) can detect unhealthy terminations.
 process.on('SIGTERM', () => {
   try {
     gracefulShutdown('SIGTERM')
-      .catch((err) => logger.error('SIGTERM handler error', err instanceof Error ? err : new Error(String(err))))
-      .finally(() => process.exit(0));
+      .then(() => process.exit(0))
+      .catch((err) => {
+        logger.error('SIGTERM handler error', err instanceof Error ? err : new Error(String(err)));
+        process.exit(1);
+      });
   } catch (syncErr) {
     logger.error('Sync error in SIGTERM handler', syncErr instanceof Error ? syncErr : new Error(String(syncErr)));
     process.exit(1);
@@ -81,8 +113,11 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   try {
     gracefulShutdown('SIGINT')
-      .catch((err) => logger.error('SIGINT handler error', err instanceof Error ? err : new Error(String(err))))
-      .finally(() => process.exit(0));
+      .then(() => process.exit(0))
+      .catch((err) => {
+        logger.error('SIGINT handler error', err instanceof Error ? err : new Error(String(err)));
+        process.exit(1);
+      });
   } catch (syncErr) {
     logger.error('Sync error in SIGINT handler', syncErr instanceof Error ? syncErr : new Error(String(syncErr)));
     process.exit(1);

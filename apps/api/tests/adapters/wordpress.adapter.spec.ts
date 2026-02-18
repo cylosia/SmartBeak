@@ -1,4 +1,45 @@
 
+// P1-SSRF-MOCK FIX: Mock @security/ssrf before any imports that use it.
+// Without this mock the real validateUrlWithDns() performs live DNS lookups,
+// causing non-deterministic failures in offline CI environments.
+jest.mock('@security/ssrf', () => ({
+  validateUrlWithDns: jest.fn().mockResolvedValue({
+    allowed: true,
+    sanitizedUrl: 'https://example.com',
+  }),
+  validateUrl: jest.fn().mockReturnValue({
+    allowed: true,
+    sanitizedUrl: 'https://example.com',
+  }),
+}));
+
+// Mock logger to suppress output during tests
+jest.mock('@kernel/logger', () => ({
+  getLogger: () => ({
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+  }),
+}));
+
+// Mock metrics collector
+jest.mock('@kernel/request', () => ({
+  MetricsCollector: class {
+    recordError = jest.fn();
+    recordLatency = jest.fn();
+  },
+}));
+
+// Mock config defaults
+jest.mock('@config', () => ({
+  DEFAULT_TIMEOUTS: { medium: 30000 },
+}));
+
+// Mock retry utility to call the function directly without retries
+jest.mock('../../src/utils/retry', () => ({
+  withRetry: jest.fn((fn: () => Promise<unknown>) => fn()),
+}));
+
 import { createWordPressPost } from '../../src/adapters/wordpress/WordPressAdapter';
 
 // P3-8 FIX: Save and restore original fetch to prevent global pollution

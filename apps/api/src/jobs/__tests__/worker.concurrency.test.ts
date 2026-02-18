@@ -14,9 +14,11 @@ describe('Worker - Async/Concurrency Tests', () => {
   const processOnHandlers: Map<string, (...args: unknown[]) => void> = new Map();
 
   beforeEach(() => {
+    // Install fake timers before anything else so vi.advanceTimersByTime() works.
+    vi.useFakeTimers();
     vi.clearAllMocks();
     processOnHandlers.clear();
-    
+
     // Mock process.exit to prevent actual exit
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined) => {
       throw new Error(`PROCESS_EXIT_${code}`);
@@ -32,6 +34,7 @@ describe('Worker - Async/Concurrency Tests', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 

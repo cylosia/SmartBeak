@@ -55,9 +55,20 @@ spec:
             limits:
               cpu: "1"
               memory: 512Mi
+          readinessProbe:
+            exec:
+              # Worker is ready once it has written its first heartbeat.
+              command:
+                - sh
+                - -c
+                - "test -f /tmp/worker-heartbeat"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             exec:
-              # Worker writes a heartbeat file every job cycle; absence means the process is hung.
+              # Worker writes a heartbeat file every 30 s; absence/staleness means hung.
               command:
                 - sh
                 - -c
