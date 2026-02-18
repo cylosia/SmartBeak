@@ -7,8 +7,17 @@
 
 import { MetricsCollector } from '../metrics-collector';
 
+// T-P1-1 FIX: Enable fake timers so jest.advanceTimersByTime works
 describe('MetricsCollector Memory Leak Prevention', () => {
   let collector: MetricsCollector;
+
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
 
   beforeEach(() => {
     collector = new MetricsCollector({

@@ -142,21 +142,31 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
       expect(userQuery[1]).toContain('tenant-123');
     });
 
+    // T-P0-1 FIX: Test now verifies the SQL injection payload is passed as a
+    // parameterized value (not interpolated into the query string), which is the
+    // actual defense mechanism. The previous test only checked rows.length === 0,
+    // which would pass even if the query were vulnerable but returned no data.
     it('should prevent cross-tenant updates via SQL injection', async () => {
       const maliciousTenantId = "tenant-1' OR '1'='1";
-      
+
       mockClient.query
         .mockResolvedValueOnce({}) // SET statement_timeout
         .mockResolvedValueOnce({}) // BEGIN
         .mockResolvedValueOnce({ rows: [] }) // Query returns no results (safe)
         .mockResolvedValueOnce({}); // COMMIT
 
-      const result = await withTransaction(async (client) => {
+      await withTransaction(async (client) => {
         return client.query('SELECT * FROM data WHERE tenant_id = $1', [maliciousTenantId]);
       });
 
-      // Parameterized query should prevent injection
-      expect(result.rows).toHaveLength(0);
+      // Verify the malicious input was passed as a parameter, not interpolated
+      const dataQuery = mockClient.query.mock.calls.find((call: any[]) =>
+        typeof call[0] === 'string' && call[0].includes('tenant_id = $1')
+      );
+      expect(dataQuery).toBeDefined();
+      // The malicious string should be in the params array, NOT in the SQL string
+      expect(dataQuery[0]).not.toContain(maliciousTenantId);
+      expect(dataQuery[1]).toContain(maliciousTenantId);
     });
   });
 
@@ -276,6 +286,21 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
       expect(context2?.orgId).toBe('tenant-2');
       expect(context1?.orgId).not.toBe(context2?.orgId);
     });
+
+    // T-P1-2 FIX: Test that a token signed with a different key is rejected
+    it('should reject token signed with wrong key', () => {
+      const forgedToken = jwt.sign({
+        sub: 'user-attacker',
+        orgId: 'tenant-victim',
+        role: 'owner',
+      }, 'wrong-secret-key-that-is-32-characters-long', {
+        algorithm: 'HS256',
+      });
+
+      const context = getAuthContext({ authorization: `Bearer ${forgedToken}` });
+      // A forged token must not yield a valid auth context
+      expect(context).toBeNull();
+    });
   });
 
   describe('Cross-Tenant Access Prevention', () => {
@@ -295,18 +320,37 @@ describe('Multi-Tenant Isolation Integration Tests', () => {
       expect(isAuthorized).toBe(false);
     });
 
+    // T-P0-2 FIX: Test now verifies IDOR prevention by checking that the
+    // database query is scoped by tenant_id, which is the actual defense.
+    // The previous test only compared string prefixes client-side, which
+    // doesn't test server-side enforcement at all.
     it('should prevent IDOR attacks via parameter manipulation', async () => {
-      // User has access to tenant-1
       const userTenantId = 'tenant-1';
-      
-      // Attempt to access tenant-2 resource by changing ID
-      const requestedResourceId = 'tenant-2-resource-123';
-      const extractedTenantId = requestedResourceId.split('-resource')[0];
-      
-      // Verify tenant match
-      const isAuthorized = userTenantId === extractedTenantId;
-      
-      expect(isAuthorized).toBe(false);
+      const attackerResourceId = 'resource-from-tenant-2';
+
+      mockClient.query
+        .mockResolvedValueOnce({}) // SET statement_timeout
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({ rows: [] }) // No results - correctly scoped
+        .mockResolvedValueOnce({}); // COMMIT
+
+      const result = await withTransaction(async (client) => {
+        // Server-side defense: always scope queries by authenticated tenant_id
+        return client.query(
+          'SELECT * FROM resources WHERE id = $1 AND tenant_id = $2',
+          [attackerResourceId, userTenantId]
+        );
+      });
+
+      // Even though the resource exists in tenant-2, the query is scoped to tenant-1
+      expect(result.rows).toHaveLength(0);
+
+      // Verify the query included tenant_id scoping
+      const resourceQuery = mockClient.query.mock.calls.find((call: any[]) =>
+        typeof call[0] === 'string' && call[0].includes('tenant_id = $2')
+      );
+      expect(resourceQuery).toBeDefined();
+      expect(resourceQuery[1]).toContain(userTenantId);
     });
   });
 

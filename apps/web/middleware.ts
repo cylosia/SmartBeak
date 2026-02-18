@@ -1,139 +1,139 @@
 
-import { getAuth } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { BASE_SECURITY_HEADERS, buildWebAppCsp, PERMISSIONS_POLICY_WEB_APP } from '@config/headers';
 
-// F3-FIX: Restore real logging. The no-op logger silently dropped all auth
-// security events (session invalidation, redirects, auth failures).
-// Edge Runtime cannot use Node.js-only loggers, so we use console with
-// structured JSON output that Vercel's log ingestion can parse.
-// P3-4 FIX: Include ...args in structured JSON output (were silently dropped)
+// P2-11 FIX: Edge-compatible logger with PII redaction
+const REDACT_KEYS = new Set(['token', 'password', 'secret', 'apikey', 'authorization', 'cookie', 'sessiontoken']);
+
+function sanitizeArg(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (obj instanceof Error) return { message: obj.message, name: obj.name };
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    if (REDACT_KEYS.has(key.toLowerCase())) {
+      result[key] = '[REDACTED]';
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 const logger = {
-  debug: (msg: string, ...args: unknown[]) => console.debug(JSON.stringify({ level: 'debug', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
-  info: (msg: string, ...args: unknown[]) => console.info(JSON.stringify({ level: 'info', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
-  warn: (msg: string, ...args: unknown[]) => console.warn(JSON.stringify({ level: 'warn', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
-  error: (msg: string, ...args: unknown[]) => console.error(JSON.stringify({ level: 'error', service: 'middleware', msg, args: args.length > 0 ? args : undefined, ts: Date.now() })),
+  debug: (msg: string, ...args: unknown[]) => console.debug(JSON.stringify({ level: 'debug', service: 'middleware', msg, args: args.length > 0 ? args.map(sanitizeArg) : undefined, ts: Date.now() })),
+  info: (msg: string, ...args: unknown[]) => console.info(JSON.stringify({ level: 'info', service: 'middleware', msg, args: args.length > 0 ? args.map(sanitizeArg) : undefined, ts: Date.now() })),
+  warn: (msg: string, ...args: unknown[]) => console.warn(JSON.stringify({ level: 'warn', service: 'middleware', msg, args: args.length > 0 ? args.map(sanitizeArg) : undefined, ts: Date.now() })),
+  error: (msg: string, ...args: unknown[]) => console.error(JSON.stringify({ level: 'error', service: 'middleware', msg, args: args.length > 0 ? args.map(sanitizeArg) : undefined, ts: Date.now() })),
 };
 
 /**
 * Next.js Middleware
-* Handles session validation and security checks
+* P0-5 FIX: Use clerkMiddleware() instead of manual getAuth() pattern.
+* Clerk v6 requires clerkMiddleware to process the request before auth is available.
+* P1-11 FIX: Use hardcoded origin instead of req.url to prevent open redirect via Host header.
+* P2-14 FIX: Propagate CSP nonce via request headers for server components.
+* P2-15 FIX: Add Vary header to prevent CDN caching of per-request CSP nonces.
+* P2-16 FIX: Add CSRF origin validation for state-changing requests.
+* P2-17 FIX: Removed hardcoded cookie name; Clerk handles cookie names internally.
 */
 
-// SECURITY FIX: P0-CRITICAL (Finding 2) - Static security headers (CSP generated per-request with real nonce)
-// Values sourced from packages/config/headers.ts (canonical source of truth)
 const STATIC_SECURITY_HEADERS: Record<string, string> = {
   ...BASE_SECURITY_HEADERS,
   'Permissions-Policy': PERMISSIONS_POLICY_WEB_APP,
 };
 
-/**
-* Generate a cryptographic nonce for CSP headers
-* SECURITY FIX: P0-CRITICAL - Replace static {random} placeholder with real per-request nonce
-*/
 function generateCspNonce(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
   return btoa(String.fromCharCode(...array));
 }
 
-export async function middleware(req: NextRequest) {
-  const hasSession = req.cookies.get('__session');
+// P1-11 FIX: Hardcode origin to prevent open redirect via Host header injection
+function getAppOrigin(): string {
+  return process.env['NEXT_PUBLIC_APP_URL'] || 'https://app.smartbeak.com';
+}
 
-  // If no session cookie, allow request (will be handled by page-level auth)
-  if (!hasSession) {
-  const response = NextResponse.next();
-  addSecurityHeaders(response);
-  return response;
+// P0-5 FIX: Define protected routes that require authentication
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/settings(.*)', '/admin(.*)']);
+
+// P2-16 FIX: CSRF origin validation for state-changing requests
+function validateOrigin(req: NextRequest): boolean {
+  const method = req.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    return true;
   }
-
+  const origin = req.headers.get('origin');
+  const appOrigin = getAppOrigin();
+  if (!origin) {
+    const referer = req.headers.get('referer');
+    if (!referer) return false;
+    try {
+      const refererUrl = new URL(referer);
+      const appUrl = new URL(appOrigin);
+      return refererUrl.host === appUrl.host;
+    } catch {
+      return false;
+    }
+  }
   try {
-  // Validate session with Clerk
-  let auth;
-  try {
-    auth = getAuth(req);
-  } catch (error) {
-    logger.error('Clerk auth error', error instanceof Error ? error : new Error(String(error)));
-    // Clear invalid session and redirect to login
-    const response = NextResponse.redirect(new URL('/login', req.url));
-    // SECURITY FIX: P1-HIGH - Add secure cookie flags when clearing session
-    response.cookies.set('__session', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
-      path: '/'
-    });
-    addSecurityHeaders(response);
-    return response;
-  }
-
-  // If session exists but is invalid/expired, clear it and redirect to login
-  if (!auth.userId) {
-    const response = NextResponse.redirect(new URL('/login', req.url));
-    // SECURITY FIX: P1-HIGH - Add secure cookie flags when clearing session
-    response.cookies.set('__session', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0,
-      path: '/'
-    });
-    addSecurityHeaders(response);
-    return response;
-  }
-
-  // Session is valid - add security headers
-  const response = NextResponse.next();
-  addSecurityHeaders(response);
-
-  return response;
-  } catch (error) {
-  logger.error('Session validation error', error instanceof Error ? error : new Error(String(error)));
-
-  // On error, redirect to login for safety
-  const response = NextResponse.redirect(new URL('/login', req.url));
-  // SECURITY FIX: P1-HIGH - Add secure cookie flags when clearing session
-  response.cookies.set('__session', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 0,
-    path: '/'
-  });
-  addSecurityHeaders(response);
-  return response;
+    const originUrl = new URL(origin);
+    const appUrl = new URL(appOrigin);
+    return originUrl.host === appUrl.host;
+  } catch {
+    return false;
   }
 }
 
+// P0-5 FIX: Use clerkMiddleware - the official Clerk v6 pattern
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- types inferred from @clerk/nextjs/server
+export default clerkMiddleware(async (auth: any, req: any) => {
+  // P2-16 FIX: CSRF validation for state-changing requests
+  if (!validateOrigin(req)) {
+    logger.warn('CSRF origin validation failed', { method: req.method, url: req.url });
+    return new NextResponse('Forbidden', { status: 403 });
+  }
+
+  // Protect routes that require authentication
+  if (isProtectedRoute(req)) {
+    try {
+      await auth.protect();
+    } catch {
+      // P1-11 FIX: Redirect to hardcoded origin, not req.url
+      const loginUrl = new URL('/login', getAppOrigin());
+      const response = NextResponse.redirect(loginUrl);
+      addSecurityHeaders(response);
+      return response;
+    }
+  }
+
+  // Add security headers to all responses
+  const response = NextResponse.next();
+  addSecurityHeaders(response);
+  return response;
+});
+
 /**
 * Add security headers to response
-* SECURITY FIX: P0 (Finding 2) - Generate real CSP nonce per request
-* SECURITY FIX: P1 (Finding 9) - Applied to all routes including API
+* P2-15 FIX: Add Vary header to prevent CDN caching per-request nonces
 */
 function addSecurityHeaders(response: NextResponse): void {
   for (const [key, value] of Object.entries(STATIC_SECURITY_HEADERS)) {
-  response.headers.set(key, value);
+    response.headers.set(key, value);
   }
-  // Generate a fresh nonce for each request
   const nonce = generateCspNonce();
   response.headers.set('Content-Security-Policy', buildWebAppCsp(nonce));
-  // P1-7 FIX: Do NOT expose nonce in response headers. The CSP nonce must only be
-  // available server-side. In Next.js middleware, response headers are visible to
-  // CDNs, proxies, and browser extensions. The nonce is already embedded in the
-  // CSP header's script-src/style-src directives above, which is sufficient for
-  // the browser to validate inline scripts. Server Components that need the nonce
-  // should read it from the CSP header itself or use next/headers.
+  // P2-15 FIX: Vary header prevents CDN from caching per-request nonce
+  response.headers.set('Vary', 'Cookie');
 }
 
 /**
 * Configure which routes the middleware runs on
-* SECURITY FIX: P1-HIGH (Finding 9) - Include API routes for security headers
 */
 export const config = {
   matcher: [
-  // Apply to all routes except static files
-  '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

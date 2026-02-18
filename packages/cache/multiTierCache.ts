@@ -229,10 +229,26 @@ export class MultiTierCache {
     await this.redis.ping();
   }
 
+  /** P2-10 FIX: Dangerous key segments that enable prototype pollution */
+  private static readonly POISONED_KEY_SEGMENTS = ['__proto__', 'constructor', 'prototype'];
+
+  /**
+   * P2-10 FIX: Validate that a cache key does not contain prototype pollution vectors.
+   * Throws if the key includes __proto__, constructor, or prototype segments.
+   */
+  private static validateKey(key: string): void {
+    for (const segment of MultiTierCache.POISONED_KEY_SEGMENTS) {
+      if (key.includes(segment)) {
+        throw new Error(`Cache key contains forbidden segment "${segment}": ${key}`);
+      }
+    }
+  }
+
   /**
    * Build full cache key with prefix
    */
   private buildKey(key: string): string {
+    MultiTierCache.validateKey(key);
     return `${this.options.keyPrefix}${key}`;
   }
 
@@ -271,7 +287,7 @@ export class MultiTierCache {
               error: parseError instanceof Error ? parseError.message : String(parseError),
             });
             // Delete corrupted entry
-            await this.redis.del(fullKey).catch((err) => {
+            await this.redis.del(fullKey).catch((err: unknown) => {
               logger.warn('Failed to delete corrupted L2 cache entry', {
                 key: fullKey,
                 error: err instanceof Error ? err.message : String(err),
@@ -475,6 +491,9 @@ export class MultiTierCache {
 
     // P1-6 FIX: Track timeout timer so it can be cleared when factory resolves first
     let timeoutId: NodeJS.Timeout | undefined;
+    // P1-5 FIX: Track abort listener so it can be removed when factory resolves first
+    let abortHandler: (() => void) | undefined;
+    const signal = options?.signal;
     try {
       const racers: Promise<T>[] = [
         factory(),
@@ -484,15 +503,16 @@ export class MultiTierCache {
       ];
 
       // Add abort signal as a racer if provided
-      if (options?.signal) {
+      if (signal) {
         racers.push(new Promise<never>((_, reject) => {
-          if (options.signal!.aborted) {
+          if (signal.aborted) {
             reject(new Error('Cache computation aborted'));
             return;
           }
-          options.signal!.addEventListener('abort', () => {
+          abortHandler = () => {
             reject(new Error('Cache computation aborted'));
-          }, { once: true });
+          };
+          signal.addEventListener('abort', abortHandler, { once: true });
         }));
       }
 
@@ -504,6 +524,10 @@ export class MultiTierCache {
       // P1-6 FIX: Always clear timeout to prevent timer leak
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
+      }
+      // P1-5 FIX: Always remove abort listener to prevent listener leak
+      if (signal && abortHandler) {
+        signal.removeEventListener('abort', abortHandler);
       }
     }
   }
@@ -543,44 +567,53 @@ export class MultiTierCache {
   }
 
   /**
+   * P2-9 FIX: Shared SCAN + batch delete helper to remove duplication
+   * between clearL2() and clearAll().
+   */
+  private async scanAndDelete(pattern: string): Promise<void> {
+    if (!this.redis) return;
+
+    const SCAN_BATCH_SIZE = 100;
+    const DELETE_BATCH_SIZE = 1000;
+
+    let cursor = '0';
+    let totalDeleted = 0;
+    const keysToDelete: string[] = [];
+
+    do {
+      const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_BATCH_SIZE);
+      cursor = result[0];
+      const keys = result[1];
+
+      if (keys.length > 0) {
+        keysToDelete.push(...keys);
+
+        if (keysToDelete.length >= DELETE_BATCH_SIZE) {
+          const batch = keysToDelete.splice(0, DELETE_BATCH_SIZE);
+          await this.redis.del(...batch);
+          totalDeleted += batch.length;
+        }
+      }
+    } while (cursor !== '0');
+
+    if (keysToDelete.length > 0) {
+      await this.redis.del(...keysToDelete);
+      totalDeleted += keysToDelete.length;
+    }
+
+    if (totalDeleted > 0) {
+      logger.info(`Cleared ${totalDeleted} keys from L2 cache`);
+    }
+  }
+
+  /**
    * Clear L2 cache (Redis) only, leaving L1 intact
    */
   async clearL2(): Promise<void> {
     if (!this.redis) return;
 
     try {
-      const pattern = `${this.options.keyPrefix}*`;
-      const SCAN_BATCH_SIZE = 100;
-      const DELETE_BATCH_SIZE = 1000;
-
-      let cursor = '0';
-      let totalDeleted = 0;
-      const keysToDelete: string[] = [];
-
-      do {
-        const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_BATCH_SIZE);
-        cursor = result[0];
-        const keys = result[1];
-
-        if (keys.length > 0) {
-          keysToDelete.push(...keys);
-
-          if (keysToDelete.length >= DELETE_BATCH_SIZE) {
-            const batch = keysToDelete.splice(0, DELETE_BATCH_SIZE);
-            await this.redis.del(...batch);
-            totalDeleted += batch.length;
-          }
-        }
-      } while (cursor !== '0');
-
-      if (keysToDelete.length > 0) {
-        await this.redis.del(...keysToDelete);
-        totalDeleted += keysToDelete.length;
-      }
-
-      if (totalDeleted > 0) {
-        logger.info(`Cleared ${totalDeleted} keys from L2 cache`);
-      }
+      await this.scanAndDelete(`${this.options.keyPrefix}*`);
     } catch (error) {
       logger.error('L2 clear error', error instanceof Error ? error : new Error(String(error)));
     }
@@ -592,44 +625,10 @@ export class MultiTierCache {
    */
   async clearAll(): Promise<void> {
     this.clearL1();
-    
+
     if (this.redis) {
       try {
-        const pattern = `${this.options.keyPrefix}*`;
-        const SCAN_BATCH_SIZE = 100;
-        const DELETE_BATCH_SIZE = 1000;
-        
-        // P1-FIX: Use SCAN instead of KEYS for non-blocking iteration
-        let cursor = '0';
-        let totalDeleted = 0;
-        const keysToDelete: string[] = [];
-        
-        do {
-          const result = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_BATCH_SIZE);
-          cursor = result[0];
-          const keys = result[1];
-          
-          if (keys.length > 0) {
-            keysToDelete.push(...keys);
-            
-            // Batch delete when we reach the batch size
-            if (keysToDelete.length >= DELETE_BATCH_SIZE) {
-              const batch = keysToDelete.splice(0, DELETE_BATCH_SIZE);
-              await this.redis.del(...batch);
-              totalDeleted += batch.length;
-            }
-          }
-        } while (cursor !== '0');
-        
-        // Delete any remaining keys
-        if (keysToDelete.length > 0) {
-          await this.redis.del(...keysToDelete);
-          totalDeleted += keysToDelete.length;
-        }
-        
-        if (totalDeleted > 0) {
-          logger.info(`Cleared ${totalDeleted} keys from L2 cache`);
-        }
+        await this.scanAndDelete(`${this.options.keyPrefix}*`);
       } catch (error) {
         logger.error('L2 clear error', error instanceof Error ? error : new Error(String(error)));
       }
@@ -744,9 +743,11 @@ export function getGlobalCache(options?: MultiTierCacheOptions): MultiTierCache 
   return globalCache;
 }
 
-export function resetGlobalCache(): void {
+export async function resetGlobalCache(): Promise<void> {
   if (globalCache) {
-    globalCache.stopInFlightCleanup();
+    // P1-28 FIX: Call close() to properly shut down the Redis connection,
+    // not just stopInFlightCleanup() which leaks the Redis connection.
+    await globalCache.close();
   }
   globalCache = null;
 }
@@ -754,6 +755,17 @@ export function resetGlobalCache(): void {
 // ============================================================================
 // Decorator for caching method results
 // ============================================================================
+
+/**
+ * P2-31 FIX: Sanitize a value for use in a cache key.
+ * Replaces dangerous segments and limits total key length to prevent abuse.
+ */
+function sanitizeCacheKeyPart(raw: string): string {
+  const MAX_KEY_LENGTH = 512;
+  // Strip prototype pollution vectors
+  const sanitized = raw.replace(/__proto__|constructor|prototype/g, '_blocked_');
+  return sanitized.length > MAX_KEY_LENGTH ? sanitized.slice(0, MAX_KEY_LENGTH) : sanitized;
+}
 
 export function Cacheable(options?: {
   key?: string;
@@ -773,9 +785,13 @@ export function Cacheable(options?: {
       // captured at decoration time would point to a destroyed cache.
       const cache = getGlobalCache();
 
+      // P2-31 FIX: Sanitize the serialised args portion of the cache key.
+      // JSON.stringify(args) can be exploited with crafted objects containing
+      // __proto__ or extremely long values. Sanitize before building the key.
+      const argsPart = sanitizeCacheKeyPart(JSON.stringify(args));
       const cacheKey = options?.key
-        ? `${options.key}:${JSON.stringify(args)}`
-        : `${target.constructor.name}:${propertyKey}:${JSON.stringify(args)}`;
+        ? `${options.key}:${argsPart}`
+        : `${target.constructor.name}:${propertyKey}:${argsPart}`;
 
       const cacheOptions: { l1TtlMs?: number; l2TtlSeconds?: number; tags?: string[] } = {};
       if (options?.ttlMs !== undefined) {

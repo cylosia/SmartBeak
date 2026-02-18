@@ -22,6 +22,33 @@ const metricBuffer: MetricBuffer = {
 };
 let metricsInWindow = 0;
 let windowStart = Date.now();
+
+// P2-12 FIX: Periodic flush interval with proper cleanup
+const FLUSH_INTERVAL_MS = 5000;
+let flushInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start periodic metric flushing
+ */
+export function startMetricsFlushing(): void {
+  if (flushInterval !== null) return;
+  flushInterval = setInterval(() => {
+    flushMetrics();
+  }, FLUSH_INTERVAL_MS);
+}
+
+/**
+ * P2-12 FIX: Stop periodic metric flushing and flush remaining metrics.
+ * Must be called during graceful shutdown to prevent interval leak.
+ */
+export function stopMetricsFlushing(): void {
+  if (flushInterval !== null) {
+    clearInterval(flushInterval);
+    flushInterval = null;
+  }
+  // Flush any remaining metrics in the buffer
+  flushMetrics();
+}
 /**
  * Get current rate limit status
  * @returns Current metrics count and window start time

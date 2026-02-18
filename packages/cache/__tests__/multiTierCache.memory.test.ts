@@ -94,7 +94,8 @@ describe('MultiTierCache Memory Leak Prevention', () => {
 
       // The original request should still be in-flight
       // But new requests should see it timed out
-      const _stats = shortTimeoutCache.getStats();
+      // T-P0-3 FIX: Variable was named `_stats` but referenced as `stats`
+      const stats = shortTimeoutCache.getStats();
       expect(stats.inFlightTimeouts).toBeGreaterThanOrEqual(0);
 
       shortTimeoutCache.stopInFlightCleanup();
