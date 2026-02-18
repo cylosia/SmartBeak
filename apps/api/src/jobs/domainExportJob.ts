@@ -80,13 +80,24 @@ interface ExportData {
 }
 
 export async function domainExportJob(input: DomainExportInput, job: Job | undefined) {
-  // P2-FIX: Add AbortController for cancellation support
+  // BUG-EXP-04 fix: create AbortController AND actually wire its signal.
+  // Previously abortController.signal was never referenced, so cancellation logged
+  // but did not interrupt any in-progress I/O.
   const abortController = new AbortController();
+  const { signal } = abortController;
+
   const abortListener = () => {
     abortController.abort();
     logger.info('Domain export job aborted', { jobId: job?.id });
   };
-  
+
+  // Helper: throw if the job was cancelled between stages.
+  // (Individual pool.query calls are not cancellable via the pg API in this pattern;
+  // we prevent starting new stages after cancellation instead.)
+  function throwIfAborted(): void {
+    if (signal.aborted) throw new Error('Export job was cancelled');
+  }
+
   // P1-6 FIX: Use BullMQ Job type for cancel event listener
   if (job && 'on' in job && typeof job.on === 'function') {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BullMQ Job.on() not exposed in type definitions
@@ -100,6 +111,7 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
   // P1-FIX: Verify the requesting org owns this domain before exporting any data.
   // Jobs are enqueued via BullMQ (Redis). Without this check, any actor with Redis
   // write access can enqueue a job for any domainId and exfiltrate all tenant data.
+  throwIfAborted();
   const { pool: authPool } = await dbModuleCache.get();
   const { rows: ownerRows } = await authPool.query(
     'SELECT 1 FROM domains WHERE id = $1 AND org_id = $2 AND archived_at IS NULL',
@@ -124,17 +136,21 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
     version: EXPORT_DATA_VERSION,
   };
   if (includeContent) {
+    throwIfAborted();
     exportData.content = await exportContent(domainId, dateRange);
     await job?.updateProgress(30);
   }
   if (includeAnalytics) {
+    throwIfAborted();
     exportData.analytics = await exportAnalytics(domainId, dateRange);
     await job?.updateProgress(50);
   }
   if (includeSettings) {
+    throwIfAborted();
     exportData.settings = await exportSettings(domainId);
     await job?.updateProgress(70);
   }
+  throwIfAborted();
   // Format data
   const formattedData = await formatExport(exportData, format);
   await job?.updateProgress(80);
@@ -176,7 +192,9 @@ async function exportContent(domainId: string, dateRange?: { start: string; end:
 
   const limit = validateLimit(MAX_CSV_ROWS);
 
-  const params = [domainId];
+  // BUG-EXP-01 fix: explicit (string | number)[] prevents TypeScript from inferring
+  // string[] and then silently accepting the numeric `limit` push below.
+  const params: (string | number)[] = [domainId];
   let query = `
   SELECT
     id, title, body, status, content_type,
@@ -290,8 +308,16 @@ async function exportSettings(domainId: string) {
 }
 async function formatExport(data: ExportData, format: ExportFormat) {
   switch (format) {
-    case 'json':
-      return Buffer.from(JSON.stringify(data, null, 2));
+    case 'json': {
+      // BUG-EXP-02 fix: check string length BEFORE calling Buffer.from().
+      // JSON.stringify on 10,000 content rows can produce 50-100 MB; the old code
+      // allocated the full Buffer and only then rejected it — risking OOM in the worker.
+      const jsonStr = JSON.stringify(data, null, 2);
+      if (jsonStr.length > MAX_DOWNLOAD_SIZE) {
+        throw new Error(`Export too large: ${jsonStr.length} bytes exceeds maximum of ${MAX_DOWNLOAD_SIZE} bytes`);
+      }
+      return Buffer.from(jsonStr);
+    }
     case 'csv':
       return convertToCSV(data);
     case 'markdown':
@@ -410,10 +436,13 @@ async function saveExport(data: Buffer | string, destination: DomainExportInput[
       if (!destination.path) {
         throw new Error('Local path required for local export');
       }
-      // C04-FIX: Prevent path traversal — resolve and validate against allowed base dir
+      // C04-FIX: Prevent path traversal — resolve and validate against allowed base dir.
+      // BUG-EXP-03 fix: append path.sep before startsWith to prevent prefix-collision
+      // bypass (e.g. /tmp/exports-evil satisfies startsWith('/tmp/exports')).
       const ALLOWED_EXPORT_BASE = process.env['EXPORT_BASE_DIR'] || '/tmp/exports';
+      const resolvedAllowedBase = path.resolve(ALLOWED_EXPORT_BASE);
       const resolvedPath = path.resolve(destination.path, `${exportId}.${format}`);
-      if (!resolvedPath.startsWith(path.resolve(ALLOWED_EXPORT_BASE))) {
+      if (!resolvedPath.startsWith(resolvedAllowedBase + path.sep)) {
         throw new Error('Invalid export path: path traversal detected');
       }
       const localPath = resolvedPath;
@@ -438,9 +467,11 @@ async function saveExport(data: Buffer | string, destination: DomainExportInput[
       // as ~13 MB base64 and then storing it in a PostgreSQL TEXT column (via recordExport)
       // causes WAL bloat, backup inflation, and query timeouts on the domain_exports table.
       // Write to a temp file instead; the caller streams it to the client and deletes it.
+      // BUG-EXP-03 fix: same prefix-collision guard as the 'local' case above.
       const ALLOWED_EXPORT_BASE = process.env['EXPORT_BASE_DIR'] || '/tmp/exports';
+      const resolvedAllowedBase2 = path.resolve(ALLOWED_EXPORT_BASE);
       const tmpPath = path.resolve(ALLOWED_EXPORT_BASE, `${exportId}.${format}`);
-      if (!tmpPath.startsWith(path.resolve(ALLOWED_EXPORT_BASE))) {
+      if (!tmpPath.startsWith(resolvedAllowedBase2 + path.sep)) {
         throw new Error('Invalid export path: path traversal detected');
       }
       const { writeFile, mkdir } = await import('fs/promises');

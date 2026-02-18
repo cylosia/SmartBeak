@@ -34,7 +34,9 @@ const DNS_TIMEOUT_MS = 5000;
  * control-plane/jobs/media-cleanup.ts.
  */
 function withDnsTimeout<T>(promise: Promise<T>): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout>;
+  // BUG-KDNS-02 fix: declare as | undefined so the clearTimeout guard is type-safe
+  // and the implicit reliance on synchronous executor behaviour is made explicit.
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(Object.assign(new Error(`DNS lookup timed out after ${DNS_TIMEOUT_MS}ms`), { code: 'ETIMEOUT' }));
@@ -42,7 +44,7 @@ function withDnsTimeout<T>(promise: Promise<T>): Promise<T> {
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => {
-    clearTimeout(timeoutId);
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   });
 }
 
@@ -133,18 +135,25 @@ export async function verifyDnsMulti(
 
   const results: Record<string, boolean> = {};
 
-  for (const method of methods) {
-  // FIX: Validate record format
-  // P2-18 FIX: Also validate record is a valid hostname to prevent arbitrary DNS lookups
+  // BUG-KDNS-01 fix: run lookups in parallel with Promise.all instead of a sequential
+  // for-await loop.  With N methods and DNS_TIMEOUT_MS = 5000, the old code had
+  // worst-case latency of N * 5000 ms; now it is bounded by a single 5000 ms timeout.
+  //
+  // BUG-KDNS-03 fix: invalid methods are skipped (logged + omitted from results) rather
+  // than written to a shared 'unknown' key that caused result corruption when multiple
+  // invalid methods existed or when a valid record happened to be named 'unknown'.
+  await Promise.all(methods.map(async (method) => {
+  // Validate record format
   if (!method.record || typeof method.record !== 'string' || method.record.length > MAX_DOMAIN_LENGTH) {
-    results[method.record || 'unknown'] = false;
-    continue;
+    logger.warn('Skipping DNS method with invalid record', { methodType: method.type });
+    // Omit from results rather than colliding on a shared 'unknown' key.
+    return;
   }
 
-  // FIX: Validate token format
+  // Validate token format
   if (!method["token"] || typeof method["token"] !== 'string' || method["token"].length > 1000) {
     results[method.record] = false;
-    continue;
+    return;
   }
 
   try {
@@ -166,7 +175,7 @@ export async function verifyDnsMulti(
     }
     results[method.record] = false;
   }
-  }
+  }));
 
   return results;
 }
