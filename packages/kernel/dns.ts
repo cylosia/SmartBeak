@@ -13,7 +13,11 @@ const logger = getLogger('kernel:dns');
 function isValidDomainLabel(l: string): boolean {
   return l.length >= 1 && l.length <= 63
     && /^[a-zA-Z0-9]/.test(l) && /[a-zA-Z0-9]$/.test(l)
-    && /^[a-zA-Z0-9-]+$/.test(l);
+    && /^[a-zA-Z0-9-]+$/.test(l)
+    // DNS-1-FIX P1: Reject labels with '--' at positions 2-3 (Punycode prefix xn--)
+    // to block IDN homograph attacks. Punycode-encoded labels bypass Unicode
+    // normalization and can render as visually identical internationalized characters.
+    && !(l.length >= 4 && l[2] === '-' && l[3] === '-');
 }
 function isValidDomainFormat(domain: string): boolean {
   const labels = domain.split('.');
@@ -24,9 +28,16 @@ const MAX_DOMAIN_LENGTH = 253;
 // DNS error codes that indicate the domain/record doesn't exist or is unreachable,
 // rather than a bug in our code. These are treated as "verification failed" (return false)
 // instead of throwing, to prevent transient DNS issues from crashing the service.
-const RECOVERABLE_DNS_ERRORS = ['ENOTFOUND', 'ENODATA', 'SERVFAIL', 'ETIMEOUT', 'ECONNREFUSED', 'ECONNRESET'];
+// DNS-3-FIX P1: SERVFAIL removed — it indicates a DNSSEC validation failure or upstream
+// resolver error, which is a security-relevant event that must surface to callers.
+// Silently treating SERVFAIL as "not found" would mask DNSSEC tampering.
+const RECOVERABLE_DNS_ERRORS = ['ENOTFOUND', 'ENODATA', 'ETIMEOUT', 'ECONNREFUSED', 'ECONNRESET'];
 
 const DNS_TIMEOUT_MS = 5000;
+// DNS-4-FIX P2: Bound TXT record responses to prevent memory exhaustion
+// from domains that publish hundreds of TXT records (e.g. SPF, DKIM sprawl).
+const MAX_TXT_RECORDS = 50;
+const MAX_TXT_RECORD_VALUE_LENGTH = 2048;
 
 /**
  * Wrap a DNS promise with a timeout to prevent indefinite hangs.
@@ -107,9 +118,17 @@ export async function verifyDns(domain: string, token: string): Promise<boolean>
 
   try {
   const records = await withDnsTimeout(dns.resolveTxt(`_acp-verification.${domain}`));
-  return records.flat().includes(token);
+  // DNS-4-FIX P2: Cap TXT record count and value length to prevent memory exhaustion.
+  const flatRecords = records.flat().slice(0, MAX_TXT_RECORDS)
+    .filter(r => r.length <= MAX_TXT_RECORD_VALUE_LENGTH);
+  return flatRecords.includes(token);
   } catch (error: unknown) {
   const dnsError = error as { code?: string };
+  if (dnsError.code === 'SERVFAIL') {
+    // DNS-3-FIX P1: Log SERVFAIL separately — it may indicate DNSSEC failure.
+    logger.warn('SERVFAIL during DNS verification — possible DNSSEC or resolver failure', { domain });
+    return false;
+  }
   if (dnsError.code && RECOVERABLE_DNS_ERRORS.includes(dnsError.code)) {
     return false;
   }
@@ -133,7 +152,9 @@ export async function verifyDnsMulti(
   throw new Error(`Invalid domain format: ${domain}`);
   }
 
-  const results: Record<string, boolean> = {};
+  // DNS-5-FIX P2: Use Object.create(null) to prevent prototype pollution via
+  // method.record = '__proto__' or other inherited property names.
+  const results = Object.create(null) as Record<string, boolean>;
 
   // BUG-KDNS-01 fix: run lookups in parallel with Promise.all instead of a sequential
   // for-await loop.  With N methods and DNS_TIMEOUT_MS = 5000, the old code had
@@ -159,14 +180,18 @@ export async function verifyDnsMulti(
   try {
     if (method.type === 'txt') {
     const records = await withDnsTimeout(dns.resolveTxt(method.record));
-    results[method.record] = records.flat().includes(method["token"]);
+    // DNS-4-FIX P2: Cap TXT records per lookup.
+    const flatRecords = records.flat().slice(0, MAX_TXT_RECORDS)
+      .filter(r => r.length <= MAX_TXT_RECORD_VALUE_LENGTH);
+    results[method.record] = flatRecords.includes(method["token"]);
     }
   } catch (error: unknown) {
-    // P1-FIX: Log unexpected errors (network failures, internal bugs) so they are
-    // not silently masked as "record not found". Only recoverable DNS errors (ENOTFOUND,
-    // SERVFAIL, etc.) are routine; everything else warrants an error log.
+    // DNS-3-FIX P1: Log SERVFAIL separately — it may indicate DNSSEC failure.
     const code = (error as { code?: string }).code;
-    if (!code || !RECOVERABLE_DNS_ERRORS.includes(code)) {
+    if (code === 'SERVFAIL') {
+      logger.warn('SERVFAIL during multi DNS verification — possible DNSSEC or resolver failure', { record: method.record });
+    } else if (!code || !RECOVERABLE_DNS_ERRORS.includes(code)) {
+      // P1-FIX: Log unexpected errors so they are not silently masked as "record not found".
       logger.error(
         'Unexpected error in verifyDnsMulti',
         error instanceof Error ? error : new Error(String(error)),
@@ -194,9 +219,16 @@ export async function getDnsTxtRecords(domain: string): Promise<string[]> {
 
   try {
   const records = await withDnsTimeout(dns.resolveTxt(domain));
-  return records.flat();
+  // DNS-4-FIX P2: Cap TXT record count and value length to prevent memory exhaustion.
+  return records.flat().slice(0, MAX_TXT_RECORDS)
+    .filter(r => r.length <= MAX_TXT_RECORD_VALUE_LENGTH);
   } catch (error: unknown) {
   const dnsError = error as { code?: string };
+  if (dnsError.code === 'SERVFAIL') {
+    // DNS-3-FIX P1: Log SERVFAIL separately — may indicate DNSSEC or resolver failure.
+    logger.warn('SERVFAIL during DNS TXT records lookup — possible DNSSEC or resolver failure', { domain });
+    return [];
+  }
   if (dnsError.code && RECOVERABLE_DNS_ERRORS.includes(dnsError.code)) {
     return [];
   }

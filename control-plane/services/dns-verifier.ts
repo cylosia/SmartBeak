@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 import { getLogger } from '@kernel/logger';
 import { getRedis } from '@kernel/redis';
 
@@ -113,7 +115,10 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
 
   // Sanitize domain (basic validation)
   const sanitizedDomain = trimmedDomain.toLowerCase();
-  if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(sanitizedDomain)) {
+  // DNSV-1-FIX P1: Original regex allowed '..' (consecutive dots) because the
+  // character class [a-z0-9.-]* permits any sequence of those chars. RFC 1035
+  // §2.3.1 forbids empty labels (which consecutive dots produce).
+  if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(sanitizedDomain) || sanitizedDomain.includes('..')) {
     logger.error('Domain format validation failed', new Error('Validation failed'), {
     domain: sanitizedDomain,
     });
@@ -127,8 +132,11 @@ export async function verifyDnsSafe(domain: string, token: string): Promise<bool
     throw new DnsValidationError('Invalid domain: potential security risk');
   }
 
-  // Check negative cache to prevent DNS quota exhaustion from repeated failed lookups
-  const cacheKey = `${DNS_CACHE_PREFIX}${sanitizedDomain}`;
+  // DNSV-2-FIX P2: Key the negative cache on domain + token hash, not domain alone.
+  // A domain-only key means org A's failed verification poisons the cache for org B's
+  // valid (different) token on the same domain — effectively a cross-org DoS.
+  const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex').substring(0, 16);
+  const cacheKey = `${DNS_CACHE_PREFIX}${sanitizedDomain}:${tokenHash}`;
   try {
     const redis = await getRedis();
     const cached = await redis.get(cacheKey);

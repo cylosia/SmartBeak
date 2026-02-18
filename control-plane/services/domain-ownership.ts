@@ -69,7 +69,10 @@ export class DomainOwnershipService {
       [toOrg, domainId, fromOrg]
     );
 
-    if (rowCount === 0) {
+    // CROSS-2-FIX P0: pg types rowCount as `number | null` (null for non-DML).
+    // `null === 0` is false — without this guard a failed UPDATE silently commits,
+    // recording a phantom transfer in the audit log.
+    if ((rowCount ?? 0) === 0) {
       throw new DomainError('Transfer failed - domain may have been modified concurrently', 'TRANSFER_FAILED');
     }
 
@@ -118,7 +121,9 @@ export class DomainOwnershipService {
   const client = await this.pool.connect();
 
   try {
-    await client.query('BEGIN');
+    // OWN-3-FIX P2: Use REPEATABLE READ so the ownership SELECT and subsequent
+    // callback operations see a consistent snapshot, preventing TOCTOU races.
+    await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ');
     await client.query('SET LOCAL statement_timeout = $1', [30000]); // 30 seconds
 
     // Verify ownership within transaction

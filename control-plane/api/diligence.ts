@@ -2,6 +2,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { rateLimit } from '../services/rate-limit';
+
 export interface TokenParams {
   token: string;
 }
@@ -21,16 +23,38 @@ interface FastifyInstanceWithDb extends FastifyInstance {
   };
 }
 
+// D-1-FIX P1: Type guard replaces the unsafe `as FastifyInstanceWithDb` cast.
+// Without a runtime check, a missing db plugin produces a TypeError deep inside a
+// route handler rather than a clear startup error.
+function hasDb(app: FastifyInstance): app is FastifyInstanceWithDb {
+  return 'db' in app
+    && app['db'] !== null
+    && typeof app['db'] === 'object'
+    && 'diligence_sessions' in (app['db'] as object)
+    && 'query' in (app['db'] as object);
+}
+
 export async function registerDiligenceRoutes(app: FastifyInstance) {
-  const appWithDb = app as FastifyInstanceWithDb;
+  // D-1-FIX P1: Fail fast at registration time rather than at first request.
+  if (!hasDb(app)) {
+    throw new Error(
+      'registerDiligenceRoutes: FastifyInstance is missing the db plugin. ' +
+      'Ensure the db plugin is registered before calling registerDiligenceRoutes.'
+    );
+  }
+  const appWithDb = app;
 
   app.get('/diligence/:token/overview', async (req, reply) => {
   // H02-FIX: Validate token via Zod instead of unsafe `as` cast
   const parseResult = TokenParamSchema.safeParse(req.params);
   if (!parseResult.success) return reply.code(400).send({ error: 'Invalid token format' });
   const { token } = parseResult.data;
+  // D-4-FIX P2: Rate limit per IP to prevent token brute-force / quota exhaustion.
+  try { rateLimit(req.ip ?? 'unknown', 30, 'diligence'); } catch { return reply.code(429).send({ error: 'Too many requests' }); }
   const session = await appWithDb.db.diligence_sessions.findActiveByToken(token);
-  if (!session) return reply.code(403).send({ error: 'Invalid or expired token' });
+  // D-6-FIX P2: Return 404 instead of 403 — a 403 leaks that the token is valid-format
+  // but expired/revoked, revealing information about the token space to attackers.
+  if (!session) return reply.code(404).send({ error: 'Not found' });
 
   // H03-FIX: Enumerate columns explicitly instead of SELECT *
   const snapshot = await appWithDb.db.query(
@@ -47,8 +71,10 @@ export async function registerDiligenceRoutes(app: FastifyInstance) {
   const parseResult = TokenParamSchema.safeParse(req.params);
   if (!parseResult.success) return reply.code(400).send({ error: 'Invalid token format' });
   const { token } = parseResult.data;
+  // D-4-FIX P2 / D-6-FIX P2: Rate limit + 404 (see overview handler for rationale).
+  try { rateLimit(req.ip ?? 'unknown', 30, 'diligence'); } catch { return reply.code(429).send({ error: 'Too many requests' }); }
   const session = await appWithDb.db.diligence_sessions.findActiveByToken(token);
-  if (!session) return reply.code(403).send({ error: 'Invalid or expired token' });
+  if (!session) return reply.code(404).send({ error: 'Not found' });
 
   // M02-FIX: Run queries in parallel instead of sequentially
   const [intents, aiArtifacts] = await Promise.all([
@@ -73,8 +99,10 @@ export async function registerDiligenceRoutes(app: FastifyInstance) {
   const parseResult = TokenParamSchema.safeParse(req.params);
   if (!parseResult.success) return reply.code(400).send({ error: 'Invalid token format' });
   const { token } = parseResult.data;
+  // D-4-FIX P2 / D-6-FIX P2: Rate limit + 404 (see overview handler for rationale).
+  try { rateLimit(req.ip ?? 'unknown', 30, 'diligence'); } catch { return reply.code(429).send({ error: 'Too many requests' }); }
   const session = await appWithDb.db.diligence_sessions.findActiveByToken(token);
-  if (!session) return reply.code(403).send({ error: 'Invalid or expired token' });
+  if (!session) return reply.code(404).send({ error: 'Not found' });
 
   // C02-FIX: Add WHERE domain_id filter to prevent cross-tenant data leakage
   // Previously returned ALL orgs' affiliate data without filtering
