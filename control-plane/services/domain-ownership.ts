@@ -100,8 +100,8 @@ export class DomainOwnershipService {
     await client.query('COMMIT');
     return; // Success - exit the retry loop
     } catch (error) {
-    await client.query('ROLLBACK').catch((rollbackError: Error) => {
-      logger.error('Rollback failed', rollbackError);
+    await client.query('ROLLBACK').catch((rollbackError: unknown) => {
+      logger.error('Rollback failed', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
     });
 
     // P1-13 FIX: Retry on serialization failures (PostgreSQL error code 40001)

@@ -116,7 +116,7 @@ class InMemoryDLQStorage implements DLQStorage {
     this.messages.delete(id);
     this.timestamps.delete(id);
     this.retryCallbacks.delete(id);
-    logger.info(`DLQ message ${id} expired and removed`);
+    logger.info('DLQ message expired and removed', { id });
     }
 
     if (expiredIds.length > 0) {
@@ -170,7 +170,8 @@ class InMemoryDLQStorage implements DLQStorage {
   this.timestamps.set(message.id, Date.now());
   // P0-FIX: No per-item setTimeout - cleanup is handled by interval
 
-  logger.warn(`Message ${message.id} moved to DLQ`, {
+  logger.warn('Message moved to DLQ', {
+    id: message.id,
     originalQueue: message.originalQueue,
     attempts: message.attempts,
     error: message["error"]["message"],
@@ -303,10 +304,14 @@ function sanitizeError(error: Error): { message: string; stack?: string | undefi
   sanitizedStack = stackLines.slice(0, 10).join('\n');
   }
 
+  // Use a runtime type guard rather than an unsafe `as` cast: `code` is not
+  // declared on the base Error type, and the cast silently accepts any runtime
+  // value. The guard verifies the property exists AND is a string before use.
+  const rawCode = 'code' in error ? (error as Record<string, unknown>)['code'] : undefined;
   return {
   message: sanitizedMessage,
   stack: sanitizedStack,
-  code: (error as Error & { code?: string | undefined }).code,
+  code: typeof rawCode === 'string' ? rawCode : undefined,
   };
 }
 
@@ -427,7 +432,7 @@ export const DLQ = {
     const batch = messages.slice(i, i + BATCH_SIZE);
     await Promise.all(batch.map(msg => storage.delete(msg.id)));
   }
-  logger.info(`DLQ purged, removed ${messages.length} messages`);
+  logger.info('DLQ purge completed', { removedCount: messages.length });
   },
 };
 

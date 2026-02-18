@@ -29,8 +29,30 @@ export class SqlMigrationSource implements Knex.MigrationSource<string> {
   }
 
   getMigration(migration: string): Knex.Migration {
+    // Defense-in-depth: reject names with path-traversal sequences. In normal
+    // operation getMigration() is called by Knex with values produced by
+    // getMigrations() (which reads the real directory), so this only fires if
+    // someone calls getMigration() directly with crafted input.
+    if (!/^[a-zA-Z0-9_-]+$/.test(migration)) {
+      throw new Error(
+        `Invalid migration name: "${migration}". ` +
+        `Migration names must contain only alphanumeric characters, underscores, and hyphens.`
+      );
+    }
+
     const upPath = join(SQL_DIR, `${migration}.up.sql`);
     const downPath = join(SQL_DIR, `${migration}.down.sql`);
+
+    // Eagerly validate that the forward migration file exists with a clear message.
+    // readFileSync throws a cryptic ENOENT; an explicit check mirrors the downPath
+    // check below and makes CI failures easier to diagnose.
+    if (!existsSync(upPath)) {
+      throw new Error(
+        `Migration file missing: ${upPath}. ` +
+        `Every migration must have a corresponding .up.sql file.`
+      );
+    }
+
     const upSql = readFileSync(upPath, 'utf8');
 
     // P2-FIX: Eagerly validate that the rollback file exists when the migration
