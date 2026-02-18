@@ -32,8 +32,10 @@ export class GscAdapter implements KeywordIngestionAdapter {
   private readonly metrics: MetricsCollector;
 
   constructor(credentials?: GSCCredentials) {
-  const clientId = credentials?.clientId || process.env['GSC_CLIENT_ID'] || '';
-  const clientSecret = credentials?.clientSecret || process.env['GSC_CLIENT_SECRET'] || '';
+  // P1-1 FIX: use ?? not || so an explicitly-passed '' doesn't silently fall
+  // through to the env var and use a different credential than the caller intended.
+  const clientId = credentials?.clientId ?? process.env['GSC_CLIENT_ID'] ?? '';
+  const clientSecret = credentials?.clientSecret ?? process.env['GSC_CLIENT_SECRET'] ?? '';
 
   if (!clientId || !clientSecret) {
     throw new Error('GSC_CLIENT_ID and GSC_CLIENT_SECRET are required');
@@ -42,7 +44,7 @@ export class GscAdapter implements KeywordIngestionAdapter {
   this.auth = new google.auth.OAuth2(
     clientId,
     clientSecret,
-    credentials?.redirectUri || process.env['GSC_REDIRECT_URI'] || ''
+    credentials?.redirectUri ?? process.env['GSC_REDIRECT_URI'] ?? ''
   );
 
   if (credentials?.refreshToken) {
@@ -80,6 +82,10 @@ export class GscAdapter implements KeywordIngestionAdapter {
   if (!tokens.access_token || tokens.expiry_date == null) {
     throw new Error('Invalid token response from Google: missing access_token or expiry_date');
   }
+  // P1-2 FIX: apply credentials to this.auth so subsequent API calls on this instance
+  // are authenticated. Without this, callers who call exchangeCode() and then fetch()
+  // on the same adapter instance receive authentication errors.
+  this.auth.setCredentials(tokens);
   return {
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token ?? undefined,
@@ -91,6 +97,8 @@ export class GscAdapter implements KeywordIngestionAdapter {
   * Set refresh token for API calls
   */
   setRefreshToken(refreshToken: string): void {
+  // P2-15 FIX: validate before setting — empty string would silently clear credentials
+  validateNonEmptyString(refreshToken, 'refreshToken');
   this.auth.setCredentials({ refresh_token: refreshToken });
   }
 
@@ -101,8 +109,6 @@ export class GscAdapter implements KeywordIngestionAdapter {
   const context = createRequestContext('GscAdapter', 'fetch');
 
   validateNonEmptyString(domain, 'domain');
-
-  this.logger.info('Fetching keywords from GSC', context, { domain, days });
 
   const startTime = Date.now();
 
@@ -116,14 +122,22 @@ export class GscAdapter implements KeywordIngestionAdapter {
     siteUrl = `${siteUrl}/`;
     }
 
+    // P1-4 FIX: log the normalised siteUrl, not the raw domain — the raw domain
+    // could contain embedded credentials (e.g. https://user:pass@internal.corp/)
+    // which must not appear in log aggregation.
+    this.logger.info('Fetching keywords from GSC', context, { siteUrl, days });
+
     // Calculate date range
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
     const requestBody: searchconsole_v1.Schema$SearchAnalyticsQueryRequest = {
-    startDate: startDate.toISOString().split('T')[0] as string,
-    endDate: endDate.toISOString().split('T')[0] as string,
+    // P2-1 FIX: use .slice(0, 10) instead of .split('T')[0] — toISOString()
+    // always returns 'YYYY-MM-DDTHH:mm:ss.sssZ' so slice is safe and avoids
+    // suppressing noUncheckedIndexedAccess with an 'as string' cast.
+    startDate: startDate.toISOString().slice(0, 10),
+    endDate: endDate.toISOString().slice(0, 10),
     dimensions: ['query'],
     rowLimit: 1000,
     aggregationType: 'auto',
@@ -147,24 +161,32 @@ export class GscAdapter implements KeywordIngestionAdapter {
     }
     const rows = response.data.rows || [];
 
-    const suggestions = rows.map((row): KeywordSuggestion => {
-    const query = row.keys?.[0] || '';
+    const suggestions = rows
+    .map((row): KeywordSuggestion => {
+    // P1-6 FIX: use ?? not || for the keyword so we can filter empty strings below.
+    const query = row.keys?.[0] ?? '';
     return {
-    keyword: query,
-    metrics: {
-    clicks: row.clicks || 0,
-    impressions: row.impressions || 0,
-    ctr: row.ctr || 0,
-    position: row.position || 0,
-    source: 'gsc',
-    fetchedAt: new Date().toISOString(),
-    dateRange: {
-        start: requestBody.startDate as string,
-        end: requestBody.endDate as string,
-    },
-    },
+      keyword: query,
+      metrics: {
+      // P1-5 FIX: use ?? not || for numeric metrics. || treats 0 the same as
+      // null/undefined; ?? correctly distinguishes them. Also avoids NaN || 0 === 0
+      // silently masking data-quality issues from the GSC API.
+      clicks: row.clicks ?? 0,
+      impressions: row.impressions ?? 0,
+      ctr: row.ctr ?? 0,
+      position: row.position ?? 0,
+      source: 'gsc',
+      fetchedAt: new Date().toISOString(),
+      dateRange: {
+        start: requestBody['startDate'] as string,
+        end: requestBody['endDate'] as string,
+      },
+      },
     };
-    });
+    })
+    // P1-6 FIX: filter out empty-string keywords (rows with no keys array or
+    // empty first element) — they pollute DB tables and corrupt cardinality counts.
+    .filter(s => s.keyword !== '');
 
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('fetch', latency, true);
@@ -177,7 +199,20 @@ export class GscAdapter implements KeywordIngestionAdapter {
   } catch (error: unknown) {
     const latency = Date.now() - startTime;
     const errName = error instanceof Error ? error.name : 'Unknown';
-    const errCode = typeof error === 'object' && error !== null && 'code' in error ? (error as { code: unknown }).code : undefined;
+    // P1-3 FIX: googleapis (gaxios) places HTTP status on error.response.status,
+    // not on error.code. Comparing error.code === 401 was dead code — those branches
+    // never triggered, letting raw Google errors (potentially with OAuth token
+    // fragments in their message) propagate to callers unfiltered.
+    const httpStatus =
+    typeof error === 'object' && error !== null && 'response' in error
+      ? (error as { response?: { status?: number } }).response?.status
+      : undefined;
+    // Fall back to error.code for network-level errors (ECONNRESET etc.)
+    const errCode =
+    httpStatus ??
+    (typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code: unknown }).code
+      : undefined);
     const errMessage = error instanceof Error ? error.message : String(error);
     this.metrics.recordLatency('fetch', latency, false);
     this.metrics.recordError('fetch', errName);
@@ -206,7 +241,9 @@ export class GscAdapter implements KeywordIngestionAdapter {
 
   try {
     const response = await this.searchConsole.sites.list();
-    const sites = response.data.siteEntry?.map(entry => entry.siteUrl || '') || [];
+    // P2-3 FIX: flatMap with guard drops entries where siteUrl is null/undefined
+    // instead of emitting empty-string URLs that break downstream consumers.
+    const sites = response.data.siteEntry?.flatMap(entry => entry.siteUrl ? [entry.siteUrl] : []) ?? [];
 
     this.metrics.recordSuccess('listSites');
     return sites;
@@ -249,10 +286,20 @@ export class GscAdapter implements KeywordIngestionAdapter {
 }
 
 // Backward-compatible lazy-initialized singleton (avoids crash at import time if env vars are missing)
+// P1-7 NOTE: this singleton lives for the process lifetime. After secret rotation
+// (GSC_CLIENT_ID / GSC_CLIENT_SECRET), the singleton continues using stale credentials
+// until process restart. Call resetGscAdapter() immediately after rotating secrets,
+// or prefer passing explicit credentials to new GscAdapter(credentials) directly.
 let _gscAdapter: GscAdapter | undefined;
+
 export function getGscAdapter(): GscAdapter {
   if (!_gscAdapter) {
     _gscAdapter = new GscAdapter();
   }
   return _gscAdapter;
+}
+
+/** Reset the singleton so the next getGscAdapter() call picks up rotated credentials. */
+export function resetGscAdapter(): void {
+  _gscAdapter = undefined;
 }

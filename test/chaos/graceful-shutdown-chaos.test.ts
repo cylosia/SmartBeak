@@ -88,9 +88,20 @@ describe('Graceful Shutdown - Chaos Scenarios', () => {
   });
 
   describe('Handler Timeout', () => {
-    it('should timeout slow handlers at 30s and continue with others', async () => {
+    // P1-17 FIX: scope fake timer setup/teardown to this describe block via nested
+    // beforeEach/afterEach. Previously vi.useFakeTimers() was called inside the test
+    // body and vi.useRealTimers() appeared after assertions — if any assertion failed,
+    // the exception propagated past useRealTimers(), leaving all subsequent tests in
+    // the suite running with fake timers active (causing hangs and incorrect results).
+    beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
 
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should timeout slow handlers at 30s and continue with others', async () => {
       const executionLog: string[] = [];
 
       registerShutdownHandler(async () => {
@@ -116,8 +127,6 @@ describe('Graceful Shutdown - Chaos Scenarios', () => {
 
       expect(executionLog).toContain('fast-handler-done');
       expect(executionLog).toContain('another-fast-handler-done');
-
-      vi.useRealTimers();
     });
   });
 
