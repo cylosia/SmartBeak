@@ -132,13 +132,16 @@ interface CircuitState {
   failures: number;
   lastFailure: number;
   isOpen: boolean;
-  // P1-1 FIX: Track half-open state to allow exactly ONE probe request
-  isHalfOpen: boolean;
 }
 
-// P2-10 FIX: Sanitize header values to prevent CRLF injection
+// M4 FIX: Sanitize header keys AND values to prevent CRLF/null-byte injection.
+// Previously only values were sanitised; a crafted key could still inject headers.
 function sanitizeHeaderValue(value: string): string {
-  return value.replace(/[\r\n]/g, '');
+  return value.replace(/[\r\n\x00]/g, '');
+}
+
+function sanitizeHeaderKey(key: string): string {
+  return key.replace(/[\r\n\x00:]/g, '');
 }
 
 class EmailProviderWithCircuitBreaker implements EmailProvider {
@@ -146,8 +149,10 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
     failures: 0,
     lastFailure: 0,
     isOpen: false,
-    isHalfOpen: false,
   };
+  // P1-1 FIX: Store the in-flight probe as a Promise so concurrent requests
+  // all wait on the SAME probe rather than each racing through the half-open check.
+  private probePromise: Promise<{ id: string; provider: string }> | null = null;
 
   constructor(
     public name: string,
@@ -156,6 +161,25 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
     private resetTimeoutMs: number = 60000
   ) {}
 
+  private async executeProbe(message: EmailMessage): Promise<{ id: string; provider: string }> {
+    try {
+      const result = await this.provider.send(message);
+      // Probe succeeded — close circuit
+      this.circuit.failures = 0;
+      this.circuit.isOpen = false;
+      logger.info(`Circuit closed for ${this.name} after successful probe`);
+      emitCounter('email.circuit_state_change', 1, { provider: this.name, state: 'closed' });
+      return result;
+    } catch (error) {
+      // Probe failed — keep circuit open, reset timer
+      this.circuit.lastFailure = Date.now();
+      this.circuit.isOpen = true;
+      logger.error(`Circuit re-opened for ${this.name} after failed probe`);
+      emitCounter('email.circuit_state_change', 1, { provider: this.name, state: 'open' });
+      throw error;
+    }
+  }
+
   async send(message: EmailMessage): Promise<{ id: string; provider: string }> {
     // Check if circuit is open
     if (this.circuit.isOpen) {
@@ -163,13 +187,16 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
       if (timeSinceLastFailure < this.resetTimeoutMs) {
         throw new Error(`Circuit open for ${this.name}`);
       }
-      // P1-1 FIX: Transition to half-open state. Only one request should
-      // be allowed through as a probe. If another concurrent request arrives
-      // while already half-open, reject it to prevent flooding a recovering provider.
-      if (this.circuit.isHalfOpen) {
-        throw new Error(`Circuit half-open for ${this.name}, probe in progress`);
+      // P1-1 FIX: Atomic half-open via stored probePromise.
+      // All concurrent requests share the same probe; no two requests race through.
+      if (this.probePromise) {
+        return this.probePromise;
       }
-      this.circuit.isHalfOpen = true;
+      // This request becomes the probe
+      this.probePromise = this.executeProbe(message).finally(() => {
+        this.probePromise = null;
+      });
+      return this.probePromise;
     }
 
     // COMPLIANCE FIX (Finding 13): Inject List-Unsubscribe headers if provided
@@ -178,10 +205,10 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
     if (message.listUnsubscribe) {
       enrichedMessage.headers = {
         ...enrichedMessage.headers,
-        'List-Unsubscribe': sanitizeHeaderValue(message.listUnsubscribe),
+        [sanitizeHeaderKey('List-Unsubscribe')]: sanitizeHeaderValue(message.listUnsubscribe),
       };
       if (message.listUnsubscribePost) {
-        enrichedMessage.headers['List-Unsubscribe-Post'] = sanitizeHeaderValue(message.listUnsubscribePost);
+        enrichedMessage.headers[sanitizeHeaderKey('List-Unsubscribe-Post')] = sanitizeHeaderValue(message.listUnsubscribePost);
       }
     }
 
@@ -189,23 +216,18 @@ class EmailProviderWithCircuitBreaker implements EmailProvider {
       const result = await this.provider.send(enrichedMessage);
       // Success - reset failures and close circuit
       this.circuit.failures = 0;
-      // P1-1 FIX: Close circuit fully on successful probe
       this.circuit.isOpen = false;
-      this.circuit.isHalfOpen = false;
       return result;
     } catch (error) {
       // Failure - increment counter
       this.circuit.failures++;
       this.circuit.lastFailure = Date.now();
 
-      // P1-1 FIX: If half-open probe failed, re-open circuit immediately
-      if (this.circuit.isHalfOpen) {
-        this.circuit.isOpen = true;
-        this.circuit.isHalfOpen = false;
-        logger.error(`Circuit re-opened for ${this.name} after failed probe`);
-      } else if (this.circuit.failures >= this.failureThreshold) {
+      if (this.circuit.failures >= this.failureThreshold) {
         this.circuit.isOpen = true;
         logger.error(`Circuit opened for ${this.name} after ${this.circuit.failures} failures`);
+        // M15 FIX: Emit circuit-state metric so alerting can detect provider outages
+        emitCounter('email.circuit_state_change', 1, { provider: this.name, state: 'open' });
       }
 
       throw error;
@@ -355,8 +377,12 @@ export class FallbackEmailSender {
 
       // P2-8 FIX: Strip attachment content to prevent memory amplification
       // (Buffer serialization via JSON.stringify causes 4-5x expansion)
+      // P0-3 FIX: Mask PII before storing in Redis. The previous code stored raw
+      // email addresses in the Redis failed-queue, confirmed by the test at
+      // fallback.test.ts:146. A Redis breach or debug access would expose all
+      // customer addresses that ever had a delivery failure.
       const failedMessage = {
-        to: message.to,
+        to: maskEmail(message.to),
         from: message.from,
         subject: message.subject,
         text: message.text,

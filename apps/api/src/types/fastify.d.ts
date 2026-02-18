@@ -1,25 +1,26 @@
 
-
 /**
-* Centralized Fastify module augmentations
+ * Centralized Fastify module augmentations
+ */
 
-*/
+/** P1-9: Exhaustive role union — typos like 'owmner' or 'Admin' are caught at compile time */
+export type Role = 'owner' | 'admin' | 'editor' | 'viewer';
 
-// Auth context interface (Issue 8: Using 'roles' array consistently)
+// Auth context interface
 export interface AuthContext {
   userId: string;
   orgId: string;
   domainId?: string;
-  roles: string[];
+  roles: Role[];
 }
 
 declare module 'fastify' {
   export interface FastifyRequest {
-  auth?: AuthContext;
-  user?: {
-    id?: string | undefined;
-    orgId?: string | undefined;
-    stripeCustomerId?: string | undefined;
-  };
+    auth?: AuthContext;
+    user?: {
+      id?: string | undefined;
+      orgId?: string | undefined;
+      stripeCustomerId?: string | undefined;
+    };
   }
 }

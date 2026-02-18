@@ -9,7 +9,7 @@
  */
 
 import { parseBoolEnv } from './env';
-import { getLogger } from '../kernel/logger';
+import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('FeatureFlags');
 

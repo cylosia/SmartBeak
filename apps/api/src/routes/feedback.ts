@@ -5,6 +5,7 @@ import type { FastifyRequest } from 'fastify';
 import { getLogger } from '@kernel/logger';
 import { getAuthContext, logAuthEvent } from '@security/jwt';
 import { errors } from '@errors/responses';
+import { emitCounter } from '@kernel/metrics';
 
 const logger = getLogger('FeedbackService');
 
@@ -23,10 +24,21 @@ const FeedbackQuerySchema = z.object({
  * P1-2 FIX: Log auth failures for intrusion detection.
  */
 function verifyAuth(req: FastifyRequest) {
-  const result = getAuthContext(req.headers.authorization != null ? { authorization: req.headers.authorization } : {});
+  // P0-8 FIX: Fail fast before calling getAuthContext when the header is absent.
+  // Previously {} was passed, which could produce a partial/null context that
+  // slipped past the `!result` guard and let unauthenticated requests through.
+  if (!req.headers.authorization) {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+    logAuthEvent('auth_failure', {
+      ip,
+      userAgent: req.headers['user-agent'] || 'unknown',
+      path: '/feedback',
+    });
+    return null;
+  }
 
+  const result = getAuthContext({ authorization: req.headers.authorization });
   if (!result) {
-    // P1-2 FIX: Log failed auth attempts for intrusion detection
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     logAuthEvent('auth_failure', {
       ip,
@@ -39,14 +51,17 @@ function verifyAuth(req: FastifyRequest) {
   return { userId: result.userId, orgId: result.orgId };
 }
 
-async function canAccessDomain(userId: string, domainId: string, orgId: string) {
+async function canAccessDomain(userId: string, domainId: string, orgId: string): Promise<boolean> {
   try {
     const db = await getDb();
     const row = await db('domain_registry')
       .join('memberships', 'memberships.org_id', 'domain_registry.org_id')
       .where('domain_registry.domain_id', domainId)
-      .where('memberships.user_id', userId)
+      // P1-5 FIX: Explicit org_id guard on domain_registry prevents IDOR if
+      // the join condition is ever relaxed or the query is refactored.
       .where('domain_registry.org_id', orgId)
+      .where('memberships.user_id', userId)
+      .where('memberships.org_id', orgId)
       .select('memberships.role')
       .first();
     return !!row;
@@ -118,7 +133,11 @@ export async function feedbackRoutes(app: FastifyInstance) {
         },
         ip,
       }).catch((err: unknown) => {
+        // P1-11 FIX: Emit a counter so audit write failures surface on dashboards.
+        // A malicious actor can degrade the audit DB to erase access traces;
+        // this counter makes the degradation visible via alerting.
         logger.error('Audit event fire-and-forget failure', err instanceof Error ? err : new Error(String(err)));
+        emitCounter('audit.write_failure', 1, { action: 'feedback_list_accessed' });
       });
       // Return empty feedback data (placeholder for future implementation)
       // NOTE: When implementing, ALL queries MUST be scoped to orgScope

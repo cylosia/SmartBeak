@@ -50,6 +50,13 @@ vi.mock('@kernel/retry', () => ({
   withRetry: vi.fn(async (fn: () => Promise<unknown>) => fn()),
 }));
 
+// P1-12 FIX: Mock @security/ssrf to prevent live DNS lookups in CI.
+// Without this, validateUrlWithDns makes real DNS calls to graph.facebook.com,
+// making tests network-dependent and flaky in air-gapped environments.
+vi.mock('@security/ssrf', () => ({
+  validateUrlWithDns: vi.fn().mockResolvedValue({ allowed: true }),
+}));
+
 // Mock node-fetch
 vi.mock('node-fetch', () => ({
   default: vi.fn(),

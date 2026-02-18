@@ -7,6 +7,7 @@
  */
 
 import { PoolClient } from 'pg';
+import { DatabaseError } from '@errors';
 
 /**
  * Validate and store a fencing token before a write operation.
@@ -15,11 +16,12 @@ import { PoolClient } from 'pg';
  * Returns false if a newer token has already been recorded, meaning this
  * caller's lock has expired and another worker has taken over.
  *
- * @param client - The PoolClient within a transaction
+ * @param client - PoolClient with an open transaction (BEGIN already issued by caller)
  * @param resourceType - Type of resource being locked (e.g., 'publishing_job')
  * @param resourceId - ID of the specific resource
  * @param fencingToken - The fencing token from the distributed lock
  * @returns true if the token is valid (no newer write), false otherwise
+ * @throws DatabaseError if the query itself fails
  */
 export async function validateFencingToken(
   client: PoolClient,
@@ -27,6 +29,10 @@ export async function validateFencingToken(
   resourceId: string,
   fencingToken: number
 ): Promise<boolean> {
+  if (!resourceType || !resourceId) {
+    throw new Error('resourceType and resourceId must be non-empty strings');
+  }
+
   const { rowCount } = await client.query(
     `INSERT INTO fence_tokens (resource_type, resource_id, fence_token, updated_at)
      VALUES ($1, $2, $3, NOW())
@@ -35,5 +41,13 @@ export async function validateFencingToken(
      WHERE fence_tokens.fence_token < $3`,
     [resourceType, resourceId, fencingToken]
   );
-  return (rowCount ?? 0) > 0;
+
+  // M11: rowCount === null means the query did not execute at the driver level.
+  // Returning false would silently block a valid write; throw so the caller can
+  // detect the failure and retry rather than silently abandoning its work.
+  if (rowCount === null) {
+    throw new DatabaseError('validateFencingToken: query returned null rowCount');
+  }
+
+  return rowCount > 0;
 }

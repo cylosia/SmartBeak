@@ -176,7 +176,7 @@ function isRetryableError(error: unknown, options: RetryOptions): boolean {
   }
 
   // Check error message for retryable patterns
-  const message = error["message"].toLowerCase();
+  const message = error.message.toLowerCase();
   return (
     message.includes('timeout') ||
     message.includes('network') ||
@@ -197,7 +197,7 @@ function calculateDelay(attempt: number, baseDelayMs: number, maxDelayMs: number
   const cappedDelay = Math.min(exponentialDelay, maxDelayMs);
   // Add jitter (±25%) to prevent thundering herd
   const jitter = cappedDelay * 0.25 * (Math.random() * 2 - 1);
-  return Math.floor(cappedDelay + jitter);
+  return Math.max(0, Math.floor(cappedDelay + jitter));
 }
 
 // sleep() is now imported from @kernel/retry
@@ -223,15 +223,19 @@ function generateCacheKey(url: string, options: RequestInit): string {
       const authEntry = headers.find(([k]) => k.toLowerCase() === 'authorization' || k.toLowerCase() === 'cookie');
       rawAuth = authEntry ? authEntry[1] : '';
     } else {
-      const headerRecord = headers as Record<string, string>;
-      rawAuth = headerRecord['Authorization'] || headerRecord['authorization'] || headerRecord['Cookie'] || headerRecord['cookie'] || '';
+      // Normalise to lowercase so 'Authorization' and 'authorization' hash identically
+      const normHeaders: Record<string, string> = {};
+      Object.entries(headers as Record<string, string>).forEach(([k, v]) => {
+        normHeaders[k.toLowerCase()] = v;
+      });
+      rawAuth = normHeaders['authorization'] || normHeaders['cookie'] || '';
     }
   }
-  // P0-4 FIX: Hash the auth value so raw tokens never appear in cache keys.
-  // A truncated SHA-256 provides sufficient uniqueness for cache differentiation
-  // while preventing credential exposure in heap dumps or debug logs.
+  // P0-4 FIX: Use the FULL SHA-256 digest (64 chars / 256 bits).
+  // The previous .slice(0,16) truncated to 64 bits, making birthday collisions
+  // reachable in production at scale and leaking one user's response to another.
   const authKey = rawAuth
-    ? createHash('sha256').update(rawAuth).digest('hex').slice(0, 16)
+    ? createHash('sha256').update(rawAuth).digest('hex')
     : '';
   return `${method}:${url}:${body}:${authKey}`;
 }
@@ -354,7 +358,7 @@ export async function fetchWithRetry(
         const serverRetryAfter = lastError instanceof RetryableError ? lastError.retryAfterMs : undefined;
         const delayMs = serverRetryAfter ?? calculateDelay(attempt, retryOptions.baseDelayMs, retryOptions.maxDelayMs);
 
-        logger.warn(`Retry attempt ${attempt + 1}/${retryOptions.maxRetries} for ${url} after ${delayMs}ms: ${lastError["message"]}`);
+        logger.warn(`Retry attempt ${attempt + 1}/${retryOptions.maxRetries} after ${delayMs}ms`, { delayMs });
 
         if (retryOptions.onRetry) {
           retryOptions.onRetry(attempt + 1, lastError, delayMs);
@@ -384,11 +388,32 @@ export function makeRetryable<T extends (url: string, options?: RequestInit) => 
   fn: T,
   defaultOptions?: RetryOptions
 ): T {
+  // P1-6 FIX: Call fn (the wrapped function) inside fetchWithRetry so that
+  // any custom logic in fn (auth injection, logging, tracing) is preserved.
+  // Previously fn was ignored and fetchWithRetry was called directly.
   return (async (url: string, options?: RequestInit & { retry?: RetryOptions }): Promise<Response> => {
-  return fetchWithRetry(url, {
-    ...options,
-    retry: { ...defaultOptions, ...options?.retry },
-  });
+    const mergedOptions = {
+      ...options,
+      retry: { ...defaultOptions, ...options?.retry },
+    };
+    let attempt = 0;
+    const retryOptions = { ...DEFAULT_RETRY_OPTIONS, ...mergedOptions.retry };
+    let lastError: Error | undefined;
+    while (attempt <= retryOptions.maxRetries) {
+      try {
+        return await fn(url, mergedOptions);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt >= retryOptions.maxRetries || !isRetryableError(error, retryOptions)) {
+          throw lastError;
+        }
+        const delayMs = calculateDelay(attempt, retryOptions.baseDelayMs, retryOptions.maxDelayMs);
+        logger.warn(`makeRetryable: retry ${attempt + 1}/${retryOptions.maxRetries}`, { delayMs });
+        await sleep(delayMs);
+        attempt++;
+      }
+    }
+    throw lastError ?? new Error('makeRetryable: exhausted retries');
   }) as T;
 }
 

@@ -14,7 +14,8 @@ const FlagValueSchema = z.boolean();
 function validateFlagKey(key: unknown): string {
   const result = FlagKeySchema.safeParse(key);
   if (!result.success) {
-  throw new ValidationError(`Invalid flag key: ${result["error"].message}`);
+    // M10 FIX: Don't expose Zod's internal error message structure to callers.
+    throw new ValidationError('Invalid flag key: must be 1-100 alphanumeric/underscore/hyphen characters');
   }
   return result.data;
 }
@@ -22,7 +23,7 @@ function validateFlagKey(key: unknown): string {
 function validateFlagValue(value: unknown): boolean {
   const result = FlagValueSchema.safeParse(value);
   if (!result.success) {
-  throw new ValidationError(`Invalid flag value: ${result["error"].message}`);
+    throw new ValidationError('Invalid flag value: must be a boolean');
   }
   return result.data;
 }
@@ -31,13 +32,18 @@ export class FlagService {
   constructor(private pool: Pool) {}
 
   async isEnabled(key: string): Promise<boolean> {
-  const validatedKey = validateFlagKey(key);
+    const validatedKey = validateFlagKey(key);
 
-  const { rows } = await this.pool.query(
-    'SELECT value FROM system_flags WHERE key=$1',
-    [validatedKey]
-  );
-  return rows[0]?.value ?? false;
+    // P1-4 FIX: A hung DB would block the event loop indefinitely without this timeout.
+    const queryPromise = this.pool.query(
+      'SELECT value FROM system_flags WHERE key=$1',
+      [validatedKey]
+    );
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Flag query timeout after 5000ms')), 5000)
+    );
+    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
+    return rows[0]?.value ?? false;
   }
 
   async set(key: string, value: boolean): Promise<void> {

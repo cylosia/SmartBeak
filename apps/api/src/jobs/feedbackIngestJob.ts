@@ -77,11 +77,11 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   try {
   validatedInput = FeedbackIngestInputSchema.parse(payload);
   } catch (error) {
-  if (error instanceof Error) {
-    logger.error('Invalid feedback ingest payload: ' + (error instanceof Error ? error.message : String(error)));
-    throw new Error(`Validation failed: ${error["message"]}`);
-  }
-  throw error;
+    if (error instanceof Error) {
+      logger.error('Invalid feedback ingest payload', error);
+      throw new Error(`Validation failed: ${error.message}`);
+    }
+    throw error;
   }
 
   const { source, entities, orgId } = validatedInput;
@@ -92,7 +92,9 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   }
 
   addSpanAttributes({ 'ingest.source': source, 'ingest.entity_count': entities.length });
-  try { getBusinessKpis().recordIngestionAttempt(source); } catch { /* not initialized */ }
+  try { getBusinessKpis().recordIngestionAttempt(source); } catch (kpiErr) {
+    logger.warn('KPI not initialized; skipping recordIngestionAttempt', { error: kpiErr instanceof Error ? kpiErr.message : String(kpiErr) });
+  }
 
   logger.info('Starting feedback ingestion', {
   entityCount: entities.length,
@@ -105,8 +107,11 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   errors: [],
   };
 
-  // P0-FIX: Process entities with bounded concurrency to prevent resource exhaustion
-  const limit = pLimit(10);
+  // P1-7 FIX: Reduced from pLimit(10) to pLimit(3).
+  // Each entity processes 3 windows with up to 3 retries each = 9 DB operations per slot.
+  // 10 concurrent slots = 90 simultaneous DB ops, exhausting a default pool of 10 connections.
+  // 3 concurrent slots = ≤27 simultaneous DB ops, leaving headroom for other queries.
+  const limit = pLimit(3);
   const allItems = entities.map(entity => ({ entity, windows: WINDOWS }));
 
   const processResults = await Promise.all(
@@ -127,7 +132,7 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
             windows: windowResults,
           };
         } catch (err) {
-          const errorMessage = err instanceof Error ? `Entity ${entity.id}: ${err["message"]}` : `Entity ${entity.id}: Unknown error`;
+          const errorMessage = err instanceof Error ? `Entity ${entity.id}: ${err.message}` : `Entity ${entity.id}: Unknown error`;
           logger.error(`Failed to process entity ${entity.id}`, err instanceof Error ? err : new Error(String(err)));
           return {
             success: false,
@@ -168,7 +173,7 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   } catch (error) {
     if (error instanceof Error) {
     logger.error('Failed to store feedback metrics', error);
-    throw new Error(`Failed to store feedback metrics: ${error["message"]}`);
+    throw new Error(`Failed to store feedback metrics: ${error.message}`);
     }
     throw error;
   }
@@ -186,7 +191,9 @@ export async function feedbackIngestJob(payload: unknown): Promise<IngestResult>
   try {
     if (result.processed > 0) getBusinessKpis().recordIngestionSuccess(source, result.processed);
     if (result.failed > 0) getBusinessKpis().recordIngestionFailure(source, result.failed);
-  } catch { /* not initialized */ }
+  } catch (kpiErr) {
+    logger.warn('KPI not initialized; skipping ingestion metrics', { error: kpiErr instanceof Error ? kpiErr.message : String(kpiErr) });
+  }
 
   logger.info('Feedback ingestion completed', {
   processed: result.processed,
@@ -213,7 +220,7 @@ async function processEntityWindow(
     initialDelayMs: 1000,
     retryableErrors: ['ECONNREFUSED', 'ETIMEDOUT', 'rate limit', 'timeout'],
     onRetry: (error, attempt) => {
-      logger.warn(`Retry ${attempt} for entity ${entity.id}`, { error: error["message"] });
+      logger.warn(`Retry ${attempt} for entity ${entity.id}`, { error: error.message });
     },
     }
   );
@@ -280,8 +287,9 @@ async function storeFeedbackMetrics(
   const trx = await db.transaction();
 
   try {
-  // Set transaction timeout to prevent long-running queries
-  await trx.raw('SET LOCAL statement_timeout = ?', [30000]); // 30 seconds
+  // M1 FIX: PostgreSQL SET commands do not accept parameterized placeholders ($1/$?).
+  // Using a literal value here is correct; 30000 ms = 30 seconds.
+  await trx.raw('SET LOCAL statement_timeout = 30000');
 
   // P1-7 FIX: Batch all windows into a single INSERT ... SELECT * FROM UNNEST(...)
   // instead of N individual INSERTs. Reduces round-trips from O(n) to O(1).
@@ -294,18 +302,36 @@ async function storeFeedbackMetrics(
     const neutralCounts = windows.map(w => w.metrics.neutral);
     const orgIds = windows.map(() => orgId);
 
+    // M2 FIX: PostgreSQL UNNEST requires all arrays to have identical length.
+    // Validate before issuing the query to produce a clear error rather than
+    // a cryptic Postgres "arrays must have same length" failure.
+    const arrays = [entityIds, windowDays, metricCounts, positiveCounts, negativeCounts, neutralCounts, orgIds];
+    const lengths = new Set(arrays.map(a => a.length));
+    if (lengths.size !== 1) {
+      throw new Error(`UNNEST array length mismatch: ${JSON.stringify(arrays.map(a => a.length))}`);
+    }
+
+    // P0-2 FIX: ON CONFLICT now includes org_id. Without it, two orgs sharing
+    // an entity_id+window_days combination would silently overwrite each other's
+    // rows — cross-org data corruption with no error or constraint violation.
+    //
+    // M3 FIX: updated_at added to the INSERT column list. Previously the INSERT
+    // omitted updated_at, leaving first-insert rows with updated_at = NULL.
+    // Only the ON CONFLICT UPDATE path set updated_at = NOW(), creating an
+    // inconsistency between new and updated rows.
     await trx.raw(
     `INSERT INTO feedback_metrics (
       entity_id, window_days, metric_count, positive_count,
-      negative_count, neutral_count, org_id, created_at
+      negative_count, neutral_count, org_id, created_at, updated_at
     )
-    SELECT * FROM UNNEST(
+    SELECT t.entity_id, t.window_days, t.metric_count, t.positive_count,
+           t.negative_count, t.neutral_count, t.org_id, NOW(), NOW()
+    FROM UNNEST(
       ?::text[], ?::int[], ?::int[], ?::int[],
       ?::int[], ?::int[], ?::text[]
     ) AS t(entity_id, window_days, metric_count, positive_count,
-           negative_count, neutral_count, org_id),
-    LATERAL (SELECT NOW() AS created_at) ts
-    ON CONFLICT (entity_id, window_days)
+           negative_count, neutral_count, org_id)
+    ON CONFLICT (org_id, entity_id, window_days)
     DO UPDATE SET
       metric_count = EXCLUDED.metric_count,
       positive_count = EXCLUDED.positive_count,

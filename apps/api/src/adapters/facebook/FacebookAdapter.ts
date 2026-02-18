@@ -1,4 +1,6 @@
 import fetch, { Response as NodeFetchResponse } from 'node-fetch';
+import { validateUrlWithDns } from '@security/ssrf';
+import { apiConfig, timeoutConfig } from '@config';
 
 /**
  * Facebook Publishing Adapter
@@ -46,6 +48,13 @@ class ApiError extends Error {
 function validatePublishInput(pageId: string, message: string): { pageId: string; message: string } {
   if (!pageId || typeof pageId !== 'string' || pageId.trim().length === 0) {
     throw new Error('Page ID is required and must be a non-empty string');
+  }
+  // P0-6 FIX: Enforce numeric-only pageId to prevent path traversal.
+  // Without this, pageId='../me/accounts' normalises to /me/accounts/feed,
+  // hitting a different Graph API endpoint. The control-plane adapter had this
+  // guard; the apps/api copy did not.
+  if (!/^\d+$/.test(pageId.trim())) {
+    throw new Error('Page ID must be a numeric string (Facebook page ID format)');
   }
   if (!message || typeof message !== 'string') {
     throw new Error('Message is required and must be a string');
@@ -151,8 +160,8 @@ function isFacebookPaginatedResponse(data: unknown): data is FacebookPaginatedRe
 
 export class FacebookAdapter {
   private readonly accessToken: string;
-  private readonly baseUrl = 'https://graph.facebook.com/v19.0';
-  private readonly timeoutMs = 30000;
+  private readonly baseUrl: string;
+  private readonly timeoutMs: number;
 
   /**
    * Creates an instance of FacebookAdapter
@@ -164,6 +173,10 @@ export class FacebookAdapter {
       throw new Error('Facebook access token is required and must be a string');
     }
     this.accessToken = accessToken;
+    // M24 FIX: Use config rather than hardcoded URL so staging/prod environments
+    // can use different Graph API versions without a code change.
+    this.baseUrl = `${apiConfig.baseUrls.facebook}/${apiConfig.versions.facebook}`;
+    this.timeoutMs = timeoutConfig.long;
   }
 
   /**
@@ -177,10 +190,20 @@ export class FacebookAdapter {
   async publishPagePost(pageId: string, message: string): Promise<FacebookPostResponse> {
     // Validate inputs
     const validatedInput = validatePublishInput(pageId, message);
+
+    // P0-6 FIX: SSRF protection — validate the constructed URL against internal
+    // network ranges and DNS before making the request. The control-plane adapter
+    // had this; the apps/api copy did not.
+    const targetUrl = `${this.baseUrl}/${validatedInput.pageId}/feed`;
+    const ssrfCheck = await validateUrlWithDns(targetUrl);
+    if (!ssrfCheck.allowed) {
+      throw new Error(`SSRF protection: request to ${targetUrl} blocked — ${ssrfCheck.reason}`);
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await fetch(`${this.baseUrl}/${validatedInput.pageId}/feed`, {
+      const res = await fetch(targetUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -341,12 +364,17 @@ export class FacebookAdapter {
       `${this.baseUrl}/${endpoint}?limit=${limit}${fields ? `&fields=${fields}` : ''}`;
     let pageCount = 0;
 
-    while (url && pageCount < MAX_PAGINATION_PAGES) {
-      pageCount++;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    // P1-2 FIX: Single AbortController and timeout outside the loop.
+    // The previous code created one controller+timer per page; if an exception
+    // was thrown before clearTimeout, all prior pages' timers remained live,
+    // preventing process shutdown under high page counts.
+    const controller = new AbortController();
+    const loopTimeout = setTimeout(() => controller.abort(), this.timeoutMs * MAX_PAGINATION_PAGES);
 
-      try {
+    try {
+      while (url && pageCount < MAX_PAGINATION_PAGES) {
+        pageCount++;
+
         const res: NodeFetchResponse = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -367,18 +395,18 @@ export class FacebookAdapter {
 
         // Follow next page link if available
         url = rawData.paging?.next;
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error('Facebook paginated fetch request timed out');
-        }
-        // AUDIT FIX (Finding 4.1): Redact tokens from pagination errors
-        if (error instanceof Error && error.message.includes('access_token')) {
-          throw new Error(redactToken(error.message));
-        }
-        throw error;
-      } finally {
-        clearTimeout(timeout);
       }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Facebook paginated fetch request timed out');
+      }
+      // AUDIT FIX (Finding 4.1): Redact tokens from pagination errors
+      if (error instanceof Error && error.message.includes('access_token')) {
+        throw new Error(redactToken(error.message));
+      }
+      throw error;
+    } finally {
+      clearTimeout(loopTimeout);
     }
 
     return allItems;
