@@ -1,5 +1,8 @@
 import dns from 'dns/promises';
 import crypto from 'crypto';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('kernel:dns');
 
 /**
 * DNS Verification Utilities
@@ -150,6 +153,17 @@ export async function verifyDnsMulti(
     results[method.record] = records.flat().includes(method["token"]);
     }
   } catch (error: unknown) {
+    // P1-FIX: Log unexpected errors (network failures, internal bugs) so they are
+    // not silently masked as "record not found". Only recoverable DNS errors (ENOTFOUND,
+    // SERVFAIL, etc.) are routine; everything else warrants an error log.
+    const code = (error as { code?: string }).code;
+    if (!code || !RECOVERABLE_DNS_ERRORS.includes(code)) {
+      logger.error(
+        'Unexpected error in verifyDnsMulti',
+        error instanceof Error ? error : new Error(String(error)),
+        { record: method.record }
+      );
+    }
     results[method.record] = false;
   }
   }

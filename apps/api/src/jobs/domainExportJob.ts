@@ -24,6 +24,9 @@ const EXPORT_SETTINGS_COLUMNS = ['id', 'domain_id', 'settings', 'created_at', 'u
 
 const DomainExportInputSchema = z.object({
   domainId: z.string().uuid(),
+  // P1-FIX: orgId required so the job can verify ownership at runtime.
+  // Without it any actor with Redis/worker access can export any tenant's data.
+  orgId: z.string().uuid(),
   format: z.enum(['json', 'csv', 'pdf', 'markdown']),
   includeContent: z.boolean(),
   includeAnalytics: z.boolean(),
@@ -92,7 +95,20 @@ export async function domainExportJob(input: DomainExportInput, job: Job | undef
 
   try {
   const validatedInput = DomainExportInputSchema.parse(input);
-  const { domainId, format, includeContent, includeAnalytics, includeSettings, dateRange, destination, } = validatedInput;
+  const { domainId, orgId, format, includeContent, includeAnalytics, includeSettings, dateRange, destination, } = validatedInput;
+
+  // P1-FIX: Verify the requesting org owns this domain before exporting any data.
+  // Jobs are enqueued via BullMQ (Redis). Without this check, any actor with Redis
+  // write access can enqueue a job for any domainId and exfiltrate all tenant data.
+  const { pool: authPool } = await dbModuleCache.get();
+  const { rows: ownerRows } = await authPool.query(
+    'SELECT 1 FROM domains WHERE id = $1 AND org_id = $2 AND archived_at IS NULL',
+    [domainId, orgId]
+  );
+  if (ownerRows.length === 0) {
+    throw new Error(`Export denied: org ${orgId} does not own domain ${domainId}`);
+  }
+
   logger.info('Starting domain export', {
     domainId,
     format,
@@ -180,7 +196,9 @@ async function exportContent(domainId: string, dateRange?: { start: string; end:
   }
   query += ` ORDER BY created_at DESC`;
 
-  params.push(String(limit));
+  // P1-FIX: Push integer, not String(limit). PostgreSQL accepts the string via
+  // implicit cast but the parameter type is semantically wrong and breaks static analysis.
+  params.push(limit);
   const limitIndex = params.length;
   query += ` LIMIT $${limitIndex}`;
   const { rows } = await withRetry(() => pool.query(query, params), { maxRetries: 3, initialDelayMs: 1000 });
@@ -415,17 +433,31 @@ async function saveExport(data: Buffer | string, destination: DomainExportInput[
     case 's3':
       // S3 upload would go here
       throw new Error('S3 export not yet implemented');
-    case 'download':
-      // Return data for direct download
+    case 'download': {
+      // P1-FIX: Do NOT embed base64 payload in download result. Encoding 10 MB of data
+      // as ~13 MB base64 and then storing it in a PostgreSQL TEXT column (via recordExport)
+      // causes WAL bloat, backup inflation, and query timeouts on the domain_exports table.
+      // Write to a temp file instead; the caller streams it to the client and deletes it.
+      const ALLOWED_EXPORT_BASE = process.env['EXPORT_BASE_DIR'] || '/tmp/exports';
+      const tmpPath = path.resolve(ALLOWED_EXPORT_BASE, `${exportId}.${format}`);
+      if (!tmpPath.startsWith(path.resolve(ALLOWED_EXPORT_BASE))) {
+        throw new Error('Invalid export path: path traversal detected');
+      }
+      const { writeFile, mkdir } = await import('fs/promises');
+      await mkdir(path.dirname(tmpPath), { recursive: true });
+      await writeFile(tmpPath, buffer);
       return {
         exportId,
         domainId,
         format,
         fileSize,
         recordCount: exportData?.content?.length || 0,
-        downloadUrl: `data:application/${format};base64,${buffer.toString('base64')}`,
+        // Return a server-side file path, not a data URI. The HTTP handler streams
+        // the file and deletes it after download. No base64 blob in the DB.
+        localPath: tmpPath,
         expiresAt: new Date(Date.now() + TIME.DAY), // 1 day
       };
+    }
     default:
       throw new Error(`Unknown destination type: ${destination.type}`);
   }

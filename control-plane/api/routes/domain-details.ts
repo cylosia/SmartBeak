@@ -19,12 +19,19 @@ const DomainIdParamSchema = z.object({
 export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
   // GET /domains/:id - Get detailed domain information
   app.get('/domains/:id', async (req, res) => {
-  const ctx = getAuthContext(req);
-  requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-
-  const { id } = DomainIdParamSchema.parse(req.params);
-
+  // P1-FIX: Auth + validation moved inside try so errors from requireRole and
+  // safeParse are caught and returned as structured responses. Previously, .parse()
+  // threw ZodError outside the try block, bypassing the sanitized error handler and
+  // potentially exposing schema internals or auth details in the raw Fastify 500.
   try {
+    const ctx = getAuthContext(req);
+    requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
+
+    const paramsResult = DomainIdParamSchema.safeParse(req.params);
+    if (!paramsResult.success) {
+      return errors.badRequest(res, 'Invalid domain ID');
+    }
+    const { id } = paramsResult.data;
     // Fetch domain details
     // C03-FIX: Removed dr.buyer_token from SELECT — secret must not be exposed to viewers
     // A02-FIX: Fixed d["id"] → d.id (invalid PostgreSQL array subscript syntax)

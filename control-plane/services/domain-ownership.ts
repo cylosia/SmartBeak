@@ -6,8 +6,14 @@ import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('domain-ownership');
 
-export interface DomainError extends Error {
-  code: string;
+// P2-FIX: Proper class instead of `new Error(...) as DomainError` cast.
+// The old cast produces objects where `instanceof DomainError` returns false,
+// silently breaking any caller that type-narrows on it.
+export class DomainError extends Error {
+  constructor(message: string, public readonly code: string) {
+    super(message);
+    this.name = 'DomainError';
+  }
 }
 
 export class DomainOwnershipService {
@@ -20,9 +26,7 @@ export class DomainOwnershipService {
     [domainId, orgId]
   );
   if (rows.length === 0) {
-    const error = new Error('Domain not owned by organization') as DomainError;
-    error.code = 'DOMAIN_NOT_OWNED';
-    throw error;
+    throw new DomainError('Domain not owned by organization', 'DOMAIN_NOT_OWNED');
   }
   }
 
@@ -48,18 +52,15 @@ export class DomainOwnershipService {
     );
 
     if (rows.length === 0) {
-      await client.query('ROLLBACK');
-      const error = new Error('Domain not found') as DomainError;
-      error.code = 'DOMAIN_NOT_FOUND';
-      throw error;
+      // P1-FIX: Do NOT call ROLLBACK explicitly before throwing. The catch block
+      // already calls ROLLBACK unconditionally. Calling it here causes a double ROLLBACK:
+      // PostgreSQL issues a warning, and it signals broken transaction state management.
+      throw new DomainError('Domain not found', 'DOMAIN_NOT_FOUND');
     }
 
     // Verify current ownership
     if (rows[0].org_id !== fromOrg) {
-      await client.query('ROLLBACK');
-      const error = new Error('Domain not owned by source organization') as DomainError;
-      error.code = 'DOMAIN_NOT_OWNED';
-      throw error;
+      throw new DomainError('Domain not owned by source organization', 'DOMAIN_NOT_OWNED');
     }
 
     // Perform transfer
@@ -69,10 +70,7 @@ export class DomainOwnershipService {
     );
 
     if (rowCount === 0) {
-      await client.query('ROLLBACK');
-      const error = new Error('Transfer failed - domain may have been modified') as DomainError;
-      error.code = 'TRANSFER_FAILED';
-      throw error;
+      throw new DomainError('Transfer failed - domain may have been modified concurrently', 'TRANSFER_FAILED');
     }
 
     // Log the transfer for audit
@@ -92,9 +90,13 @@ export class DomainOwnershipService {
     // P1-13 FIX: Retry on serialization failures (PostgreSQL error code 40001)
     const pgError = error as { code?: string };
     if (pgError.code === '40001' && attempt < MAX_SERIALIZATION_RETRIES - 1) {
-      logger.warn('Serialization failure during domain transfer, retrying', {
-      domainId, attempt: attempt + 1, maxRetries: MAX_SERIALIZATION_RETRIES,
+      // P2-FIX: Exponential backoff with jitter before retry. Without a delay, all
+      // concurrent retries collide again immediately, guaranteeing repeated failures.
+      const backoffMs = Math.min(100 * Math.pow(2, attempt), 1000) + Math.random() * 50;
+      logger.warn('Serialization failure during domain transfer, retrying with backoff', {
+      domainId, attempt: attempt + 1, maxRetries: MAX_SERIALIZATION_RETRIES, backoffMs,
       });
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
       continue;
     }
 

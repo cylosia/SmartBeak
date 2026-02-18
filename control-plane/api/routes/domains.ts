@@ -177,6 +177,11 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   const { name, domainType } = bodyResult.data;
 
+  // P1-FIX: Fetch the active plan BEFORE beginning the transaction so the external
+  // billing call does not hold the org_usage row lock. Holding that lock during an
+  // external DB call extends lock hold time and causes starvation under burst load.
+  const plan = await billing.getActivePlan(ctx["orgId"]);
+
   // SECURITY FIX: Use transaction with SELECT FOR UPDATE to prevent race condition
   const client = await pool.connect();
   try {
@@ -190,9 +195,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     );
 
     const currentDomainCount = usageRows[0]?.["domain_count"] ?? 0;
-
-    // Check quota within the same transaction
-    const plan = await billing.getActivePlan(ctx["orgId"]);
     const maxDomains = plan?.max_domains;
 
     if (maxDomains !== null && maxDomains !== undefined && currentDomainCount >= maxDomains) {
@@ -360,13 +362,22 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     updates.push(`updated_at = NOW()`);
-    values.push(domainId);
+    // P0-FIX: Include org_id in WHERE clause to prevent TOCTOU cross-tenant write.
+    // The pre-transaction ownership check (SELECT 1 ... WHERE id=$1 AND org_id=$2) is
+    // not atomic with this UPDATE. Without org_id here, a concurrent domain transfer
+    // between the check and the update would let the old owner modify the new owner's domain.
+    values.push(domainId, ctx["orgId"]);
 
     if (updates.length > 0) {
-    await client.query(
-    `UPDATE domains SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+    const result = await client.query(
+    `UPDATE domains SET ${updates.join(', ')} WHERE id = $${paramIndex} AND org_id = $${paramIndex + 1}`,
     values
     );
+    if (result.rowCount === 0) {
+      // Domain was transferred or deleted between the ownership check and this update
+      await client.query('ROLLBACK');
+      return errors.forbidden(res, 'Domain access lost during update — possible concurrent transfer');
+    }
     }
 
     // Update domain_registry if domainType provided
