@@ -156,6 +156,9 @@ export async function billingPaddleRoutes(app: FastifyInstance): Promise<void> {
     const session = await db.transaction(async (_trx: import('knex').Knex.Transaction) => {
       return createPaddleCheckout(orgId, planId);
     });
+    if (!session['url']) {
+      return reply.status(502).send({ error: 'Payment provider unavailable', code: 'PROVIDER_ERROR' });
+    }
     return reply.status(200).send(session);
     } catch (error) {
     billingPaddleLogger.error('Error in paddle checkout', error instanceof Error ? error : new Error(String(error)));

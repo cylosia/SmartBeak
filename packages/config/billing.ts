@@ -50,3 +50,28 @@ export function getStripeConfig(): { secretKey: string } {
     secretKey: billingConfig.stripeSecretKey,
   };
 }
+
+/**
+ * Assert all billing credentials are present and well-formed at startup.
+ * Call this once before the server starts accepting requests so that a
+ * misconfigured deployment fails immediately rather than mid-request.
+ */
+export function assertBillingConfig(): void {
+  const stripeKey = process.env['STRIPE_SECRET_KEY'];
+  if (!stripeKey) {
+    throw new Error('FATAL: STRIPE_SECRET_KEY environment variable is required');
+  }
+  if (!stripeKey.startsWith('sk_')) {
+    throw new Error('FATAL: STRIPE_SECRET_KEY must begin with "sk_" — check that it is a Stripe secret key, not a publishable key');
+  }
+
+  const paddleKey = process.env['PADDLE_API_KEY'];
+  if (!paddleKey) {
+    throw new Error('FATAL: PADDLE_API_KEY environment variable is required');
+  }
+
+  const jwtKey = process.env['JWT_KEY_1'];
+  if (!jwtKey) {
+    throw new Error('FATAL: JWT_KEY_1 environment variable is required');
+  }
+}

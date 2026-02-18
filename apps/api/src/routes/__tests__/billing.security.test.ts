@@ -9,6 +9,7 @@ import { billingInvoiceExportRoutes } from '../billingInvoiceExport';
 import { billingPaddleRoutes } from '../billingPaddle';
 import { billingStripeRoutes } from '../billingStripe';
 import { getDb } from '../../db';
+import { ErrorCodes } from '@errors';
 
 // Mock dependencies
 jest.mock('../../db');
@@ -107,7 +108,8 @@ describe('Billing Routes Security Tests', () => {
 
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
-      expect(body.code).toBe('ORG_MEMBERSHIP_REQUIRED');
+      expect(body.code).toBe(ErrorCodes.FORBIDDEN);
+      expect(body['requestId']).toBeDefined();
     });
 
     it('should skip membership check for user-level billing (no org)', async () => {
@@ -227,7 +229,8 @@ describe('Billing Routes Security Tests', () => {
 
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
-      expect(body.code).toBe('ORG_MEMBERSHIP_REQUIRED');
+      expect(body.code).toBe(ErrorCodes.FORBIDDEN);
+      expect(body['requestId']).toBeDefined();
     });
 
     it('should reject when userId is missing', async () => {
@@ -310,7 +313,8 @@ describe('Billing Routes Security Tests', () => {
 
       expect(response.statusCode).toBe(403);
       const body = JSON.parse(response.body);
-      expect(body.code).toBe('ORG_MEMBERSHIP_REQUIRED');
+      expect(body.code).toBe(ErrorCodes.FORBIDDEN);
+      expect(body['requestId']).toBeDefined();
     });
 
     it('should verify membership before generating CSRF token', async () => {

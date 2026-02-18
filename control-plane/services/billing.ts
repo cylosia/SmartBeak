@@ -173,6 +173,7 @@ export class BillingService {
 
     try {
     await client.query('BEGIN');
+    await client.query('SET LOCAL TRANSACTION ISOLATION LEVEL SERIALIZABLE');
     await client.query('SET LOCAL statement_timeout = $1', [60000]);
 
     const planResult = await client.query<Plan>(
@@ -194,9 +195,15 @@ export class BillingService {
     }
 
     const { customerId } = await this.stripe.createCustomer(orgId);
+    if (!customerId) {
+        throw new Error('Stripe customer creation returned no ID');
+    }
     stripeCustomerId = customerId;
 
     const { subscriptionId } = await this.stripe.createSubscription(customerId, planId);
+    if (!subscriptionId) {
+        throw new Error('Stripe subscription creation returned no ID');
+    }
     stripeSubscriptionId = subscriptionId;
 
     const dbSubscriptionId = randomUUID();

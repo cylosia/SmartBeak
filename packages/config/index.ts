@@ -164,6 +164,7 @@ export {
   billingConfig,
   getBillingConfig,
   getStripeConfig,
+  assertBillingConfig,
 } from './billing';
 
 // ============================================================================
