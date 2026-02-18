@@ -1,6 +1,7 @@
 
 // Valid onboarding steps
 import { Pool } from 'pg';
+import { ValidationError, ErrorCodes } from '@errors';
 
 const VALID_STEPS = ['profile', 'billing', 'team'] as const;
 export type OnboardingStep = typeof VALID_STEPS[number];
@@ -33,7 +34,10 @@ export class OnboardingService {
   */
   private validateStep(step: string): asserts step is OnboardingStep {
   if (!VALID_STEPS.includes(step as OnboardingStep)) {
-    throw new Error('Invalid step');
+    throw new ValidationError(
+      `Invalid onboarding step: "${step}". Must be one of: ${VALID_STEPS.join(', ')}`,
+      ErrorCodes.VALIDATION_ERROR
+    );
   }
   }
 

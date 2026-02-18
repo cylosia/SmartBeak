@@ -9,14 +9,11 @@ import { InviteService } from '../../services/invite-service';
 import { MembershipService } from '../../services/membership-service';
 import { OrgService } from '../../services/org-service';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, AuthContext } from '../../services/auth';
+import { requireRole, AuthError } from '../../services/auth';
 import { errors } from '@errors/responses';
+import type { AuthenticatedRequest } from '../types';
 
 const logger = getLogger('Orgs');
-
-export type AuthenticatedRequest = FastifyRequest & {
-  auth?: AuthContext | undefined;
-};
 
 // SECURITY FIX: Add Zod validation schema for org name
 const CreateOrgSchema = z.object({
@@ -71,8 +68,15 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     const { name } = bodyResult.data;
     return await orgs.createOrg(name, ctx.userId);
   } catch (error) {
+    if (error instanceof AuthError) {
+      return error.statusCode === 403
+        ? errors.forbidden(res)
+        : errors.unauthorized(res);
+    }
+    if (error instanceof Error && error.message === 'Rate limit exceeded') {
+      return errors.rateLimited(res, 60);
+    }
     logger.error('[orgs] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to create organization');
   }
   });
@@ -101,8 +105,15 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
 
     return await orgs.listMembers(id);
   } catch (error) {
+    if (error instanceof AuthError) {
+      return error.statusCode === 403
+        ? errors.forbidden(res)
+        : errors.unauthorized(res);
+    }
+    if (error instanceof Error && error.message === 'Rate limit exceeded') {
+      return errors.rateLimited(res, 60);
+    }
     logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to retrieve members');
   }
   });
@@ -137,8 +148,15 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     const { email, role } = bodyResult.data;
     return await invites.invite(id, email, role);
   } catch (error) {
+    if (error instanceof AuthError) {
+      return error.statusCode === 403
+        ? errors.forbidden(res)
+        : errors.unauthorized(res);
+    }
+    if (error instanceof Error && error.message === 'Rate limit exceeded') {
+      return errors.rateLimited(res, 60);
+    }
     logger.error('[orgs/:id/invite] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to send invite');
   }
   });
@@ -174,8 +192,15 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool) {
     await members.addMember(id, userId, role);
     return { ok: true };
   } catch (error) {
+    if (error instanceof AuthError) {
+      return error.statusCode === 403
+        ? errors.forbidden(res)
+        : errors.unauthorized(res);
+    }
+    if (error instanceof Error && error.message === 'Rate limit exceeded') {
+      return errors.rateLimited(res, 60);
+    }
     logger.error('[orgs/:id/members] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
     return errors.internal(res, 'Failed to add member');
   }
   });
