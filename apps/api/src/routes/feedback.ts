@@ -140,8 +140,10 @@ export async function feedbackRoutes(app: FastifyInstance) {
         emitCounter('audit.write_failure', 1, { action: 'feedback_list_accessed' });
       });
       // Return empty feedback data (placeholder for future implementation)
-      // NOTE: When implementing, ALL queries MUST be scoped to orgScope
-      return { data: [], orgId: orgScope };
+      // NOTE: When implementing, ALL queries MUST be scoped to orgScope.
+      // F-8 FIX: orgId is an internal identifier — omit it from the response
+      // body to avoid leaking the org's UUID to the client.
+      return { data: [] };
     }
     catch (error) {
       logger.error('Error processing feedback request', error as Error);
