@@ -428,7 +428,10 @@ function formatContentItemMarkdown(item: ContentItem) {
   return parts.join('\n');
 }
 async function saveExport(data: Buffer | string, destination: DomainExportInput['destination'], domainId: string, format: ExportFormat, exportData: ExportData) {
-  const exportId = `exp_${Date.now()}_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
+  // Issue-6-FIX P2: Use full 32-char UUID (without dashes) instead of the truncated
+  // 8-char substring. With 8 hex chars (~4 billion) and concurrent exports the birthday
+  // probability of collision within ~65k exports is ~1%. Full UUID is collision-proof.
+  const exportId = `exp_${Date.now()}_${randomUUID().replace(/-/g, '')}`;
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
   const fileSize = buffer.length;
   switch (destination.type) {
@@ -516,7 +519,9 @@ async function recordExport(domainId: string, result: ExportResult) {
 export interface ContentItem {
   id: string;
   title: string;
-  body: string;
+  // Issue-10-FIX P1: DB column body is nullable — typed as `string` was a type lie
+  // causing runtime errors when the field is NULL (e.g. draft content).
+  body: string | null;
   status: string;
   contentType: string;
   createdAt: Date;
@@ -564,7 +569,8 @@ export function registerDomainExportJob(scheduler: JobScheduler) {
     queue: EXPORT_QUEUE,
     priority: 'low',
     maxRetries: 3,
-    backoffType: 'fixed',
+    // Issue-9-FIX P2: Exponential backoff to avoid thundering herd on retry bursts.
+    backoffType: 'exponential',
     backoffDelay: 60000,
     timeout: 600000, // 10 minutes
   }, domainExportJob, DomainExportInputSchema);

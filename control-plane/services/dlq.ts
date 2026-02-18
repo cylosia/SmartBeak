@@ -51,16 +51,18 @@ export class SafeDLQService extends KernelDLQService {
   * @param error - Error that caused the failure
   * @param jobData - Original job data
   * @param retryCount - Number of retry attempts made
-  * @param orgId - Organization ID for tenant isolation (optional)
+  * @param orgId - Organization ID for tenant isolation (required)
   * @throws Error if recording fails
   */
+  // CDLQ-2-FIX P1: orgId is now required. An optional orgId allowed callers to omit it,
+  // bypassing tenant isolation and letting DLQ entries be recorded without an org boundary.
   async recordSafe(
   jobId: string,
   region: string,
   error: Error,
   jobData: Record<string, unknown>,
   retryCount: number,
-  orgId?: string
+  orgId: string
   ): Promise<void> {
   try {
     // Validate inputs
@@ -83,6 +85,12 @@ export class SafeDLQService extends KernelDLQService {
     logger["error"]('Invalid retryCount for DLQ record', new Error('Validation failed'), {
     });
     throw new Error('Invalid retryCount: must be a non-negative number');
+    }
+
+    // CDLQ-2-FIX P1: Validate the now-required orgId.
+    if (typeof orgId !== 'string' || orgId.length === 0) {
+    logger["error"]('Invalid orgId for DLQ record', new Error('Validation failed'), { orgId });
+    throw new Error('Invalid orgId: must be a non-empty string');
     }
 
     const sanitizedJobId = jobId.trim();

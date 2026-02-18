@@ -481,6 +481,9 @@ export async function closeConnection(): Promise<void> {
   };
   // P0-FIX: Use getDb() to ensure lazy initialization and check if initialized
   const instance = dbInstance;
+  // FIX: Null out dbInstance before destroying so any concurrent getDb() call
+  // after shutdown creates a fresh pool rather than returning the destroyed one.
+  dbInstance = null;
   if (instance) {
     promises.push(withShutdownTimeout(
       instance.destroy(),

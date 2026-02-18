@@ -62,7 +62,10 @@ export interface DLQStorage {
   dequeue(id: string): Promise<DLQMessage | null>;
   peek(limit: number): Promise<DLQMessage[]>;
   delete(id: string): Promise<void>;
-  retry(id: string): Promise<void>;
+  // DLQ-6-FIX P1: Returns true if the message was found and its callback invoked,
+  // false if no message or no callback exists. Callers can no longer silently
+  // ignore a no-op retry on a non-existent or callback-less message.
+  retry(id: string): Promise<boolean>;
   count(): Promise<number>;
 }
 
@@ -135,25 +138,31 @@ class InMemoryDLQStorage implements DLQStorage {
   async enqueue(message: DLQMessage): Promise<void> {
 
   if (this.messages.size >= this.MAX_SIZE) {
-    // Remove oldest message (FIFO).
-    // BUG-DLQ-06 fix: skip eviction if the oldest message has an active retry
-    // callback — evicting it would silently drop an in-flight job with no trace.
-    const oldestKey = this.messages.keys().next().value;
-    if (oldestKey) {
-    if (this.retryCallbacks.has(oldestKey)) {
-      logger.warn('DLQ size limit reached; oldest message has active retry — skipping eviction', {
-      skippedId: oldestKey,
-      currentSize: this.messages.size,
+    // DLQ-3-FIX P1: Scan oldest-first for an entry without an active retry callback.
+    // The previous code skipped eviction when the OLDEST entry had an active retry but
+    // still enqueued the new message, allowing the map to grow unboundedly past MAX_SIZE.
+    let evictedKey: string | undefined;
+    for (const key of this.messages.keys()) {
+      if (!this.retryCallbacks.has(key)) {
+        evictedKey = key;
+        break;
+      }
+    }
+    if (evictedKey) {
+      this.messages.delete(evictedKey);
+      this.timestamps.delete(evictedKey);
+      logger.warn('DLQ size limit reached, removed oldest evictable message', {
+        removedId: evictedKey,
+        currentSize: this.messages.size,
       });
     } else {
-      this.messages.delete(oldestKey);
-      this.timestamps.delete(oldestKey);
-      this.retryCallbacks.delete(oldestKey);
-      logger.warn('DLQ size limit reached, removed oldest message', {
-      removedId: oldestKey,
-      currentSize: this.messages.size,
+      // All existing messages have active retry callbacks — drop the incoming message
+      // rather than silently exceeding MAX_SIZE and breaking the bounded-queue guarantee.
+      logger.error('DLQ size limit reached; all entries have active retries — dropping new message', {
+        droppedId: message.id,
+        currentSize: this.messages.size,
       });
-    }
+      return;
     }
   }
 
@@ -197,12 +206,15 @@ class InMemoryDLQStorage implements DLQStorage {
   this.timestamps.delete(id);
   }
 
-  async retry(id: string): Promise<void> {
+  async retry(id: string): Promise<boolean> {
   const callback = this.retryCallbacks.get(id);
-  if (callback) {
-    await callback();
-    await this.delete(id);
+  // DLQ-6-FIX P1: Return false when no callback registered instead of no-oping silently.
+  if (!callback) {
+    return false;
   }
+  await callback();
+  await this.delete(id);
+  return true;
   }
 
   async count(): Promise<number> {
@@ -258,7 +270,9 @@ function sanitizeError(error: Error): { message: string; stack?: string | undefi
   /bearer\s+\S+/gi,
   /api[_-]?key[=:]?\s*\S+/gi,
   /[a-zA-Z0-9_]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // email addresses
-  /\b[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b/g, // IP addresses (unrolled to avoid ReDoS)
+  /\b[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b/g, // IPv4 addresses (unrolled to avoid ReDoS)
+  // DLQ-7-FIX P2: Add IPv6 address redaction — previously only IPv4 was redacted.
+  /(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}/g, // IPv6 addresses
   ];
 
   let sanitizedMessage = error["message"];
@@ -380,8 +394,8 @@ export const DLQ = {
   return getDLQStorageInstance().peek(limit);
   },
 
-  async retry(id: string): Promise<void> {
-  await getDLQStorageInstance().retry(id);
+  async retry(id: string): Promise<boolean> {
+  return getDLQStorageInstance().retry(id);
   },
 
   async remove(id: string): Promise<void> {

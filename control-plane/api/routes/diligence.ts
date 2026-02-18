@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 
 import { rateLimit } from '../../services/rate-limit';
+import { getClientIp } from '@kernel/ip-utils';
 import { errors } from '@errors/responses';
 
 // H14-FIX: Use structured logger instead of console.error
@@ -26,13 +27,11 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
       return errors.badRequest(res, 'Invalid token format');
     }
     const { token } = tokenResult.data;
-    // P1-FIX: Key on client IP, not a shared literal. A global 'diligence' key means
-    // any single user can exhaust the limit for ALL buyers — trivial DoS during M&A.
-    const clientIp = String(
-      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
-      ?? req.ip
-      ?? 'unknown'
-    );
+    // RD-1-FIX P1: Use kernelGetClientIp instead of hand-rolled x-forwarded-for parsing.
+    // The hand-rolled version lacked spoofing protection: an attacker could set
+    // X-Forwarded-For: <victim-ip> to exhaust the victim's rate limit bucket.
+    // @kernel/ip-utils validates the header against trusted proxy ranges.
+    const clientIp = getClientIp(req);
     await rateLimit(`diligence:${clientIp}`, 30);
     // Validate token and get domain info
     const { rows } = await pool.query(
@@ -106,11 +105,8 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
       return errors.badRequest(res, 'Invalid token format');
     }
     const { token } = tokenResult.data;
-    const clientIp = String(
-      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
-      ?? req.ip
-      ?? 'unknown'
-    );
+    // RD-1-FIX P1: Use kernelGetClientIp (see overview handler for rationale).
+    const clientIp = getClientIp(req);
     await rateLimit(`diligence:${clientIp}`, 30);
     // Validate token
     const { rows } = await pool.query(
