@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { timingSafeEqual } from 'crypto';
 
 // ============================================================================
 // Reusable validators
@@ -19,6 +20,13 @@ const nonPlaceholder = z.string().min(3).refine(
 );
 
 const secretString = nonPlaceholder.pipe(z.string().min(10));
+
+// P0-SECURITY FIX: JWT signing keys require at minimum 32 bytes (256 bits) of entropy
+// to meet NIST SP 800-132 minimums for HS256. The generic secretString allows min(10)
+// which is catastrophically weak for HMAC signing keys.
+const jwtKey = nonPlaceholder.pipe(z.string().min(32, {
+  message: 'JWT signing key must be at least 32 characters (256 bits) for HS256',
+}));
 
 // ============================================================================
 // Environment schema
@@ -38,7 +46,11 @@ export const envSchema = z.object({
 
   // -- Auth (Clerk) --
   CLERK_SECRET_KEY: secretString,
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: secretString,
+  // P0-SECURITY FIX: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is a *public* key — it starts with
+  // "pk_" and is intentionally embedded in client bundles. Validating it as `secretString`
+  // (a) gives false confidence that it's secret, and (b) blocks legitimate pk_ values
+  // that start with recognisable prefixes. Use a weaker non-placeholder validator.
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: nonPlaceholder,
   CLERK_WEBHOOK_SECRET: secretString,
 
   // -- Payments --
@@ -46,9 +58,10 @@ export const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: secretString,
 
   // -- Security --
-  JWT_KEY_1: secretString,
-  JWT_KEY_2: secretString,
-  KEY_ENCRYPTION_SECRET: secretString,
+  // P0-SECURITY FIX: Use jwtKey validator (min 32 chars) instead of secretString (min 10).
+  JWT_KEY_1: jwtKey,
+  JWT_KEY_2: jwtKey,
+  KEY_ENCRYPTION_SECRET: jwtKey,
 
   // -- Optional services --
   REDIS_URL: z.string().min(1).optional(),
@@ -127,7 +140,14 @@ export const envSchema = z.object({
   NEXT_PUBLIC_ENABLE_BETA: z.enum(['true', 'false', '1', '0']).optional(),
   NEXT_PUBLIC_ENABLE_CHAT: z.enum(['true', 'false', '1', '0']).optional(),
 }).refine(
-  (data) => data.JWT_KEY_1 !== data.JWT_KEY_2,
+  (data) => {
+    // P0-SECURITY FIX: Use timing-safe comparison to prevent timing-oracle attacks.
+    // Plain `!==` leaks key length and content via timing differences.
+    const a = Buffer.from(data.JWT_KEY_1, 'utf8');
+    const b = Buffer.from(data.JWT_KEY_2, 'utf8');
+    if (a.length !== b.length) return true; // Different lengths → definitely different
+    return !timingSafeEqual(a, b);
+  },
   { message: 'JWT_KEY_1 and JWT_KEY_2 must be different values', path: ['JWT_KEY_2'] }
 );
 

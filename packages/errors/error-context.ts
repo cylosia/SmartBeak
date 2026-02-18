@@ -34,7 +34,11 @@ export function withContext(
     : ErrorCodes.INTERNAL_ERROR;
   const statusCode = (error instanceof AppError) ? error.statusCode : 500;
 
-  const message = `${context.operation} failed: ${cause.message}`;
+  // P1-SECURITY FIX: Do not embed cause.message in the user-visible message.
+  // cause.message may contain raw SQL errors, connection strings, or internal
+  // implementation details that must not reach clients. The cause chain is preserved
+  // for server-side logging via the Error `cause` property.
+  const message = `${context.operation} failed`;
 
   return new AppError(
     message,

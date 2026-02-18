@@ -46,13 +46,20 @@ export const EmailSchema = z.string()
   });
 
 /**
- * Validate email format
+ * Validate email format.
+ *
+ * P1-CORRECTNESS FIX: Normalize (lowercase + trim) before validating to match
+ * what `EmailSchema` does. Previously `isValidEmail` checked the raw string
+ * while `EmailSchema` applied `.toLowerCase().trim()` first, producing
+ * inconsistent accept/reject decisions for the same input address.
+ *
  * @param email - Email to validate
  * @returns True if valid email format
  */
 export function isValidEmail(email: string): boolean {
   if (typeof email !== 'string') return false;
-  return isValidEmailFormat(email) && email.length <= 255;
+  const normalized = email.toLowerCase().trim();
+  return normalized.length <= 255 && isValidEmailFormat(normalized);
 }
 
 /**

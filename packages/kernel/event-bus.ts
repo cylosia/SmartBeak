@@ -1,8 +1,15 @@
 import { DomainEventEnvelope } from '@packages/types/domain-event';
 import { trace, context as otelContext, SpanKind, SpanStatusCode } from '@opentelemetry/api';
 
+import { getLogger } from './logger';
 import { CircuitBreaker } from './retry';
 import { runSafely } from './safe-handler';
+
+// P1-SECURITY FIX: Use the kernel's structured logger as the default instead of
+// `console`. The kernel logger applies automatic PII redaction (tokens, passwords,
+// API keys, email addresses) via its redaction configuration. The `console` object
+// has no such redaction and would log event payloads containing PII in plain text.
+const DEFAULT_LOGGER = getLogger('EventBus');
 
 /**
 * Safe handler type for event handlers
@@ -20,12 +27,20 @@ export type SafeHandler<T> = {
 * Handles event subscription, unsubscription, and publishing
 * with safe handler execution and error isolation.
 */
+// P1-SECURITY FIX: Minimal structured logger interface that both the kernel logger
+// and the console object satisfy, allowing typed substitution without coupling to Console.
+export interface EventBusLogger {
+  info(message: string, ...args: unknown[]): void;
+  warn(message: string, ...args: unknown[]): void;
+  error(message: string, ...args: unknown[]): void;
+}
+
 export class EventBus {
   // P2-TYPE FIX: Replace `any` with `unknown` to enforce type safety on event handlers
   /** Map of event names to their handlers */
   private readonly handlers = new Map<string, SafeHandler<unknown>[]>();
   /** Logger instance for event bus operations */
-  private readonly logger: Console;
+  private readonly logger: EventBusLogger;
   /** Circuit breaker for event publishing protection */
   private readonly circuitBreaker: CircuitBreaker;
   /** P2-FIX: Maximum number of handlers per event to prevent memory leaks */
@@ -33,9 +48,9 @@ export class EventBus {
 
   /**
   * Create a new EventBus instance
-  * @param logger - Console logger instance (defaults to console)
+  * @param logger - Logger instance (defaults to the kernel PII-redacting logger)
   */
-  constructor(logger: Console = console) {
+  constructor(logger: EventBusLogger = DEFAULT_LOGGER) {
   this.logger = logger;
 
   this.circuitBreaker = new CircuitBreaker('EventBus', {
@@ -63,14 +78,14 @@ export class EventBus {
 
   // P2-FIX: Enforce maximum handlers per event to prevent memory leaks
   if (existing.length >= this.maxHandlersPerEvent) {
-    this.logger["error"](`[EventBus] Maximum handlers (${this.maxHandlersPerEvent}) reached for event ${eventName}. Rejecting subscription from ${plugin}`);
+    this.logger.error(`[EventBus] Maximum handlers (${this.maxHandlersPerEvent}) reached for event ${eventName}. Rejecting subscription from ${plugin}`);
     throw new Error(`Maximum handlers exceeded for event: ${eventName}`);
   }
 
   existing.push({ plugin, handle: handler as (e: DomainEventEnvelope<unknown>) => Promise<void> });
   this.handlers.set(eventName, existing);
 
-  this.logger.log(`[EventBus] Plugin ${plugin} subscribed to ${eventName}`);
+  this.logger.info(`[EventBus] Plugin ${plugin} subscribed to ${eventName}`);
   }
 
   /**
@@ -85,7 +100,7 @@ export class EventBus {
   const filtered = existing.filter(h => h.plugin !== plugin);
   this.handlers.set(eventName, filtered);
 
-  this.logger.log(`[EventBus] Plugin ${plugin} unsubscribed from ${eventName}`);
+  this.logger.info(`[EventBus] Plugin ${plugin} unsubscribed from ${eventName}`);
   }
 
   /**
@@ -149,7 +164,7 @@ export class EventBus {
         }
 
         return runSafely(plugin, event.name, () => handle(event), async (f) => {
-          this.logger["error"]('[EventBus] Plugin failure:', f);
+          this.logger.error('[EventBus] Plugin failure:', f);
         }).then(() => {
           handlerSpan?.setStatus({ code: SpanStatusCode.OK });
           handlerSpan?.end();
@@ -168,7 +183,7 @@ export class EventBus {
     // Log any failures
     results.forEach((result, index) => {
     if (result.status === 'rejected') {
-    this.logger["error"](
+    this.logger.error(
         `[EventBus] Handler ${handlers[index]!.plugin} failed for ${event.name}:`,
         result.reason
     );
@@ -187,7 +202,7 @@ export class EventBus {
     const err = error instanceof Error ? error : new Error(String(error));
     publishSpan?.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
     publishSpan?.recordException(err);
-    this.logger["error"](`[EventBus] Circuit breaker error for ${event.name}:`, err["message"]);
+    this.logger.error(`[EventBus] Circuit breaker error for ${event.name}:`, err.message);
     throw error;
   } finally {
     publishSpan?.end();

@@ -9,6 +9,15 @@ const tabs = [
   ['performance', 'Performance'],
 ] as const;
 
+// P1-SECURITY FIX: Validate that domainId is a well-formed UUID before embedding it
+// in an href. An unvalidated domainId could be "javascript:alert(1)" or
+// "/../admin/delete" — both result in dangerous or unintended navigation.
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isSafeUuid(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
 export function EmailAudienceTabs({ domainId, active }: { domainId: string; active: string }) {
   const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
@@ -34,6 +43,12 @@ export function EmailAudienceTabs({ domainId, active }: { domainId: string; acti
     },
     [active],
   );
+
+  // P1-SECURITY FIX: Refuse to render navigation links if domainId is not a valid UUID.
+  // Rendering with an invalid domainId would produce broken or dangerous hrefs.
+  if (!isSafeUuid(domainId)) {
+    return null;
+  }
 
   return (
   <div

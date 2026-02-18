@@ -34,6 +34,15 @@ const getEnv = getOptionalEnv;
 
 const logger = getLogger('EmailAdapter');
 
+/**
+ * P0-SECURITY FIX: Strip CRLF characters from email header values.
+ * A value containing "\r\n" injects additional SMTP headers (header injection),
+ * allowing an attacker to add arbitrary Bcc recipients or override the From address.
+ */
+function stripCrlf(value: string): string {
+  return value.replace(/[\r\n]/g, '');
+}
+
 /** Email provider types - MEDIUM FIX I8: Add enum validation */
 export type EmailProvider = 'ses' | 'smtp' | 'sendgrid' | 'postmark';
 
@@ -123,13 +132,31 @@ export class EmailAdapter implements DeliveryAdapter {
   * @param config - Partial email configuration
   */
   constructor(config?: Partial<EmailConfig>) {
-    // P2-CORRECTNESS FIX: Spread config FIRST, then apply defaults only for missing fields.
-    // Previously, the spread came AFTER defaults, overwriting them with raw config values.
+    // P1-SECURITY FIX: Prevent prototype pollution via spread of untrusted config objects.
+    // `{ ...(config as Partial<EmailConfig>) }` would copy __proto__ if set on config.
+    // Explicitly pick only the known EmailConfig fields instead.
+    const safeConfig: Partial<EmailConfig> = {
+      provider: config?.provider,
+      awsAccessKeyId: config?.awsAccessKeyId,
+      awsSecretAccessKey: config?.awsSecretAccessKey,
+      awsRegion: config?.awsRegion,
+      smtpHost: config?.smtpHost,
+      smtpPort: config?.smtpPort,
+      smtpUser: config?.smtpUser,
+      smtpPass: config?.smtpPass,
+      smtpSecure: config?.smtpSecure,
+      sendgridApiKey: config?.sendgridApiKey,
+      postmarkToken: config?.postmarkToken,
+      fromEmail: config?.fromEmail,
+      fromName: config?.fromName,
+      replyTo: config?.replyTo,
+    };
+
     this.config = {
-      ...(config as Partial<EmailConfig>),
-      fromEmail: config?.fromEmail || getEnvWithDefault('EMAIL_FROM', DEFAULT_FROM_EMAIL),
-      fromName: config?.fromName || getEnvWithDefault('EMAIL_FROM_NAME', DEFAULT_FROM_NAME),
-      replyTo: config?.replyTo || getEnv('EMAIL_REPLY_TO') || undefined,
+      ...safeConfig,
+      fromEmail: safeConfig.fromEmail || getEnvWithDefault('EMAIL_FROM', DEFAULT_FROM_EMAIL),
+      fromName: safeConfig.fromName || getEnvWithDefault('EMAIL_FROM_NAME', DEFAULT_FROM_NAME),
+      replyTo: safeConfig.replyTo || getEnv('EMAIL_REPLY_TO') || undefined,
     } as EmailConfig;
 
     // Auto-detect provider from env vars
@@ -272,8 +299,10 @@ export class EmailAdapter implements DeliveryAdapter {
       return {
         success: true,
         attemptedAt,
-        // P2-SECURITY FIX: Use crypto.randomUUID() instead of Math.random() for unique IDs
-        deliveryId: `email_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`
+        // P1-SECURITY FIX: Use the full UUID (128-bit) as the delivery ID.
+        // The previous `.slice(0, 8)` truncated to 32 bits of entropy, making
+        // delivery IDs easily guessable and prone to collision under load.
+        deliveryId: `email_${Date.now()}_${crypto.randomUUID()}`
       };
     } catch (error) {
       return {
@@ -439,15 +468,27 @@ export class EmailAdapter implements DeliveryAdapter {
     }
     const client = this.sesClient;
 
+    // P0-SECURITY FIX: Strip CRLF from all header-injectable fields before use.
+    // fromName is user-controlled config and could contain "\r\nBcc: attacker@evil.com".
+    const safeFromName = stripCrlf(this.config.fromName ?? '');
+    const safeSubject = stripCrlf(payload.subject);
+    const toAddresses = (Array.isArray(payload.to) ? payload.to : [payload.to]).map(stripCrlf);
+    const ccAddresses = payload.cc
+      ? (Array.isArray(payload.cc) ? payload.cc : [payload.cc]).map(stripCrlf)
+      : undefined;
+    const bccAddresses = payload.bcc
+      ? (Array.isArray(payload.bcc) ? payload.bcc : [payload.bcc]).map(stripCrlf)
+      : undefined;
+
     const command = new SendEmailCommand({
-      Source: `${this.config.fromName} <${this.config.fromEmail}>`,
+      Source: `${safeFromName} <${this.config.fromEmail}>`,
       Destination: {
-        ToAddresses: Array.isArray(payload.to) ? payload.to : [payload.to],
-        CcAddresses: payload.cc ? (Array.isArray(payload.cc) ? payload.cc : [payload.cc]) : undefined,
-        BccAddresses: payload.bcc ? (Array.isArray(payload.bcc) ? payload.bcc : [payload.bcc]) : undefined,
+        ToAddresses: toAddresses,
+        CcAddresses: ccAddresses,
+        BccAddresses: bccAddresses,
       },
       Message: {
-        Subject: { Data: payload.subject },
+        Subject: { Data: safeSubject },
         Body: {
           Html: payload.html ? { Data: payload.html } : undefined,
           Text: payload.text ? { Data: payload.text } : undefined,
@@ -500,15 +541,20 @@ export class EmailAdapter implements DeliveryAdapter {
     const transporter = this.smtpTransporter;
 
     try {
+      // P0-SECURITY FIX: Strip CRLF from all header-injectable fields.
       await transporter.sendMail({
-        from: `${this.config.fromName} <${this.config.fromEmail}>`,
-        to: payload.to,
-        cc: payload.cc,
-        bcc: payload.bcc,
-        subject: payload.subject,
+        from: `${stripCrlf(this.config.fromName ?? '')} <${this.config.fromEmail}>`,
+        to: Array.isArray(payload.to) ? payload.to.map(stripCrlf) : stripCrlf(payload.to),
+        cc: payload.cc
+          ? (Array.isArray(payload.cc) ? payload.cc.map(stripCrlf) : stripCrlf(payload.cc))
+          : undefined,
+        bcc: payload.bcc
+          ? (Array.isArray(payload.bcc) ? payload.bcc.map(stripCrlf) : stripCrlf(payload.bcc))
+          : undefined,
+        subject: stripCrlf(payload.subject),
         html: payload.html,
         text: payload.text,
-        replyTo: this.config.replyTo,
+        replyTo: this.config.replyTo ? stripCrlf(this.config.replyTo) : undefined,
         attachments: payload.attachments,
       });
 
