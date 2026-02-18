@@ -51,6 +51,13 @@ export class BusinessKpiTracker {
     const c = this.ensureCounter(this.publishCounters, platform);
     c.successes++;
     c.timestamps.push(Date.now());
+    // Eagerly trim to prevent unbounded growth between evaluate() cycles.
+    // Without this, high publish rates cause the array to grow to millions
+    // of entries before the per-minute evaluate() trim runs.
+    if (c.timestamps.length > 10_000) {
+      const tenMinutesAgo = Date.now() - 10 * 60 * 1_000;
+      c.timestamps = c.timestamps.filter(t => t >= tenMinutesAgo);
+    }
   }
 
   recordPublishFailure(platform: string, reason: string): void {

@@ -106,6 +106,7 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
   });
   } catch (error) {
   logger.error('Failed to record audit event', error instanceof Error ? error : new Error(String(error)));
+  throw error;
   }
 }
 
@@ -144,7 +145,13 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     const rows = await db('content_roi_models')
     .join('content', 'content.id', 'content_roi_models.content_id')
     .where('content.domain_id', domain)
-    .select('content_roi_models.*');
+    .limit(10_000)
+    .select(
+      'content_roi_models.id',
+      'content_roi_models.content_id',
+      'content_roi_models.roi_value',
+      'content_roi_models.created_at',
+    );
     const validatedRows = rows.map(validateRoiRow);
 
     await recordAuditEvent({

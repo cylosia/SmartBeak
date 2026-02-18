@@ -1,6 +1,9 @@
 
 import { DomainEventEnvelope } from '@packages/types/domain-event';
 import { Queue } from 'bullmq';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('bullmq');
 
 // P0-FIX: Parse Redis connection from REDIS_URL. Without this, BullMQ defaults
 // to localhost:6379 which silently fails in production/Vercel environments.
@@ -36,8 +39,26 @@ function getRedisConnection(): { host: string; port: number; password?: string; 
 
 export const eventQueue = new Queue('events', {
   connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 2_000 },
+    removeOnComplete: { count: 1_000 },
+    removeOnFail: false,
+  },
+});
+
+eventQueue.on('failed', (job, err) => {
+  logger.error('Job permanently failed', {
+    jobId: job?.id,
+    jobName: job?.name,
+    err,
+  });
+});
+
+eventQueue.on('stalled', (jobId) => {
+  logger.warn('Job stalled', { jobId });
 });
 
 export async function enqueueEvent(event: DomainEventEnvelope<unknown>) {
-  await eventQueue.add(event.name, event, { attempts: 3 });
+  await eventQueue.add(event.name, event);
 }

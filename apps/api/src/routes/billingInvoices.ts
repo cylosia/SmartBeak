@@ -21,7 +21,7 @@ const stripe = new Stripe(stripeKey, {
 
 const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(10),
-  startingAfter: z.string().optional(),
+  startingAfter: z.string().regex(/^in_[A-Za-z0-9_-]+$/).optional(),
 });
 
 export type QueryType = z.infer<typeof QuerySchema>;

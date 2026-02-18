@@ -27,6 +27,7 @@ export function BulkPublishView({ drafts, onPublish }: BulkPublishViewProps) {
     <label key={d.id}>
       <input
       type='checkbox'
+      checked={selected.includes(d.id)}
       onChange={() => toggle(d.id)}
       />
       {d.title}

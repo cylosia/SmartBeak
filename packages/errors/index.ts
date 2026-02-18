@@ -99,6 +99,9 @@ export const ErrorCodes = {
   STRIPE_ERROR: 'STRIPE_ERROR',
   WEBHOOK_ERROR: 'WEBHOOK_ERROR',
   PAYMENT_ERROR: 'PAYMENT_ERROR',
+
+  // Batch Processing Errors
+  BATCH_PARTIAL_FAILURE: 'BATCH_PARTIAL_FAILURE',
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
@@ -345,6 +348,19 @@ export class PayloadTooLargeError extends AppError {
   details?: unknown
   ) {
   super(message, ErrorCodes.PAYLOAD_TOO_LARGE, 413, details);
+  }
+}
+
+export class BatchError extends AppError {
+  public readonly errors: ReadonlyArray<{ index: number; error: Error }>;
+
+  constructor(
+  message: string = 'Batch operation partially failed',
+  errors: Array<{ index: number; error: Error }> = [],
+  details?: unknown,
+  ) {
+  super(message, ErrorCodes.BATCH_PARTIAL_FAILURE, 500, details);
+  this.errors = errors;
   }
 }
 
@@ -673,6 +689,7 @@ export const {
   STRIPE_ERROR,
   WEBHOOK_ERROR,
   PAYMENT_ERROR,
+  BATCH_PARTIAL_FAILURE,
 } = ErrorCodes;
 
 export { withContext, type OperationContext } from './error-context';

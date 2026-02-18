@@ -9,7 +9,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { getPoolInstance, getConnectionMetrics, getBackpressureMetrics } from '@database/pool';
 import { registerShutdownHandler, getIsShuttingDown } from '@shutdown';
-import { validateEnv } from '@config';
+import { validateEnv, assertBillingConfig } from '@config';
 import { AppError, ErrorCodes, RateLimitError } from '@errors';
 import { errors as errHelpers } from '@errors/responses';
 import type { Pool } from 'pg';
@@ -33,6 +33,13 @@ try {
 } catch (error) {
   // Logger not available yet at this point - stderr is acceptable for startup failure
   process.stderr.write(`[startup] Environment validation failed: ${error instanceof Error ? error.message : error}\n`);
+  process.exit(1);
+}
+
+try {
+  assertBillingConfig();
+} catch (error) {
+  process.stderr.write(`[startup] Billing config validation failed: ${error instanceof Error ? error.message : error}\n`);
   process.exit(1);
 }
 

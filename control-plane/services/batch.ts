@@ -4,6 +4,7 @@
 
 // P2-FIX: Use @kernel alias instead of fragile relative path crossing package boundaries
 import { getLogger } from '@kernel/logger';
+import { BatchError } from '@errors';
 
 const logger = getLogger('BatchService');
 
@@ -157,12 +158,11 @@ export async function processInBatchesStrict<T>(
 
   // P1-FIX: If any errors occurred, throw aggregated error
   if (batchErrors.length > 0) {
-    const aggregatedError = new Error(
-    `Batch processing failed for ${batchErrors.length} items: ` +
-    batchErrors.map(e => `index ${e['index']}: ${e['error']['message']}`).join(', ')
+    throw new BatchError(
+    `Batch processing failed for ${batchErrors.length} item(s): ` +
+    batchErrors.map(e => `index ${e['index']}: ${e['error']['message']}`).join(', '),
+    batchErrors,
     );
-    (aggregatedError as Error & { errors: typeof batchErrors }).errors = batchErrors;
-    throw aggregatedError;
   }
 
   processedCount += batch.length;
