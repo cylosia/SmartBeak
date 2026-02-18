@@ -129,13 +129,18 @@ export class StructuredLogger {
     adapter: this.adapterName,
     operation: context.operation,
     durationMs: Date.now() - context.startTime,
+    // Previously `metadata` was accepted as a parameter but never written to
+    // the entry, silently dropping all structured log context from callers.
+    metadata,
   };
-  
+
   if (error) {
     entry.error = {
       message: error.message,
     };
-    if (error.stack !== undefined) {
+    // Stack traces reveal internal file paths and line numbers. Only include
+    // them in development; omit in production to reduce information leakage.
+    if (error.stack !== undefined && process.env['NODE_ENV'] === 'development') {
       entry.error.stack = error.stack;
     }
     const errorWithCode = error as { code?: string };
@@ -144,16 +149,18 @@ export class StructuredLogger {
     }
   }
 
-  // Log using structured logger
-  const serialized = JSON.stringify(entry);
+  // Pass the structured entry object directly to the logger rather than
+  // double-serialising it (JSON.stringify → string → new Error(string)).
+  // The previous approach caused the error message itself to be a JSON blob,
+  // making log aggregation and search significantly harder.
   if (level === 'error') {
-    logger.error(serialized, new Error(serialized));
+    logger.error(message, error ?? new Error(message), entry as Record<string, unknown>);
   } else if (level === 'warn') {
-    logger.warn(serialized);
+    logger.warn(message, entry as Record<string, unknown>);
   } else if (level === 'debug') {
-    logger.debug(serialized);
+    logger.debug(message, entry as Record<string, unknown>);
   } else {
-    logger.info(serialized);
+    logger.info(message, entry as Record<string, unknown>);
   }
   }
 

@@ -93,7 +93,7 @@ function buildRateLimitKey(identifier: string, namespace: string = 'global'): st
 * }
 * ```
 */
-export function rateLimit(identifier: string, limit?: number, namespace?: string): void {
+export function rateLimit(identifier: string, limit: number = DEFAULT_RATE_LIMIT, namespace?: string): void {
   const now = Date.now();
   // SECURITY FIX: Issue 3 - Add namespace prefix to prevent key collision attacks
   const key = buildRateLimitKey(identifier, namespace);

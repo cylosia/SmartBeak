@@ -207,7 +207,9 @@ export function rateLimitMiddleware(
     const tierLimits: Record<string, RateLimitConfig> = {
       strict: { tokensPerInterval: 10, intervalSeconds: 60, burstSize: 10 },
       standard: { tokensPerInterval: 60, intervalSeconds: 60, burstSize: 60 },
-      lenient: { tokensPerInterval: 1000, intervalSeconds: 60, burstSize: 100 },
+      // burstSize must be >= tokensPerInterval; otherwise burst becomes the
+      // effective cap and the stated rate limit of 1000 req/min is never reachable.
+      lenient: { tokensPerInterval: 1000, intervalSeconds: 60, burstSize: 1000 },
     };
 
     const tierConfig = tierLimits[tier] ?? tierLimits['standard']!;

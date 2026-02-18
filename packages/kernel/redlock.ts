@@ -77,17 +77,25 @@ export async function acquireLock(
   // Atomically: SET NX with PX expiration + INCR fencing token.
   // The fencing token is a monotonically increasing counter that allows
   // downstream systems to reject writes from stale lock holders.
+  //
+  // The fencing key TTL is set to FENCE_KEY_TTL_MULTIPLIER × the lock TTL so
+  // the counter survives multiple lock cycles (e.g. retries) but is eventually
+  // cleaned up automatically. Without an expiry the fence:* key accumulates
+  // forever in Redis for every unique resource ever locked.
+  const FENCE_KEY_TTL_MULTIPLIER = 100;
   const luaAcquire = `
     local acquired = redis.call("set", KEYS[1], ARGV[1], "PX", ARGV[2], "NX")
     if acquired then
       local token = redis.call("incr", KEYS[2])
+      local fenceTtl = tonumber(ARGV[2]) * tonumber(ARGV[3])
+      redis.call("pexpire", KEYS[2], fenceTtl)
       return token
     else
       return -1
     end
   `;
 
-  const result = await redis.eval(luaAcquire, 2, lockKey, fencingKey, lockValue, String(opts.ttl));
+  const result = await redis.eval(luaAcquire, 2, lockKey, fencingKey, lockValue, String(opts.ttl), String(FENCE_KEY_TTL_MULTIPLIER));
   const token = Number(result);
 
   if (token >= 0) {
@@ -118,9 +126,12 @@ export async function acquireLockWithRetry(
   for (let attempt = 0; attempt < opts.retryCount; attempt++) {
     const lock = await acquireLock(resource, opts);
     if (lock) return lock;
-    
-    // Wait before retry
-    await new Promise(resolve => setTimeout(resolve, opts.retryDelay));
+
+    // Add ±25% jitter to the retry delay to prevent thundering herd when
+    // multiple processes are waiting on the same lock simultaneously.
+    const jitter = opts.retryDelay * 0.25 * (Math.random() * 2 - 1);
+    const delay = Math.max(0, Math.floor(opts.retryDelay + jitter));
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
 
   return null;
