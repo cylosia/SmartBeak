@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, type KeyboardEvent } from 'react';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const tabs = [
   ['overview', 'Overview'],
   ['content', 'Content'],
@@ -18,6 +20,9 @@ const tabs = [
 ] as const;
 
 export function DomainTabs({ domainId, active }: { domainId: string; active: string }) {
+  // Reject non-UUID domainIds to prevent path-traversal / open-redirect via href construction.
+  if (!UUID_RE.test(domainId)) return null;
+
   const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
   const handleKeyDown = useCallback(

@@ -1,3 +1,7 @@
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('LinkedInOAuth');
+
 export const LINKEDIN_OAUTH_SCOPES = [
   'w_organization_social',
   'r_organization_social'
@@ -33,6 +37,13 @@ function validateOAuthParams(clientId: string, redirectUri: string, state: strin
 
 export function getLinkedInAuthUrl(clientId: string, redirectUri: string, state: string) {
   validateOAuthParams(clientId, redirectUri, state);
+  // Audit-log every OAuth initiation attempt with a partial clientId and a
+  // hash of the state so we can detect misuse without leaking the value.
+  logger.info('LinkedIn OAuth flow initiated', {
+    clientIdPrefix: clientId.slice(0, 4),
+    redirectUri,
+    stateLength: state.length,
+  });
   // P0-FIX: Include state parameter for CSRF protection
   const params = new URLSearchParams({
   response_type: 'code',

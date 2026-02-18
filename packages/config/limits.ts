@@ -22,6 +22,6 @@ export const resourceLimits = {
   /** Maximum payload size in bytes (10MB default, capped at 50MB) */
   maxPayloadSize: Math.min(parseIntEnv('MAX_PAYLOAD_SIZE', 10 * 1024 * 1024), 50 * 1024 * 1024),
 
-  /** Maximum file upload size in bytes (P2-FIX: reduced default from 100MB to 20MB, capped at 100MB) */
-  maxFileUploadSize: Math.min(parseIntEnv('MAX_FILE_UPLOAD_SIZE', 20 * 1024 * 1024), 100 * 1024 * 1024),
+  /** Maximum file upload size in bytes (20MB default, capped at 50MB to prevent storage/memory DoS) */
+  maxFileUploadSize: Math.min(parseIntEnv('MAX_FILE_UPLOAD_SIZE', 20 * 1024 * 1024), 50 * 1024 * 1024),
 } as const;

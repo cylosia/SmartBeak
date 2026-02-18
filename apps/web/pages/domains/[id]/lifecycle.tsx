@@ -9,10 +9,13 @@ interface DomainLifecycleProps {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default function DomainLifecycle({ domainId: _domainId }: DomainLifecycleProps) {
+export default function DomainLifecycle({ domainId }: DomainLifecycleProps) {
   return (
   <AppShell>
     <h1>Domain Lifecycle</h1>
+    <p>
+      Managing domain: <strong>{domainId}</strong>
+    </p>
     <p>Archive or transfer this domain. These actions are irreversible.</p>
     <button>Archive Domain</button>
     <button>Transfer Domain</button>

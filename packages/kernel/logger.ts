@@ -159,13 +159,14 @@ function redactSensitiveData(obj: Record<string, unknown> | undefined): Record<s
 * @param entry - Log entry to output
 */
 function consoleHandler(entry: LogEntry): void {
-  const { timestamp: _timestamp, level, message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
+  const { timestamp, level, message, service, requestId, correlationId, userId, orgId, traceId, duration, errorMessage, errorStack, metadata } = entry;
 
   // All logs go to stderr for structured logging; prevents stdout pollution for CLI tools
   const logFn = console["error"];
 
-  // Build structured log output
+  // Build structured log output — timestamp is the first field for easy log-tail reading
   const logOutput: Record<string, unknown> = {
+  timestamp,
   level: level.toUpperCase(),
   message,
   };
@@ -304,6 +305,7 @@ export function debug(message: string, metadata?: Record<string, unknown>): void
 * @param metadata - Additional metadata
 */
 export function info(message: string, metadata?: Record<string, unknown>): void {
+  if (!shouldLog('info')) return;
   const entry = createLogEntry('info', message, metadata);
   getHandlers().forEach(h => h(entry));
 }
@@ -314,6 +316,7 @@ export function info(message: string, metadata?: Record<string, unknown>): void 
 * @param metadata - Additional metadata
 */
 export function warn(message: string, metadata?: Record<string, unknown>): void {
+  if (!shouldLog('warn')) return;
   const entry = createLogEntry('warn', message, metadata);
   getHandlers().forEach(h => h(entry));
 }
@@ -325,6 +328,7 @@ export function warn(message: string, metadata?: Record<string, unknown>): void 
 * @param metadata - Additional metadata
 */
 export function error(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
+  if (!shouldLog('error')) return;
   const entry = createLogEntry('error', message, metadata);
   if (err) {
     entry.errorMessage = err["message"];
@@ -340,6 +344,7 @@ export function error(message: string, err?: Error | undefined, metadata?: Recor
 * @param metadata - Additional metadata
 */
 export function fatal(message: string, err?: Error | undefined, metadata?: Record<string, unknown>): void {
+  if (!shouldLog('fatal')) return;
   const entry = createLogEntry('fatal', message, metadata);
   if (err) {
     entry.errorMessage = err["message"];
@@ -398,7 +403,7 @@ export class Logger {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
-      message: `[${this["service"]}] ${message}`,
+      message,
       service: this["service"],
       metadata: { ...this.context, ...metadata },
     };

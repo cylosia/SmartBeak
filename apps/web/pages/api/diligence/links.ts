@@ -49,22 +49,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // P1-FIX: Wrap both queries in a transaction for consistent statistics
     await client.query('BEGIN');
 
-    // Get internal link statistics
+    // Get internal link statistics.
+    // Orphan detection is scoped to the domain: a page is an orphan only when
+    // no internal link from another page *within the same domain* targets it.
+    // CTE-based rewrite eliminates the prior correlated subquery that scanned
+    // the full links table once per page row (O(pages * links) → O(pages + links)).
+    // The link_count subquery is also domain-scoped to avoid cross-domain skew.
     const internalStats = await client.query(`
-      SELECT COUNT(DISTINCT p.id) as total_pages,
-      COUNT(DISTINCT CASE WHEN NOT EXISTS (
-      SELECT 1 FROM links l2 WHERE l2.target_id = p.id AND l2.is_external = false
-      ) THEN p.id END) as orphan_pages,
-      COUNT(DISTINCT CASE WHEN l.broken = true THEN l.id END) as broken_links,
-      COALESCE(AVG(link_counts.link_count), 0) as avg_links_per_page
-    FROM pages p
-    LEFT JOIN links l ON l.source_id = p.id
-    LEFT JOIN (
-      SELECT source_id, COUNT(*) as link_count
-      FROM links
-      GROUP BY source_id
-    ) link_counts ON link_counts.source_id = p.id
-    WHERE p.domain_id = $1
+      WITH domain_pages AS (
+        SELECT id FROM pages WHERE domain_id = $1
+      ),
+      internal_targets AS (
+        SELECT DISTINCT l2.target_id
+        FROM links l2
+        WHERE l2.source_id IN (SELECT id FROM domain_pages)
+          AND l2.is_external = false
+      ),
+      domain_link_counts AS (
+        SELECT source_id, COUNT(*) AS link_count
+        FROM links
+        WHERE source_id IN (SELECT id FROM domain_pages)
+        GROUP BY source_id
+      )
+      SELECT
+        COUNT(DISTINCT p.id) AS total_pages,
+        COUNT(DISTINCT CASE WHEN it.target_id IS NULL THEN p.id END) AS orphan_pages,
+        COUNT(DISTINCT CASE WHEN l.broken = true THEN l.id END) AS broken_links,
+        COALESCE(AVG(dlc.link_count), 0) AS avg_links_per_page
+      FROM pages p
+      LEFT JOIN links l ON l.source_id = p.id
+      LEFT JOIN internal_targets it ON it.target_id = p.id
+      LEFT JOIN domain_link_counts dlc ON dlc.source_id = p.id
+      WHERE p.domain_id = $1
     `, [domainId]);
 
     // Get external link statistics

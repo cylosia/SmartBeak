@@ -235,7 +235,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
       const container = getContainer();
       const monthly = updates.costLimits.monthly ?? 0;
       const daily = monthly > 0 ? monthly / 30 : 0;
-      container.costTracker.setBudget(ctx.orgId, daily, monthly);
+      await container.costTracker.setBudget(ctx.orgId, daily, monthly);
     } catch (syncErr) {
       logger.warn('[llm/preferences] Failed to sync budget to CostTracker', {
       error: syncErr instanceof Error ? syncErr.message : String(syncErr),

@@ -24,9 +24,11 @@ export class LRUCache<K, V> {
   private readonly ttlMs: number | undefined;
 
   constructor(options: LRUCacheOptions) {
-  // P2-FIX: Validate maxSize > 0 to prevent unbounded growth
   if (options.maxSize <= 0) {
     throw new Error(`LRUCache maxSize must be > 0, got ${options.maxSize}`);
+  }
+  if (options.ttlMs !== undefined && options.ttlMs <= 0) {
+    throw new Error(`LRUCache ttlMs must be > 0 or undefined, got ${options.ttlMs}`);
   }
   this.cache = new Map();
   this.maxSize = options.maxSize;
@@ -138,19 +140,27 @@ export class LRUCache<K, V> {
   }
 
   /**
-  * Returns an iterable of key-value pairs
+  * Returns an iterable of key-value pairs, skipping expired entries.
+  * Snapshots the cache at iteration start so concurrent modifications
+  * during iteration do not cause undefined behaviour.
   */
   *entries(): Generator<[K, V]> {
-  for (const [key, entry] of this.cache.entries()) {
+  const snapshot = Array.from(this.cache.entries());
+  const now = Date.now();
+  for (const [key, entry] of snapshot) {
+    if (this.ttlMs && now - entry.timestamp > this.ttlMs) continue;
     yield [key, entry.value];
   }
   }
 
   /**
-  * Returns an iterable of values
+  * Returns an iterable of values, skipping expired entries.
   */
   *values(): Generator<V> {
-  for (const entry of this.cache.values()) {
+  const snapshot = Array.from(this.cache.entries());
+  const now = Date.now();
+  for (const [, entry] of snapshot) {
+    if (this.ttlMs && now - entry.timestamp > this.ttlMs) continue;
     yield entry.value;
   }
   }
