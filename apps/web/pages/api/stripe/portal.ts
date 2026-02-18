@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 
 import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, validateMethod } from '../../../lib/auth';
@@ -66,8 +67,6 @@ function validateCSRFToken(req: NextApiRequest): boolean {
   }
 }
 
-import crypto from 'crypto';
-
 /**
  * Set CSRF token cookie
  * SECURITY FIX: Issue 13 - Generate and set CSRF token
@@ -110,9 +109,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { customerId, returnUrl } = req.body;
 
-    // In production, look up the customer ID from your database
-    // Based on the authenticated user's organization
-    const stripeCustomerId = customerId || req.body.customerId;
+    // customerId must be provided by the caller; ownership is verified below
+    const stripeCustomerId = customerId as string | undefined;
 
     // IDOR FIX: Verify this customer belongs to the user's org
     if (stripeCustomerId) {

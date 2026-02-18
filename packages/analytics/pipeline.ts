@@ -225,7 +225,7 @@ export class AnalyticsPipeline {
     ]
     );
   } catch (error) {
-    const errMsg = error instanceof Error ? error["message"] : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     process.stderr.write(`[${new Date().toISOString()}] [AnalyticsPipeline] Failed to flush keywords: ${errMsg}\n`);
     // Re-add items to buffer for retry
     this.buffer.keywords.unshift(...items);
@@ -267,7 +267,7 @@ export class AnalyticsPipeline {
     ]
     );
   } catch (error) {
-    const errMsg = error instanceof Error ? error["message"] : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     process.stderr.write(`[${new Date().toISOString()}] [AnalyticsPipeline] Failed to flush social: ${errMsg}\n`);
     this.buffer.social.unshift(...items);
   } finally {
@@ -306,7 +306,7 @@ export class AnalyticsPipeline {
     ]
     );
   } catch (error) {
-    const errMsg = error instanceof Error ? error["message"] : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     process.stderr.write(`[${new Date().toISOString()}] [AnalyticsPipeline] Failed to flush content: ${errMsg}\n`);
     this.buffer.content.unshift(...items);
   } finally {
@@ -441,7 +441,9 @@ export class AnalyticsPipeline {
     SUM(clicks) as value
     FROM keyword_metrics
     WHERE DATE(timestamp) = $1
-    GROUP BY DATE(timestamp), domain_id`,
+    GROUP BY DATE(timestamp), domain_id
+    ON CONFLICT (date, domain_id, metric_type, metric_name)
+    DO UPDATE SET value = EXCLUDED.value`,
     [dateStr]
   );
   }

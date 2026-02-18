@@ -33,7 +33,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
 
   app.get('/publishing/targets', async (req, res) => {
   try {
-    await rateLimit('publishing', 50, req, res);
+    await rateLimit('publishing', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor']);
 
@@ -52,7 +52,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
 
   app.post('/publishing/targets', async (req, res) => {
   try {
-    await rateLimit('publishing', 30, req, res);
+    await rateLimit('publishing', 30);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
 
@@ -63,7 +63,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
 
     const bodyResult = TargetBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-      return errors.validationFailed(res, bodyResult["error"].issues);
+      return errors.validationFailed(res, bodyResult.error.issues);
     }
 
     const { type, config } = bodyResult.data;
@@ -77,7 +77,7 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
 
   app.get('/publishing/jobs', async (req, res) => {
   try {
-    await rateLimit('publishing', 50, req, res);
+    await rateLimit('publishing', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor']);
 

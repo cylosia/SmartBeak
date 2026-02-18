@@ -118,7 +118,7 @@ export class PaaAdapter implements KeywordIngestionAdapter {
     const latency = Date.now() - startTime;
     this.metrics.recordLatency('fetchForKeyword', latency, false);
     this.metrics.recordError('fetchForKeyword', error instanceof Error ? error.name : 'Unknown');
-    this.logger["error"]('Failed to fetch PAA questions', context, error as Error);
+    this.logger.error('Failed to fetch PAA questions', context, error as Error);
     throw error;
   }
   }
@@ -326,16 +326,26 @@ export class PaaAdapter implements KeywordIngestionAdapter {
     }
     const forbidden = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254', '169.254.170.2'];
     const hostname = parsed.hostname.toLowerCase();
+    // Strip IPv6 brackets so "[::1]" becomes "::1" for the checks below.
+    const bare = hostname.startsWith('[') && hostname.endsWith(']')
+      ? hostname.slice(1, -1)
+      : hostname;
     if (
-      forbidden.includes(hostname) ||
+      forbidden.includes(bare) ||
       // Block private IPv4 ranges
-      /^10\./.test(hostname) ||
-      /^192\.168\./.test(hostname) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
-      // Block link-local
-      /^169\.254\./.test(hostname)
+      /^10\./.test(bare) ||
+      /^192\.168\./.test(bare) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(bare) ||
+      // Block link-local IPv4
+      /^169\.254\./.test(bare) ||
+      // Block IPv6 loopback, link-local, ULA (fc00::/7), and IPv4-mapped private
+      /^::1$/.test(bare) ||
+      /^fe[89ab][0-9a-f]:/i.test(bare) ||   // fe80::/10 link-local
+      /^fc[0-9a-f]{2}:/i.test(bare) ||        // fc00::/7 ULA
+      /^fd[0-9a-f]{2}:/i.test(bare) ||        // fd00::/8 ULA
+      /^::ffff:(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|169\.254\.)/i.test(bare)  // IPv4-mapped private
     ) {
-      throw new Error(`CUSTOM_SERP_ENDPOINT points to a private/reserved address: ${hostname}`);
+      throw new Error(`CUSTOM_SERP_ENDPOINT points to a private/reserved address: ${bare}`);
     }
   } catch (e) {
     throw new Error(`Invalid CUSTOM_SERP_ENDPOINT: ${e instanceof Error ? e.message : String(e)}`);
