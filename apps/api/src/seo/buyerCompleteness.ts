@@ -17,7 +17,7 @@ function validateInput(input: unknown): SeoCompletenessInput {
   const result = SeoCompletenessInputSchema.safeParse(input);
 
   if (!result.success) {
-  const errors = result.error.issues.map(e => `${e.path.join('.')}: ${e["message"]}`).join(', ');
+  const errors = result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
   throw new Error(`Invalid SEO completeness input: ${errors}`);
   }
 
@@ -41,7 +41,9 @@ function readSeoEnv(key: string, defaultVal: number): number {
   if (raw === undefined || raw === null || raw === '') return defaultVal;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) {
-    throw new Error(`${key} must be a non-negative finite number, got: "${raw}"`);
+    // P2-FIX: Do not include the raw env var value in the error message — it
+    // may propagate to logs/clients and expose configuration internals.
+    throw new Error(`${key} must be a non-negative finite number`);
   }
   return n;
 }

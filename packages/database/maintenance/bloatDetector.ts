@@ -9,6 +9,23 @@
 
 import type { Knex } from 'knex';
 import type { TableBloat, IndexUsageStats, MaintenanceResult } from './types';
+import { getLogger } from '@kernel/logger';
+
+const logger = getLogger('bloatDetector');
+
+// P0-FIX (P0-5): Maximum wall-clock time for any single maintenance query.
+// Without this, a query on a very large pg_stat_user_indexes or db_table_bloat
+// view can run for hours, holding a connection and blocking the entire pool.
+const BLOAT_QUERY_TIMEOUT_MS = 30_000; // 30 seconds
+
+/**
+ * Set a session-level statement timeout and return it so callers can reset it.
+ * Using SET LOCAL scopes the timeout to the current transaction only (safer).
+ */
+async function withStatementTimeout<T>(knex: Knex, fn: () => Promise<T>): Promise<T> {
+  await knex.raw('SET LOCAL statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
+  return fn();
+}
 
 /**
  * Get bloat information for all tables
@@ -16,22 +33,24 @@ import type { TableBloat, IndexUsageStats, MaintenanceResult } from './types';
 export async function getTableBloat(
   knex: Knex
 ): Promise<TableBloat[]> {
-  const result = await knex.raw<{
-    rows: TableBloat[];
-  }>(`
-    SELECT 
-      schemaname,
-      table_name,
-      total_size,
-      table_size,
-      indexes_size,
-      n_live_tup,
-      n_dead_tup,
-      bloat_ratio,
-      status
-    FROM db_table_bloat
-  `);
-  return result.rows;
+  return knex.transaction(trx =>
+    withStatementTimeout(trx, async () => {
+      const result = await trx.raw<{ rows: TableBloat[] }>(`
+        SELECT
+          schemaname,
+          table_name,
+          total_size,
+          table_size,
+          indexes_size,
+          n_live_tup,
+          n_dead_tup,
+          bloat_ratio,
+          status
+        FROM db_table_bloat
+      `);
+      return result.rows;
+    })
+  );
 }
 
 /**
@@ -40,24 +59,26 @@ export async function getTableBloat(
 export async function getCriticalBloat(
   knex: Knex
 ): Promise<TableBloat[]> {
-  const result = await knex.raw<{
-    rows: TableBloat[];
-  }>(`
-    SELECT 
-      schemaname,
-      table_name,
-      total_size,
-      table_size,
-      indexes_size,
-      n_live_tup,
-      n_dead_tup,
-      bloat_ratio,
-      status
-    FROM db_table_bloat
-    WHERE status != 'OK'
-    ORDER BY bloat_ratio DESC
-  `);
-  return result.rows;
+  return knex.transaction(trx =>
+    withStatementTimeout(trx, async () => {
+      const result = await trx.raw<{ rows: TableBloat[] }>(`
+        SELECT
+          schemaname,
+          table_name,
+          total_size,
+          table_size,
+          indexes_size,
+          n_live_tup,
+          n_dead_tup,
+          bloat_ratio,
+          status
+        FROM db_table_bloat
+        WHERE status != 'OK'
+        ORDER BY bloat_ratio DESC
+      `);
+      return result.rows;
+    })
+  );
 }
 
 /**
@@ -67,23 +88,25 @@ export async function getTableBloatByName(
   knex: Knex,
   tableName: string
 ): Promise<TableBloat | null> {
-  const result = await knex.raw<{
-    rows: TableBloat[];
-  }>(`
-    SELECT 
-      schemaname,
-      table_name,
-      total_size,
-      table_size,
-      indexes_size,
-      n_live_tup,
-      n_dead_tup,
-      bloat_ratio,
-      status
-    FROM db_table_bloat
-    WHERE table_name = ?
-  `, [tableName]);
-  return result.rows[0] ?? null;
+  return knex.transaction(trx =>
+    withStatementTimeout(trx, async () => {
+      const result = await trx.raw<{ rows: TableBloat[] }>(`
+        SELECT
+          schemaname,
+          table_name,
+          total_size,
+          table_size,
+          indexes_size,
+          n_live_tup,
+          n_dead_tup,
+          bloat_ratio,
+          status
+        FROM db_table_bloat
+        WHERE table_name = ?
+      `, [tableName]);
+      return result.rows[0] ?? null;
+    })
+  );
 }
 
 /**
@@ -92,30 +115,34 @@ export async function getTableBloatByName(
 export async function getIndexUsageStats(
   knex: Knex
 ): Promise<IndexUsageStats[]> {
-  const result = await knex.raw<{
-    rows: Array<{
-      schemaname: string;
-      tablename: string;
-      indexname: string;
-      index_size: string;
-      idx_scan: number;
-      idx_tup_read: number;
-      idx_tup_fetch: number;
-    }>;
-  }>(`
-    SELECT 
-      schemaname,
-      tablename,
-      indexname,
-      pg_size_pretty(pg_relation_size(indexrelid)) as index_size,
-      idx_scan,
-      idx_tup_read,
-      idx_tup_fetch
-    FROM pg_stat_user_indexes
-    WHERE schemaname = 'public'
-    ORDER BY pg_relation_size(indexrelid) DESC
-  `);
-  return result.rows;
+  return knex.transaction(trx =>
+    withStatementTimeout(trx, async () => {
+      const result = await trx.raw<{
+        rows: Array<{
+          schemaname: string;
+          tablename: string;
+          indexname: string;
+          index_size: string;
+          idx_scan: number;
+          idx_tup_read: number;
+          idx_tup_fetch: number;
+        }>;
+      }>(`
+        SELECT
+          schemaname,
+          tablename,
+          indexname,
+          pg_size_pretty(pg_relation_size(indexrelid)) as index_size,
+          idx_scan,
+          idx_tup_read,
+          idx_tup_fetch
+        FROM pg_stat_user_indexes
+        WHERE schemaname = 'public'
+        ORDER BY pg_relation_size(indexrelid) DESC
+      `);
+      return result.rows;
+    })
+  );
 }
 
 /** Unused index info */
@@ -143,27 +170,29 @@ export async function getUnusedIndexes(
   // Use pg_stat_user_tables stats_reset as a proxy for table age, or filter on
   // last_idx_scan instead. Here we use the index scan count + pg_stat_user_tables
   // last_analyze time as a reasonable proxy for index staleness.
-  const result = await knex.raw<{
-    rows: UnusedIndexInfo[];
-  }>(`
-    SELECT
-      s.schemaname,
-      s.relname as tablename,
-      s.indexrelname as indexname,
-      pg_size_pretty(pg_relation_size(s.indexrelid)) as index_size,
-      s.idx_scan,
-      COALESCE(EXTRACT(DAY FROM NOW() - st.last_analyze), 0)::int as index_age_days
-    FROM pg_stat_user_indexes s
-    JOIN pg_index i ON s.indexrelid = i.indexrelid
-    LEFT JOIN pg_stat_user_tables st ON s.relid = st.relid
-    WHERE s.schemaname = 'public'
-      AND s.idx_scan = 0
-      AND NOT i.indisunique
-      AND NOT i.indisprimary
-      AND (st.last_analyze IS NULL OR st.last_analyze < NOW() - (? * INTERVAL '1 day'))
-    ORDER BY pg_relation_size(s.indexrelid) DESC
-  `, [minAgeDays]);
-  return result.rows;
+  return knex.transaction(trx =>
+    withStatementTimeout(trx, async () => {
+      const result = await trx.raw<{ rows: UnusedIndexInfo[] }>(`
+        SELECT
+          s.schemaname,
+          s.relname as tablename,
+          s.indexrelname as indexname,
+          pg_size_pretty(pg_relation_size(s.indexrelid)) as index_size,
+          s.idx_scan,
+          COALESCE(EXTRACT(DAY FROM NOW() - st.last_analyze), 0)::int as index_age_days
+        FROM pg_stat_user_indexes s
+        JOIN pg_index i ON s.indexrelid = i.indexrelid
+        LEFT JOIN pg_stat_user_tables st ON s.relid = st.relid
+        WHERE s.schemaname = 'public'
+          AND s.idx_scan = 0
+          AND NOT i.indisunique
+          AND NOT i.indisprimary
+          AND (st.last_analyze IS NULL OR st.last_analyze < NOW() - (? * INTERVAL '1 day'))
+        ORDER BY pg_relation_size(s.indexrelid) DESC
+      `, [minAgeDays]);
+      return result.rows;
+    })
+  );
 }
 
 /**
@@ -177,30 +206,34 @@ export async function getDuplicateIndexes(
   indexes: string;
   total_size: string;
 }>> {
-  const result = await knex.raw<{
-    rows: Array<{
-      tablename: string;
-      index_columns: string;
-      indexes: string;
-      total_size: string;
-    }>;
-  }>(`
-    SELECT 
-      t.tablename,
-      array_agg(a.attname ORDER BY array_position(i.indkey, a.attnum))::text as index_columns,
-      string_agg(i.relname, ', ') as indexes,
-      pg_size_pretty(sum(pg_relation_size(i.oid))) as total_size
-    FROM pg_index ix
-    JOIN pg_class i ON ix.indexrelid = i.oid
-    JOIN pg_class t ON ix.indrelid = t.oid
-    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
-    WHERE t.relkind = 'r'
-      AND NOT ix.indisunique
-      AND NOT ix.indisprimary
-    GROUP BY t.tablename, ix.indkey
-    HAVING count(*) > 1
-  `);
-  return result.rows;
+  return knex.transaction(trx =>
+    withStatementTimeout(trx, async () => {
+      const result = await trx.raw<{
+        rows: Array<{
+          tablename: string;
+          index_columns: string;
+          indexes: string;
+          total_size: string;
+        }>;
+      }>(`
+        SELECT
+          t.tablename,
+          array_agg(a.attname ORDER BY array_position(i.indkey, a.attnum))::text as index_columns,
+          string_agg(i.relname, ', ') as indexes,
+          pg_size_pretty(sum(pg_relation_size(i.oid))) as total_size
+        FROM pg_index ix
+        JOIN pg_class i ON ix.indexrelid = i.oid
+        JOIN pg_class t ON ix.indrelid = t.oid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        WHERE t.relkind = 'r'
+          AND NOT ix.indisunique
+          AND NOT ix.indisprimary
+        GROUP BY t.tablename, ix.indkey
+        HAVING count(*) > 1
+      `);
+      return result.rows;
+    })
+  );
 }
 
 /**
@@ -213,22 +246,27 @@ export async function reindexTable(
   const startTime = Date.now();
   
   try {
-    // Get indexes for table
-    const indexes = await knex.raw<{
-      rows: Array<{ indexname: string }>;
-    }>(`
-      SELECT indexname 
-      FROM pg_indexes 
-      WHERE tablename = ? AND schemaname = 'public'
-    `, [tableName]);
-    
-    // Reindex each index concurrently
+    // Get indexes for table — scoped timeout applies to this lookup
+    const indexes = await knex.transaction(trx =>
+      withStatementTimeout(trx, () =>
+        trx.raw<{ rows: Array<{ indexname: string }> }>(`
+          SELECT indexname
+          FROM pg_indexes
+          WHERE tablename = ? AND schemaname = 'public'
+        `, [tableName])
+      )
+    );
+
+    // REINDEX CONCURRENTLY cannot run inside a transaction; use a separate
+    // statement_timeout session variable set before the command.
     for (const { indexname } of indexes.rows) {
+      await knex.raw('SET statement_timeout = ?', [BLOAT_QUERY_TIMEOUT_MS]);
       await knex.raw('REINDEX INDEX CONCURRENTLY ??', [indexname]);
+      await knex.raw('RESET statement_timeout');
     }
-    
+
     const duration = Date.now() - startTime;
-    
+
     return {
       success: true,
       operation: 'REINDEX CONCURRENTLY',
@@ -238,7 +276,10 @@ export async function reindexTable(
     };
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+    // P2-FIX (P2-9): Log the error so DBAs can diagnose reindex failures.
+    // Previously the catch block swallowed the error silently.
+    logger.error('reindexTable failed', error instanceof Error ? error : new Error(String(error)), { tableName });
+
     return {
       success: false,
       operation: 'REINDEX',
@@ -342,11 +383,13 @@ export async function runBloatAnalysis(
  * Format bloat information for logging
  */
 export function formatBloatInfo(bloat: TableBloat): string {
-  const status = bloat.status === 'CRITICAL' 
-    ? '🔴 CRITICAL' 
-    : bloat.status === 'WARNING' 
-    ? '🟡 WARNING' 
-    : '🟢 OK';
+  // P3-FIX (P3-1): Use text indicators instead of emoji — emoji can corrupt
+  // log aggregators and monitoring systems that don't handle UTF-8 emoji ranges.
+  const status = bloat.status === 'CRITICAL'
+    ? '[CRITICAL]'
+    : bloat.status === 'WARNING'
+    ? '[WARNING]'
+    : '[OK]';
   
   return `[${status}] ${bloat.table_name}: ${bloat.bloat_ratio.toFixed(2)}% bloat ` +
     `(Size: ${bloat.total_size}, Dead: ${bloat.n_dead_tup.toLocaleString()})`;
@@ -359,10 +402,10 @@ export function createBloatAlertMessage(
   analysis: Awaited<ReturnType<typeof runBloatAnalysis>>
 ): string {
   if (analysis.critical_count === 0 && analysis.warning_count === 0) {
-    return '✅ Database bloat check: All tables healthy';
+    return '[OK] Database bloat check: All tables healthy';
   }
-  
-  let message = `⚠️ Database Bloat Report\n\n`;
+
+  let message = `[ALERT] Database Bloat Report\n\n`;
   message += `Critical: ${analysis.critical_count} tables\n`;
   message += `Warning: ${analysis.warning_count} tables\n`;
   message += `Average Bloat: ${analysis.total_bloat_ratio.toFixed(2)}%\n\n`;

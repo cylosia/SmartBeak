@@ -32,15 +32,39 @@ export function sanitizeHtml(html: string | undefined | null, options: SanitizeO
   const config: DOMPurify.Config = {
     ALLOWED_TAGS: options.ALLOWED_TAGS || DEFAULT_ALLOWED_TAGS,
     ALLOWED_ATTR: options.ALLOWED_ATTR || DEFAULT_ALLOWED_ATTR,
-    // Prevent javascript: URLs
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout'],
+    // P0-FIX (P0-6): Expanded FORBID_ATTR to block 'style' (CSS expression injection)
+    // and all event handler attributes not already covered by DOMPurify defaults.
+    FORBID_ATTR: [
+      'style',
+      'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout',
+      'onmousemove', 'onmouseenter', 'onmouseleave',
+      'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset',
+      'onkeydown', 'onkeyup', 'onkeypress',
+      'ondblclick', 'oncontextmenu', 'ondrag', 'ondrop',
+      'onscroll', 'onwheel', 'onresize', 'onselect',
+      'formaction', 'form',
+    ],
     // Keep the content of removed tags
     KEEP_CONTENT: true,
     // Prevent data URIs that could contain JavaScript
     FORBID_DATA_URI: true,
   };
 
-  return DOMPurify.sanitize(html, config);
+  // P0-FIX (P0-7): Add rel="noopener noreferrer" to all target="_blank" links
+  // to prevent tabnabbing attacks where the opened page gains window.opener
+  // access and can redirect the original tab to a phishing page.
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+
+  const result = DOMPurify.sanitize(html, config);
+
+  // Remove the hook after use to prevent accumulation across calls
+  DOMPurify.removeAllHooks();
+
+  return result;
 }
 
 /**

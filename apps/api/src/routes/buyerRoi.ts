@@ -39,11 +39,25 @@ function validateRoiRow(row: unknown): RoiRow {
   return result.data;
 }
 
+// P1-FIX (P1-5): Add pagination parameters. Fetching up to 10 000 rows per
+// request serialises them all into memory at once, blocking the event loop
+// during JSON serialisation and risking OOM on large domains.
+const MAX_ROI_PAGE_SIZE = 500;
+const DEFAULT_ROI_PAGE_SIZE = 100;
+
 const BuyerRoiQuerySchema = z.object({
-  domain: z.string().uuid('Domain must be a valid UUID')
+  domain: z.string().uuid('Domain must be a valid UUID'),
+  limit: z.coerce.number().int().min(1).max(MAX_ROI_PAGE_SIZE).default(DEFAULT_ROI_PAGE_SIZE),
+  cursor: z.string().uuid().optional(),
 });
 
 export type BuyerRoiQueryType = z.infer<typeof BuyerRoiQuerySchema>;
+
+export interface RoiSummaryPagination {
+  next_cursor: string | null;
+  has_more: boolean;
+  limit: number;
+}
 
 export interface AuditEventParams {
   orgId: string;
@@ -66,6 +80,7 @@ export interface RoiSummaryResponse {
   domain: string;
   domain_id: string;
   roi_rows: RoiRow[];
+  pagination: RoiSummaryPagination;
 }
 
 async function canAccessDomain(
@@ -142,7 +157,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     return errors.validationFailed(reply, parseResult.error.issues);
     }
 
-    const { domain } = parseResult.data;
+    const { domain, limit, cursor } = parseResult.data;
 
     const hasAccess = await canAccessDomain(auth.userId, domain, auth.orgId);
     if (!hasAccess) {
@@ -151,17 +166,29 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const db = await getDb();
-    const rows = await db('content_roi_models')
-    .join('content', 'content.id', 'content_roi_models.content_id')
-    .where('content.domain_id', domain)
-    .limit(10_000)
-    .select(
-      'content_roi_models.id',
-      'content_roi_models.content_id',
-      'content_roi_models.roi_value',
-      'content_roi_models.created_at',
-    );
-    const validatedRows = rows.map(validateRoiRow);
+    // P1-FIX (P1-5): Use cursor-based pagination instead of LIMIT 10_000.
+    // Fetch limit+1 rows to determine whether a next page exists, then trim.
+    const query = db('content_roi_models')
+      .join('content', 'content.id', 'content_roi_models.content_id')
+      .where('content.domain_id', domain)
+      .orderBy('content_roi_models.id', 'asc')
+      .limit(limit + 1)
+      .select(
+        'content_roi_models.id',
+        'content_roi_models.content_id',
+        'content_roi_models.roi_value',
+        'content_roi_models.created_at',
+      );
+
+    if (cursor) {
+      void query.where('content_roi_models.id', '>', cursor);
+    }
+
+    const rawRows = await query;
+    const hasMore = rawRows.length > limit;
+    const pageRows = hasMore ? rawRows.slice(0, limit) : rawRows;
+    const nextCursor = hasMore ? (pageRows[pageRows.length - 1]?.id ?? null) : null;
+    const validatedRows = pageRows.map(validateRoiRow);
 
     await recordAuditEvent({
     orgId: auth.orgId,
@@ -177,13 +204,18 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     });
 
     const summary = await generateBuyerRoiSummary({
-    domain: domain,
-    domain_id: domain,
-    roi_rows: validatedRows as SummaryRoiRow[]
+      domain: domain,
+      domain_id: domain,
+      roi_rows: validatedRows as SummaryRoiRow[],
     });
-    // P1-FIX: Removed unsafe double assertion (as unknown as X). The summary
-    // type is now trusted directly — if there's a mismatch, tsc will catch it.
-    return reply.status(200).send(summary);
+    return reply.status(200).send({
+      ...summary,
+      pagination: {
+        next_cursor: nextCursor,
+        has_more: hasMore,
+        limit,
+      },
+    });
   } catch (error) {
     logger.error('Error generating buyer ROI summary', error instanceof Error ? error : new Error(String(error)));
     return errors.internal(reply);
