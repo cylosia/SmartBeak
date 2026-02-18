@@ -12,6 +12,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 // @ts-expect-error -- Should use getKnex() async; needs refactor to support lazy init
 import { knex } from '../../../packages/database';
 import {
@@ -20,8 +21,21 @@ import {
   listShardVersions,
   rollbackShard,
 } from '../../services/shard-deployment';
-import { generateShardFiles, ThemeConfig, VALID_THEME_IDS } from '../../services/shard-generator';
+import { generateShardFiles, VALID_THEME_IDS } from '../../services/shard-generator';
 import { errors } from '@errors/responses';
+
+// ── Request body schemas ───────────────────────────────────────────────────
+const DeployBodySchema = z.object({
+  siteId: z.string().min(1).max(255),
+  themeId: z.string().min(1).max(100),
+  themeConfig: z.record(z.unknown()),
+  vercelProjectId: z.string().min(1).max(255),
+}).strict();
+
+const RollbackBodySchema = z.object({
+  targetVersion: z.number().int().positive(),
+  vercelProjectId: z.string().min(1).max(255),
+}).strict();
 
 /**
  * Verify the authenticated user owns the given siteId.
@@ -48,17 +62,11 @@ export default async function shardRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/deploy', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const body = request.body as {
-        siteId: string;
-        themeId: string;
-        themeConfig: ThemeConfig;
-        vercelProjectId: string;
-      };
-
-      // Validate required fields
-      if (!body.siteId || !body.themeId || !body.vercelProjectId) {
-        return errors.badRequest(reply, 'Missing required fields: siteId, themeId, vercelProjectId');
+      const parseResult = DeployBodySchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return errors.badRequest(reply, `Invalid request body: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
       }
+      const body = parseResult.data;
 
       // SECURITY FIX P1 #17: Validate themeId against known themes
       if (!VALID_THEME_IDS.includes(body.themeId)) {
@@ -78,7 +86,7 @@ export default async function shardRoutes(fastify: FastifyInstance) {
         {
           siteId: body.siteId,
           themeId: body.themeId,
-          themeConfig: body.themeConfig as unknown as Record<string, unknown>,
+          themeConfig: body.themeConfig,
         },
         files
       );
@@ -142,14 +150,11 @@ export default async function shardRoutes(fastify: FastifyInstance) {
   fastify.post('/:siteId/rollback', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { siteId } = request.params as { siteId: string };
-      const { targetVersion, vercelProjectId } = request.body as {
-        targetVersion: number;
-        vercelProjectId: string;
-      };
-
-      if (!targetVersion || !vercelProjectId) {
-        return errors.badRequest(reply, 'Missing required fields: targetVersion, vercelProjectId');
+      const parseResult = RollbackBodySchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return errors.badRequest(reply, `Invalid request body: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
       }
+      const { targetVersion, vercelProjectId } = parseResult.data;
 
       // SECURITY FIX P0 #4: Verify site ownership
       if (!(await verifySiteOwnership(request, siteId))) {

@@ -1,4 +1,5 @@
 
+import crypto from 'crypto';
 import { DomainEventEnvelope } from '../../../../packages/types/domain-event';
 
 export interface SeoUpdatedPayload {
@@ -12,7 +13,7 @@ export class SeoUpdated {
     version: 1,
     occurredAt: new Date().toISOString(),
     payload: { seoId },
-    meta: { correlationId: correlationId || '', domainId: 'seo', source: 'domain' }
+    meta: { correlationId: correlationId || crypto.randomUUID(), domainId: 'seo', source: 'domain' }
   };
   }
 }

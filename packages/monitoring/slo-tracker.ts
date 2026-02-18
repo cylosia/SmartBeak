@@ -199,7 +199,9 @@ export class SloTracker {
     const actualErrorRate = failures / total;
     const allowedErrorRate = 1 - slo.target;
 
-    if (allowedErrorRate === 0) return actualErrorRate > 0 ? Infinity : 0;
+    // Cap at 1000x burn rate to prevent Infinity propagating into dashboards when
+    // the SLO target is 100% (allowedErrorRate === 0) and any error occurs.
+    if (allowedErrorRate === 0) return actualErrorRate > 0 ? 1000 : 0;
     return actualErrorRate / allowedErrorRate;
   }
 
