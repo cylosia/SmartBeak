@@ -93,7 +93,13 @@ export function createRouteErrorHandler(options: RouteErrorHandlerOptions) {
       if (candidateCode !== undefined && knownCodes.includes(candidateCode)) {
         errorCode = candidateCode as ErrorCode;
       }
-      clientMessage = error.message;
+      // In production, do not expose raw duck-typed error messages.
+      // They may contain internal details (DB connection strings, stack paths,
+      // or third-party API error bodies). The validated code and statusCode are
+      // forwarded above; the message is gated behind the dev flag.
+      clientMessage = shouldExposeErrorDetails()
+        ? error.message
+        : 'An error occurred processing your request';
     }
 
     // Build the client response

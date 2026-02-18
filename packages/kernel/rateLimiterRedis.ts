@@ -203,7 +203,7 @@ else
 end
 `;
     const memberId = `${now}-${randomBytes(8).toString('hex')}`;
-    const result = await redis.eval(
+    const rawResult = await redis.eval(
       luaScript,
       1,
       redisKey,
@@ -211,7 +211,23 @@ end
       String(config.windowMs),
       String(config.maxRequests),
       memberId
-    ) as [number, number];
+    );
+
+    // Validate the Lua script response before trusting it.
+    // The script returns [allowed (0|1), newCount]. An unexpected response
+    // (null, wrong length, non-numeric elements) must be rejected to avoid
+    // silently granting or denying requests based on corrupt data.
+    if (
+      !Array.isArray(rawResult) ||
+      rawResult.length < 2 ||
+      typeof rawResult[0] !== 'number' ||
+      typeof rawResult[1] !== 'number'
+    ) {
+      throw new Error(
+        `Unexpected Lua response from rate-limit script: ${JSON.stringify(rawResult)}`
+      );
+    }
+    const result = rawResult as [number, number];
 
     const allowedFlag = result[0];
     const newCount = result[1];
