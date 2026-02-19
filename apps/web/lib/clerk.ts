@@ -161,3 +161,5 @@ export { getClerkWebhookSecret as getWebhookSecret };
 export const CLERK_PUBLISHABLE_KEY = getClerkPublishableKey;
 export const CLERK_SECRET_KEY = getClerkSecretKey;
 export const CLERK_WEBHOOK_SECRET = getClerkWebhookSecret;
+
+export default { getClerkPublishableKey, getClerkSecretKey, getClerkWebhookSecret };

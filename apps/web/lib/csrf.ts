@@ -48,3 +48,5 @@ export async function fetchWithCsrf(
     credentials: options.credentials ?? 'include',
   });
 }
+
+export default { getCsrfToken, fetchWithCsrf };

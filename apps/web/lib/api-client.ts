@@ -252,3 +252,5 @@ export const authFetch = async (
 
   return response;
 };
+
+export default apiClient;

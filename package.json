@@ -16,7 +16,7 @@
     "dev": "tsx --import ./control-plane/api/tracing-preload.ts control-plane/api/http.ts",
     "build": "tsc -p tsconfig.json",
     "build:web": "cd apps/web && next build",
-    "validate-env": "node -e \"import('./apps/web/lib/env.js').then(m => m.validateEnv())\"",
+    "validate-env": "tsx scripts/validate-env.ts",
     "worker": "tsx --import ./apps/api/src/jobs/tracing-preload.ts apps/api/src/jobs/worker.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --ignore-pattern 'node_modules/**' --ignore-pattern 'dist/**' --ignore-pattern 'build/**'",

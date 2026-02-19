@@ -92,3 +92,5 @@ registerShutdownHandlers();
 
 // Additional web-specific database utilities can be added here
 // For now, all functionality is provided by the shared @database package
+
+export default { withTransaction };

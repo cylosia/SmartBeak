@@ -8,6 +8,21 @@ import Location from './location';
 import Post from './post';
 import Review from './review';
 import Service from './service';
+import Thankyou from './thankyou';
+
+export {
+  Article as ArticleTemplate,
+  Bestof as BestOfTemplate,
+  Comparison as ComparisonTemplate,
+  Guide as GuideTemplate,
+  Landing as LandingTemplate,
+  Location as LocationTemplate,
+  Post as PostTemplate,
+  Review as ReviewTemplate,
+  Service as ServiceTemplate,
+  Thankyou as ThankyouTemplate,
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const templateMap: Record<string, any> = {
   article: Article,
@@ -18,5 +33,19 @@ export const templateMap: Record<string, any> = {
   service: Service,
   location: Location,
   post: Post,
-  landing: Landing
+  landing: Landing,
+  thankyou: Thankyou,
+};
+
+export default {
+  ArticleTemplate: Article,
+  BestOfTemplate: Bestof,
+  ComparisonTemplate: Comparison,
+  GuideTemplate: Guide,
+  LandingTemplate: Landing,
+  LocationTemplate: Location,
+  PostTemplate: Post,
+  ReviewTemplate: Review,
+  ServiceTemplate: Service,
+  ThankyouTemplate: Thankyou,
 };

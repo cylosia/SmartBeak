@@ -8,6 +8,17 @@
  * For new code, consider importing directly from @config.
  */
 
+import {
+  validateEnv,
+  requireEnv,
+  getEnv,
+  getEnvWithDefault,
+  REQUIRED_ENV_VARS,
+  OPTIONAL_ENV_VARS,
+  isProduction,
+  isDevelopment,
+} from '@config';
+
 export {
   validateEnv,
   requireEnv,
@@ -15,6 +26,15 @@ export {
   getEnvWithDefault,
   REQUIRED_ENV_VARS,
   OPTIONAL_ENV_VARS,
-} from '@config';
+  isProduction,
+  isDevelopment,
+};
 
-export { isProduction, isDevelopment } from '@config';
+export default {
+  validateEnv,
+  requireEnv,
+  getEnv,
+  getEnvWithDefault,
+  REQUIRED_ENV_VARS,
+  OPTIONAL_ENV_VARS,
+};
