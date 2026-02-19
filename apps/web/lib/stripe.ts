@@ -83,3 +83,5 @@ export function validateStripeConfig(): void {
   getStripeSecretKey();
 }
 
+export default { getStripe, getStripeWebhookSecret, validateStripeConfig };
+

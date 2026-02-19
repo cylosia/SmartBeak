@@ -855,3 +855,5 @@ export function withAuth(handler: ApiHandler, options?: WithAuthOptions): (req: 
     }
   };
 }
+
+export default { requireAuth, optionalAuth, canAccessDomain, requireDomainAccess, requireOrgAdmin, requireRole, validateMethod, sendError, withAuth, checkRateLimit, applyRateLimit, getRateLimitIdentifier, onAuthAudit };
