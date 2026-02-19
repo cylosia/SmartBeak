@@ -72,7 +72,7 @@ export default function Objections() {
           body !== null &&
           'message' in body &&
           typeof (body as Record<string, unknown>)['message'] === 'string'
-            ? (body as Record<string, string>)['message']
+            ? ((body as Record<string, string>)['message'] ?? 'Failed to submit objection. Please try again.')
             : 'Failed to submit objection. Please try again.';
         setError(msg);
         return;
@@ -96,7 +96,7 @@ export default function Objections() {
           appropriate for errors that require immediate attention. */}
       {success && <p role="status" style={{ color: 'green' }}>Objection submitted successfully.</p>}
       {error && <p role="alert" style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={(e) => { void handleSubmit(e); }}>
         {/* ACCESSIBILITY FIX (OBJ-4): Associate label with textarea via htmlFor/id. */}
         <label htmlFor="objection-text">
           Objection or concern

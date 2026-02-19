@@ -122,7 +122,7 @@ async function markEventProcessed(eventId: string): Promise<void> {
     // Non-fatal: log but don't throw. Worst case: event is reprocessed once.
     // The handlers are idempotent (FOR UPDATE + conditional UPDATE), so
     // reprocessing is safe.
-    logger.warn('Failed to mark webhook event as processed in Redis', error instanceof Error ? error : undefined, { eventId });
+    logger.warn('Failed to mark webhook event as processed in Redis', { eventId, error: error instanceof Error ? error.message : String(error) });
   }
 }
 

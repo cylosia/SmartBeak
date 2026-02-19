@@ -13,8 +13,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-// @ts-expect-error -- Should use getKnex() async; needs refactor to support lazy init
-import { knex } from '../../../packages/database';
+import { getKnex } from '../../../packages/database';
 import {
   createShardVersion,
   deployShardToVercel,
@@ -30,7 +29,7 @@ import { errors } from '@errors/responses';
 // generateShardFiles(). Previously themeConfig was typed as Record<string, unknown>
 // and cast implicitly; missing required fields (siteName, primaryColor) caused
 // silent crashes or XSS-safe-but-wrong template output.
-const ThemeConfigSchema: z.ZodType<ThemeConfig> = z.object({
+const ThemeConfigSchema = z.object({
   siteName: z.string().min(1).max(500),
   siteDescription: z.string().max(1000).optional(),
   primaryColor: z.string().min(1).max(50),
@@ -42,7 +41,7 @@ const ThemeConfigSchema: z.ZodType<ThemeConfig> = z.object({
     instagram: z.string().url().max(2000).optional(),
   }).optional(),
   customCss: z.string().max(50000).optional(),
-  metaTags: z.record(z.string()).optional(),
+  metaTags: z.record(z.string(), z.string()).optional(),
 }).strict();
 
 // ── Request body schemas ───────────────────────────────────────────────────
@@ -69,7 +68,8 @@ async function verifySiteOwnership(
   const user = (request as FastifyRequest & { user?: { orgId?: string } }).user;
   if (!user?.orgId) return false;
 
-  const site = await knex('sites')
+  const db = await getKnex();
+  const site = await db('sites')
     .where({ id: siteId, org_id: user.orgId })
     .first();
 
@@ -100,14 +100,14 @@ export default async function shardRoutes(fastify: FastifyInstance) {
       }
 
       // 1. Generate shard files from template
-      const files = generateShardFiles(body.themeId, body.themeConfig);
+      const files = generateShardFiles(body.themeId, body.themeConfig as ThemeConfig);
 
       // 2. Save to storage and database
       const { shardId } = await createShardVersion(
         {
           siteId: body.siteId,
           themeId: body.themeId,
-          themeConfig: body.themeConfig,
+          themeConfig: body.themeConfig as unknown as Record<string, unknown>,
         },
         files
       );

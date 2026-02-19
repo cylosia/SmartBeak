@@ -1,6 +1,6 @@
 
 import crypto from 'crypto';
-import { DomainEventEnvelope } from '../../../../packages/types/domain-event';
+import { DomainEventEnvelope, toIsoDateString } from '../../../../packages/types/domain-event';
 
 export interface ContentScheduledPayload {
   contentId: string;
@@ -8,11 +8,12 @@ export interface ContentScheduledPayload {
 }
 
 export class ContentScheduled {
-  toEnvelope(contentId: string, publishAt: Date, correlationId = crypto.randomUUID()): DomainEventEnvelope<ContentScheduledPayload> {
+  toEnvelope(contentId: string, publishAt: Date, correlationId = crypto.randomUUID()): DomainEventEnvelope<string, ContentScheduledPayload> {
   return {
+    id: crypto.randomUUID(),
     name: 'content.scheduled',
     version: 1,
-    occurredAt: new Date().toISOString(),
+    occurredAt: toIsoDateString(new Date()),
     payload: { contentId, publishAt: publishAt.toISOString() },
     meta: { correlationId, domainId: 'content', source: 'domain' }
   };

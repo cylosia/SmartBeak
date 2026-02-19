@@ -18,12 +18,16 @@ import { createHash, randomUUID } from 'crypto';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-// @ts-expect-error -- Should use getKnex() async; needs refactor to support lazy init
-import { knex } from '../../packages/database';
+import { getKnex, type Knex } from '../../packages/database';
 import { VercelAdapter } from '@adapters/vercel/VercelAdapter';
 import { getLogger } from '@kernel/logger';
 
 const logger = getLogger('shard-deployment');
+
+/** Lazily resolved Knex instance for DB queries */
+async function db(): Promise<Knex> {
+  return getKnex();
+}
 
 // Types
 export interface ShardFile {
@@ -182,13 +186,14 @@ export async function createShardVersion(
   // If S3 succeeds but the final DB insert fails, the S3 path must be cleaned up.
 
   // Step 1: Atomically assign a version number (short lock, no S3 I/O inside).
-  const { version } = await knex.transaction(async (trx: typeof knex) => {
+  const knex = await db();
+  const { version } = await knex.transaction(async (trx) => {
     const lastVersion = await trx('site_shards')
       .where('site_id', siteId)
       .max('version as max')
       .forUpdate()
       .first();
-    return { version: (lastVersion?.max || 0) + 1 };
+    return { version: ((lastVersion as Record<string, unknown> | undefined)?.['max'] as number || 0) + 1 };
   });
 
   // Build file manifest with SHA hashes (CPU only, no I/O).
@@ -227,7 +232,7 @@ export async function createShardVersion(
       .returning('id');
     shardId = shard.id;
   } catch (dbError) {
-    logger.error('DB insert failed after S3 upload; S3 path may be orphaned', {
+    logger.error('DB insert failed after S3 upload; S3 path may be orphaned', dbError instanceof Error ? dbError : undefined, {
       storagePath,
       siteId,
       version,
@@ -243,10 +248,11 @@ export async function createShardVersion(
  */
 export async function deployShardToVercel(
   shardId: string,
-  vercelProjectId: string
+  _vercelProjectId: string
 ): Promise<DeploymentResult> {
   // SECURITY FIX P1 #14: Use crypto.randomUUID for unique temp directory
   const tempDir = join(tmpdir(), `shard-${randomUUID()}`);
+  const knex = await db();
 
   try {
     // 1. Get shard from database
@@ -372,6 +378,7 @@ export async function getShardDownloadUrl(
 ): Promise<string | null> {
   // Sanitize the requested file path
   const safePath = sanitizeFilePath(filePath);
+  const knex = await db();
 
   const shard = await knex('site_shards')
     .where('id', shardId)
@@ -391,7 +398,7 @@ export async function getShardDownloadUrl(
   try {
     manifest = JSON.parse(shard.file_manifest) as Record<string, unknown>;
   } catch {
-    logger.error('Corrupted file manifest', { shardId });
+    logger.error('Corrupted file manifest', undefined, { shardId });
     return null;
   }
   if (!manifest[safePath]) {
@@ -412,6 +419,7 @@ export async function getShardDownloadUrl(
  * List all versions for a site
  */
 export async function listShardVersions(siteId: string) {
+  const knex = await db();
   return knex('site_shards')
     .where('site_id', siteId)
     .orderBy('version', 'desc')
@@ -433,6 +441,7 @@ export async function rollbackShard(
   targetVersion: number,
   vercelProjectId: string
 ): Promise<DeploymentResult> {
+  const knex = await db();
   const targetShard = await knex('site_shards')
     .where({
       site_id: siteId,

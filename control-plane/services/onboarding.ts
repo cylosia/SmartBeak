@@ -160,7 +160,7 @@ export class OnboardingService {
       // console.* bypasses log aggregation, OpenTelemetry context propagation,
       // and the logger's automatic PII redaction, violating the "Never use
       // console.log" rule in CLAUDE.md.
-      logger.error('OnboardingService.get: ROLLBACK failed', {
+      logger.error('OnboardingService.get: ROLLBACK failed', rbErr instanceof Error ? rbErr : undefined, {
         orgId,
         rbError: rbErr instanceof Error ? rbErr.message : String(rbErr),
       });

@@ -1,6 +1,7 @@
 
 import { computePortfolioRoi } from './portfolioRoi';
 import { keywordCoverageForDomain } from '../keywords/keywords';
+import { createDomainId } from '@kernel/branded';
 
 /**
 * ROI row data structure for buyer ROI summary
@@ -82,7 +83,7 @@ export async function generateBuyerRoiSummary(
     }
     return { production_cost_usd: cost, monthly_revenue_estimate: revenue };
   }));
-  const kw = await keywordCoverageForDomain(input.domain_id);
+  const kw = await keywordCoverageForDomain(createDomainId(input.domain_id));
 
   const notes: string[] = [
     'ROI figures are advisory estimates based on historical performance and assumptions.',

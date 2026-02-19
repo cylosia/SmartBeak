@@ -429,7 +429,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // phantom memberships with wrong IDs are never written to the database.
       const userId = membershipData.public_user_data?.user_id;
       if (!userId) {
-        logger.error('Missing public_user_data.user_id in organizationMembership.created', { membershipId: membershipData.id });
+        logger.error('Missing public_user_data.user_id in organizationMembership.created', undefined, { membershipId: membershipData.id });
         return res.status(400).json({ error: 'Missing user_id in membership event' });
       }
       const orgId = membershipData.organization_id;
@@ -487,7 +487,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const deleteMembershipData = event.data as { id: string; organization_id?: string; public_user_data?: { user_id?: string } };
       const userId = deleteMembershipData.public_user_data?.user_id;
       if (!userId) {
-        logger.error('Missing public_user_data.user_id in organizationMembership.deleted', { membershipId: deleteMembershipData.id });
+        logger.error('Missing public_user_data.user_id in organizationMembership.deleted', undefined, { membershipId: deleteMembershipData.id });
         return res.status(400).json({ error: 'Missing user_id in membership event' });
       }
       const orgId = deleteMembershipData.organization_id;

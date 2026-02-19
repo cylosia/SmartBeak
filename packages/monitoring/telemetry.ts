@@ -214,13 +214,15 @@ export function initTelemetry(config: TelemetryConfig): void {
       registerInstrumentations({
         instrumentations: [
           new HttpInstrumentation({
-            requestHook: (span: Span, request: HttpRequestLike) => {
-              const contentLength = request.headers['content-length'];
+            requestHook: (span, request) => {
+              const req = request as HttpRequestLike;
+              const contentLength = req.headers['content-length'];
               span.setAttribute('http.request.body.size',
                 typeof contentLength === 'string' ? contentLength : 0);
             },
-            responseHook: (span: Span, response: HttpResponseLike) => {
-              const contentLength = response.headers['content-length'];
+            responseHook: (span, response) => {
+              const res = response as HttpResponseLike;
+              const contentLength = res.headers['content-length'];
               span.setAttribute('http.response.body.size',
                 typeof contentLength === 'string' ? contentLength : 0);
             },

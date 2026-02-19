@@ -90,7 +90,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Import Stripe dynamically to avoid loading if not needed
-    const { stripe } = await import('../../../../lib/stripe');
+    const { getStripe } = await import('../../../../lib/stripe');
+    const stripe = getStripe();
 
     try {
       const session = await stripe.checkout.sessions.create({

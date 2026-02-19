@@ -5,6 +5,22 @@ export type KeywordMetrics = {
   competition?: number; // 0.0–1.0
   cpc?: number;         // cost-per-click in USD cents
   trend?: 'up' | 'down' | 'stable';
+  source?: string;      // e.g. 'ahrefs', 'gsc', 'paa_serpapi', 'paa_dataforseo'
+  fetchedAt?: string;   // ISO 8601 timestamp
+  type?: string;        // e.g. 'paa_question', 'related_search'
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+  position?: number;
+  volume?: number;
+  difficulty?: number;
+  currentPosition?: number;
+  rankingUrl?: string | undefined;
+  parentTopic?: string | undefined;
+  answerPreview?: string | undefined;
+  sourceUrl?: string | undefined;
+  relatedSearches?: string[];
+  dateRange?: { start: string; end: string };
 };
 
 export type KeywordSuggestion = {
@@ -38,6 +54,25 @@ export const KeywordSuggestionSchema = z.object({
     competition: z.number().min(0).max(1).optional(),
     cpc: z.number().nonnegative().optional(),
     trend: z.enum(['up', 'down', 'stable']).optional(),
+    source: z.string().optional(),
+    fetchedAt: z.string().optional(),
+    type: z.string().optional(),
+    clicks: z.number().nonnegative().optional(),
+    impressions: z.number().nonnegative().optional(),
+    ctr: z.number().min(0).max(1).optional(),
+    position: z.number().nonnegative().optional(),
+    volume: z.number().nonnegative().optional(),
+    difficulty: z.number().nonnegative().optional(),
+    currentPosition: z.number().nonnegative().optional(),
+    rankingUrl: z.string().optional(),
+    parentTopic: z.string().optional(),
+    answerPreview: z.string().optional(),
+    sourceUrl: z.string().optional(),
+    relatedSearches: z.array(z.string()).optional(),
+    dateRange: z.object({
+      start: z.string(),
+      end: z.string(),
+    }).optional(),
   }).optional(),
 });
 

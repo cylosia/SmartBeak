@@ -453,7 +453,7 @@ export class QueryCache {
    */
   async invalidateQuery(query: string, params: unknown[] = []): Promise<void> {
     const baseKey = this.generateKey(query, params);
-    const deletePromises: Promise<boolean>[] = [];
+    const deletePromises: Promise<void>[] = [];
 
     // Delete the entry under every known version key (covers all dependsOn combos).
     for (const [, entry] of this.queryVersions) {

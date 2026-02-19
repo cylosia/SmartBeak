@@ -86,7 +86,7 @@ async function recordAuditEvent(params: AuditEventParams): Promise<void> {
     });
   } catch (error) {
     // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
-    logger.error('Failed to record audit event', { message: getErrorMessage(error) });
+    logger.error('Failed to record audit event', new Error(getErrorMessage(error)));
     throw error;
   }
 }
@@ -140,7 +140,7 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(202).send({ status: 'generating' });
     } catch (error) {
       // P1-10 FIX: Use getErrorMessage instead of `error as Error` cast.
-      logger.error('Error processing export request', { message: getErrorMessage(error) });
+      logger.error('Error processing export request', new Error(getErrorMessage(error)));
       return errors.internal(reply, 'Failed to process export request');
     }
   });

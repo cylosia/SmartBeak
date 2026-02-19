@@ -26,7 +26,7 @@ export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
     // Rate limit BEFORE auth to prevent DoS
     // P1-FIX: Include client IP in the key — static 'analytics' key shared
     // one bucket for all tenants.
-    await rateLimit(`analytics:${req.ip ?? 'unknown'}`, 50, req, res);
+    await rateLimit(`analytics:${req.ip ?? 'unknown'}`, 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor','viewer']);
 

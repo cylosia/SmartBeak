@@ -157,7 +157,7 @@ export class HealthChecksRegistry extends EventEmitter {
     // emit() in runCheck() guards against listener throw in user code, but the
     // 'error' event itself is a special case that bypasses that guard.
     this.on('error', (err: unknown) => {
-      logger.error('HealthChecksRegistry EventEmitter error', { error: err instanceof Error ? err.message : String(err) });
+      logger.error('HealthChecksRegistry EventEmitter error', err instanceof Error ? err : undefined, { error: err instanceof Error ? err.message : String(err) });
     });
     this.version = version;
     this.environment = environment;
@@ -704,12 +704,12 @@ export function createExternalApiHealthCheck(
     try {
       const requestInit: RequestInit = {
         method,
-        headers: options.headers,
         signal: controller.signal,
         // Only include body for non-GET/HEAD methods (validated above at registration)
         ...(method === 'POST' && options.body !== undefined
           ? { body: JSON.stringify(options.body) }
           : {}),
+        ...(options.headers ? { headers: options.headers } : {}),
       };
       const response = await fetch(options.url, requestInit);
 

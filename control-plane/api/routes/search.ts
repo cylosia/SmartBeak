@@ -30,7 +30,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
 
   app.get('/search', async (req, res) => {
   try {
-    await rateLimit('search', 30, req, res);
+    await rateLimit('search', 30);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 

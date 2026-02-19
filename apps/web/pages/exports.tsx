@@ -18,11 +18,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     return { redirect: { destination: '/select-org', permanent: false } };
   }
   try {
-    const membership = await clerkClient.organizations.getOrganizationMembership({
+    const membershipList = await (await clerkClient()).organizations.getOrganizationMembershipList({
       organizationId: orgId,
-      userId,
+      userId: [userId],
     });
-    if (!EXPORT_ALLOWED_ROLES.has(membership.role)) {
+    const membership = membershipList.data[0];
+    if (!membership || !EXPORT_ALLOWED_ROLES.has(membership.role)) {
       return { redirect: { destination: '/unauthorized', permanent: false } };
     }
   } catch {

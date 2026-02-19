@@ -62,7 +62,7 @@ export {
 } from '@database';
 
 // Import for shutdown handler registration
-import { getPoolInstance as getPool } from '@database';
+import { getPoolInstance as getPool, withTransaction as _withTransaction } from '@database';
 
 const logger = getLogger('database:web');
 
@@ -93,4 +93,4 @@ registerShutdownHandlers();
 // Additional web-specific database utilities can be added here
 // For now, all functionality is provided by the shared @database package
 
-export default { withTransaction };
+export default { withTransaction: _withTransaction };

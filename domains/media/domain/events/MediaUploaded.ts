@@ -1,16 +1,17 @@
 
-import { DomainEventEnvelope } from '../../../../packages/types/domain-event';
+import { DomainEventEnvelope, toIsoDateString } from '../../../../packages/types/domain-event';
 
 export interface MediaUploadedPayload {
   mediaId: string;
 }
 
 export class MediaUploaded {
-  toEnvelope(mediaId: string, correlationId?: string): DomainEventEnvelope<MediaUploadedPayload> {
+  toEnvelope(mediaId: string, correlationId?: string): DomainEventEnvelope<string, MediaUploadedPayload> {
   return {
+    id: crypto.randomUUID(),
     name: 'media.uploaded',
     version: 1,
-    occurredAt: new Date().toISOString(),
+    occurredAt: toIsoDateString(new Date()),
     payload: { mediaId },
     // FIX(P1): Use a generated UUID fallback instead of '' — empty string clusters
     // ALL uncorrelated events under the same key in distributed tracing systems,

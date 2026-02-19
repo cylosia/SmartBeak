@@ -2,6 +2,7 @@ import { getLogger } from '@kernel/logger';
 import { API_BASE_URLS } from '@config';
 import { upsertKeyword } from '../keywords/keywords';
 import { ValidationError, validateNonEmptyString, validateArray } from '../utils/validation';
+import { createDomainId } from '@kernel/branded';
 
 /**
  * FIX: Type guard for Ahrefs API response validation
@@ -320,7 +321,7 @@ async function processKeywordBatches(domain_id: string, phrases: string[], keywo
       const batch = phrases.slice(i, i + BATCH_SIZE);
       // FIX: Prepare batch input for bulk upsert
       const batchInputs = batch.map(phrase => ({
-        domain_id,
+        domain_id: createDomainId(domain_id),
         phrase,
         source: 'ahrefs',
       }));
@@ -422,7 +423,7 @@ async function processInChunks(domain_id: string, phrases: string[], keywordData
       // FIX: Use Promise.all to process chunk items in parallel
       const chunkResults = await Promise.all(chunk.map(async (phrase) => {
         const k = await upsertKeyword({
-          domain_id,
+          domain_id: createDomainId(domain_id),
           phrase,
           source: 'ahrefs',
         });

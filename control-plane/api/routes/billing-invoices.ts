@@ -24,7 +24,7 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /billing/invoices - List invoices for the organization
   app.get('/billing/invoices', async (req, res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('billing:invoices', 50, req, res);
+  await rateLimit('billing:invoices', 50);
   const ctx = getAuthContext(req);
   // M3-FIX: Restrict invoice access to owner/admin only (was allowing viewers to see financial data)
   requireRole(ctx, ['owner', 'admin']);

@@ -73,7 +73,7 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
       } catch (patternErr: unknown) {
         // P2-FIX: Log the pattern and error so operators can diagnose malformed
         // patterns instead of silently swallowing the failure.
-        logger.warn('Cache key pattern compilation failed', { pattern }, patternErr instanceof Error ? patternErr : new Error(String(patternErr)));
+        logger.warn('Cache key pattern compilation failed', { pattern, error: patternErr instanceof Error ? patternErr : new Error(String(patternErr)) });
         return res.status(400).send({
           error: 'Invalid search pattern',
           code: 'INVALID_PATTERN',

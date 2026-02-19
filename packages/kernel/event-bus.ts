@@ -18,7 +18,7 @@ export type SafeHandler<T> = {
   /** Plugin name that registered the handler */
   plugin: string;
   /** Handler function */
-  handle: (e: DomainEventEnvelope<T>) => Promise<void>
+  handle: (e: DomainEventEnvelope<string, T>) => Promise<void>
 };
 
 /**
@@ -66,7 +66,7 @@ export class EventBus {
   * @param plugin - Name of the plugin subscribing
   * @param handler - Handler function for the event
   */
-  subscribe<T>(eventName: string, plugin: string, handler: (e: DomainEventEnvelope<T>) => Promise<void>): void {
+  subscribe<T>(eventName: string, plugin: string, handler: (e: DomainEventEnvelope<string, T>) => Promise<void>): void {
   // Prevent duplicate subscriptions from same plugin
   const existing = this.handlers.get(eventName) ?? [];
   const alreadySubscribed = existing.some(h => h.plugin === plugin);
@@ -82,7 +82,7 @@ export class EventBus {
     throw new Error(`Maximum handlers exceeded for event: ${eventName}`);
   }
 
-  existing.push({ plugin, handle: handler as (e: DomainEventEnvelope<unknown>) => Promise<void> });
+  existing.push({ plugin, handle: handler as (e: DomainEventEnvelope<string, unknown>) => Promise<void> });
   this.handlers.set(eventName, existing);
 
   this.logger.info(`[EventBus] Plugin ${plugin} subscribed to ${eventName}`);
@@ -118,7 +118,7 @@ export class EventBus {
   * @param event - Event envelope to publish
   * @returns Promise that resolves when all handlers have executed
   */
-  async publish<T>(event: DomainEventEnvelope<T>): Promise<void> {
+  async publish<T>(event: DomainEventEnvelope<string, T>): Promise<void> {
   // P2-2 FIX: Snapshot the handler array before iterating.
   // Using the live reference means a subscribe() or unsubscribe() call from within
   // a handler mutates the array in place (via push/filter), causing:

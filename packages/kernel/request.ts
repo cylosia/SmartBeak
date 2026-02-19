@@ -154,13 +154,13 @@ export class StructuredLogger {
   // The previous approach caused the error message itself to be a JSON blob,
   // making log aggregation and search significantly harder.
   if (level === 'error') {
-    logger.error(message, error ?? new Error(message), entry as Record<string, unknown>);
+    logger.error(message, error ?? new Error(message), entry as unknown as Record<string, unknown>);
   } else if (level === 'warn') {
-    logger.warn(message, entry as Record<string, unknown>);
+    logger.warn(message, entry as unknown as Record<string, unknown>);
   } else if (level === 'debug') {
-    logger.debug(message, entry as Record<string, unknown>);
+    logger.debug(message, entry as unknown as Record<string, unknown>);
   } else {
-    logger.info(message, entry as Record<string, unknown>);
+    logger.info(message, entry as unknown as Record<string, unknown>);
   }
   }
 

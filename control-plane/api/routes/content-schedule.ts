@@ -28,7 +28,7 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
   app.post('/content/:id/schedule', async (req, res) => {
   try {
     // SECURITY FIX: Rate limit BEFORE auth to prevent DoS (per-IP isolation)
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor']);
 

@@ -73,7 +73,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   try {
     // P1-11 FIX: Rate limit BEFORE auth to prevent CPU exhaustion via JWT verification DDoS.
     // Previously auth (expensive JWT verify) ran before rate limit.
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
 
@@ -203,7 +203,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // POST /content - Create new content draft
   app.post('/content', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
@@ -252,7 +252,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // GET /content/:id - Get specific content
   app.get('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
 
@@ -289,7 +289,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // PATCH /content/:id - Update content draft
   app.patch('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
@@ -345,7 +345,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // POST /content/:id/publish - Publish content
   app.post('/content/:id/publish', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    await rateLimit('content', 20, req, res);
+    await rateLimit('content', 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
@@ -385,7 +385,7 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
   // DELETE /content/:id - Delete content (soft delete)
   app.delete('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
   try {
-    await rateLimit('content', 20, req, res);
+    await rateLimit('content', 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
 

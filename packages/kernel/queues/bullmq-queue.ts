@@ -1,4 +1,5 @@
 
+import { EventEmitter } from 'events';
 import { DomainEventEnvelope } from '@packages/types/domain-event';
 import { Queue } from 'bullmq';
 import { getLogger } from '@kernel/logger';
@@ -62,11 +63,6 @@ export const eventQueue = new Queue('events', {
   defaultJobOptions: {
     attempts: 5,
     backoff: { type: 'exponential', delay: 2_000 },
-    // P2-FIX (P2-1): Add explicit job timeout. Without this, a job that hangs
-    // (e.g. waiting on a network call that never resolves) stays in the active
-    // state forever, blocking the worker slot and preventing other jobs from
-    // running. BullMQ's default is no timeout (unlimited).
-    timeout: 30_000, // 30 seconds
     // P3-FIX: Retain completed jobs for 24 h in addition to capping by count.
     // Count-only retention means high-throughput periods evict jobs in minutes,
     // destroying the ability to correlate queue job IDs with audit_events rows
@@ -86,22 +82,24 @@ export const eventQueue = new Queue('events', {
 // process. Redis disconnects, TLS errors, and serialization failures all emit
 // this event. Without a handler, any Redis blip kills the application.
 eventQueue.on('error', (err) => {
-  logger.error('BullMQ queue error', { err });
+  logger.error('BullMQ queue error', err instanceof Error ? err : undefined);
 });
 
-eventQueue.on('failed', (job, err) => {
-  logger.error('Job permanently failed', {
-    jobId: job?.id,
-    jobName: job?.name,
-    err,
+// BullMQ v5: 'failed' and 'stalled' events are on QueueEvents, not Queue.
+// Use EventEmitter cast for backward-compatible runtime listeners.
+(eventQueue as unknown as EventEmitter).on('failed', (job: unknown, err: unknown) => {
+  const typedJob = job as { id?: string; name?: string } | undefined;
+  logger.error('Job permanently failed', err instanceof Error ? err : undefined, {
+    jobId: typedJob?.id,
+    jobName: typedJob?.name,
   });
 });
 
-eventQueue.on('stalled', (jobId) => {
-  logger.warn('Job stalled', { jobId });
+(eventQueue as unknown as EventEmitter).on('stalled', (jobId: unknown) => {
+  logger.warn('Job stalled', { jobId: String(jobId) });
 });
 
-export async function enqueueEvent(event: DomainEventEnvelope<unknown>) {
+export async function enqueueEvent(event: DomainEventEnvelope<string, unknown>) {
   // P1-FIX: Derive a deterministic job ID from the event envelope's identity fields
   // so that BullMQ deduplicates retries. Without a jobId, every call to enqueueEvent
   // created a new random job — duplicate enqueues (HTTP retries, at-least-once

@@ -42,11 +42,12 @@ export interface SearchDocumentRepository {
   * Search documents by query string
   *
   * @param query - The search query string
+  * @param indexId - The index ID to scope the search to a single tenant
   * @param limit - Maximum number of results to return (default: 20, max: 100)
   * @returns Promise resolving to array of search results
   * @throws {Error} If query execution fails
   */
-  search(query: string, limit?: number): Promise<SearchResultRow[]>;
+  search(query: string, indexId: string, limit?: number): Promise<SearchResultRow[]>;
 
   /**
   * Bulk upsert search documents

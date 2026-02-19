@@ -118,7 +118,7 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
     // P1-FIX: Remove spurious `undefined` second arg to logger.error.
     // logger.error(message, err?, metadata?) — passing undefined for err is a no-op
     // but confusing; pass metadata directly as the second argument.
-    logger.error('Cannot start experiment — not in ready state', {
+    logger.error('Cannot start experiment — not in ready state', undefined, {
       experimentId,
       currentStatus: exp.status,
     });
@@ -126,7 +126,7 @@ export async function experimentStartJob(payload: unknown): Promise<{ status: st
   }
 
   if (!exp.variants || exp.variants.length < 2) {
-    logger.error('Experiment must have at least 2 variants', {
+    logger.error('Experiment must have at least 2 variants', undefined, {
       experimentId,
       variantCount: exp.variants?.length ?? 0,
     });

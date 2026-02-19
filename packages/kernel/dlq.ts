@@ -158,7 +158,7 @@ class InMemoryDLQStorage implements DLQStorage {
     } else {
       // All existing messages have active retry callbacks — drop the incoming message
       // rather than silently exceeding MAX_SIZE and breaking the bounded-queue guarantee.
-      logger.error('DLQ size limit reached; all entries have active retries — dropping new message', {
+      logger.error('DLQ size limit reached; all entries have active retries — dropping new message', undefined, {
         droppedId: message.id,
         currentSize: this.messages.size,
       });

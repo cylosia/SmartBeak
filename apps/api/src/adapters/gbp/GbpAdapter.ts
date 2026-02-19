@@ -553,7 +553,7 @@ export class GbpAdapter {
       // now, the token is permanently lost — the user must re-authorize from
       // scratch. Promote this to a structured error log with the orgId so
       // on-call engineers can identify affected orgs in the incident timeline.
-      logger.error('gbp_refresh_token_storage_failed — token permanently lost for org; user must re-authorize', {
+      logger.error('gbp_refresh_token_storage_failed — token permanently lost for org; user must re-authorize', undefined, {
         orgId,
         error: error instanceof Error ? error.message : String(error),
       });

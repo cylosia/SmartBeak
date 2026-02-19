@@ -27,7 +27,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
   try {
     // H5-FIX: Rate limit BEFORE auth — throttles unauthenticated DoS attempts
     // before any auth infrastructure is touched.
-    await rateLimit('billing', 20, req, res);
+    await rateLimit('billing', 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner']);
 
@@ -50,7 +50,7 @@ export async function billingRoutes(app: FastifyInstance, pool: Pool) {
   app.get('/billing/plan', async (req, res) => {
   try {
     // H5-FIX: Rate limit before auth.
-    await rateLimit('billing', 50, req, res);
+    await rateLimit('billing', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner','admin']);
     const plan = await billing.getActivePlan(ctx["orgId"]);

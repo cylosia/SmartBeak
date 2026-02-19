@@ -31,7 +31,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     // The hand-rolled version lacked spoofing protection: an attacker could set
     // X-Forwarded-For: <victim-ip> to exhaust the victim's rate limit bucket.
     // @kernel/ip-utils validates the header against trusted proxy ranges.
-    const clientIp = getClientIp(req);
+    const clientIp = getClientIp(req as unknown as Parameters<typeof getClientIp>[0]);
     await rateLimit(`diligence:${clientIp}`, 30);
     // Validate token and get domain info
     const { rows } = await pool.query(
@@ -109,7 +109,7 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     }
     const { token } = tokenResult.data;
     // RD-1-FIX P1: Use kernelGetClientIp (see overview handler for rationale).
-    const clientIp = getClientIp(req);
+    const clientIp = getClientIp(req as unknown as Parameters<typeof getClientIp>[0]);
     await rateLimit(`diligence:${clientIp}`, 30);
     // Validate token
     const { rows } = await pool.query(

@@ -282,7 +282,7 @@ export function validateSearchDocumentFields(fields: unknown): SearchDocumentFie
   // BUG-DS-03 fix: removed redundant type guard that checked only `typeof title === 'string'`.
   // If we reach this point, all validations above have already passed — the guard was
   // always true and created false confidence (it did NOT enforce length constraints).
-  return f as SearchDocumentFields;
+  return f as unknown as SearchDocumentFields;
 }
 
 /**

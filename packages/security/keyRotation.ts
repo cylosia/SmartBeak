@@ -305,8 +305,9 @@ export class KeyRotationManager extends EventEmitter {
         [provider],
       );
 
-      if (rows.length > 0 && rows[0]['salt']) {
-        this.providerSalts.set(provider, Buffer.from(rows[0]['salt'], 'hex'));
+      const firstRow = rows[0];
+      if (rows.length > 0 && firstRow && firstRow['salt']) {
+        this.providerSalts.set(provider, Buffer.from(firstRow['salt'], 'hex'));
       } else {
         // FIX: Use DO NOTHING instead of DO UPDATE SET salt = EXCLUDED.salt.
         // In a multi-instance deployment, concurrent inserts would race and the last

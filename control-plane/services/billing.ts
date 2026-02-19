@@ -462,6 +462,7 @@ export class BillingService {
         } catch (stripeError) {
           logger.error(
             'STRIPE CANCEL FAILED AFTER DB COMMIT — manual Stripe reconciliation required',
+            stripeError instanceof Error ? stripeError : undefined,
             {
               orgId,
               subscriptionId: subscription['id'],

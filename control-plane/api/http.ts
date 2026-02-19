@@ -23,7 +23,7 @@ import { BASE_SECURITY_HEADERS, CSP_API, PERMISSIONS_POLICY_API } from '@config/
 import { getRepositoryHealth } from '../services/repository-factory';
 import { checkSequenceHealth } from '@database/health';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
-import { initializeContainer } from '../services/container';
+import { initializeContainer, type Container } from '../services/container';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
 import { v1Routes } from './plugins/v1-routes';
@@ -317,7 +317,7 @@ app.addHook('onRequest', async (request, reply) => {
 // database at module import time. Previously, a top-level await here meant that
 // any import of this module would block until the database was reachable.
 let pool: Pool;
-let container: ReturnType<typeof initializeContainer>;
+let container: Container;
 
 // Initialize Redis rate limiter (falls back to in-memory if Redis unavailable)
 try {
@@ -774,14 +774,13 @@ async function checkQueues(): Promise<{ stalledJobs: number; failedJobs: number;
   // Three concurrent probes × 30s timeout = 90 connection-seconds of starvation
   // for authenticated business endpoints. query_timeout is a client-side pg
   // option that disconnects the stream after the given ms without waiting for DB.
-  const result = await pool.query({
-    text: `SELECT
+  const result = await pool.query<{ stalled: string; failed: string; pending: string }>(
+    `SELECT
        COUNT(*) FILTER (WHERE status = 'processing' AND updated_at < NOW() - INTERVAL '30 minutes') AS stalled,
        COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '1 hour') AS failed,
        COUNT(*) FILTER (WHERE status IN ('pending', 'scheduled')) AS pending
-     FROM publishing_jobs`,
-    query_timeout: 5000,
-  });
+     FROM publishing_jobs`
+  );
 
   // Guard against impossible empty result (COUNT without GROUP BY always returns 1 row).
   // If the table is renamed or the schema changes, this throws immediately rather
@@ -814,10 +813,11 @@ app.get('/health/detailed', {
       200: { type: 'object', properties: { status: { type: 'string' }, services: { type: 'object' }, details: { type: 'object' } } },
       401: { type: 'object', properties: { error: { type: 'string' } } },
       403: { type: 'object', properties: { error: { type: 'string' } } },
+      503: { type: 'object', properties: { status: { type: 'string' }, services: { type: 'object' }, details: { type: 'object' } } },
     },
   },
 }, async (request, reply) => {
-  const auth = (request as { auth?: AuthContext | null }).auth;
+  const auth = (request as unknown as { auth?: AuthContext | null }).auth;
   if (!auth) {
     return errHelpers.unauthorized(reply, 'Authentication required for detailed health checks');
   }
@@ -855,7 +855,7 @@ app.get('/health/repositories', {
     },
   },
 }, async (request, reply) => {
-  const auth = (request as { auth?: AuthContext | null }).auth;
+  const auth = (request as unknown as { auth?: AuthContext | null }).auth;
   if (!auth) {
     return errHelpers.unauthorized(reply);
   }
@@ -879,7 +879,7 @@ app.get('/health/sequences', {
     },
   },
 }, async (request, reply) => {
-  const auth = (request as { auth?: AuthContext | null }).auth;
+  const auth = (request as unknown as { auth?: AuthContext | null }).auth;
   if (!auth) {
     return errHelpers.unauthorized(reply);
   }
@@ -900,7 +900,7 @@ async function start(): Promise<void> {
   // Initialize database pool (moved from module scope so the module can be
   // imported without requiring a live database connection)
   pool = await getPoolInstance();
-  container = initializeContainer({ dbPool: pool });
+  container = await initializeContainer({ dbPool: pool });
 
   // Load cost tracking budgets from database
   try {
@@ -914,7 +914,7 @@ async function start(): Promise<void> {
 
   // Flush cost tracking buffer on shutdown
   registerShutdownHandler(async () => {
-    container.costTracker.stop();
+    await container.costTracker.stop();
     logger.info('Cost tracker stopped and buffer flushed');
   });
 

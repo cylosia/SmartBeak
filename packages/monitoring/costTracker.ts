@@ -47,7 +47,7 @@ export class CostTracker extends EventEmitter {
   private readonly db: Pool;
   private buffer: CostEntry[] = [];
   private readonly flushIntervalMs: number = 30000; // 30 seconds
-  private flushTimer?: NodeJS.Timeout;
+  private flushTimer?: NodeJS.Timeout | undefined;
   private readonly budgets = new LRUCache<string, { daily: number; monthly: number }>({ maxSize: 10000, ttlMs: 86400000 });
 
   constructor(db: Pool) {
@@ -511,7 +511,7 @@ export class CostTracker extends EventEmitter {
   let loaded = 0;
 
   try {
-    while (true) {
+    for (;;) {
       const { rows } = await this.db.query(
         `SELECT org_id, preferences FROM org_llm_prefs ORDER BY org_id LIMIT $1 OFFSET $2`,
         [PAGE_SIZE, offset]

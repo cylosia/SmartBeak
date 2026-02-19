@@ -6,11 +6,11 @@ import { getLogger } from '@kernel/logger';
 import { withSpan, addSpanAttributes, recordSpanException, getBusinessKpis, getSloTracker } from '@packages/monitoring';
 import { writeToOutbox } from '@packages/database/outbox';
 
-import { DeliveryAdapter, SendNotificationInput } from './ports/DeliveryAdapter';
+import { DeliveryAdapter, SendNotificationInput, type NotificationChannel } from './ports/DeliveryAdapter';
 import { NotificationAttemptRepository } from './ports/NotificationAttemptRepository';
 import { NotificationDLQRepository } from './ports/NotificationDLQRepository';
 import { NotificationFailed } from '../domain/events/NotificationFailed';
-import { Notification, NotificationPayload } from '../domain/entities/Notification';
+import { Notification } from '../domain/entities/Notification';
 import { NotificationPreferenceRepository } from './ports/NotificationPreferenceRepository';
 import { NotificationRepository } from './ports/NotificationRepository';
 import { NotificationSent } from '../domain/events/NotificationSent';
@@ -212,7 +212,7 @@ export class NotificationWorker {
 
   // ── External I/O: no DB client held ─────────────────────────────────────
   const message: SendNotificationInput = {
-    channel: notificationChannel,
+    channel: notificationChannel as NotificationChannel,
     to: sendingNotification.payload.to ?? '',
     template: sendingNotification.template,
     payload: sendingNotification.payload,

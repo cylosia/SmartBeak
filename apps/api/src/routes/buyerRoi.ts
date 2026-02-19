@@ -34,7 +34,7 @@ function validateRoleRow(row: unknown): { role: string } {
   if (!result.success) {
   // P3-FIX: ZodError.message is a verbose multi-line concatenation of all
   // issues. Use errors[0].message for a concise, actionable single message.
-  throw new Error(`Invalid role row: ${result.error.errors[0]?.message ?? 'validation failed'}`);
+  throw new Error(`Invalid role row: ${result.error.issues[0]?.message ?? 'validation failed'}`);
   }
   return result.data;
 }
@@ -43,7 +43,7 @@ function validateRoiRow(row: unknown): RoiRow {
   const result = RoiRowSchema.safeParse(row);
   if (!result.success) {
   // P3-FIX: Same ZodError.message issue as validateRoleRow above.
-  throw new Error(`Invalid ROI row: ${result.error.errors[0]?.message ?? 'validation failed'}`);
+  throw new Error(`Invalid ROI row: ${result.error.issues[0]?.message ?? 'validation failed'}`);
   }
   return result.data;
 }
@@ -199,7 +199,7 @@ export async function buyerRoiRoutes(app: FastifyInstance): Promise<void> {
     if (cursor) {
       // P3-FIX (P3-4): Knex QueryBuilder is mutable; .where() modifies in place.
       // Removed the misleading `void` keyword — the cursor filter IS applied.
-      query.where('content_roi_models.id', '>', cursor);
+      void query.where('content_roi_models.id', '>', cursor);
     }
 
     const rawRows = await query;

@@ -428,10 +428,16 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
   try {
     const client = getRedisClient();
     // Check both per-token revocation AND user-wide revocation in a single pipeline
-    const [jtiRevoked, userRevoked] = await client.pipeline()
+    const pipelineResult = await client.pipeline()
       .exists(`${REVOCATION_KEY_PREFIX}${jti}`)
       .exists(`jwt:revoked:user:${userId}`)
       .exec();
+
+    if (!pipelineResult) {
+      return false;
+    }
+
+    const [jtiRevoked, userRevoked] = pipelineResult;
 
     // Success - reset failure count
     circuitBreaker.failures = 0;

@@ -21,7 +21,7 @@ export type AuthenticatedRequest = FastifyRequest & {
  */
 export function hasAuthContext(req: FastifyRequest): req is AuthenticatedRequest {
   // Use bracket notation to avoid property-access from prototype chain
-  const r = req as Record<string, unknown>;
+  const r = req as unknown as Record<string, unknown>;
   return r['auth'] !== null && r['auth'] !== undefined && typeof r['auth'] === 'object';
 }
 
@@ -37,7 +37,7 @@ export function getAuthContext(req: FastifyRequest): AuthContext {
     // FIXED (TYPES-4): Throw AuthError so Fastify's error handler returns 401 not 500
     throw new AuthError('Auth context not found', ErrorCodes['UNAUTHORIZED']);
   }
-  const r = req as Record<string, unknown>;
+  const r = req as unknown as Record<string, unknown>;
   return r['auth'] as AuthContext;
 }
 
@@ -49,6 +49,6 @@ export function getAuthContext(req: FastifyRequest): AuthContext {
  */
 export function getOptionalAuthContext(req: FastifyRequest): AuthContext | null {
   if (!hasAuthContext(req)) return null;
-  const r = req as Record<string, unknown>;
+  const r = req as unknown as Record<string, unknown>;
   return r['auth'] as AuthContext;
 }

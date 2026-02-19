@@ -245,8 +245,8 @@ export interface AuditEventParams {
   userId: string;
   action: string;
   entityType: string;
-  entityId?: string;
-  metadata?: Record<string, unknown>;
+  entityId?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
   ip: string;
 }
 

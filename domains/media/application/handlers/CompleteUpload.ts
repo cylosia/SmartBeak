@@ -14,7 +14,7 @@ import { MediaUploadCompletedPayload } from '../../domain/events/MediaUploadComp
 export interface CompleteUploadResult {
   success: boolean;
   asset?: MediaAsset;
-  event?: DomainEventEnvelope<MediaUploadCompletedPayload>;
+  event?: DomainEventEnvelope<string, MediaUploadCompletedPayload>;
   error?: string;
 }
 

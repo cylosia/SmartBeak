@@ -64,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // SECURITY FIX T-1: Validate request body with Zod schema
     const bodyResult = TransferBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-      return sendError(res, 400, bodyResult.error.errors[0]?.message ?? 'Invalid request body');
+      return sendError(res, 400, bodyResult.error.issues[0]?.message ?? 'Invalid request body');
     }
 
     const { domainId, targetUserId, targetOrgId } = bodyResult.data;

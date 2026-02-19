@@ -43,7 +43,7 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
   app.post('/seo/:id', async (req, res) => {
   try {
-    await rateLimit('seo', 50, req, res);
+    await rateLimit('seo', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 

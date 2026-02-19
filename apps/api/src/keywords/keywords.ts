@@ -91,7 +91,7 @@ export async function upsertKeyword(input: {
     throw new ValidationError(
       `Keyword phrase must not exceed ${MAX_PHRASE_LENGTH} characters`,
       'phrase',
-      ErrorCodes.VALIDATION_FAILED,
+      ErrorCodes.VALIDATION_ERROR,
     );
   }
 

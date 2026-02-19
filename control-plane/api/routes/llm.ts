@@ -94,7 +94,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
     // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
     try {
-      await rateLimit('llm', 30, req, res);
+      await rateLimit('llm', 30);
     } catch (_e) {
       logger.warn('LLM rate limit exceeded', { route: req.url });
       return;
@@ -131,7 +131,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
     try {
-      await rateLimit('llm', 30, req, res);
+      await rateLimit('llm', 30);
     } catch (_e) {
       logger.warn('LLM rate limit exceeded', { route: req.url });
       return;
@@ -170,15 +170,15 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
         });
       } else {
         const stored = parseResult.data;
-        preferences = { ...defaults, ...stored };
+        preferences = { ...defaults, ...stored } as LlmPreferences;
         if (stored.contentGeneration) {
-        preferences.contentGeneration = { ...defaults.contentGeneration, ...stored.contentGeneration };
+        preferences.contentGeneration = { ...defaults.contentGeneration, ...stored.contentGeneration } as LlmPreferences['contentGeneration'];
         }
         if (stored.imageGeneration) {
-        preferences.imageGeneration = { ...defaults.imageGeneration, ...stored.imageGeneration };
+        preferences.imageGeneration = { ...defaults.imageGeneration, ...stored.imageGeneration } as LlmPreferences['imageGeneration'];
         }
         if (stored.costLimits) {
-        preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits };
+        preferences.costLimits = { ...defaults.costLimits, ...stored.costLimits } as LlmPreferences['costLimits'];
         }
       }
     }
@@ -206,7 +206,7 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
     requireRole(ctx, ['owner', 'admin']);
     try {
-      await rateLimit('llm', 30, req, res);
+      await rateLimit('llm', 30);
     } catch (_e) {
       logger.warn('LLM rate limit exceeded', { route: req.url });
       return;

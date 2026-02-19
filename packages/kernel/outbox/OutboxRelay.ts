@@ -20,7 +20,7 @@ import { Pool } from 'pg';
 import { EventBus } from '../event-bus';
 import { enqueueEvent } from '../queues/bullmq-queue';
 import { getLogger } from '../logger';
-import { DomainEventEnvelope } from '@packages/types/domain-event';
+import { DomainEventEnvelope, type IsoDateString } from '@packages/types/domain-event';
 
 const logger = getLogger('outbox-relay');
 
@@ -182,7 +182,7 @@ export class OutboxRelay {
             id: row.id,
             name: row.event_name,
             version: row.event_version,
-            occurredAt: row.occurred_at,
+            occurredAt: row.occurred_at as IsoDateString,
             payload: row.payload,
             meta: row.meta,
           };

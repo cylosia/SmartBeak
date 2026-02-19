@@ -48,7 +48,7 @@ export default function FeatureFlags() {
 
   const fetchFlags = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(apiUrl('admin/flags'), { credentials: 'include', signal });
+      const res = await fetch(apiUrl('admin/flags'), { credentials: 'include', ...(signal ? { signal } : {}) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: { flags: FlagEntry[] } = await res.json();
       setFlags(data.flags);

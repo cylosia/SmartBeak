@@ -99,7 +99,7 @@ export function registerHealthCheck(check: HealthCheck): void {
         // P2-FIX: Replaced `err as Error` unsafe cast with structured logging.
         // If `err` is not an Error instance (e.g., a thrown string or object),
         // the cast would silently log undefined for .message and .stack.
-        logger.error(`Health check '${check.name}' failed`, { error: err instanceof Error ? err.message : String(err) });
+        logger.error(`Health check '${check.name}' failed`, err instanceof Error ? err : undefined, { error: err instanceof Error ? err.message : String(err) });
         const errorMessage = err instanceof Error ? err.message : String(err);
         getMutableLastResults().set(check.name, {
         name: check.name,

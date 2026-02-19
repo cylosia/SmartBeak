@@ -54,7 +54,7 @@ export class FacebookAdapter implements PublishAdapter {
     // string describes WHY the URL was blocked (e.g., "DNS resolved to private IP
     // 192.168.1.1") which gives an attacker actionable feedback for iterative
     // bypass attempts. Log the detail internally; throw a generic message.
-    this.logger.error('SSRF check failed for Facebook API URL', context, {
+    this.logger.error('SSRF check failed for Facebook API URL', context, new Error('SSRF check failed'), {
       reason: ssrfCheck.reason,
     });
     throw new Error('Facebook API request blocked by security policy');
