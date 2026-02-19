@@ -1,7 +1,7 @@
 
 import { Job } from 'bullmq';
 import { randomUUID, randomInt } from 'crypto';
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 import { Pool } from 'pg';
 import { z } from 'zod';
 

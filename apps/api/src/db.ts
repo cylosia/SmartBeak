@@ -1,4 +1,5 @@
-import { knex, Knex } from 'knex';
+import knex from 'knex';
+import type { Knex } from 'knex';
 import { registerShutdownHandler, setupShutdownHandlers } from './utils/shutdown';
 import { getLogger } from '@kernel/logger';
 import { emitCounter } from '@kernel/metrics';

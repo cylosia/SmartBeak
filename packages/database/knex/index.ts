@@ -1,5 +1,10 @@
-import { knex, Knex } from 'knex';
+import knex from 'knex';
+import type { Knex } from 'knex';
 import { getLogger } from '@kernel/logger';
+
+// Re-export so the rest of the codebase (including generate-openapi.ts) still works
+export { knex };
+export type { Knex };
 
 const _logger = getLogger('database:knex');
 
