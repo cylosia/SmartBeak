@@ -159,7 +159,12 @@ const globalStampedeProtector = new CacheStampedeProtector();
 export async function getOrComputeWithStampedeProtection<T>(
   key: string,
   factory: () => Promise<T>,
-  options?: Parameters<CacheStampedeProtector['getOrCompute']>[2]
+  options?: {
+    cacheGetter?: () => Promise<T | undefined> | T | undefined;
+    cacheSetter?: (value: T) => Promise<void> | void;
+    timeoutMs?: number;
+    onDedupe?: () => void;
+  }
 ): Promise<T> {
   // P2-FIX: Pass explicit type parameter so TypeScript infers the return type
   // correctly rather than relying on an unsafe `as Promise<T>` cast.

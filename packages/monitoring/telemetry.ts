@@ -112,15 +112,6 @@ export interface TracedOperationOptions {
   parentContext?: Context;
 }
 
-// Type definitions for instrumentation hooks
-// Using IncomingMessage/ServerResponse compatible shapes to avoid importing http module
-type HttpRequestLike = {
-  headers: Record<string, string | string[] | undefined>;
-};
-
-type HttpResponseLike = {
-  headers: Record<string, string | string[] | undefined>;
-};
 
 // ============================================================================
 // Global State
@@ -214,15 +205,19 @@ export function initTelemetry(config: TelemetryConfig): void {
       registerInstrumentations({
         instrumentations: [
           new HttpInstrumentation({
-            requestHook: (span: Span, request: HttpRequestLike) => {
-              const contentLength = request.headers['content-length'];
-              span.setAttribute('http.request.body.size',
-                typeof contentLength === 'string' ? contentLength : 0);
+            requestHook: (span, request) => {
+              if ('headers' in request && typeof request.headers === 'object') {
+                const contentLength = request.headers['content-length'];
+                span.setAttribute('http.request.body.size',
+                  typeof contentLength === 'string' ? contentLength : 0);
+              }
             },
-            responseHook: (span: Span, response: HttpResponseLike) => {
-              const contentLength = response.headers['content-length'];
-              span.setAttribute('http.response.body.size',
-                typeof contentLength === 'string' ? contentLength : 0);
+            responseHook: (span, response) => {
+              if ('headers' in response && typeof response.headers === 'object') {
+                const contentLength = response.headers['content-length'];
+                span.setAttribute('http.response.body.size',
+                  typeof contentLength === 'string' ? contentLength : 0);
+              }
             },
           }),
           new PgInstrumentation({

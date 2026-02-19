@@ -195,23 +195,22 @@ export class EmailAdapter implements DeliveryAdapter {
   constructor(config?: Partial<EmailConfig>) {
     // P1-SECURITY FIX: Prevent prototype pollution via spread of untrusted config objects.
     // `{ ...(config as Partial<EmailConfig>) }` would copy __proto__ if set on config.
-    // Explicitly pick only the known EmailConfig fields instead.
-    const safeConfig: Partial<EmailConfig> = {
-      provider: config?.provider,
-      awsAccessKeyId: config?.awsAccessKeyId,
-      awsSecretAccessKey: config?.awsSecretAccessKey,
-      awsRegion: config?.awsRegion,
-      smtpHost: config?.smtpHost,
-      smtpPort: config?.smtpPort,
-      smtpUser: config?.smtpUser,
-      smtpPass: config?.smtpPass,
-      smtpSecure: config?.smtpSecure,
-      sendgridApiKey: config?.sendgridApiKey,
-      postmarkToken: config?.postmarkToken,
-      fromEmail: config?.fromEmail,
-      fromName: config?.fromName,
-      replyTo: config?.replyTo,
-    };
+    // Explicitly pick only the known EmailConfig fields, skipping undefined values
+    // to satisfy exactOptionalPropertyTypes.
+    const safeKeys = [
+      'provider', 'awsAccessKeyId', 'awsSecretAccessKey', 'awsRegion',
+      'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpSecure',
+      'sendgridApiKey', 'postmarkToken', 'fromEmail', 'fromName', 'replyTo',
+    ] as const;
+    const safeConfig: Partial<EmailConfig> = {};
+    if (config) {
+      for (const key of safeKeys) {
+        if (config[key] !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- safe: key is a known EmailConfig key
+          (safeConfig as Record<string, unknown>)[key] = config[key];
+        }
+      }
+    }
 
     this.config = {
       ...safeConfig,
