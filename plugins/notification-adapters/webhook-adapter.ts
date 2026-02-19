@@ -3,8 +3,8 @@ import type {
   DeliveryAdapter,
   SendNotificationInput,
   DeliveryResult,
-} from '@types/notifications';
-import { DeliveryAdapterError } from '@types/notifications';
+} from '@packages/types/notifications';
+import { DeliveryAdapterError } from '@packages/types/notifications';
 import { getOptionalEnv, getEnvWithDefault } from '@config';
 
 import { ErrorCodes, ExternalAPIError } from '@kernel/validation';

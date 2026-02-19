@@ -196,7 +196,7 @@ export class EmailAdapter implements DeliveryAdapter {
     // P1-SECURITY FIX: Prevent prototype pollution via spread of untrusted config objects.
     // `{ ...(config as Partial<EmailConfig>) }` would copy __proto__ if set on config.
     // Explicitly pick only the known EmailConfig fields instead.
-    const safeConfig: Partial<EmailConfig> = {
+    const safeConfig: { [K in keyof EmailConfig]?: EmailConfig[K] | undefined } = {
       provider: config?.provider,
       awsAccessKeyId: config?.awsAccessKeyId,
       awsSecretAccessKey: config?.awsSecretAccessKey,
@@ -339,7 +339,7 @@ export class EmailAdapter implements DeliveryAdapter {
         throw new ExternalAPIError(
           'Invalid recipient email address',
           ErrorCodes.INVALID_EMAIL,
-          { validationErrors: emailValidation.error.issues.map(i => i.message) }
+          { validationErrors: emailValidation.error.issues.map((i: { message: string }) => i.message) }
         );
       }
 

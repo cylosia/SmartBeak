@@ -734,7 +734,7 @@ export class KeyRotationManager extends EventEmitter {
        FROM api_keys
        ORDER BY expires_at`,
     );
-    return rows.map((r) => ({
+    return rows.map((r: RotationStatusRow) => ({
       provider: r['provider'],
       status: r['status'],
       rotatedAt: r['rotated_at'],
