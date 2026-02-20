@@ -39,10 +39,12 @@ export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
   const randomSuffix = crypto.randomBytes(4).toString('hex');
 
   return {
-    id: options.id || `job-${timestamp}-${randomSuffix}`,
-    name: options.name || 'test-job',
-    queue: options.queue || 'default',
-    data: options.data || {},
+    // AUDIT-FIX P3: Use ?? instead of || for string fields. Empty string ""
+    // is a valid test value but || treats it as falsy, generating defaults.
+    id: options.id ?? `job-${timestamp}-${randomSuffix}`,
+    name: options.name ?? 'test-job',
+    queue: options.queue ?? 'default',
+    data: options.data ?? {},
     opts: {
       // AUDIT-FIX L11: Use ?? instead of ||. priority: 0 is a valid value
       // (highest BullMQ priority) but || coerces it to the default of 50.
@@ -55,7 +57,7 @@ export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
       },
     },
     attemptsMade: 0,
-    created_at: options.createdAt || new Date(),
+    created_at: options.createdAt ?? new Date(),
     processed_at: null,
     completed_at: null,
     failed_at: null,
@@ -65,22 +67,25 @@ export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
   };
 }
 
+// AUDIT-FIX P3: Added explicit return types. Without them, TypeScript infers
+// the return type from the spread expression, which is fragile — adding a field
+// to JobFactoryResult may not propagate as expected.
 export function createHighPriorityJob(
   options: Omit<JobFactoryOptions, 'priority'> = {}
-) {
+): JobFactoryResult {
   return createJob({ ...options, priority: 10 });
 }
 
 export function createLowPriorityJob(
   options: Omit<JobFactoryOptions, 'priority'> = {}
-) {
+): JobFactoryResult {
   return createJob({ ...options, priority: 90 });
 }
 
 export function createDelayedJob(
   delayMs: number,
   options: Omit<JobFactoryOptions, 'delay'> = {}
-) {
+): JobFactoryResult {
   return createJob({ ...options, delay: delayMs });
 }
 
@@ -107,7 +112,15 @@ export interface FailedJobOptions extends JobFactoryOptions {
   attemptsMade?: number;
 }
 
-export function createFailedJob(options: FailedJobOptions = {}) {
+// AUDIT-FIX P3: Explicit return type for failed job factory.
+export interface FailedJobFactoryResult extends Omit<JobFactoryResult, 'failed_at' | 'failedReason' | 'stacktrace' | 'attemptsMade'> {
+  failed_at: Date;
+  failedReason: string;
+  stacktrace: string[];
+  attemptsMade: number;
+}
+
+export function createFailedJob(options: FailedJobOptions = {}): FailedJobFactoryResult {
   const job = createJob(options);
   
   return {
@@ -127,7 +140,14 @@ export interface CompletedJobOptions extends JobFactoryOptions {
   processingTimeMs?: number;
 }
 
-export function createCompletedJob(options: CompletedJobOptions = {}) {
+// AUDIT-FIX P3: Explicit return type for completed job factory.
+export interface CompletedJobFactoryResult extends Omit<JobFactoryResult, 'processed_at' | 'completed_at' | 'returnvalue'> {
+  processed_at: Date;
+  completed_at: Date;
+  returnvalue: unknown;
+}
+
+export function createCompletedJob(options: CompletedJobOptions = {}): CompletedJobFactoryResult {
   const job = createJob(options);
   const completedAt = new Date();
   // P3-C FIX: Use ?? instead of ||. processingTimeMs=0 is a valid value

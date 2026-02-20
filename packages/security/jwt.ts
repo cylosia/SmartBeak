@@ -45,7 +45,11 @@ export const JwtClaimsSchema = z.object({
   // F31-FIX: orgId is now required. It was optional in the schema but required
   // by getAuthContext(), causing silent auth failures for tokens without orgId.
   orgId: z.string().min(1).max(256),
-  aud: z.union([z.string(), z.array(z.string())]).optional(),
+  // AUDIT-FIX P2: Add .min(1) to array branch to reject empty audiences.
+  // An empty array passes Zod validation but rawAud[0] is undefined, which
+  // would silently change the audience to DEFAULT_AUDIENCE on refresh —
+  // a privilege escalation from "no audience" to the default.
+  aud: z.union([z.string(), z.array(z.string()).min(1)]).optional(),
   iss: z.string().optional(),
   jti: z.string().optional(),
   exp: z.number().optional(),
@@ -148,21 +152,23 @@ export function constantTimeCompare(a: string, b: string): boolean {
   // allowing an empty secret to "match" an empty challenge.
   if (a.length === 0 || b.length === 0) return false;
 
+  // AUDIT-FIX P1: Reject length mismatch early instead of padding to max length.
+  // The previous padding strategy (Buffer.alloc(maxLen)) leaked length information:
+  // comparing a 10-byte vs 10,000-byte string took measurably longer due to the
+  // 10KB buffer allocation + timingSafeEqual on 10KB. Early length rejection is
+  // the standard approach and does not leak which input is longer (the attacker
+  // controls both inputs for boundOrgId comparison, or only one for auth header).
+  if (a.length !== b.length) return false;
+
   const aBuf = Buffer.from(a, 'utf8');
   const bBuf = Buffer.from(b, 'utf8');
-  const maxLen = Math.max(aBuf.length, bBuf.length);
 
-  const aPadded = Buffer.alloc(maxLen, 0);
-  const bPadded = Buffer.alloc(maxLen, 0);
-  aBuf.copy(aPadded);
-  bBuf.copy(bPadded);
+  // After UTF-8 encoding, byte lengths may differ even if string lengths match
+  // (e.g., multi-byte characters). Reject to avoid timingSafeEqual throwing.
+  if (aBuf.length !== bBuf.length) return false;
 
   try {
-    // AUDIT-FIX M5: Avoid short-circuit evaluation that could leak length info.
-    // Compute both values before combining to maintain constant-time behavior.
-    const contentsEqual = timingSafeEqual(aPadded, bPadded);
-    const lengthEqual = a.length === b.length;
-    return contentsEqual && lengthEqual;
+    return timingSafeEqual(aBuf, bBuf);
   } catch {
     return false;
   }
@@ -411,12 +417,18 @@ export function verifyToken(
         algorithms: ['HS256'],
         clockTolerance: JWT_CLOCK_TOLERANCE,
         // F29-FIX: ignoreExpiration removed - expired tokens must always be rejected
+        // AUDIT-FIX P2: Explicit nbf enforcement (defense-in-depth). The default
+        // is false, but making it explicit prevents regressions if jsonwebtoken
+        // changes defaults or a wrapper layer inadvertently overrides it.
+        ignoreNotBefore: false,
       });
 
       // Runtime validation with Zod
       const claims = verifyJwtClaims(payload);
 
-      // Validate required claims
+      // AUDIT-FIX P3: claims.sub is guaranteed non-empty by JwtClaimsSchema
+      // (z.string().min(1)), so this branch is unreachable. Kept as defense-in-depth
+      // for the security-critical verification path.
       if (!claims.sub) {
         lastError = new TokenInvalidError('Token missing required claim: sub');
       } else if (successResult === null) {

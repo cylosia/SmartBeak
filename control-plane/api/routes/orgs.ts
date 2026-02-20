@@ -1,6 +1,6 @@
 
 
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
@@ -83,8 +83,13 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // FIX (P2-201): Resource creation must return HTTP 201, not the default 200.
     return res.code(201).send(await orgs.createOrg(name, ctx.userId));
   } catch (error) {
-    if (error instanceof AuthError) {
-      return error.statusCode === 403
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    // Five independent AuthError classes exist (security/jwt, kernel/auth, @errors,
+    // control-plane/services/auth, apps/web/lib/auth). instanceof only matches the
+    // imported class. The name check catches errors from any AuthError variant.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+      const status = error instanceof AuthError ? error.statusCode : 401;
+      return status === 403
         ? errors.forbidden(res)
         : errors.unauthorized(res);
     }
@@ -137,8 +142,13 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
 
     return res.send(await orgs.listMembers(id, limit, offset));
   } catch (error) {
-    if (error instanceof AuthError) {
-      return error.statusCode === 403
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    // Five independent AuthError classes exist (security/jwt, kernel/auth, @errors,
+    // control-plane/services/auth, apps/web/lib/auth). instanceof only matches the
+    // imported class. The name check catches errors from any AuthError variant.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+      const status = error instanceof AuthError ? error.statusCode : 401;
+      return status === 403
         ? errors.forbidden(res)
         : errors.unauthorized(res);
     }
@@ -181,8 +191,13 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const { email, role } = bodyResult.data;
     return res.send(await invites.invite(id, email, role));
   } catch (error) {
-    if (error instanceof AuthError) {
-      return error.statusCode === 403
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    // Five independent AuthError classes exist (security/jwt, kernel/auth, @errors,
+    // control-plane/services/auth, apps/web/lib/auth). instanceof only matches the
+    // imported class. The name check catches errors from any AuthError variant.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+      const status = error instanceof AuthError ? error.statusCode : 401;
+      return status === 403
         ? errors.forbidden(res)
         : errors.unauthorized(res);
     }
@@ -235,8 +250,13 @@ export async function orgRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     await members.addMember(id, userId, role, ctx.userId);
     return res.send({ ok: true });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return error.statusCode === 403
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    // Five independent AuthError classes exist (security/jwt, kernel/auth, @errors,
+    // control-plane/services/auth, apps/web/lib/auth). instanceof only matches the
+    // imported class. The name check catches errors from any AuthError variant.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+      const status = error instanceof AuthError ? error.statusCode : 401;
+      return status === 403
         ? errors.forbidden(res)
         : errors.unauthorized(res);
     }

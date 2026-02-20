@@ -2,10 +2,13 @@ import jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
 import { z } from 'zod';
 
-import { getLogger } from '../../packages/kernel/logger';
+// AUDIT-FIX P2: Use path aliases instead of relative paths. Relative paths
+// (../../packages/...) are fragile, break on directory restructuring, and are
+// harder to mock in tests. The project defines @kernel/* and @security/* aliases.
+import { getLogger } from '@kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
-import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken } from '../../packages/security/jwt';
+import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken, UserRoleSchema as SecurityUserRoleSchema, type JwtClaims as SecurityJwtClaims } from '@security/jwt';
 
 
 /**
@@ -25,24 +28,11 @@ const logger = getLogger('JwtService');
 // P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
 // SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
 export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
-// AUDIT-FIX P1: jti, iat, exp are optional in the security package's Zod schema
-// (JwtClaimsSchema). Declaring them required here was a type-lie: verifyToken()
-// returns the security package's type where these are optional, so callers that
-// access claims.jti / claims.iat / claims.exp believing they are guaranteed
-// non-undefined can crash or produce NaN. Aligned to match the actual runtime
-// shape. Callers MUST null-check before using these fields.
-export interface JwtClaims {
-  sub: string;
-  role: UserRole;
-  // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
-  orgId: string;
-  aud?: string | undefined;
-  iss?: string | undefined;
-  jti?: string | undefined;
-  iat?: number | undefined;
-  exp?: number | undefined;
-  boundOrgId?: string | undefined;
-}
+// AUDIT-FIX P2: Import JwtClaims from the security package's Zod-derived type
+// instead of maintaining a manual copy. The previous manual interface drifted
+// from the Zod schema (e.g., missing nbf until manually added). Importing
+// ensures the type stays in sync with the canonical schema definition.
+export type JwtClaims = SecurityJwtClaims;
 
 // Re-export from unified auth package for backward compatibility
 export {
@@ -53,9 +43,11 @@ export {
 // Zod Schemas
 // ============================================================================
 
-// P0-FIX: Added 'owner' to match packages/security/jwt.ts and prevent Zod validation
-// failures when creating tokens for org owners.
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner', 'buyer']);
+// AUDIT-FIX P2: Re-export from the security package instead of maintaining a
+// duplicate definition. Three independent copies of UserRoleSchema meant that
+// adding a new role to one copy but forgetting the others silently broke auth.
+// The security package is the single source of truth.
+export const UserRoleSchema = SecurityUserRoleSchema;
 
 export const JwtClaimsInputSchema = z.object({
   sub: z.string().min(1).max(256),
@@ -148,9 +140,13 @@ export type TimeUnit = 'ms' | 's' | 'm' | 'h' | 'd' | 'w';
 // Error Types (additional service-specific errors)
 // ============================================================================
 
-class TokenInvalidError extends Error {
+// AUDIT-FIX P2: Extends AuthError instead of bare Error. The previous Error-based
+// class had no `code`, no `statusCode`, and was missed by all `instanceof AuthError`
+// catch blocks. Key configuration errors (e.g., 'No signing keys available') would
+// produce 500 responses instead of proper 401 auth errors.
+class TokenInvalidError extends AuthError {
   constructor(message: string) {
-    super(message);
+    super(message, 'TOKEN_INVALID');
     this.name = 'TokenInvalidError';
   }
 }
@@ -192,7 +188,11 @@ const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
 * @returns Milliseconds
 */
 function parseMs(timeStr: string): number {
-  const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/i);
+  // AUDIT-FIX P3: Removed /i flag. The Zod schema (JwtClaimsInputSchema.expiresIn)
+  // uses a case-sensitive regex, so validated input is always lowercase. Matching
+  // case-insensitively here but case-sensitively at the schema creates an
+  // inconsistency where parseMs accepts values that Zod would reject.
+  const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/);
   if (!match) {
     // AUDIT-FIX P2: Throw on invalid input instead of silently defaulting.
     // For a security-sensitive function controlling token lifetime, a silent
@@ -203,6 +203,15 @@ function parseMs(timeStr: string): number {
   }
 
   const value = parseInt(match[1]!, 10);
+  // AUDIT-FIX P2: Reject non-safe integers. The regex allows arbitrarily large
+  // digit sequences (e.g. "99999999999999999999d"). parseInt truncates to a
+  // double-precision float, silently losing precision. For a security-sensitive
+  // function controlling token lifetime, this could grant longer access than intended.
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new TokenInvalidError(
+      `Invalid time value: "${timeStr}". Value must be a positive integer within safe bounds.`
+    );
+  }
   const unit = match[2]!.toLowerCase() as TimeUnit;
 
   const multipliers: Record<TimeUnit, number> = {
@@ -381,7 +390,11 @@ function getRedisClient(): Redis {
 * @returns Unique token ID
 */
 function generateTokenId(): string {
-  return `${Date.now()}-${randomBytes(16).toString('hex')}`;
+  // AUDIT-FIX P3: Replaced Date.now() prefix with pure random bytes. The
+  // timestamp leaked server clock information to anyone who decodes the token
+  // (jti is a standard claim visible in the JWT payload). 20 random bytes
+  // (160 bits) provide sufficient uniqueness without clock leakage.
+  return randomBytes(20).toString('hex');
 }
 
 /**
@@ -411,19 +424,25 @@ export function signToken(claimsInput: SignTokenInput): string {
   const validated = JwtClaimsInputSchema.parse(claimsInput);
 
   // AUDIT-FIX P2: Use ?? to prevent empty-string values from falling through.
-  const _aud = validated.aud ?? DEFAULT_AUDIENCE;
-  const _iss = validated.iss ?? DEFAULT_ISSUER;
+  const tokenAud = validated.aud ?? DEFAULT_AUDIENCE;
+  const tokenIss = validated.iss ?? DEFAULT_ISSUER;
 
   // SECURITY FIX: Enforce maximum token lifetime of 24 hours
   const expiresInMs = calculateExpiration(validated.expiresIn);
 
   // AUDIT-FIX L4: Removed redundant double-cast.
+  // AUDIT-FIX P3: Added nbf (Not Before) claim. Without nbf, tokens are valid
+  // from the moment of issuance with no explicit start time. While iat is set
+  // by jwt.sign, nbf is a distinct claim that verification libraries enforce
+  // independently (jsonwebtoken checks ignoreNotBefore).
+  const nowSeconds = Math.floor(Date.now() / 1000);
   const payload = {
   sub: validated.sub,
   role: validated.role,
   orgId: validated["orgId"],
   jti: generateTokenId(),
   boundOrgId: validated["orgId"],
+  nbf: nowSeconds,
   };
 
   // AUDIT-FIX H3/H14: Use getCurrentSigningKeys() for hot reload support.
@@ -437,8 +456,8 @@ export function signToken(claimsInput: SignTokenInput): string {
   const signOptions: jwt.SignOptions = {
     algorithm: 'HS256',
     expiresIn: Math.floor(expiresInMs / 1000),
-    audience: _aud,
-    issuer: _iss,
+    audience: tokenAud,
+    issuer: tokenIss,
   };
   return jwt.sign(payload, primaryKey, signOptions);
 }
@@ -491,7 +510,7 @@ function recordFailure(error: unknown): void {
  * @param userId - The token's subject (sub claim) — used for user-wide revocation
  * @returns Whether the token should be treated as revoked
  */
-export async function isTokenRevoked(jti: string, userId: string): Promise<boolean> {
+export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?: number | undefined): Promise<boolean> {
   // P0-2 FIX: Fail-closed when Redis is unavailable. When the circuit breaker
   // is open, we cannot verify revocation status, so we MUST reject the token.
   // Previously this returned false (fail-open), meaning revoked tokens were
@@ -508,17 +527,28 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
   // the circuit breaker's failure counter, allowing an attacker with a valid signing
   // key to poison the circuit breaker by sending tokens with ':' in jti/userId,
   // opening the breaker and denying service to ALL users for 30 seconds.
-  if (jti.includes(':') || userId.includes(':')) {
-    throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
+  //
+  // AUDIT-FIX P1: Expanded validation beyond ':' to reject newlines, null bytes,
+  // and other control characters that could be used for Redis RESP protocol injection
+  // or key namespace collisions. Only alphanumeric, hyphens, underscores, and dots
+  // are allowed in token identifiers.
+  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+  if (!SAFE_ID_PATTERN.test(jti) || !SAFE_ID_PATTERN.test(userId)) {
+    throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
   }
 
   try {
     const client = getRedisClient();
 
-    // Check both per-token revocation AND user-wide revocation in a single pipeline
+    // Check both per-token revocation AND user-wide revocation in a single pipeline.
+    // AUDIT-FIX P1: Use GET (not EXISTS) for user-wide revocation so we can compare
+    // the revocation timestamp against the token's iat. revokeAllUserTokens stores
+    // Date.now().toString() as the value. With EXISTS, any token — including ones
+    // issued AFTER the revocation — is rejected for 7 days, effectively locking the
+    // user out. Comparing iat allows tokens issued after revocation to pass.
     const results = await client.pipeline()
       .exists(`${REVOCATION_KEY_PREFIX}${jti}`)
-      .exists(`jwt:revoked:user:${userId}`)
+      .get(`jwt:revoked:user:${userId}`)
       .exec();
 
     // AUDIT-FIX H4: Validate pipeline results are non-null and check per-command
@@ -543,16 +573,40 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     // Success - reset failure count
     circuitBreaker.failures = 0;
 
-    // Pipeline results are [error, value] tuples
+    // Per-token revocation: EXISTS returns 1 if revoked
     const jtiResult = jtiRevoked[1];
-    const userResult = userRevoked[1];
-    return jtiResult === 1 || userResult === 1;
+    if (jtiResult === 1) return true;
+
+    // User-wide revocation: GET returns the revocation timestamp or null.
+    // Only revoke tokens issued BEFORE the revocation. Tokens issued after
+    // (e.g., after re-authentication) should be allowed through.
+    const userRevokedAt = userRevoked[1];
+    if (userRevokedAt !== null && typeof userRevokedAt === 'string') {
+      const revokedAtMs = parseInt(userRevokedAt, 10);
+      if (!Number.isNaN(revokedAtMs)) {
+        // If we have the token's iat, compare it against the revocation time.
+        // If iat is not available (legacy callers), fail-closed: treat as revoked.
+        if (tokenIssuedAt === undefined) {
+          return true;
+        }
+        // Token iat is in seconds, revocation timestamp is in ms
+        return tokenIssuedAt * 1000 <= revokedAtMs;
+      }
+    }
+    return false;
   } catch (error) {
     // AUDIT-FIX P2: Don't count our own AuthErrors (pipeline validation failures)
     // toward the circuit breaker. Those are expected fail-closed responses, not
     // infrastructure failures. Counting them allows transient Redis pipeline
     // anomalies to open the circuit breaker, causing a 30s full auth outage.
-    if (error instanceof AuthError) {
+    //
+    // AUDIT-FIX P1: Use name-based check as secondary guard for cross-module
+    // AuthError class mismatch. This file imports AuthError from @kernel/auth,
+    // but packages/security/jwt.ts defines its own AuthError. If a refactor
+    // introduces security-module errors into this try block, instanceof would
+    // silently fail, routing auth errors into recordFailure() and polluting
+    // the circuit breaker. The name check catches both class variants.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
       throw error;
     }
     recordFailure(error);
@@ -569,15 +623,19 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
 * @throws {JwtError} When revocation fails
 */
 export async function revokeToken(tokenId: string): Promise<void> {
-  // AUDIT-FIX M16: Validate tokenId to prevent Redis key injection via colons.
-  if (tokenId.includes(':')) {
+  // AUDIT-FIX P1: Validate tokenId against strict allowlist to prevent Redis
+  // key injection via newlines, null bytes, or control characters.
+  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+  if (!SAFE_ID_PATTERN.test(tokenId)) {
     throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
   }
   try {
   await getRedisClient().setex(`${REVOCATION_KEY_PREFIX}${tokenId}`, REVOCATION_TTL_SECONDS, '1');
   } catch (error) {
   logger.error('Error revoking token', error instanceof Error ? error : new Error(String(error)));
-  throw new AuthError('Failed to revoke token', 'REVOCATION_FAILED');
+  // AUDIT-FIX P2: Make error message explicit that the token remains valid.
+  // Callers need to know they must retry — the revocation was NOT applied.
+  throw new AuthError('Failed to revoke token: the token remains valid. Manual retry required.', 'REVOCATION_FAILED');
   }
 }
 
@@ -589,8 +647,10 @@ export async function revokeToken(tokenId: string): Promise<void> {
 * @throws {JwtError} When revocation fails
 */
 export async function revokeAllUserTokens(userId: string): Promise<void> {
-  // AUDIT-FIX M16: Validate userId to prevent Redis key injection via colons.
-  if (userId.includes(':')) {
+  // AUDIT-FIX P1: Validate userId against strict allowlist to prevent Redis
+  // key injection via newlines, null bytes, or control characters.
+  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+  if (!SAFE_ID_PATTERN.test(userId)) {
     throw new AuthError('Invalid user identifier', 'INVALID_USER_ID');
   }
   try {
@@ -600,7 +660,8 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
   logger.info('Revoked all tokens for user', { userId: userId.substring(0, 8) + '...' });
   } catch (error) {
   logger.error('Error revoking user tokens', error instanceof Error ? error : new Error(String(error)));
-  throw new AuthError('Failed to revoke user tokens', 'USER_REVOCATION_FAILED');
+  // AUDIT-FIX P2: Explicit message that tokens remain valid on failure.
+  throw new AuthError('Failed to revoke user tokens: existing tokens remain valid. Manual retry required.', 'USER_REVOCATION_FAILED');
   }
 }
 
@@ -639,7 +700,7 @@ export async function verifyToken(
   // always generates a jti, so a missing jti indicates a non-standard token source.
   // User-wide revocation (revokeAllUserTokens) still works via the sub claim.
   if (claims.jti) {
-    const revoked = await isTokenRevoked(claims.jti, claims.sub);
+    const revoked = await isTokenRevoked(claims.jti, claims.sub, claims.iat);
     if (revoked) {
       throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
     }
@@ -647,14 +708,39 @@ export async function verifyToken(
     // AUDIT-FIX P2: Even without jti, check user-wide revocation.
     // Previously the entire revocation check was skipped, allowing tokens
     // without jti to bypass revokeAllUserTokens() — a security gap.
+    //
+    // AUDIT-FIX P1: Check circuit breaker even for JTI-less tokens. Previously
+    // this code path bypassed the breaker entirely, causing unnecessary Redis
+    // calls during outages and inconsistent fail-closed behavior.
+    if (isCircuitOpen()) {
+      logger.error('Circuit breaker open, rejecting JTI-less token (fail-closed)');
+      throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
+    }
     try {
       const client = getRedisClient();
-      const userRevoked = await client.exists(`jwt:revoked:user:${claims.sub}`);
-      if (userRevoked === 1) {
-        throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+      // AUDIT-FIX P1: Validate sub against safe pattern (same as isTokenRevoked)
+      const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+      if (!SAFE_ID_PATTERN.test(claims.sub)) {
+        throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
       }
+      // AUDIT-FIX P1: Use GET instead of EXISTS and compare timestamps, consistent
+      // with the isTokenRevoked fix. Tokens issued after revocation are allowed.
+      const userRevokedAt = await client.get(`jwt:revoked:user:${claims.sub}`);
+      if (userRevokedAt !== null) {
+        const revokedAtMs = parseInt(userRevokedAt, 10);
+        if (!Number.isNaN(revokedAtMs)) {
+          // If iat is present and token was issued after revocation, allow it
+          if (claims.iat === undefined || claims.iat * 1000 <= revokedAtMs) {
+            throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+          }
+        }
+      }
+      // Reset circuit breaker on success (consistent with isTokenRevoked)
+      circuitBreaker.failures = 0;
     } catch (err) {
-      if (err instanceof AuthError) throw err;
+      // AUDIT-FIX P1: Name-based secondary guard (same cross-module rationale as isTokenRevoked)
+      if (err instanceof AuthError || (err instanceof Error && err.name === 'AuthError')) throw err;
+      recordFailure(err);
       // Fail-closed: if Redis is unavailable, reject the token
       throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
     }
@@ -732,17 +818,28 @@ export function unsafeDecodeTokenInfo(token: string): TokenInfo | null {
   // AUDIT-FIX P3: Reject tokens missing required claims instead of fabricating
   // data. Empty-string jti could collide with revocation keys. Fabricated
   // new Date() for iat/exp makes tokens appear freshly issued and not expired.
-  if (!decoded['jti'] || !decoded['sub'] || !decoded['iat'] || !decoded['exp']) {
+  //
+  // AUDIT-FIX P3: Use explicit typeof guards instead of truthiness + `as` casts.
+  // Truthiness checks pass for any truthy value (e.g., jti: 42 passes `!decoded['jti']`),
+  // then `as string` is a type lie. typeof ensures structural correctness.
+  const jti = decoded['jti'];
+  const sub = decoded['sub'];
+  const iat = decoded['iat'];
+  const exp = decoded['exp'];
+  const orgId = decoded['orgId'];
+
+  if (typeof jti !== 'string' || typeof sub !== 'string' ||
+      typeof iat !== 'number' || typeof exp !== 'number') {
     return null;
   }
 
   return {
-    jti: decoded['jti'] as string,
-    sub: decoded['sub'] as string,
+    jti,
+    sub,
     role,
-    orgId: decoded['orgId'] as string | undefined,
-    issuedAt: new Date((decoded['iat'] as number) * 1000),
-    expiresAt: new Date((decoded['exp'] as number) * 1000),
+    orgId: typeof orgId === 'string' ? orgId : undefined,
+    issuedAt: new Date(iat * 1000),
+    expiresAt: new Date(exp * 1000),
     // AUDIT-FIX C2: null = unknown. Cannot determine revocation without Redis.
     isRevoked: null,
   };
@@ -793,10 +890,30 @@ export async function refreshToken(token: string): Promise<string> {
   // subsequent null check was dead code. Use the value directly.
   const orgId = claims['orgId'];
   // AUDIT-FIX M12: JWT spec allows aud to be string | string[]. Extract first.
+  // AUDIT-FIX P2: Guard against empty array — rawAud[0] is undefined for [].
+  // Without this, a token with aud:[] would silently change to DEFAULT_AUDIENCE.
   const rawAud = claims.aud;
-  const aud = Array.isArray(rawAud) ? rawAud[0] : rawAud;
+  let aud: string | undefined;
+  if (Array.isArray(rawAud)) {
+    if (rawAud.length === 0) {
+      throw new TokenInvalidError('Cannot refresh token with empty audience array');
+    }
+    // AUDIT-FIX P2: Log when multi-audience tokens are reduced to single audience.
+    // The refreshed token silently loses all audiences except the first, which
+    // could break partner API access if the token was scoped to multiple services.
+    if (rawAud.length > 1) {
+      logger.warn('[jwt] Refreshing multi-audience token; only first audience preserved', {
+        audienceCount: rawAud.length,
+      });
+    }
+    aud = rawAud[0];
+  } else {
+    aud = rawAud;
+  }
   const iss = claims.iss;
 
+  // sub is guaranteed non-empty by JwtClaimsSchema (z.string().min(1)),
+  // but defensive check is kept as belt-and-suspenders for a security path.
   if (!sub) {
     throw new TokenInvalidError('Token missing required claim: sub');
   }
@@ -805,6 +922,7 @@ export async function refreshToken(token: string): Promise<string> {
     sub,
     role,
     orgId,
+    // Only include aud/iss if defined; omitting delegates to DEFAULT_AUDIENCE/DEFAULT_ISSUER
     ...(aud !== undefined && { aud }),
     ...(iss !== undefined && { iss }),
   });

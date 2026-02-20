@@ -60,8 +60,10 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     // Auth errors (requireRole throws RoleAccessError with statusCode 403) must
     // produce the correct HTTP status — not 500 — so clients receive 403 and
     // callers are not misled by spurious server-error alerts.
-    if (error instanceof AuthError) {
-      return error.statusCode === 403
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+      const status = error instanceof AuthError ? error.statusCode : 401;
+      return status === 403
         ? errors.forbidden(res)
         : errors.unauthorized(res);
     }
@@ -122,8 +124,10 @@ export async function onboardingRoutes(app: FastifyInstance, pool: Pool): Promis
     await onboarding.mark(ctx["orgId"], step);
     return res.send({ ok: true });
   } catch (error) {
-    if (error instanceof AuthError) {
-      return error.statusCode === 403
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+      const status = error instanceof AuthError ? error.statusCode : 401;
+      return status === 403
         ? errors.forbidden(res)
         : errors.unauthorized(res);
     }

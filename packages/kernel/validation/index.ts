@@ -195,8 +195,10 @@ export {
   fitsInJSONB,
   serializeForJSONB,
   truncateJSONB,
+  safeStringify,
   MAX_JSONB_SIZE,
   MAX_JSONB_SIZE_LARGE,
+  type JsonValue,
 } from './jsonb';
 
 // ============================================================================

@@ -57,25 +57,64 @@ const config: Config = {
       moduleNameMapper: sharedModuleNameMapper,
       setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
       transform: sharedTransform,
-      // The following test files use Vitest APIs (vi.mock/vi.fn/vi.spyOn) and are
-      // covered by the Vitest config. Running them under Jest produces incorrect
-      // results: mocks don't work and tests silently pass without exercising
-      // production code. Exclude them here.
-      // P1-FIX: Added the two JobScheduler Vitest tests that were missing from
-      // this exclusion list (same root cause as rateLimiterRedis below).
+      // AUDIT-FIX P0: Comprehensive Vitest exclusion list.
+      // All files below import from 'vitest' (vi.mock/vi.fn/vi.spyOn). Running
+      // them under Jest produces vacuous passes: mocks are no-ops, assertions
+      // execute against un-mocked production code or don't execute at all.
+      // Previously only 5 of 58 Vitest files were excluded.
       testPathIgnorePatterns: [
         '/node_modules/',
         '/dist/',
         '/.next/',
         'test/a11y/',
+        // -- Vitest-only top-level test directories --
+        'test/benchmarks/',
+        'test/chaos/',
+        'test/load/',
+        // -- packages/ Vitest tests --
+        'packages/database/__tests__/transaction-error-handling.test.ts',
+        'packages/database/__tests__/transactions.concurrency.test.ts',
+        'packages/database/__tests__/transactions.test.ts',
+        'packages/errors/__tests__/index.test.ts',
+        'packages/kernel/__tests__/event-bus.test.ts',
         'packages/kernel/__tests__/rateLimiterRedis.test.ts',
+        'packages/kernel/__tests__/redis.test.ts',
+        'packages/kernel/__tests__/redlock.test.ts',
+        'packages/kernel/__tests__/safe-handler.test.ts',
+        'packages/monitoring/__tests__/performance-fixes.test.ts',
+        'packages/security/__tests__/input-validator.test.ts',
+        'packages/security/__tests__/jwt.test.ts',
+        'packages/security/__tests__/session-binding.test.ts',
+        'packages/security/__tests__/ssrf.test.ts',
+        // -- control-plane/ Vitest tests --
+        'control-plane/services/__tests__/auth.test.ts',
+        'control-plane/services/__tests__/billing.test.ts',
+        'control-plane/services/__tests__/jwt-signing.test.ts',
+        'control-plane/services/__tests__/shard-generator.test.ts',
+        'control-plane/adapters/affiliate/__tests__/amazon.test.ts',
+        'control-plane/adapters/facebook/__tests__/FacebookAdapter.test.ts',
+        // -- apps/api/ Vitest tests --
+        'apps/api/src/adapters/__tests__/google-oauth.test.ts',
+        'apps/api/src/adapters/wordpress/__tests__/WordPressAdapter.test.ts',
+        'apps/api/src/billing/__tests__/paddle-webhook.test.ts',
+        'apps/api/src/billing/__tests__/stripe.test.ts',
+        'apps/api/src/domain/publishing/__tests__/WebPublishingAdapter.test.ts',
+        'apps/api/src/email/__tests__/fallback.test.ts',
         'apps/api/src/jobs/__tests__/JobScheduler.test.ts',
         'apps/api/src/jobs/__tests__/JobScheduler.concurrency.test.ts',
-        // P1-2 FIX: These files import `vi` from 'vitest'. Under Jest, vitest
-        // APIs are undefined — mocks don't function and tests silently pass
-        // without exercising production code.
-        'control-plane/services/__tests__/jwt-signing.test.ts',
-        'packages/security/__tests__/jwt.test.ts',
+        'apps/api/src/jobs/__tests__/worker.concurrency.test.ts',
+        'apps/api/src/middleware/__tests__/abuseGuard.test.ts',
+        'apps/api/src/middleware/__tests__/csrf.security.test.ts',
+        'apps/api/src/middleware/__tests__/csrf.test.ts',
+        'apps/api/src/routes/__tests__/bulkPublishCreate.test.ts',
+        'apps/api/src/services/vault/__tests__/VaultClient.test.ts',
+        'apps/api/src/utils/__tests__/resilience.concurrency.test.ts',
+        // -- apps/web/ Vitest tests --
+        'apps/web/pages/api/webhooks/__tests__/clerk.test.ts',
+        // -- domains/ Vitest tests --
+        'domains/customers/application/__tests__/CustomersService.test.ts',
+        'domains/publishing/application/__tests__/PublishingService.test.ts',
+        'domains/search/application/__tests__/SearchIndexingWorker.test.ts',
       ],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       clearMocks: true,
@@ -157,6 +196,21 @@ const config: Config = {
       functions: 90,
       lines: 90,
       statements: 90,
+    },
+    // AUDIT-FIX P2: control-plane JWT/auth services handle token signing,
+    // revocation, and refresh. These are security-critical paths that must
+    // meet the same threshold as packages/security.
+    './control-plane/services/jwt.ts': {
+      branches: 85,
+      functions: 85,
+      lines: 85,
+      statements: 85,
+    },
+    './control-plane/services/auth.ts': {
+      branches: 85,
+      functions: 85,
+      lines: 85,
+      statements: 85,
     },
   },
 

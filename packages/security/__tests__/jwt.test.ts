@@ -30,15 +30,15 @@ describe('JWT Verification with Key Rotation Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Save original env vars
-    originalEnv['JWT_KEY_1'] = process.env.JWT_KEY_1;
-    originalEnv['JWT_KEY_2'] = process.env.JWT_KEY_2;
-    originalEnv['JWT_AUDIENCE'] = process.env.JWT_AUDIENCE;
-    originalEnv['JWT_ISSUER'] = process.env.JWT_ISSUER;
+    originalEnv['JWT_KEY_1'] = process.env['JWT_KEY_1'];
+    originalEnv['JWT_KEY_2'] = process.env['JWT_KEY_2'];
+    originalEnv['JWT_AUDIENCE'] = process.env['JWT_AUDIENCE'];
+    originalEnv['JWT_ISSUER'] = process.env['JWT_ISSUER'];
 
-    process.env.JWT_KEY_1 = mockSecret;
-    process.env.JWT_KEY_2 = 'secondary-key-also-32-chars-minimum';
-    process.env.JWT_AUDIENCE = 'test-audience';
-    process.env.JWT_ISSUER = 'test-issuer';
+    process.env['JWT_KEY_1'] = mockSecret;
+    process.env['JWT_KEY_2'] = 'secondary-key-also-32-chars-minimum';
+    process.env['JWT_AUDIENCE'] = 'test-audience';
+    process.env['JWT_ISSUER'] = 'test-issuer';
 
     // Reload keys to pick up environment changes
     reloadKeys();
@@ -247,7 +247,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
     it('should verify tokens signed with primary key', () => {
       const token = jwt.sign(
         { sub: 'user-123', role: 'admin', orgId: 'org-456' },
-        process.env.JWT_KEY_1!,
+        process.env['JWT_KEY_1']!,
         { algorithm: 'HS256' }
       );
 
@@ -258,7 +258,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
     it('should verify tokens signed with secondary key', () => {
       const token = jwt.sign(
         { sub: 'user-123', role: 'admin', orgId: 'org-456' },
-        process.env.JWT_KEY_2!,
+        process.env['JWT_KEY_2']!,
         { algorithm: 'HS256' }
       );
 
@@ -269,7 +269,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
     it('should reject tokens signed with old key after rotation', () => {
       // First create token with current key
       const oldKey = 'old-key-that-will-be-rotated-out-123';
-      process.env.JWT_KEY_1 = oldKey;
+      process.env['JWT_KEY_1'] = oldKey;
       reloadKeys();
 
       const token = jwt.sign(
@@ -279,8 +279,8 @@ describe('JWT Verification with Key Rotation Tests', () => {
       );
 
       // Now rotate keys
-      process.env.JWT_KEY_1 = 'new-key-for-testing-purposes-123';
-      process.env.JWT_KEY_2 = 'another-new-key-for-testing-123';
+      process.env['JWT_KEY_1'] = 'new-key-for-testing-purposes-123';
+      process.env['JWT_KEY_2'] = 'another-new-key-for-testing-123';
       reloadKeys();
 
       // Token signed with old key should fail
@@ -288,8 +288,8 @@ describe('JWT Verification with Key Rotation Tests', () => {
     });
 
     it('should throw when no keys configured', () => {
-      delete process.env.JWT_KEY_1;
-      delete process.env.JWT_KEY_2;
+      delete process.env['JWT_KEY_1'];
+      delete process.env['JWT_KEY_2'];
       reloadKeys();
 
       const token = jwt.sign({ sub: 'user-123' }, 'any-key', { algorithm: 'HS256' });
@@ -298,7 +298,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
     });
 
     it('should reject keys shorter than 32 characters', () => {
-      process.env.JWT_KEY_1 = 'short-key';
+      process.env['JWT_KEY_1'] = 'short-key';
       reloadKeys();
 
       const token = jwt.sign({ sub: 'user-123' }, 'any-key', { algorithm: 'HS256' });
@@ -419,7 +419,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
       // Create tokens signed with each key
       const tokenKey1 = jwt.sign(
         { sub: 'user-123', role: 'admin', orgId: 'org-456' },
-        process.env.JWT_KEY_1!,
+        process.env['JWT_KEY_1']!,
         { algorithm: 'HS256' }
       );
 
@@ -486,7 +486,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
     it('should not leak information through early returns on success', () => {
       const token = jwt.sign(
         { sub: 'user-123', role: 'admin', orgId: 'org-456' },
-        process.env.JWT_KEY_1!,
+        process.env['JWT_KEY_1']!,
         { algorithm: 'HS256' }
       );
 
@@ -501,7 +501,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
       // Create token signed with second key
       const tokenKey2 = jwt.sign(
         { sub: 'user-456', role: 'viewer', orgId: 'org-789' },
-        process.env.JWT_KEY_2!,
+        process.env['JWT_KEY_2']!,
         { algorithm: 'HS256' }
       );
 
@@ -515,7 +515,7 @@ describe('JWT Verification with Key Rotation Tests', () => {
           sub: 'user-123',
           exp: Math.floor(Date.now() / 1000) - 3600, // 1 hour ago
         },
-        process.env.JWT_KEY_1!,
+        process.env['JWT_KEY_1']!,
         { algorithm: 'HS256' }
       );
 
@@ -582,8 +582,8 @@ describe('JWT Verification with Key Rotation Tests', () => {
 
     it('should reject PEM-formatted keys in env vars', () => {
       // If a PEM key is accidentally set, it should be rejected
-      process.env.JWT_KEY_1 = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA\n-----END PUBLIC KEY-----';
-      delete process.env.JWT_KEY_2;
+      process.env['JWT_KEY_1'] = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA\n-----END PUBLIC KEY-----';
+      delete process.env['JWT_KEY_2'];
       reloadKeys();
 
       const token = jwt.sign({ sub: 'user-123' }, 'any-key', { algorithm: 'HS256' });

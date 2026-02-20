@@ -1,15 +1,22 @@
 /**
- * P2 TEST: End-to-End Job Processing Integration Tests
- * 
- * Tests complete job processing flow from scheduling to completion,
- * including error handling and DLQ behavior.
+ * P2 TEST: Job Processing Unit Tests (with mocked infrastructure)
+ *
+ * AUDIT-FIX P1: Renamed from "End-to-End Integration Tests". This suite mocks
+ * Redis entirely (jest.mock below), so it tests handler registration, scheduling
+ * dispatch, and error paths — NOT actual Redis/BullMQ behavior. For true
+ * integration tests, use real Redis via `docker compose up -d` and remove mocks.
+ *
+ * Tests: job scheduling dispatch, priority ordering, retry handler logic,
+ * DLQ handler assertion, rate limit mock invocation, graceful shutdown.
  */
 
 
 import { JobScheduler } from '../../src/jobs/JobScheduler';
 import { getRedis } from '@kernel/redis';
 
-// Integration test setup - requires Redis
+// Unit test mock — replaces Redis with in-memory stubs.
+// NOTE: This means BullMQ queue behavior, Lua scripts, and distributed
+// locking are NOT tested here. See AUDIT-FIX P1 note above.
 jest.mock('@kernel/redis', () => ({
   getRedis: jest.fn(),
 }));
@@ -17,7 +24,7 @@ jest.mock('@kernel/redis', () => ({
 // AUDIT-FIX L12: Reduced `any` usage with proper types where feasible.
 // Note: Test files are allowed relaxed type rules per CLAUDE.md, but
 // we improve type safety where it doesn't add excessive verbosity.
-describe('End-to-End Job Processing Integration Tests', () => {
+describe('Job Processing Unit Tests (mocked infrastructure)', () => {
   let scheduler: JobScheduler;
   let mockRedis: Record<string, jest.Mock>;
   let _processedJobs: Array<{ name: string; data: unknown; result: unknown }>;
@@ -210,7 +217,10 @@ describe('End-to-End Job Processing Integration Tests', () => {
   });
 
   describe('Rate-Limited Job Processing', () => {
-    it('should enforce rate limits across distributed instances', async () => {
+    it('should invoke rate limit check for each scheduled job', async () => {
+      // AUDIT-FIX P2: Renamed from "should enforce rate limits across distributed
+      // instances" — this test verifies that the rate limit Lua script is *invoked*,
+      // not that rate limiting actually *works*. Real enforcement requires real Redis.
       let _requestCount = 0;
 
       scheduler.register({
@@ -226,7 +236,7 @@ describe('End-to-End Job Processing Integration Tests', () => {
       mockRedis.eval.mockResolvedValue(1); // Allow request
 
       // Simulate multiple requests
-      const requests = Array.from({ length: 5 }, () => 
+      const requests = Array.from({ length: 5 }, () =>
         scheduler.schedule('rate-limited-job', {})
       );
 
@@ -326,13 +336,18 @@ describe('End-to-End Job Processing Integration Tests', () => {
 
       // Start shutdown
       const stopPromise = scheduler.stop();
-      
+
       // During shutdown, new schedules should be handled gracefully
       // (actual behavior depends on implementation)
-      
+
       await stopPromise;
-      
+
       expect((scheduler as any).workers.size).toBe(0);
+
+      // AUDIT-FIX P3: Nullify scheduler to prevent afterEach from calling
+      // stop() again. Double stop() could throw if redis.quit() is called
+      // on an already-closed connection.
+      scheduler = null as any;
     });
 
     it('should complete in-progress jobs before shutdown', async () => {

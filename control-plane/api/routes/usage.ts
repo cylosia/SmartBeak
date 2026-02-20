@@ -81,7 +81,8 @@ export async function usageRoutes(app: FastifyInstance, pool: Pool): Promise<voi
       return errors.forbidden(res);
     }
     // Any other AuthError (expired token slipping through, missing claims) → 401.
-    if (error instanceof AuthError) {
+    // AUDIT-FIX P0: Name-based fallback for cross-module AuthError.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
       return errors.unauthorized(res);
     }
     // Log full error server-side but never expose raw error messages to clients.
