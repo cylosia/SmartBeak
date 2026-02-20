@@ -2,10 +2,13 @@ import jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
 import { z } from 'zod';
 
-import { getLogger } from '../../packages/kernel/logger';
+// AUDIT-FIX P2: Use path aliases instead of relative paths. Relative paths
+// (../../packages/...) are fragile, break on directory restructuring, and are
+// harder to mock in tests. The project defines @kernel/* and @security/* aliases.
+import { getLogger } from '@kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
-import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken } from '../../packages/security/jwt';
+import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken, UserRoleSchema as SecurityUserRoleSchema } from '@security/jwt';
 
 
 /**
@@ -59,9 +62,11 @@ export {
 // Zod Schemas
 // ============================================================================
 
-// P0-FIX: Added 'owner' to match packages/security/jwt.ts and prevent Zod validation
-// failures when creating tokens for org owners.
-export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner', 'buyer']);
+// AUDIT-FIX P2: Re-export from the security package instead of maintaining a
+// duplicate definition. Three independent copies of UserRoleSchema meant that
+// adding a new role to one copy but forgetting the others silently broke auth.
+// The security package is the single source of truth.
+export const UserRoleSchema = SecurityUserRoleSchema;
 
 export const JwtClaimsInputSchema = z.object({
   sub: z.string().min(1).max(256),

@@ -17,7 +17,10 @@ function validateCountResult(row: unknown): { count: string | number } {
     // AUDIT-FIX L7: Don't interpolate Zod error details into the exception.
     // Log the full error server-side for debugging.
     logger.warn('Invalid count result from DB', { error: result.error["message"] });
-    throw new ValidationError('Invalid count result from job_executions query', 'count');
+    // AUDIT-FIX P3: Pass structured details object. The second argument to
+    // @errors:ValidationError is `details`, not a field name. Passing bare 'count'
+    // produced confusing output like { details: "count" }.
+    throw new ValidationError('Invalid count result from job_executions query', { field: 'count' });
   }
   return result.data;
 }
@@ -80,7 +83,7 @@ function getValidatedJobCount(countResult: Array<{ count: string | number }>): n
     // AUDIT-FIX P2: Log raw value server-side but don't interpolate into error
     // message. Database corruption or unexpected data could leak internal state.
     logger.warn('Invalid job count value', { rawCount: String(result["count"]) });
-    throw new ValidationError('Invalid job count value from job_executions query', 'count');
+    throw new ValidationError('Invalid job count value from job_executions query', { field: 'count' });
   }
 
   return count;

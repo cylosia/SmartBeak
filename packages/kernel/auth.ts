@@ -99,17 +99,27 @@ export interface VerifyTokenOptions {
 
 // Delegate to the real implementation in packages/security/jwt.ts.
 // Static import is safe: security/jwt only imports @kernel/logger, no circular dep.
-import { verifyToken as securityVerifyToken } from '../security/jwt';
+import { verifyToken as securityVerifyToken, type JwtClaims } from '../security/jwt';
+
+// Re-export JwtClaims for consumers of this module.
+export type { JwtClaims };
 
 /**
  * Verify a JWT token synchronously.
  * Delegates to packages/security/jwt.ts which holds the real implementation.
  *
+ * NOTE: This performs cryptographic verification only (signature, expiry, claims
+ * schema). It does NOT check Redis revocation lists. For revocation-aware
+ * verification, use control-plane/services/jwt.ts:verifyToken() instead.
+ *
  * @param token - JWT token string
  * @param options - Verification options
- * @returns Decoded claims
+ * @returns Zod-validated JWT claims
  * @throws {TokenInvalidError} When token is invalid or verification fails
  */
-export function verifyToken(token: string, options: VerifyTokenOptions = {}): unknown {
+// AUDIT-FIX P2: Return type changed from `unknown` to `JwtClaims`. The previous
+// `unknown` return erased all Zod-validated type safety from securityVerifyToken,
+// forcing callers to re-validate or use unsafe casts.
+export function verifyToken(token: string, options: VerifyTokenOptions = {}): JwtClaims {
   return securityVerifyToken(token, { audience: options.audience, issuer: options.issuer });
 }
