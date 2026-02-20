@@ -57,6 +57,8 @@ export interface Database {
 export interface KnexQueryBuilder<T> {
   where: (conditions: Partial<T>) => KnexQueryBuilder<T>;
   andWhere: (conditions: Partial<T>) => KnexQueryBuilder<T>;
+  // AUDIT-FIX P1: Added whereIn for multi-value status filtering.
+  whereIn: (column: keyof T & string, values: unknown[]) => KnexQueryBuilder<T>;
   count: () => Promise<Array<{ count: string | number }>>;
 }
 
@@ -109,13 +111,27 @@ export async function assertOrgCapacity(
     // AUDIT-FIX H9: Use two int4 keys for 64-bit advisory lock space.
     // hashtext() returns int4 (~4.3B values), causing cross-org collisions.
     // Using a fixed namespace key + org hash provides 64-bit key space.
-    await t.raw(
-      `SELECT pg_advisory_xact_lock($1, hashtext($2))`,
+    //
+    // AUDIT-FIX P1: Use pg_try_advisory_xact_lock instead of pg_advisory_xact_lock.
+    // The blocking variant has no timeout — if a transaction holding the lock hangs
+    // (network partition, dead connection), all subsequent callers for that org block
+    // indefinitely, exhausting the connection pool.
+    const lockResult = await t.raw(
+      `SELECT pg_try_advisory_xact_lock($1, hashtext($2)) AS acquired`,
       [1001, `org_capacity:${orgId}`]
     );
+    const lockRow = lockResult.rows[0];
+    if (!lockRow || lockRow['acquired'] !== true) {
+      logger.warn('Could not acquire capacity lock, rejecting request', { orgId });
+      throw new RateLimitError('Could not acquire capacity lock, try again', 5);
+    }
 
+    // AUDIT-FIX P1: Count both 'started' AND 'pending' jobs. Previously only
+    // 'started' was counted. Under high throughput, an org can enqueue unlimited
+    // 'pending' jobs that all transition to 'started' simultaneously, bursting
+    // past the concurrency limit.
     const countResult = await t('job_executions')
-      .where({ status: 'started' })
+      .whereIn('status', ['started', 'pending'])
       .andWhere({ entity_id: orgId })["count"]();
 
     const count = getValidatedJobCount(countResult);
@@ -146,11 +162,19 @@ export async function assertOrgCapacity(
 
 /**
  * Check if org has capacity without throwing on capacity-limit errors.
+ *
+ * AUDIT-FIX P2: Replaced lock-based implementation with a lightweight read.
+ * The previous implementation delegated to assertOrgCapacity() which acquires
+ * pg_advisory_xact_lock — a blocking lock. For an informational/UI check
+ * ("can this org create more jobs?"), the lock serialized all callers,
+ * creating unnecessary contention. This now uses getOrgActiveJobCount()
+ * which reads without a lock. The result is advisory only — use
+ * assertOrgCapacity() within a transaction for authoritative enforcement.
  */
 export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<boolean> {
   try {
-    await assertOrgCapacity(db, orgId);
-    return true;
+    const count = await getOrgActiveJobCount(db, orgId);
+    return count < MAX_ACTIVE_JOBS_PER_ORG;
   } catch (err) {
     if (err instanceof RateLimitError) {
       return false;
@@ -167,8 +191,10 @@ export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<bool
  * Use assertOrgCapacity() with a transaction for capacity enforcement.
  */
 export async function getOrgActiveJobCount(db: Database, orgId: OrgId): Promise<number> {
+  // AUDIT-FIX P1: Count both 'started' and 'pending' for consistency with
+  // assertOrgCapacity(). Informational reads should reflect the same semantics.
   const countResult = await db('job_executions')
-    .where({ status: 'started' })
+    .whereIn('status', ['started', 'pending'])
     .andWhere({ entity_id: orgId })["count"]();
 
   return getValidatedJobCount(countResult);
