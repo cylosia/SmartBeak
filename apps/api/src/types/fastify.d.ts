@@ -15,8 +15,9 @@
 
 import type { AuthContext as BaseAuthContext } from '@security';
 
+// AUDIT-FIX H2: Added 'buyer' role to match UserRoleSchema across the codebase.
 /** P1-9: Exhaustive role union — typos like 'owmner' or 'Admin' are caught at compile time */
-export type Role = 'owner' | 'admin' | 'editor' | 'viewer';
+export type Role = 'owner' | 'admin' | 'editor' | 'viewer' | 'buyer';
 
 /**
  * Request-level auth context attached by route middleware.

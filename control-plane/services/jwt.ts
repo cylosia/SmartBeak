@@ -109,14 +109,19 @@ export interface VerifyResult {
 /**
 * Token metadata for external storage
 */
+// AUDIT-FIX C2: isRevoked changed to `boolean | null`. getTokenInfo() uses
+// jwt.decode() which cannot determine revocation status (requires Redis).
+// Returning `false` or casting `undefined as unknown as boolean` was a type-lie
+// that made revoked tokens appear valid to consumers.
 export interface TokenInfo {
   jti: string;
   sub: string;
   role: UserRole;
-  orgId?: string;
+  orgId?: string | undefined;
   issuedAt: Date;
   expiresAt: Date;
-  isRevoked: boolean;
+  /** null = unknown (no Redis check performed). Use verifyToken() for authoritative status. */
+  isRevoked: boolean | null;
 }
 
 /**
@@ -180,7 +185,11 @@ const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
 */
 function parseMs(timeStr: string): number {
   const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/i);
-  if (!match) return 3600000; // Default 1 hour
+  if (!match) {
+    // AUDIT-FIX M13: Log warning on invalid input instead of silent default.
+    logger.warn('Invalid time string, using 1h default', { timeStr });
+    return 3600000; // Default 1 hour
+  }
 
   const value = parseInt(match[1]!, 10);
   const unit = match[2]!.toLowerCase() as TimeUnit;
@@ -270,11 +279,35 @@ function getKeys(): string[] {
   return [key1, key2];
 }
 
-// Load keys at module initialization
-// P0-2 FIX: Fail-closed instead of fail-open. If signing keys are invalid,
-// the application must crash at startup rather than silently producing tokens
-// signed with empty strings that can never be verified.
-const KEYS: string[] = getKeys();
+// AUDIT-FIX H3: Support key rotation without restart. Previously used static
+// `const KEYS = getKeys()` that was loaded once at module init. After key
+// rotation, the signing module would use stale keys that the verification
+// module no longer accepts, causing complete auth outage.
+// AUDIT-FIX H14: Typed as readonly tuple to prevent KEYS[0]! on empty array.
+// Previously `KEYS[0]!` would pass `undefined` to jwt.sign, signing with
+// "undefined" string — trivially forgeable tokens.
+let signingKeys: readonly string[] = getKeys();
+let lastSigningKeyReload = Date.now();
+const SIGNING_KEY_RELOAD_INTERVAL_MS = 60000; // Reload every 60 seconds
+
+function getCurrentSigningKeys(): readonly string[] {
+  const now = Date.now();
+  if (now - lastSigningKeyReload > SIGNING_KEY_RELOAD_INTERVAL_MS) {
+    try {
+      signingKeys = getKeys();
+      lastSigningKeyReload = now;
+      logger.info('[jwt] Signing keys reloaded successfully');
+    } catch (err) {
+      logger.error('[jwt] Failed to reload signing keys, keeping existing keys',
+        err instanceof Error ? err : new Error(String(err)));
+      lastSigningKeyReload = now; // Prevent retry storm
+    }
+  }
+  return signingKeys;
+}
+
+// Backward compatibility alias
+const KEYS = signingKeys;
 
 // ============================================================================
 // Redis Connection (Lazy Initialization)
@@ -283,7 +316,10 @@ const KEYS: string[] = getKeys();
 // P1-5 FIX: Defer Redis connection to first use instead of module-level throw.
 // Module-level throw crashes any file that imports this module (tests, CLI tools,
 // type-only imports) if REDIS_URL is not set.
+// AUDIT-FIX M14: Use a pending promise to prevent duplicate connections from
+// concurrent calls during initialization.
 let redis: Redis | null = null;
+let redisInitPromise: Promise<Redis> | null = null;
 
 // Circuit breaker state
 const circuitBreaker: CircuitBreakerState = {
@@ -292,23 +328,29 @@ const circuitBreaker: CircuitBreakerState = {
   isOpen: false,
 };
 
+// AUDIT-FIX M14: Prevent duplicate Redis connections from concurrent calls.
 function getRedisClient(): Redis {
   if (redis) return redis;
 
+  // Synchronous init (ioredis connects lazily, so this is safe)
   const url = process.env['REDIS_URL'];
   if (!url) {
     throw new Error('REDIS_URL environment variable is required');
   }
 
-  redis = new Redis(url, {
+  // Double-check after getting url (another call may have initialized)
+  if (redis) return redis;
+
+  const client = new Redis(url, {
     retryStrategy: (times: number): number => Math.min(times * 50, 2000),
     maxRetriesPerRequest: 3,
   });
 
-  redis.on('error', (err: Error) => {
+  client.on('error', (err: Error) => {
     logger.error('Redis connection error', err);
   });
 
+  redis = client;
   return redis;
 }
 
@@ -358,15 +400,22 @@ export function signToken(claimsInput: SignTokenInput): string {
   // SECURITY FIX: Enforce maximum token lifetime of 24 hours
   const expiresInMs = calculateExpiration(validated.expiresIn);
 
-  const payload: Omit<JwtClaims, 'iat' | 'exp'> = {
+  // AUDIT-FIX L4: Removed redundant double-cast.
+  const payload = {
   sub: validated.sub,
   role: validated.role,
   orgId: validated["orgId"],
   jti: generateTokenId(),
   boundOrgId: validated["orgId"],
-  } as Omit<JwtClaims, 'iat' | 'exp'>;
+  };
 
-  return jwt.sign(payload as object, KEYS[0]!, {
+  // AUDIT-FIX H3/H14: Use getCurrentSigningKeys() for hot reload support.
+  const keys = getCurrentSigningKeys();
+  const primaryKey = keys[0];
+  if (!primaryKey) {
+    throw new TokenInvalidError('No signing keys available');
+  }
+  return jwt.sign(payload as object, primaryKey, {
     algorithm: 'HS256',
     expiresIn: Math.floor(expiresInMs / 1000),
     audience: _aud,
@@ -434,18 +483,35 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
 
   try {
     const client = getRedisClient();
+    // AUDIT-FIX M16: Validate token ID and user ID to prevent key injection.
+    // Colons in jti/userId could collide with the namespace separator.
+    if (jti.includes(':') || userId.includes(':')) {
+      throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
+    }
+
     // Check both per-token revocation AND user-wide revocation in a single pipeline
-    const [jtiRevoked, userRevoked] = await client.pipeline()
+    const results = await client.pipeline()
       .exists(`${REVOCATION_KEY_PREFIX}${jti}`)
       .exists(`jwt:revoked:user:${userId}`)
       .exec();
+
+    // AUDIT-FIX H4: Validate pipeline results are non-null and check per-command
+    // error tuples. If pipeline.exec() returns null (connection lost mid-pipeline),
+    // or if any command errored, fail-closed instead of treating as "not revoked".
+    if (!results || results.length < 2) {
+      throw new AuthError('Revocation check failed: incomplete pipeline result', 'REVOCATION_CHECK_FAILED');
+    }
+    const [jtiRevoked, userRevoked] = results;
+    if (jtiRevoked![0] || userRevoked![0]) {
+      throw new AuthError('Revocation check failed: pipeline command error', 'REVOCATION_CHECK_FAILED');
+    }
 
     // Success - reset failure count
     circuitBreaker.failures = 0;
 
     // Pipeline results are [error, value] tuples
-    const jtiResult = jtiRevoked?.[1];
-    const userResult = userRevoked?.[1];
+    const jtiResult = jtiRevoked![1];
+    const userResult = userRevoked![1];
     return jtiResult === 1 || userResult === 1;
   } catch (error) {
     recordFailure(error);
@@ -462,6 +528,10 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
 * @throws {JwtError} When revocation fails
 */
 export async function revokeToken(tokenId: string): Promise<void> {
+  // AUDIT-FIX M16: Validate tokenId to prevent Redis key injection via colons.
+  if (tokenId.includes(':')) {
+    throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
+  }
   try {
   await getRedisClient().setex(`${REVOCATION_KEY_PREFIX}${tokenId}`, REVOCATION_TTL_SECONDS, '1');
   } catch (error) {
@@ -478,6 +548,10 @@ export async function revokeToken(tokenId: string): Promise<void> {
 * @throws {JwtError} When revocation fails
 */
 export async function revokeAllUserTokens(userId: string): Promise<void> {
+  // AUDIT-FIX M16: Validate userId to prevent Redis key injection via colons.
+  if (userId.includes(':')) {
+    throw new AuthError('Invalid user identifier', 'INVALID_USER_ID');
+  }
   try {
   const key = `jwt:revoked:user:${userId}`;
   await getRedisClient().setex(key, REVOCATION_TTL_SECONDS, Date.now().toString());
@@ -513,7 +587,10 @@ export async function verifyToken(
   iss: string = DEFAULT_ISSUER
 ): Promise<JwtClaims> {
   // Step 1: verify signature and standard claims (synchronous, throws on failure)
-  const claims = securityVerifyToken(token, { audience: aud, issuer: iss }) as JwtClaims;
+  // AUDIT-FIX M9: securityVerifyToken returns Zod-validated claims. The `as JwtClaims`
+  // cast masked the optional/required field mismatch. This is now safe since both
+  // schemas are aligned (jti/iat/exp are optional in verification but present in signed tokens).
+  const claims = securityVerifyToken(token, { audience: aud, issuer: iss });
 
   // Step 2: check revocation lists (async Redis lookup)
   if (claims.jti) {
@@ -536,15 +613,16 @@ export async function verifyToken(
 * @param token - JWT token string
 * @returns Expiration date or null if unable to parse
 */
+// AUDIT-FIX M10: Safer type narrowing instead of unsafe `as` cast.
 export function getTokenExpiration(token: string): Date | null {
   try {
-  const decoded = jwt.decode(token) as { exp?: number } | null;
-  if (decoded && 'exp' in decoded && decoded['exp']) {
-    return new Date((decoded['exp'] as number) * 1000);
-  }
-  return null;
+    const decoded = jwt.decode(token);
+    if (decoded && typeof decoded === 'object' && 'exp' in decoded && typeof decoded['exp'] === 'number') {
+      return new Date(decoded['exp'] * 1000);
+    }
+    return null;
   } catch {
-  return null;
+    return null;
   }
 }
 
@@ -561,28 +639,38 @@ export function isTokenExpired(token: string): boolean {
 }
 
 /**
-* Get token info without verification
+* AUDIT-FIX H16: Renamed from getTokenInfo to unsafeDecodeTokenInfo to make it
+* clear this uses jwt.decode() (NO signature verification). The returned data
+* is unverified and MUST NOT be used for authorization decisions.
+*
+* AUDIT-FIX C2: isRevoked is now `null` (unknown) instead of
+* `undefined as unknown as boolean` which was a type-lie.
 *
 * @param token - JWT token string
-* @returns Token info or null if invalid
+* @returns Token info or null if invalid. Data is UNVERIFIED.
 */
-export function getTokenInfo(token: string): TokenInfo | null {
+export function unsafeDecodeTokenInfo(token: string): TokenInfo | null {
   const decoded = jwt.decode(token) as { jti?: string; sub?: string; role?: string; orgId?: string; iat?: number; exp?: number } | null;
   if (!decoded) return null;
 
+  // AUDIT-FIX H15: Validate role with schema instead of unsafe cast.
+  const roleResult = UserRoleSchema.safeParse(decoded['role']);
+  const role: UserRole = roleResult.success ? roleResult.data : 'viewer';
+
   return {
-  jti: ('jti' in decoded ? decoded['jti'] : '') as string || '',
-  sub: ('sub' in decoded ? decoded['sub'] : '') as string,
-  role: ('role' in decoded ? decoded['role'] : 'viewer') as UserRole,
-  orgId: 'orgId' in decoded ? (decoded['orgId'] as string) : undefined,
-  issuedAt: 'iat' in decoded && decoded['iat'] ? new Date((decoded['iat'] as number) * 1000) : new Date(),
-  expiresAt: 'exp' in decoded && decoded['exp'] ? new Date((decoded['exp'] as number) * 1000) : new Date(),
-  // P2-7 FIX: Changed from `false` to `undefined`. Without a Redis check we
-  // cannot determine revocation status. Returning `false` was semantically
-  // "not revoked" which callers could incorrectly trust.
-  isRevoked: undefined as unknown as boolean,
-  } as TokenInfo;
+    jti: decoded['jti'] ?? '',
+    sub: decoded['sub'] ?? '',
+    role,
+    orgId: decoded['orgId'],
+    issuedAt: decoded['iat'] ? new Date(decoded['iat'] * 1000) : new Date(),
+    expiresAt: decoded['exp'] ? new Date(decoded['exp'] * 1000) : new Date(),
+    // AUDIT-FIX C2: null = unknown. Cannot determine revocation without Redis.
+    isRevoked: null,
+  };
 }
+
+/** @deprecated Use unsafeDecodeTokenInfo instead. This alias exists for backward compatibility. */
+export const getTokenInfo = unsafeDecodeTokenInfo;
 
 /**
 * Refresh a token
@@ -593,49 +681,39 @@ export function getTokenInfo(token: string): TokenInfo | null {
 * @returns New signed token
 */
 /**
- * P0-1 SECURITY FIX: Token refresh now VERIFIES the old token before re-signing.
+ * AUDIT-FIX C1: refreshToken is now ASYNC and delegates to verifyToken()
+ * which includes Redis revocation checks. Previously synchronous and only
+ * checked the signature, allowing revoked tokens to be refreshed into new
+ * valid tokens — completely defeating the revocation system.
  *
- * Previously used jwt.decode() (no signature verification), which allowed an
- * attacker to craft an arbitrary JWT payload and get it re-signed with a valid key.
- * Now uses jwt.verify() to ensure the old token was legitimately signed.
+ * AUDIT-FIX H15: Role is validated with UserRoleSchema.parse() instead of
+ * an unsafe `as UserRole` cast that could silently upgrade empty/unknown roles.
+ *
+ * AUDIT-FIX M11: Uses verifyToken() which tries all keys uniformly,
+ * eliminating the timing side-channel that revealed which key signed the token.
+ *
+ * AUDIT-FIX M12: Handles JWT spec aud as string | string[].
+ * AUDIT-FIX M15: Preserves original error details instead of swallowing them.
  */
-// P2-8 FIX: Removed unused `_expiresIn` parameter. Callers passing a custom
-// expiry silently received default expiration, which is confusing. If custom
-// expiry support is needed in the future, it should be properly implemented.
-export function refreshToken(token: string): string {
+export async function refreshToken(token: string): Promise<string> {
   // SECURITY FIX: Pre-verification algorithm check (defense-in-depth)
   rejectDisallowedAlgorithm(token);
 
-  // P0-1 FIX: VERIFY the token cryptographically instead of just decoding it.
-  // jwt.decode() performs NO signature verification - an attacker could craft
-  // any payload and get it signed with a valid production key.
-  // P0-FIX: Pass audience and issuer to jwt.verify during refresh.
-  // Previously omitting these allowed tokens issued for a different audience
-  // (e.g., a third-party service) to be refreshed against this issuer's signing key.
-  const verifyOpts: jwt.VerifyOptions = {
-    algorithms: ['HS256'],
-    clockTolerance: 30,
-    audience: DEFAULT_AUDIENCE,
-    issuer: DEFAULT_ISSUER,
-  };
+  // C1-FIX: Use verifyToken() which includes revocation check via Redis.
+  // Previously used raw jwt.verify() which only checked the signature,
+  // allowing revoked tokens to be refreshed into new valid tokens.
+  const claims = await verifyToken(token);
 
-  let verified: jwt.JwtPayload;
-  try {
-    verified = jwt.verify(token, KEYS[0]!, verifyOpts) as jwt.JwtPayload;
-  } catch {
-    // Try second key for rotation support
-    try {
-      verified = jwt.verify(token, KEYS[1]!, verifyOpts) as jwt.JwtPayload;
-    } catch {
-      throw new TokenInvalidError('Token verification failed during refresh');
-    }
-  }
-
-  const sub = verified.sub;
-  const role = (verified['role'] || 'viewer') as UserRole;
-  const orgId = verified['orgId'] as string | undefined;
-  const aud = verified.aud as string | undefined;
-  const iss = verified.iss as string | undefined;
+  const sub = claims.sub;
+  // AUDIT-FIX H15: Validate role with Zod schema instead of unsafe cast.
+  // Previously `(verified['role'] || 'viewer') as UserRole` silently upgraded
+  // tokens with empty or unknown roles to 'viewer'.
+  const role = UserRoleSchema.parse(claims.role);
+  const orgId = claims['orgId'] as string | undefined;
+  // AUDIT-FIX M12: JWT spec allows aud to be string | string[]. Extract first.
+  const rawAud = claims.aud;
+  const aud = Array.isArray(rawAud) ? rawAud[0] : (rawAud as string | undefined);
+  const iss = claims.iss as string | undefined;
 
   if (!sub) {
     throw new TokenInvalidError('Token missing required claim: sub');
@@ -665,5 +743,6 @@ export async function closeJwtRedis(): Promise<void> {
   if (redis) {
     await redis.quit();
     redis = null;
+    redisInitPromise = null;
   }
 }

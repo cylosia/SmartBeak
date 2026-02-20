@@ -31,10 +31,11 @@ import {
 * Auth context for Fastify requests
 * Attached to request object by auth middleware
 */
+// AUDIT-FIX H17: roles typed as UserRole[] for compile-time enforcement.
 export interface FastifyAuthContext {
   userId: string;
   orgId: string;
-  roles: string[];
+  roles: UserRole[];
   sessionId?: string | undefined;
   requestId?: string | undefined;
 }
@@ -325,7 +326,11 @@ export function verifyAuthHeader(authHeader: string | undefined): {
 // SECURITY FIX: Add 'owner' role at highest privilege level (matches DB constraint)
 // P1-FIX #12: Added 'owner' role (level 4) which exists in database memberships
 // but was missing from the hierarchy, causing owners to fail admin permission checks.
+// AUDIT-FIX H2: Added 'buyer: 0' to match UserRoleSchema. Without this entry,
+// hasRequiredRole('buyer', 'viewer') evaluated (roleHierarchy['buyer'] ?? 0) >= 1
+// = false, silently locking out all buyer-role users.
 export const roleHierarchy: Record<UserRole, number> = {
+  buyer: 0,
   viewer: 1,
   editor: 2,
   admin: 3,
@@ -346,10 +351,11 @@ export function hasRequiredRole(userRole: UserRole, requiredRole: UserRole): boo
 // P1-FIX: Strengthened regex to validate JWT format (three base64url segments)
 const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
+// AUDIT-FIX H17: roles typed as UserRole[] for compile-time enforcement.
 export interface AuthContext {
   userId: string;
   orgId: string;
-  roles: string[];
+  roles: UserRole[];
   sessionId?: string | undefined;
   requestId?: string | undefined;
 }

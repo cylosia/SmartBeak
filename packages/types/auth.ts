@@ -8,13 +8,14 @@
  * This allows users to have multiple roles simultaneously.
  */
 
+// AUDIT-FIX H17: roles typed as UserRole[] for compile-time enforcement.
 export interface AuthContext {
   /** Unique identifier for the authenticated user */
   userId: string;
   /** Organization the user belongs to */
   orgId: string;
   /** Array of roles assigned to the user (supports multiple simultaneous roles) */
-  roles: string[];
+  roles: UserRole[];
   /** Optional session identifier for request tracking */
   sessionId?: string;
   /** Optional request identifier for distributed tracing */

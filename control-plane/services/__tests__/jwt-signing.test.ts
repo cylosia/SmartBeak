@@ -5,7 +5,7 @@
  * audience/issuer claims, preventing algorithm confusion attacks.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 
 // Mock kernel dependencies to break circular logger <-> request-context import
@@ -49,6 +49,13 @@ process.env.JWT_AUDIENCE = 'smartbeak';
 process.env.JWT_ISSUER = 'smartbeak-api';
 
 describe('signToken algorithm enforcement', () => {
+  // AUDIT-FIX L12: Reset modules between tests to prevent stale module cache.
+  // Dynamic imports cache the module after first load; without reset, env var
+  // changes between tests have no effect.
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   it('should sign tokens with explicit HS256 algorithm', async () => {
     const { signToken } = await import('../jwt');
 

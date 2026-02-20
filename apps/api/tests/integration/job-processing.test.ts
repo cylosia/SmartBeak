@@ -14,16 +14,19 @@ jest.mock('@kernel/redis', () => ({
   getRedis: jest.fn(),
 }));
 
+// AUDIT-FIX L12: Reduced `any` usage with proper types where feasible.
+// Note: Test files are allowed relaxed type rules per CLAUDE.md, but
+// we improve type safety where it doesn't add excessive verbosity.
 describe('End-to-End Job Processing Integration Tests', () => {
   let scheduler: JobScheduler;
-  let mockRedis: any;
-  let _processedJobs: Array<{ name: string; data: any; result: any }>;
-  let _failedJobs: Array<{ name: string; data: any; error: Error }>;
+  let mockRedis: Record<string, jest.Mock>;
+  let _processedJobs: Array<{ name: string; data: unknown; result: unknown }>;
+  let _failedJobs: Array<{ name: string; data: unknown; error: Error }>;
 
   beforeAll(async () => {
     // Setup mock Redis for testing
-    const jobStore = new Map<string, any>();
-    
+    const jobStore = new Map<string, string>();
+
     mockRedis = {
       eval: jest.fn().mockResolvedValue(1),
       keys: jest.fn().mockResolvedValue([]),
@@ -44,10 +47,14 @@ describe('End-to-End Job Processing Integration Tests', () => {
       quit: jest.fn().mockResolvedValue(undefined),
     };
 
-    (getRedis as any).mockResolvedValue(mockRedis);
+    (getRedis as jest.Mock).mockResolvedValue(mockRedis);
   });
 
   beforeEach(() => {
+    // AUDIT-FIX L12: Reset mocks between tests to prevent cross-test pollution.
+    jest.clearAllMocks();
+    (getRedis as jest.Mock).mockResolvedValue(mockRedis);
+
     _processedJobs = [];
     _failedJobs = [];
     // P3-5 FIX: Use env var instead of hardcoded Redis URL
