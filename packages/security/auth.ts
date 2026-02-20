@@ -358,7 +358,9 @@ export interface AuthContext {
 // via declaration merging. The interface was never used and caused confusion.
 
 // SECURITY FIX: Add 'owner' role which exists in DB but was missing from types
-const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner']);
+// P1-4 FIX: Added 'buyer' to match packages/security/jwt.ts and control-plane/services/jwt.ts.
+// Without this, buyer-role tokens fail validation on code paths using this schema.
+const UserRoleSchema = z.enum(['viewer', 'editor', 'admin', 'owner', 'buyer']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
 // ============================================================================

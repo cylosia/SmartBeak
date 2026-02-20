@@ -8,10 +8,11 @@ import { parseIntEnv } from './env';
 
 export const jobConfig = {
   /** Number of concurrent workers */
-  workerConcurrency: parseIntEnv('JOB_WORKER_CONCURRENCY', 5),
+  // P1-6 FIX: Add min/max bounds to prevent resource exhaustion from misconfigured env vars
+  workerConcurrency: parseIntEnv('JOB_WORKER_CONCURRENCY', 5, { min: 1, max: 100 }),
 
   /** Batch size for database operations */
-  batchSize: parseIntEnv('JOB_BATCH_SIZE', 100),
+  batchSize: parseIntEnv('JOB_BATCH_SIZE', 100, { min: 1, max: 10000 }),
 
   /** Maximum number of retries for failed jobs */
   maxRetries: parseIntEnv('JOB_MAX_RETRIES', 3),
@@ -83,8 +84,13 @@ export const contentIdeaConfig = {
 export const exportConfig = {
   /** Maximum rows per export file */
   maxRowsPerFile: parseIntEnv('EXPORT_MAX_ROWS_PER_FILE', 10000),
-  /** Default export format */
-  defaultFormat: process.env['EXPORT_DEFAULT_FORMAT'] || 'json',
+  /** Default export format — P2-12 FIX: validated against allowed values */
+  defaultFormat: (() => {
+    const ALLOWED_FORMATS = ['json', 'csv', 'xlsx'] as const;
+    const raw = process.env['EXPORT_DEFAULT_FORMAT'];
+    if (raw && (ALLOWED_FORMATS as readonly string[]).includes(raw)) return raw;
+    return 'json';
+  })(),
   /** Export file retention in days */
   retentionDays: parseIntEnv('EXPORT_RETENTION_DAYS', 7),
 } as const;

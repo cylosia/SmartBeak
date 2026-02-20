@@ -18,13 +18,24 @@ const sharedTransform: Record<string, [string, Record<string, unknown>]> = {
   }],
 };
 
+// P2-10 FIX: Added missing aliases that exist in tsconfig paths
 const sharedModuleNameMapper = {
   '^@/(.*)$': '<rootDir>/$1',
   '^@kernel/(.*)$': '<rootDir>/packages/kernel/$1',
   '^@security/(.*)$': '<rootDir>/packages/security/$1',
   '^@database/(.*)$': '<rootDir>/packages/database/$1',
+  '^@database$': '<rootDir>/packages/database/index.ts',
   '^@config$': '<rootDir>/packages/config/index.ts',
+  '^@config/(.*)$': '<rootDir>/packages/config/$1',
   '^@errors$': '<rootDir>/packages/errors/index.ts',
+  '^@monitoring$': '<rootDir>/packages/monitoring/index.ts',
+  '^@monitoring/(.*)$': '<rootDir>/packages/monitoring/$1',
+  '^@utils/(.*)$': '<rootDir>/packages/utils/$1',
+  '^@types/(.*)$': '<rootDir>/packages/types/$1',
+  '^@domain/(.*)$': '<rootDir>/domains/$1',
+  '^@adapters/(.*)$': '<rootDir>/packages/adapters/$1',
+  '^@packages/(.*)$': '<rootDir>/packages/$1',
+  '^@shutdown$': '<rootDir>/packages/shutdown/index.ts',
 };
 
 const config: Config = {
@@ -60,6 +71,11 @@ const config: Config = {
         'packages/kernel/__tests__/rateLimiterRedis.test.ts',
         'apps/api/src/jobs/__tests__/JobScheduler.test.ts',
         'apps/api/src/jobs/__tests__/JobScheduler.concurrency.test.ts',
+        // P1-2 FIX: These files import `vi` from 'vitest'. Under Jest, vitest
+        // APIs are undefined — mocks don't function and tests silently pass
+        // without exercising production code.
+        'control-plane/services/__tests__/jwt-signing.test.ts',
+        'packages/security/__tests__/jwt.test.ts',
       ],
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
       clearMocks: true,
@@ -82,14 +98,25 @@ const config: Config = {
 
   
   // Module path mapping (match tsconfig)
+  // P2-10 FIX: Added missing aliases that exist in tsconfig paths but were
+  // absent here, causing test imports of these packages to fail silently.
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^@kernel/(.*)$': '<rootDir>/packages/kernel/$1',
     '^@security/(.*)$': '<rootDir>/packages/security/$1',
     '^@database/(.*)$': '<rootDir>/packages/database/$1',
+    '^@database$': '<rootDir>/packages/database/index.ts',
     '^@config$': '<rootDir>/packages/config/index.ts',
     '^@config/(.*)$': '<rootDir>/packages/config/$1',
     '^@errors$': '<rootDir>/packages/errors/index.ts',
+    '^@monitoring$': '<rootDir>/packages/monitoring/index.ts',
+    '^@monitoring/(.*)$': '<rootDir>/packages/monitoring/$1',
+    '^@utils/(.*)$': '<rootDir>/packages/utils/$1',
+    '^@types/(.*)$': '<rootDir>/packages/types/$1',
+    '^@domain/(.*)$': '<rootDir>/domains/$1',
+    '^@adapters/(.*)$': '<rootDir>/packages/adapters/$1',
+    '^@packages/(.*)$': '<rootDir>/packages/$1',
+    '^@shutdown$': '<rootDir>/packages/shutdown/index.ts',
   },
   
   // Setup files

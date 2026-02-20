@@ -18,9 +18,12 @@ export default function SystemJobs() {
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  // P2-4 FIX: Gate on the admin-protected `admin/cache/stats` endpoint instead
+  // of the public `system/health` check. The admin/* routes require
+  // ['owner', 'admin'] roles (enforced server-side in guardrails.ts).
+  // Previously ANY authenticated user (viewer, editor) could access this page.
   try {
-    // Verify auth by making an authenticated request; redirects to login if unauthorized
-    await authFetch(apiUrl('system/health'), { ctx });
+    await authFetch(apiUrl('admin/cache/stats'), { ctx });
     return { props: {} };
   } catch {
     return { redirect: { destination: '/login', permanent: false } };

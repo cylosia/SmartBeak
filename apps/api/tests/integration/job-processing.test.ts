@@ -27,8 +27,9 @@ describe('End-to-End Job Processing Integration Tests', () => {
     mockRedis = {
       eval: jest.fn().mockResolvedValue(1),
       keys: jest.fn().mockResolvedValue([]),
+      // P3-3 FIX: Match real ioredis Pipeline.exec() shape: Array<[Error|null, unknown]>
       pipeline: jest.fn().mockReturnValue({
-        exec: jest.fn().mockResolvedValue([]),
+        exec: jest.fn().mockResolvedValue([] as Array<[Error | null, unknown]>),
       }),
       lpush: jest.fn().mockResolvedValue(1),
       get: jest.fn().mockImplementation((key: string) => {
@@ -49,7 +50,8 @@ describe('End-to-End Job Processing Integration Tests', () => {
   beforeEach(() => {
     _processedJobs = [];
     _failedJobs = [];
-    scheduler = new JobScheduler('redis://localhost:6379');
+    // P3-5 FIX: Use env var instead of hardcoded Redis URL
+    scheduler = new JobScheduler(process.env['REDIS_URL'] || 'redis://localhost:6379');
   });
 
   afterAll(async () => {

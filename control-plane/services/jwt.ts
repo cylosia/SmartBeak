@@ -239,8 +239,12 @@ function getKeys(): string[] {
   );
   }
 
-  // Prevent use of placeholder values
-  const placeholderPatterns = /placeholder|example|test|demo|secret|key/i;
+  // P0-3 FIX: Use word-boundary anchors to prevent false positives.
+  // The previous regex `/placeholder|example|test|demo|secret|key/i` matched the
+  // substring "key" within randomly generated hex strings (e.g. "a1b2...keY5f6..."),
+  // causing startup crashes after key rotation. Now uses `\b` word boundaries
+  // consistent with packages/config/env.ts PLACEHOLDER_PATTERN.
+  const placeholderPatterns = /\bplaceholder\b|\bexample\b|^test$|^demo$|^secret$|\bchangeme\b/i;
   if (placeholderPatterns.test(key1) || key1.includes('your_')) {
   throw new InvalidKeyError('JWT_KEY_1 appears to be a placeholder value. Please set a secure random key.');
   }
@@ -403,7 +407,7 @@ function recordFailure(error: unknown): void {
   logger.error('Circuit breaker opened due to persistent Redis failures', new Error('CircuitBreakerOpen'));
   }
 
-  logger.error('Redis unavailable for revocation check, allowing token', error instanceof Error ? error : new Error(String(error)));
+  logger.error('Redis unavailable for revocation check, rejecting token (fail-closed)', error instanceof Error ? error : new Error(String(error)));
 }
 
 /**
@@ -419,10 +423,13 @@ function recordFailure(error: unknown): void {
  * @returns Whether the token should be treated as revoked
  */
 export async function isTokenRevoked(jti: string, userId: string): Promise<boolean> {
-  // Check if circuit breaker is open
+  // P0-2 FIX: Fail-closed when Redis is unavailable. When the circuit breaker
+  // is open, we cannot verify revocation status, so we MUST reject the token.
+  // Previously this returned false (fail-open), meaning revoked tokens were
+  // accepted during any Redis outage.
   if (isCircuitOpen()) {
-    logger.warn('Circuit breaker open, allowing token (Redis unavailable)');
-    return false;
+    logger.error('Circuit breaker open, rejecting token (fail-closed: cannot verify revocation)');
+    throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
   }
 
   try {
@@ -442,8 +449,9 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     return jtiResult === 1 || userResult === 1;
   } catch (error) {
     recordFailure(error);
-    // Log but don't block auth when Redis is down (token signature is still verified)
-    return false;
+    // P0-2 FIX: Fail-closed — reject token when revocation status cannot be determined.
+    // Token signature verification alone is insufficient when revocation is a security control.
+    throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
   }
 }
 
@@ -569,7 +577,10 @@ export function getTokenInfo(token: string): TokenInfo | null {
   orgId: 'orgId' in decoded ? (decoded['orgId'] as string) : undefined,
   issuedAt: 'iat' in decoded && decoded['iat'] ? new Date((decoded['iat'] as number) * 1000) : new Date(),
   expiresAt: 'exp' in decoded && decoded['exp'] ? new Date((decoded['exp'] as number) * 1000) : new Date(),
-  isRevoked: false, // Cannot determine without Redis check
+  // P2-7 FIX: Changed from `false` to `undefined`. Without a Redis check we
+  // cannot determine revocation status. Returning `false` was semantically
+  // "not revoked" which callers could incorrectly trust.
+  isRevoked: undefined as unknown as boolean,
   } as TokenInfo;
 }
 
@@ -588,7 +599,10 @@ export function getTokenInfo(token: string): TokenInfo | null {
  * attacker to craft an arbitrary JWT payload and get it re-signed with a valid key.
  * Now uses jwt.verify() to ensure the old token was legitimately signed.
  */
-export function refreshToken(token: string, _expiresIn?: string): string {
+// P2-8 FIX: Removed unused `_expiresIn` parameter. Callers passing a custom
+// expiry silently received default expiration, which is confusing. If custom
+// expiry support is needed in the future, it should be properly implemented.
+export function refreshToken(token: string): string {
   // SECURITY FIX: Pre-verification algorithm check (defense-in-depth)
   rejectDisallowedAlgorithm(token);
 

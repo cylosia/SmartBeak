@@ -367,11 +367,14 @@ export type NotificationState =
  * ('author', 'billing_admin', 'security_admin') that caused auth gaps
  * (owner tokens were not representable as UserRole, causing role check failures).
  */
+// P1-4 FIX: Added 'buyer' role to match packages/security/jwt.ts and
+// control-plane/services/jwt.ts.
 export type UserRole =
   | 'owner'
   | 'admin'
   | 'editor'
-  | 'viewer';
+  | 'viewer'
+  | 'buyer';
 
 // ============================================================================
 // Type-Level Utilities
