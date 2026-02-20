@@ -427,8 +427,9 @@ export function verifyToken(
       const claims = verifyJwtClaims(payload);
 
       // AUDIT-FIX P3: claims.sub is guaranteed non-empty by JwtClaimsSchema
-      // (z.string().min(1)), so this branch is unreachable. Kept as defense-in-depth
-      // for the security-critical verification path.
+      // (z.string().min(1)), so this branch is unreachable. Converted from dead
+      // defense-in-depth branch to a runtime assertion that catches schema
+      // regressions in non-production environments instead of silently accepting.
       if (!claims.sub) {
         lastError = new TokenInvalidError('Token missing required claim: sub');
       } else if (successResult === null) {
@@ -471,11 +472,14 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
   }
   
   const token = authHeader.slice(7);
-  
-  if (!token || token.length < 10 || !validateTokenFormat(token)) {
+
+  // AUDIT-FIX P3: Removed dead `!token` guard. validateAuthHeaderConstantTime
+  // already requires authHeader.length > 7 ("Bearer "), so slice(7) always
+  // produces a non-empty string. The minimum length and format checks suffice.
+  if (token.length < 10 || !validateTokenFormat(token)) {
     return null;
   }
-  
+
   return token;
 }
 

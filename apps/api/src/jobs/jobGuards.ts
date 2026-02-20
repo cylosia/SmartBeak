@@ -133,8 +133,12 @@ export async function assertOrgCapacity(
     // 'started' was counted. Under high throughput, an org can enqueue unlimited
     // 'pending' jobs that all transition to 'started' simultaneously, bursting
     // past the concurrency limit.
+    // AUDIT-FIX P2: Also count 'retrying' jobs. Jobs in 'retrying' status are
+    // about to transition to 'started'. Without counting them, a burst of retries
+    // all transitioning simultaneously can exceed the capacity limit. The set of
+    // active-equivalent statuses is: pending → started → (retrying → started).
     const countResult = await t('job_executions')
-      .whereIn('status', ['started', 'pending'])
+      .whereIn('status', ['started', 'pending', 'retrying'])
       .andWhere({ entity_id: orgId })["count"]();
 
     const count = getValidatedJobCount(countResult);
@@ -196,8 +200,9 @@ export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<bool
 export async function getOrgActiveJobCount(db: Database, orgId: OrgId): Promise<number> {
   // AUDIT-FIX P1: Count both 'started' and 'pending' for consistency with
   // assertOrgCapacity(). Informational reads should reflect the same semantics.
+  // AUDIT-FIX P2: Include 'retrying' for consistency with assertOrgCapacity().
   const countResult = await db('job_executions')
-    .whereIn('status', ['started', 'pending'])
+    .whereIn('status', ['started', 'pending', 'retrying'])
     .andWhere({ entity_id: orgId })["count"]();
 
   return getValidatedJobCount(countResult);

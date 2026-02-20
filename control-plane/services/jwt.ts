@@ -27,7 +27,10 @@ const logger = getLogger('JwtService');
 // Type exports at top level
 // P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
 // SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
-export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
+// AUDIT-FIX P2: Derive from Zod schema instead of manual union. The previous
+// manual definition (`'admin' | 'editor' | 'viewer' | 'owner' | 'buyer'`) drifts
+// silently if a role is added to SecurityUserRoleSchema — compile-time sync is lost.
+export type UserRole = z.infer<typeof SecurityUserRoleSchema>;
 // AUDIT-FIX P2: Import JwtClaims from the security package's Zod-derived type
 // instead of maintaining a manual copy. The previous manual interface drifted
 // from the Zod schema (e.g., missing nbf until manually added). Importing
@@ -173,6 +176,12 @@ const DEFAULT_ISSUER = process.env['JWT_ISSUER'] ?? 'smartbeak-api';
 const REVOCATION_KEY_PREFIX = 'jwt:revoked:';
 const REVOCATION_TTL_SECONDS = 86400 * 7; // 7 days
 
+// AUDIT-FIX P2: Module-level constant for token/user ID validation.
+// Previously defined inline in isTokenRevoked(), revokeToken(), revokeAllUserTokens(),
+// and verifyToken() (4 copies). If the pattern needs updating (e.g., to exclude '.'
+// for a Redis namespace issue), only one location needs to change.
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+
 const CIRCUIT_BREAKER_THRESHOLD = 5;
 const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
 
@@ -212,7 +221,10 @@ function parseMs(timeStr: string): number {
       `Invalid time value: "${timeStr}". Value must be a positive integer within safe bounds.`
     );
   }
-  const unit = match[2]!.toLowerCase() as TimeUnit;
+  // AUDIT-FIX P3: Removed redundant .toLowerCase(). The regex on line 195 has no
+  // /i flag, so the match group is guaranteed lowercase. The cast is safe because
+  // the regex alternation (ms|s|m|h|d|w) exhaustively covers TimeUnit.
+  const unit = match[2]! as TimeUnit;
 
   const multipliers: Record<TimeUnit, number> = {
   ms: 1,
@@ -366,9 +378,15 @@ function getRedisClient(): Redis {
   // async operation occurs between the first `if (redis)` check and this point,
   // so no other code can initialize redis in the interim.
 
+  // AUDIT-FIX P2: Added connectTimeout and commandTimeout. Without these, Redis
+  // client operations (including the revocation pipeline in verifyToken) block
+  // indefinitely if Redis hangs, causing request timeouts and connection pool
+  // exhaustion in the auth middleware path.
   const client = new Redis(url, {
     retryStrategy: (times: number): number => Math.min(times * 50, 2000),
     maxRetriesPerRequest: 3,
+    connectTimeout: 5000,   // 5s connection timeout
+    commandTimeout: 3000,   // 3s per-command timeout
   });
 
   client.on('error', (err: Error) => {
@@ -436,12 +454,15 @@ export function signToken(claimsInput: SignTokenInput): string {
   // by jwt.sign, nbf is a distinct claim that verification libraries enforce
   // independently (jsonwebtoken checks ignoreNotBefore).
   const nowSeconds = Math.floor(Date.now() / 1000);
+  // AUDIT-FIX P3: Read orgId once to prevent divergence between orgId and boundOrgId
+  // if one bracket access is refactored and the other is missed.
+  const orgId = validated['orgId'];
   const payload = {
   sub: validated.sub,
   role: validated.role,
-  orgId: validated["orgId"],
+  orgId,
   jti: generateTokenId(),
-  boundOrgId: validated["orgId"],
+  boundOrgId: orgId,
   nbf: nowSeconds,
   };
 
@@ -532,7 +553,6 @@ export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?
   // and other control characters that could be used for Redis RESP protocol injection
   // or key namespace collisions. Only alphanumeric, hyphens, underscores, and dots
   // are allowed in token identifiers.
-  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
   if (!SAFE_ID_PATTERN.test(jti) || !SAFE_ID_PATTERN.test(userId)) {
     throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
   }
@@ -625,7 +645,6 @@ export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?
 export async function revokeToken(tokenId: string): Promise<void> {
   // AUDIT-FIX P1: Validate tokenId against strict allowlist to prevent Redis
   // key injection via newlines, null bytes, or control characters.
-  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
   if (!SAFE_ID_PATTERN.test(tokenId)) {
     throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
   }
@@ -649,7 +668,6 @@ export async function revokeToken(tokenId: string): Promise<void> {
 export async function revokeAllUserTokens(userId: string): Promise<void> {
   // AUDIT-FIX P1: Validate userId against strict allowlist to prevent Redis
   // key injection via newlines, null bytes, or control characters.
-  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
   if (!SAFE_ID_PATTERN.test(userId)) {
     throw new AuthError('Invalid user identifier', 'INVALID_USER_ID');
   }
@@ -657,7 +675,10 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
   const key = `jwt:revoked:user:${userId}`;
   await getRedisClient().setex(key, REVOCATION_TTL_SECONDS, Date.now().toString());
   // P2-1 FIX: Avoid logging userId directly (potential PII)
-  logger.info('Revoked all tokens for user', { userId: userId.substring(0, 8) + '...' });
+  // AUDIT-FIX P3: Mask to fixed 4+**** pattern. For short userIds (e.g., "u1"),
+  // the previous substring(0,8)+'...' logged the full value, defeating PII redaction.
+  const maskedId = userId.length > 4 ? userId.substring(0, 4) + '****' : '****';
+  logger.info('Revoked all tokens for user', { userId: maskedId });
   } catch (error) {
   logger.error('Error revoking user tokens', error instanceof Error ? error : new Error(String(error)));
   // AUDIT-FIX P2: Explicit message that tokens remain valid on failure.
@@ -719,7 +740,6 @@ export async function verifyToken(
     try {
       const client = getRedisClient();
       // AUDIT-FIX P1: Validate sub against safe pattern (same as isTokenRevoked)
-      const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
       if (!SAFE_ID_PATTERN.test(claims.sub)) {
         throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
       }
@@ -729,7 +749,10 @@ export async function verifyToken(
       if (userRevokedAt !== null) {
         const revokedAtMs = parseInt(userRevokedAt, 10);
         if (!Number.isNaN(revokedAtMs)) {
-          // If iat is present and token was issued after revocation, allow it
+          // AUDIT-FIX P3: Clarified fail-closed semantics. If iat is undefined,
+          // we cannot determine if the token was issued before or after revocation,
+          // so we reject (fail-closed). This is safe: signToken() always sets iat,
+          // so undefined iat indicates a non-standard token source.
           if (claims.iat === undefined || claims.iat * 1000 <= revokedAtMs) {
             throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
           }
@@ -744,8 +767,10 @@ export async function verifyToken(
       // Fail-closed: if Redis is unavailable, reject the token
       throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
     }
+    // AUDIT-FIX P3: Use consistent PII masking (4+**** pattern) for sub claim.
+    const maskedSub = claims.sub.length > 4 ? claims.sub.substring(0, 4) + '****' : '****';
     logger.warn('[jwt] Token verified without jti claim — individual revocation is not possible for this token', {
-      sub: claims.sub.substring(0, 8) + '...',
+      sub: maskedSub,
     });
   }
 
