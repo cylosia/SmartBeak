@@ -306,8 +306,9 @@ function getCurrentSigningKeys(): readonly string[] {
   return signingKeys;
 }
 
-// Backward compatibility alias
-const KEYS = signingKeys;
+// P2-A FIX: Removed dead `const KEYS = signingKeys` backward-compat alias.
+// It captured the array reference at module load time and was never refreshed
+// by getCurrentSigningKeys(), creating a stale-key hazard after rotation.
 
 // ============================================================================
 // Redis Connection (Lazy Initialization)
@@ -319,7 +320,10 @@ const KEYS = signingKeys;
 // AUDIT-FIX M14: Use a pending promise to prevent duplicate connections from
 // concurrent calls during initialization.
 let redis: Redis | null = null;
-let redisInitPromise: Promise<Redis> | null = null;
+// P2-B FIX: Removed dead `redisInitPromise` variable. getRedisClient() is
+// synchronous (ioredis connects lazily), so the async init promise was never
+// assigned or used. Dead code that misleads maintainers into thinking there's
+// an async initialization path.
 
 // Circuit breaker state
 const circuitBreaker: CircuitBreakerState = {
@@ -481,13 +485,19 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
   }
 
+  // AUDIT-FIX M16: Validate token ID and user ID to prevent key injection.
+  // Colons in jti/userId could collide with the namespace separator.
+  // P2-C FIX: Validation errors are thrown BEFORE the try/catch block so they
+  // don't trigger recordFailure(). Previously, input validation errors incremented
+  // the circuit breaker's failure counter, allowing an attacker with a valid signing
+  // key to poison the circuit breaker by sending tokens with ':' in jti/userId,
+  // opening the breaker and denying service to ALL users for 30 seconds.
+  if (jti.includes(':') || userId.includes(':')) {
+    throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
+  }
+
   try {
     const client = getRedisClient();
-    // AUDIT-FIX M16: Validate token ID and user ID to prevent key injection.
-    // Colons in jti/userId could collide with the namespace separator.
-    if (jti.includes(':') || userId.includes(':')) {
-      throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
-    }
 
     // Check both per-token revocation AND user-wide revocation in a single pipeline
     const results = await client.pipeline()
@@ -593,11 +603,19 @@ export async function verifyToken(
   const claims = securityVerifyToken(token, { audience: aud, issuer: iss });
 
   // Step 2: check revocation lists (async Redis lookup)
+  // P2-D FIX: Log a warning when jti is missing. Without jti, the token cannot
+  // be individually revoked and revokeToken() is ineffective for it. signToken()
+  // always generates a jti, so a missing jti indicates a non-standard token source.
+  // User-wide revocation (revokeAllUserTokens) still works via the sub claim.
   if (claims.jti) {
     const revoked = await isTokenRevoked(claims.jti, claims.sub);
     if (revoked) {
       throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
     }
+  } else {
+    logger.warn('[jwt] Token verified without jti claim — individual revocation is not possible for this token', {
+      sub: claims.sub.substring(0, 8) + '...',
+    });
   }
 
   return claims;
@@ -650,8 +668,12 @@ export function isTokenExpired(token: string): boolean {
 * @returns Token info or null if invalid. Data is UNVERIFIED.
 */
 export function unsafeDecodeTokenInfo(token: string): TokenInfo | null {
-  const decoded = jwt.decode(token) as { jti?: string; sub?: string; role?: string; orgId?: string; iat?: number; exp?: number } | null;
-  if (!decoded) return null;
+  // P2-E FIX: jwt.decode() returns JwtPayload | string | null. The previous
+  // `as { ... } | null` cast hid the string case, which would produce an object
+  // with all-undefined properties (silently wrong data). Use proper narrowing.
+  const raw = jwt.decode(token);
+  if (!raw || typeof raw === 'string') return null;
+  const decoded = raw as { jti?: string; sub?: string; role?: string; orgId?: string; iat?: number; exp?: number };
 
   // AUDIT-FIX H15: Validate role with schema instead of unsafe cast.
   const roleResult = UserRoleSchema.safeParse(decoded['role']);
@@ -709,18 +731,17 @@ export async function refreshToken(token: string): Promise<string> {
   // Previously `(verified['role'] || 'viewer') as UserRole` silently upgraded
   // tokens with empty or unknown roles to 'viewer'.
   const role = UserRoleSchema.parse(claims.role);
-  const orgId = claims['orgId'] as string | undefined;
+  // P3-A FIX: orgId is required `string` in the verified JwtClaims schema.
+  // The previous `as string | undefined` widening was misleading and the
+  // subsequent null check was dead code. Use the value directly.
+  const orgId = claims['orgId'];
   // AUDIT-FIX M12: JWT spec allows aud to be string | string[]. Extract first.
   const rawAud = claims.aud;
-  const aud = Array.isArray(rawAud) ? rawAud[0] : (rawAud as string | undefined);
-  const iss = claims.iss as string | undefined;
+  const aud = Array.isArray(rawAud) ? rawAud[0] : rawAud;
+  const iss = claims.iss;
 
   if (!sub) {
     throw new TokenInvalidError('Token missing required claim: sub');
-  }
-
-  if (!orgId) {
-    throw new TokenInvalidError('Token missing required claim: orgId');
   }
 
   return signToken({
@@ -743,6 +764,6 @@ export async function closeJwtRedis(): Promise<void> {
   if (redis) {
     await redis.quit();
     redis = null;
-    redisInitPromise = null;
+    // P2-B FIX: Removed `redisInitPromise = null` — variable was removed (dead code).
   }
 }

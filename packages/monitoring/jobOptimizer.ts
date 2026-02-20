@@ -329,8 +329,11 @@ export class JobOptimizer extends EventEmitter {
     ? priorityLevels.indexOf(requestedPriority)
     : -1;
 
-    if (requestedIndex > windowIndex) {
-    return requestedPriority!;
+    // P3-B FIX: Explicit narrowing instead of non-null assertion.
+    // requestedPriority is guaranteed non-undefined here because
+    // requestedIndex > -1 only when requestedPriority is truthy.
+    if (requestedIndex > windowIndex && requestedPriority !== undefined) {
+    return requestedPriority;
     }
 
     return window.priority;
