@@ -38,7 +38,7 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject | undefined;
  * deserialized payloads). This function rejects objects with toJSON methods and
  * enforces depth/key-count limits.
  */
-function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
+function sanitizeForStringify(data: unknown, depth = 0, visited: WeakSet<object> = new WeakSet()): JsonValue {
   if (depth > MAX_DEPTH) {
     throw new ValidationError('JSONB data exceeds maximum nesting depth', { field: 'jsonb' });
   }
@@ -64,6 +64,17 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   }
   if (typeof data !== 'object') return data;
 
+  // AUDIT-FIX P2: Detect circular references and DAG exponential blowup.
+  // Depth check alone prevents stack overflow for simple cycles, but a DAG
+  // (diamond-shaped structure where multiple keys reference the same object)
+  // causes 2^depth visits without a visited set. At MAX_DEPTH=50, that's
+  // 2^50 (~1 quadrillion) operations — a CPU DoS. The WeakSet tracks visited
+  // objects and short-circuits re-processing.
+  if (visited.has(data as object)) {
+    throw new ValidationError('JSONB data contains circular reference', { field: 'jsonb' });
+  }
+  visited.add(data as object);
+
   // Reject objects with toJSON method (prevents arbitrary code execution)
   if ('toJSON' in (data as object) && typeof (data as Record<string, unknown>)['toJSON'] === 'function') {
     throw new ValidationError('JSONB data contains toJSON method which is not allowed', { field: 'jsonb' });
@@ -76,7 +87,7 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
     if (data.length > MAX_ARRAY_LENGTH) {
       throw new ValidationError(`JSONB array exceeds maximum length of ${MAX_ARRAY_LENGTH}`, { field: 'jsonb' });
     }
-    return data.map((item) => sanitizeForStringify(item, depth + 1));
+    return data.map((item) => sanitizeForStringify(item, depth + 1, visited));
   }
 
   const keys = Object.keys(data as object);
@@ -91,7 +102,7 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   // accessors, so all keys including '__proto__' are stored as data properties.
   const result: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
   for (const key of keys) {
-    result[key] = sanitizeForStringify((data as Record<string, unknown>)[key], depth + 1);
+    result[key] = sanitizeForStringify((data as Record<string, unknown>)[key], depth + 1, visited);
   }
   return result;
 }
