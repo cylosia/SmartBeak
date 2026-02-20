@@ -27,23 +27,10 @@ export function calculateJSONBSize(data: unknown): number {
     // so callers reject it rather than silently storing corrupt JSONB.
     return Number.MAX_SAFE_INTEGER;
   }
-  // Use a conservative estimate for UTF-8 encoding
-  let size = 0;
-  for (let i = 0; i < jsonString.length; i++) {
-    const code = jsonString.charCodeAt(i);
-    if (code <= 0x7f) {
-      size += 1;
-    } else if (code <= 0x7ff) {
-      size += 2;
-    } else if (code >= 0xd800 && code <= 0xdfff) {
-      // Surrogate pair
-      size += 4;
-      i++;
-    } else {
-      size += 3;
-    }
-  }
-  return size;
+  // P2-2 FIX: Standardize on Buffer.byteLength for UTF-8 size calculation.
+  // Previously used a manual charCode loop that disagreed with
+  // serializeForJSONB's Buffer.byteLength on edge-case Unicode.
+  return Buffer.byteLength(jsonString, 'utf8');
 }
 
 /**
@@ -134,7 +121,15 @@ export function truncateJSONB(
   data: Record<string, unknown>,
   maxSize: number = MAX_JSONB_SIZE
 ): Record<string, unknown> {
-  const jsonString = JSON.stringify(data);
+  // P2-1 FIX: Wrap JSON.stringify in try/catch. calculateJSONBSize and
+  // serializeForJSONB both handle circular references, but truncateJSONB
+  // was missing this protection.
+  let jsonString: string;
+  try {
+    jsonString = JSON.stringify(data);
+  } catch {
+    return { _error: 'Data cannot be serialized to JSON' };
+  }
   const sizeInBytes = Buffer.byteLength(jsonString, 'utf8');
 
   if (sizeInBytes <= maxSize) {
@@ -166,6 +161,14 @@ export function truncateJSONB(
     } else {
       result[field.key] = field.value;
     }
+  }
+
+  // P2-3 FIX: Post-truncation size validation. The fixed 10-byte overhead
+  // estimate per field key underestimates for long key names, so the truncated
+  // output can still exceed maxSize. If it does, fall back to a simple marker.
+  const finalSize = Buffer.byteLength(JSON.stringify(result), 'utf8');
+  if (finalSize > maxSize) {
+    return { _truncated: true, _error: `Data exceeded ${maxSize} bytes after truncation` };
   }
 
   return result;

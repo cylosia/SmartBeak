@@ -5,7 +5,9 @@ import { getLogger } from '@kernel/logger';
 // import type { AuthContext, UserRole } from '@security/jwt';
 // SECURITY FIX: Add 'owner' role which exists in DB (CHECK role IN ('owner','admin','editor','viewer'))
 // but was missing from TypeScript types, causing mapRole() to throw 500 for org owners
-export type UserRole = 'owner' | 'admin' | 'editor' | 'viewer';
+// P1-4 FIX: Added 'buyer' role to match packages/security/jwt.ts and
+// control-plane/services/jwt.ts.
+export type UserRole = 'owner' | 'admin' | 'editor' | 'viewer' | 'buyer';
 export interface AuthContext {
   userId: string;
   orgId: string;

@@ -24,6 +24,7 @@ import { getRepositoryHealth } from '../services/repository-factory';
 import { checkSequenceHealth } from '@database/health';
 import { authFromHeader, requireRole, type AuthContext } from '../services/auth';
 import { initializeContainer } from '../services/container';
+import { closeJwtRedis } from '../services/jwt';
 import { initializeRateLimiter } from '../services/rate-limit';
 import { getRedis } from '@kernel/redis';
 import { v1Routes } from './plugins/v1-routes';
@@ -943,6 +944,15 @@ async function start(): Promise<void> {
     logger.info('Flushing telemetry spans...');
     await shutdownTelemetry();
     logger.info('Telemetry shutdown complete');
+  });
+
+  // P0-4 FIX: Close JWT Redis connection on shutdown. closeJwtRedis() was exported
+  // but never called anywhere, causing the standalone JWT Redis connection to hang
+  // open during graceful shutdown, blocking pod termination in Kubernetes.
+  registerShutdownHandler(async () => {
+    logger.info('Closing JWT Redis connection...');
+    await closeJwtRedis();
+    logger.info('JWT Redis closed');
   });
   } catch (error) {
   logger.error('Failed to start server', error instanceof Error ? error : new Error(String(error)));

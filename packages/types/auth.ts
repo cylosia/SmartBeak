@@ -24,12 +24,16 @@ export interface AuthContext {
 /**
  * Standard user roles across the application
  */
-export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner';
+// P1-4 FIX: Added 'buyer' role to match packages/security/jwt.ts and
+// control-plane/services/jwt.ts. Without this, buyer-role tokens fail
+// validation on code paths using this type.
+export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
 
 /**
  * Role hierarchy for authorization checks (higher number = more permissions)
  */
 export const roleHierarchy: Record<UserRole, number> = {
+  buyer: 0,
   viewer: 1,
   editor: 2,
   admin: 3,

@@ -75,6 +75,10 @@ export class JobOptimizer extends EventEmitter {
 
   constructor(scheduler: IJobScheduler) {
   super();
+  // P2-11 FIX: Raise default maxListeners. With multiple coalescing rules,
+  // dependency watchers, and stats listeners, the default of 10 triggers
+  // spurious "MaxListenersExceededWarning" in production logs.
+  this.setMaxListeners(50);
   this.scheduler = scheduler;
   this.setupDefaultRules();
   this.setupDefaultWindows();
@@ -237,9 +241,14 @@ export class JobOptimizer extends EventEmitter {
   // P1-3 FIX: Add .catch() to prevent unhandled promise rejection from crashing
   // the process. Previously, if schedule() threw inside the async setTimeout
   // callback, it was an unhandled rejection (process crash in Node 15+).
+  // P2-9 FIX: Delete from pendingJobs only AFTER successful scheduling.
+  // Previously, the key was deleted before scheduler.schedule(), so on failure
+  // the job data was permanently lost (logged but never retried).
   const timeout = setTimeout(() => {
-    this.pendingJobs.delete(key);
-    this.scheduler.schedule(jobName, data).catch(err => {
+    this.scheduler.schedule(jobName, data).then(() => {
+      this.pendingJobs.delete(key);
+    }).catch(err => {
+      // Keep the entry in pendingJobs so it can be retried or flushed
       logger.error('Failed to schedule coalesced job', undefined, {
         jobName,
         key,
@@ -280,7 +289,10 @@ export class JobOptimizer extends EventEmitter {
   * @returns Optimal priority for current time
   */
   getOptimalPriority(requestedPriority?: JobPriority): JobPriority {
-  const hour = new Date().getHours();
+  // P1-5 FIX: Use UTC hours instead of server local time.
+  // In multi-region deployments, servers in different timezones previously
+  // assigned different priorities to the same job.
+  const hour = new Date().getUTCHours();
 
   for (const window of this.scheduledWindows) {
     if (hour >= window.startHour && hour < window.endHour) {
@@ -426,9 +438,13 @@ export class JobOptimizer extends EventEmitter {
   for (const [_key, groupItems] of groups) {
     for (let i = 0; i < groupItems.length; i += batchSize) {
     const batch = groupItems.slice(i, i + batchSize);
+    // P1-3 FIX: Wrap the batch array in an object to maintain the
+    // Record<string,unknown> contract. The previous `batch as unknown as JobData`
+    // was a type lie — downstream code calling Object.entries(data) or
+    // data['domainId'] on an array produced garbage coalescing keys.
     await this.scheduleWithCoalescing(
     jobName,
-    batch as unknown as JobData,
+    { items: batch },
     { priority: 'background' }
     );
     }
@@ -477,5 +493,12 @@ export class JobOptimizer extends EventEmitter {
     }
   }
   this.pendingJobs.clear();
+  }
+
+  // P2-11 FIX: Add destroy() method to cleanly tear down the optimizer.
+  // Clears all pending timeouts, removes all event listeners, and resets state.
+  destroy(): void {
+  this.flush();
+  this.removeAllListeners();
   }
 }

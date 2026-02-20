@@ -38,7 +38,16 @@ export function isPlaceholder(value: string | undefined): boolean {
 /**
  * Parse integer environment variable with default
  */
-export function parseIntEnv(name: string, defaultValue: number): number {
+/**
+ * P1-6 FIX: Added optional min/max bounds validation.
+ * Without bounds, JOB_WORKER_CONCURRENCY=1000000 causes OOM and
+ * JOB_BATCH_SIZE=-1 causes undefined behavior.
+ */
+export function parseIntEnv(
+  name: string,
+  defaultValue: number,
+  options?: { min?: number; max?: number },
+): number {
   const value = process.env[name];
   if (!value) return defaultValue;
   // P3-3 FIX: Trim before parsing — Number('  ') === 0, which is a valid integer,
@@ -47,7 +56,18 @@ export function parseIntEnv(name: string, defaultValue: number): number {
   const trimmed = value.trim();
   if (!trimmed) return defaultValue;
   const parsed = Number(trimmed);
-  return Number.isInteger(parsed) ? parsed : defaultValue;
+  if (!Number.isInteger(parsed)) return defaultValue;
+
+  if (options?.min !== undefined && parsed < options.min) {
+    logger.warn('Env var below minimum, using default', { name, value: parsed, min: options.min, defaultValue });
+    return defaultValue;
+  }
+  if (options?.max !== undefined && parsed > options.max) {
+    logger.warn('Env var above maximum, using default', { name, value: parsed, max: options.max, defaultValue });
+    return defaultValue;
+  }
+
+  return parsed;
 }
 
 /**

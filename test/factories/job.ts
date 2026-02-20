@@ -18,7 +18,24 @@ export interface JobFactoryOptions {
   createdAt?: Date;
 }
 
-export function createJob(options: JobFactoryOptions = {}) {
+// P3-4 FIX: Explicit return type for factory function
+export interface JobFactoryResult {
+  id: string;
+  name: string;
+  queue: string;
+  data: Record<string, unknown>;
+  opts: { priority: number; delay: number; attempts: number; backoff: { type: string; delay: number } };
+  attemptsMade: number;
+  created_at: Date;
+  processed_at: null;
+  completed_at: null;
+  failed_at: null;
+  returnvalue: null;
+  failedReason: null;
+  stacktrace: null;
+}
+
+export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
   const timestamp = Date.now();
   const randomSuffix = crypto.randomBytes(4).toString('hex');
 
