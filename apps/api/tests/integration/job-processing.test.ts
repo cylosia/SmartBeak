@@ -36,7 +36,9 @@ describe('End-to-End Job Processing Integration Tests', () => {
       }),
       lpush: jest.fn().mockResolvedValue(1),
       get: jest.fn().mockImplementation((key: string) => {
-        return Promise.resolve(jobStore.get(key) || null);
+        // AUDIT-FIX P2: ?? instead of ||. jobStore may legitimately contain
+        // falsy string values (e.g. "0", "") that || would discard.
+        return Promise.resolve(jobStore.get(key) ?? null);
       }),
       setex: jest.fn().mockImplementation((key: string, ttl: number, value: string) => {
         jobStore.set(key, value);
@@ -61,7 +63,10 @@ describe('End-to-End Job Processing Integration Tests', () => {
     scheduler = new JobScheduler(process.env['REDIS_URL'] || 'redis://localhost:6379');
   });
 
-  afterAll(async () => {
+  // AUDIT-FIX P2: Changed from afterAll to afterEach. beforeEach creates a new
+  // scheduler instance per test, but afterAll only stops the LAST instance,
+  // leaking workers/connections from all prior tests.
+  afterEach(async () => {
     if (scheduler) {
       await scheduler.stop();
     }
@@ -195,9 +200,12 @@ describe('End-to-End Job Processing Integration Tests', () => {
         // Expected to fail
       }
 
-      // After max retries, should record to DLQ
-      // Note: Actual DLQ recording happens in worker, not directly in handler
-      expect(mockDLQ).toBeDefined();
+      // AUDIT-FIX P1: The original assertion `expect(mockDLQ).toBeDefined()` was
+      // vacuous — mockDLQ is a local const and is always defined. Assert that the
+      // handler actually throws the persistent failure instead.
+      // Note: Actual DLQ recording happens in the worker error handler, not
+      // directly in the job handler, so we verify the handler rejects.
+      await expect(jobFn({ test: 'data2' })).rejects.toThrow('Persistent failure');
     });
   });
 

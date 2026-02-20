@@ -14,7 +14,6 @@ export interface JobFactoryOptions {
   priority?: number;
   delay?: number;
   attempts?: number;
-  maxRetries?: number;
   createdAt?: Date;
 }
 
@@ -114,8 +113,10 @@ export function createFailedJob(options: FailedJobOptions = {}) {
   return {
     ...job,
     failed_at: new Date(),
-    failedReason: options.error?.message || 'Unknown error',
-    stacktrace: options.stacktrace || [options.error?.stack || ''],
+    // AUDIT-FIX P2: ?? preserves empty-string error messages (e.g. Error('')).
+    failedReason: options.error?.message ?? 'Unknown error',
+    // AUDIT-FIX P3: ?? preserves empty arrays and empty-string stacks.
+    stacktrace: options.stacktrace ?? [options.error?.stack ?? ''],
     // AUDIT-FIX L11: Use ?? to preserve 0 values.
     attemptsMade: options.attemptsMade ?? options.attempts ?? 1,
   };
