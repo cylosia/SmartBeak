@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { getLogger } from '@kernel/logger';
 import { randomBytes } from 'crypto';
 import { AuthError } from '@kernel/auth';
-import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken, UserRoleSchema as SecurityUserRoleSchema } from '@security/jwt';
+import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken, UserRoleSchema as SecurityUserRoleSchema, type JwtClaims as SecurityJwtClaims } from '@security/jwt';
 
 
 /**
@@ -28,30 +28,11 @@ const logger = getLogger('JwtService');
 // P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
 // SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
 export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
-// AUDIT-FIX P1: jti, iat, exp are optional in the security package's Zod schema
-// (JwtClaimsSchema). Declaring them required here was a type-lie: verifyToken()
-// returns the security package's type where these are optional, so callers that
-// access claims.jti / claims.iat / claims.exp believing they are guaranteed
-// non-undefined can crash or produce NaN. Aligned to match the actual runtime
-// shape. Callers MUST null-check before using these fields.
-export interface JwtClaims {
-  sub: string;
-  role: UserRole;
-  // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
-  orgId: string;
-  // AUDIT-FIX P1: aud type must match packages/security/jwt.ts JwtClaimsSchema which
-  // uses z.union([z.string(), z.array(z.string())]). JWT spec (RFC 7519 §4.1.3)
-  // allows aud to be a single string or an array of strings. Without the array type,
-  // the return from securityVerifyToken was not assignable to this interface.
-  aud?: string | string[] | undefined;
-  iss?: string | undefined;
-  jti?: string | undefined;
-  iat?: number | undefined;
-  exp?: number | undefined;
-  // AUDIT-FIX P1: Added nbf to match security package JwtClaimsSchema
-  nbf?: number | undefined;
-  boundOrgId?: string | undefined;
-}
+// AUDIT-FIX P2: Import JwtClaims from the security package's Zod-derived type
+// instead of maintaining a manual copy. The previous manual interface drifted
+// from the Zod schema (e.g., missing nbf until manually added). Importing
+// ensures the type stays in sync with the canonical schema definition.
+export type JwtClaims = SecurityJwtClaims;
 
 // Re-export from unified auth package for backward compatibility
 export {
@@ -159,9 +140,13 @@ export type TimeUnit = 'ms' | 's' | 'm' | 'h' | 'd' | 'w';
 // Error Types (additional service-specific errors)
 // ============================================================================
 
-class TokenInvalidError extends Error {
+// AUDIT-FIX P2: Extends AuthError instead of bare Error. The previous Error-based
+// class had no `code`, no `statusCode`, and was missed by all `instanceof AuthError`
+// catch blocks. Key configuration errors (e.g., 'No signing keys available') would
+// produce 500 responses instead of proper 401 auth errors.
+class TokenInvalidError extends AuthError {
   constructor(message: string) {
-    super(message);
+    super(message, 'TOKEN_INVALID');
     this.name = 'TokenInvalidError';
   }
 }

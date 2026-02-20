@@ -2,7 +2,12 @@
  * JSONB Size Validation
  */
 
-import { ValidationError } from './types-base';
+// AUDIT-FIX P2: Import from @errors instead of ./types-base. The types-base
+// ValidationError extends plain Error (no statusCode, no code from ErrorCodes),
+// so it bypasses route middleware that catches `instanceof ValidationError` from
+// @errors (which extends AppError with statusCode:400). JSONB validation errors
+// would surface as 500 Internal Server Error instead of 400 Bad Request.
+import { ValidationError } from '@errors';
 
 /** Maximum JSONB size in bytes (1MB) */
 export const MAX_JSONB_SIZE = 1024 * 1024;
@@ -35,7 +40,7 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject | undefined;
  */
 function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   if (depth > MAX_DEPTH) {
-    throw new ValidationError('JSONB data exceeds maximum nesting depth', 'jsonb');
+    throw new ValidationError('JSONB data exceeds maximum nesting depth', { field: 'jsonb' });
   }
 
   if (data === null || data === undefined) return data;
@@ -44,13 +49,13 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   // try/catch but produced unhelpful MAX_SAFE_INTEGER size. Explicit rejection gives
   // a clear error message for debugging.
   if (typeof data === 'bigint') {
-    throw new ValidationError('JSONB data contains BigInt which cannot be serialized to JSON. Convert to number or string first.', 'jsonb');
+    throw new ValidationError('JSONB data contains BigInt which cannot be serialized to JSON. Convert to number or string first.', { field: 'jsonb' });
   }
   if (typeof data !== 'object') return data;
 
   // Reject objects with toJSON method (prevents arbitrary code execution)
   if ('toJSON' in (data as object) && typeof (data as Record<string, unknown>)['toJSON'] === 'function') {
-    throw new ValidationError('JSONB data contains toJSON method which is not allowed', 'jsonb');
+    throw new ValidationError('JSONB data contains toJSON method which is not allowed', { field: 'jsonb' });
   }
 
   if (Array.isArray(data)) {
@@ -58,14 +63,14 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
     // to MAX_KEYS but arrays were unbounded, allowing 10M-element arrays to
     // exhaust memory during sanitization and JSON.stringify.
     if (data.length > MAX_ARRAY_LENGTH) {
-      throw new ValidationError(`JSONB array exceeds maximum length of ${MAX_ARRAY_LENGTH}`, 'jsonb');
+      throw new ValidationError(`JSONB array exceeds maximum length of ${MAX_ARRAY_LENGTH}`, { field: 'jsonb' });
     }
     return data.map((item) => sanitizeForStringify(item, depth + 1));
   }
 
   const keys = Object.keys(data as object);
   if (keys.length > MAX_KEYS) {
-    throw new ValidationError(`JSONB data exceeds maximum key count of ${MAX_KEYS}`, 'jsonb');
+    throw new ValidationError(`JSONB data exceeds maximum key count of ${MAX_KEYS}`, { field: 'jsonb' });
   }
 
   // AUDIT-FIX P1: Use Object.create(null) to prevent __proto__ key injection.
@@ -148,7 +153,7 @@ export function assertJSONBSize(data: unknown, maxSize: number = MAX_JSONB_SIZE)
   const result = validateJSONBSize(data, maxSize);
   if (!result.valid) {
     // AUDIT-FIX L9: Safe access instead of non-null assertion.
-    throw new ValidationError(result["error"] ?? 'JSONB validation failed', 'jsonb');
+    throw new ValidationError(result["error"] ?? 'JSONB validation failed', { field: 'jsonb' });
   }
 }
 
@@ -180,13 +185,13 @@ export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZ
     // causing it to bubble as an unhandled 500.
     throw new ValidationError(
       `Data cannot be serialized to JSON: ${err instanceof Error ? err.message : String(err)}`,
-      'jsonb'
+      { field: 'jsonb' }
     );
   }
   const size = Buffer.byteLength(jsonString, 'utf8');
 
   if (size > maxSize) {
-    throw new ValidationError(`JSONB size ${size} bytes exceeds maximum of ${maxSize} bytes`, 'jsonb');
+    throw new ValidationError(`JSONB size ${size} bytes exceeds maximum of ${maxSize} bytes`, { field: 'jsonb' });
   }
 
   return jsonString;
