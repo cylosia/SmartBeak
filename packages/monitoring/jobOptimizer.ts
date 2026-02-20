@@ -502,11 +502,13 @@ export class JobOptimizer extends EventEmitter {
     groups.set('default', items);
   }
 
-  // AUDIT-FIX P2: Schedule batches in parallel instead of sequential awaits.
-  // The previous nested for-loop with sequential awaits caused O(n) latency
-  // where n = total batches. For 10,000 items / 10 batch size = 1,000 serial
-  // awaits. Promise.all reduces this to O(1) * max(batch scheduling time).
-  const batchPromises: Promise<void>[] = [];
+  // AUDIT-FIX P2: Schedule batches with bounded concurrency. The previous
+  // unbounded Promise.all launched up to N/batchSize concurrent scheduler calls
+  // simultaneously (e.g., 10,000 items / 10 = 1,000 concurrent promises).
+  // This can exhaust scheduler connections and cause backpressure failures.
+  // Chunked execution limits concurrency to 50 parallel scheduling calls.
+  const MAX_CONCURRENT_BATCHES = 50;
+  const allBatches: Array<{ data: JobData }> = [];
   for (const [_key, groupItems] of groups) {
     for (let i = 0; i < groupItems.length; i += batchSize) {
     const batch = groupItems.slice(i, i + batchSize);
@@ -514,14 +516,18 @@ export class JobOptimizer extends EventEmitter {
     // Record<string,unknown> contract. The previous `batch as unknown as JobData`
     // was a type lie — downstream code calling Object.entries(data) or
     // data['domainId'] on an array produced garbage coalescing keys.
-    batchPromises.push(this.scheduleWithCoalescing(
-    jobName,
-    { items: batch },
-    { priority: 'background' }
-    ));
+    allBatches.push({ data: { items: batch } });
     }
   }
-  await Promise.all(batchPromises);
+
+  for (let i = 0; i < allBatches.length; i += MAX_CONCURRENT_BATCHES) {
+    const chunk = allBatches.slice(i, i + MAX_CONCURRENT_BATCHES);
+    await Promise.all(chunk.map(b => this.scheduleWithCoalescing(
+    jobName,
+    b.data,
+    { priority: 'background' }
+    )));
+  }
   }
 
   /**

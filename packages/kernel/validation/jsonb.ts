@@ -51,6 +51,17 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   if (typeof data === 'bigint') {
     throw new ValidationError('JSONB data contains BigInt which cannot be serialized to JSON. Convert to number or string first.', { field: 'jsonb' });
   }
+  // AUDIT-FIX P3: Reject functions and symbols explicitly. After the bigint check,
+  // `typeof data !== 'object'` passes through functions and symbols. JSON.stringify
+  // silently drops them (omitted from objects, null in arrays), but for JSONB storage
+  // this silent data loss could mask application bugs. Explicit rejection surfaces
+  // the error at the storage boundary where it can be debugged.
+  if (typeof data === 'function') {
+    throw new ValidationError('JSONB data contains a function which cannot be serialized to JSON', { field: 'jsonb' });
+  }
+  if (typeof data === 'symbol') {
+    throw new ValidationError('JSONB data contains a Symbol which cannot be serialized to JSON', { field: 'jsonb' });
+  }
   if (typeof data !== 'object') return data;
 
   // Reject objects with toJSON method (prevents arbitrary code execution)

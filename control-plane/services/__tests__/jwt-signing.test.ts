@@ -45,6 +45,10 @@ vi.mock('@kernel/auth', () => ({
 // Set env vars BEFORE dynamic import (module-level key validation rejects placeholders)
 // AUDIT-FIX P2: Save originals so afterEach can restore them, preventing
 // cross-test pollution when this suite runs alongside other JWT tests.
+// AUDIT-FIX P3: Module-level save is intentional here — it captures env state before
+// this file's mutations. Vitest runs each test file in an isolated worker, so
+// cross-file pollution is prevented. The save must be at module level because
+// env vars are set at module level (lines 54-57) for the dynamic import to work.
 const savedEnv: Record<string, string | undefined> = {
   JWT_KEY_1: process.env['JWT_KEY_1'],
   JWT_KEY_2: process.env['JWT_KEY_2'],
