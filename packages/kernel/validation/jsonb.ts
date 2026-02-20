@@ -219,6 +219,10 @@ export function truncateJSONB(
       const keyOverhead = Buffer.byteLength(JSON.stringify(field.key), 'utf8') + 3; // "key":"",
       const valueBudget = Math.max(0, perFieldBudget - keyOverhead);
       if (field.length > valueBudget && valueBudget > 20) {
+        // P3-F NOTE: substring() operates on UTF-16 code units while valueBudget
+        // is computed in UTF-8 bytes. For multi-byte characters this may under- or
+        // over-shoot the budget. The post-truncation size check on line 232 is the
+        // safety net that guarantees the final result fits within maxSize.
         result[field.key] = field.value.substring(0, Math.floor(valueBudget / 2)) + '... [truncated]';
       } else if (valueBudget <= 20) {
         result[field.key] = '... [truncated]';

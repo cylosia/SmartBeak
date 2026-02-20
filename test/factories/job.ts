@@ -129,7 +129,9 @@ export interface CompletedJobOptions extends JobFactoryOptions {
 export function createCompletedJob(options: CompletedJobOptions = {}) {
   const job = createJob(options);
   const completedAt = new Date();
-  const processedAt = new Date(completedAt.getTime() - (options.processingTimeMs || 100));
+  // P3-C FIX: Use ?? instead of ||. processingTimeMs=0 is a valid value
+  // (instant processing) but || coerces it to the default of 100ms.
+  const processedAt = new Date(completedAt.getTime() - (options.processingTimeMs ?? 100));
 
   return {
     ...job,

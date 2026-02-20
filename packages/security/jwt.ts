@@ -563,10 +563,15 @@ export function requireAuthContext(
  * @param event - Event type
  * @param data - Event data (will be sanitized)
  */
-// AUDIT-FIX L3: Cast to the expected logger type after sanitization.
+// P3-E FIX: Replaced double cast `as unknown as Record<string, unknown>` with
+// a single type guard. sanitizeForLogging returns SanitizedData which may be a
+// primitive. We verify it's a record before passing to the logger.
 export function logAuthEvent(event: string, data: Record<string, unknown>): void {
   const sanitized = sanitizeForLogging(data);
-  logger.info(`[Auth:${event}]`, sanitized as unknown as Record<string, unknown>);
+  const logData: Record<string, unknown> = (typeof sanitized === 'object' && sanitized !== null && !Array.isArray(sanitized))
+    ? sanitized as Record<string, unknown>
+    : { _sanitized: sanitized };
+  logger.info(`[Auth:${event}]`, logData);
 }
 
 // ============================================================================
