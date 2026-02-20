@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
 import { AppShell } from '../../components/AppShell';
-import { authFetch, apiUrl } from '../../lib/api-client';
+import { apiUrl } from '../../lib/api-client';
 
 // AUDIT-FIX M23: Define expected response shape instead of trusting any 200.
 interface CacheStatsResponse {
@@ -15,6 +15,11 @@ interface CacheStatsResponse {
   memoryUsage?: number;
 }
 
+// AUDIT-FIX P3: Use Clerk's standard sign-in path instead of hardcoded '/login'.
+// Clerk's default sign-in route is /sign-in. Hardcoding /login causes a 404
+// or redirect loop if Clerk middleware doesn't have a matching path.
+const SIGN_IN_PATH = '/sign-in';
+
 export default function SystemJobs() {
   // AUDIT-FIX M21: Client-side auth guard redirects unauthenticated users.
   const { isSignedIn, isLoaded } = useAuth();
@@ -22,7 +27,7 @@ export default function SystemJobs() {
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      void router.replace('/login');
+      void router.replace(SIGN_IN_PATH);
     }
   }, [isLoaded, isSignedIn, router]);
 
@@ -40,34 +45,69 @@ export default function SystemJobs() {
   );
 }
 
+// AUDIT-FIX P1: SSR timeout for the admin probe. authFetch delegates to
+// fetchWithRetry which performs 3 retries with exponential backoff (up to ~47s).
+// SSR must respond quickly; a single attempt with a short timeout is appropriate.
+const SSR_PROBE_TIMEOUT_MS = 3000;
+
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   // AUDIT-FIX H11: Validate the response body against an expected schema
   // instead of treating any HTTP success as authorization. A CDN/proxy
   // returning 200 for all requests would previously grant unauthorized access.
   //
-  // AUDIT-FIX P2: Redirect non-admin authenticated users to dashboard (/)
-  // instead of /login. Redirecting to /login creates a redirect loop for
-  // authenticated non-admin users (Clerk sees them as signed in and bounces
-  // them back). Use /login only for unauthenticated users (401).
+  // AUDIT-FIX P1: Use plain fetch with AbortSignal.timeout instead of authFetch.
+  // authFetch throws on non-2xx responses (making the response.ok differentiation
+  // dead code) and delegates to fetchWithRetry (blocking SSR with retries).
+  // A single fetch with a short timeout gives us direct status code access
+  // and fails fast for SSR.
+  //
+  // NOTE: This is a GET request — CSRF protection is not needed per OWASP
+  // guidelines (state-changing requests only). Do not copy this pattern
+  // for POST/PUT/DELETE endpoints.
   try {
-    const response = await authFetch(apiUrl('admin/cache/stats'), { ctx });
-    // AUDIT-FIX P2: Check response.ok before parsing JSON. Non-2xx responses
-    // (e.g. 502 from reverse proxy) may return HTML, causing .json() to throw
-    // with an unhelpful "Unexpected token <" error instead of redirecting.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SSR_PROBE_TIMEOUT_MS);
+
+    // Forward cookies from SSR context for authenticated server-side requests
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (ctx.req.headers.cookie) {
+      headers['Cookie'] = ctx.req.headers.cookie;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(apiUrl('admin/cache/stats'), {
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    // AUDIT-FIX P1: Status-based redirects now reachable (authFetch previously
+    // threw before this code could execute).
+    // 401 = not authenticated → sign-in; 403+ = not authorized → dashboard
     if (!response.ok) {
-      // 401 = not authenticated → /login; 403 = not authorized → /
-      const destination = response.status === 401 ? '/login' : '/';
+      const destination = response.status === 401 ? SIGN_IN_PATH : '/';
       return { redirect: { destination, permanent: false } };
     }
+
     const data = await response.json() as CacheStatsResponse;
 
-    // Validate the response contains expected admin-only data structure
-    if (typeof data !== 'object' || data === null || !('hitRate' in data || 'memoryUsage' in data)) {
+    // AUDIT-FIX P2: Use typeof checks instead of `in` operator. The `in`
+    // operator only checks key existence, not value type — `{"hitRate": null}`
+    // or `{"hitRate": "not-a-number"}` would pass the previous check.
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      (typeof data['hitRate'] !== 'number' && typeof data['memoryUsage'] !== 'number')
+    ) {
       return { redirect: { destination: '/', permanent: false } };
     }
 
     return { props: {} };
   } catch {
-    return { redirect: { destination: '/login', permanent: false } };
+    // Network error, timeout, or parse failure → redirect to sign-in
+    return { redirect: { destination: SIGN_IN_PATH, permanent: false } };
   }
 };

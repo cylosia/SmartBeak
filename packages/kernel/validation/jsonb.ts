@@ -19,6 +19,13 @@ const MAX_KEYS = 10000;
 /** Maximum array length to prevent DoS (matches MAX_KEYS for consistency) */
 const MAX_ARRAY_LENGTH = 10000;
 
+// AUDIT-FIX P3: Typed return for sanitizeForStringify instead of `unknown`.
+// Captures the structural invariant that the sanitized output is valid JSON.
+type JsonPrimitive = string | number | boolean | null;
+type JsonArray = JsonValue[];
+type JsonObject = { [key: string]: JsonValue };
+export type JsonValue = JsonPrimitive | JsonArray | JsonObject | undefined;
+
 /**
  * AUDIT-FIX C3: Sanitize data before JSON.stringify to prevent malicious toJSON()
  * execution. JSON.stringify invokes toJSON() on objects, which can execute arbitrary
@@ -26,7 +33,7 @@ const MAX_ARRAY_LENGTH = 10000;
  * deserialized payloads). This function rejects objects with toJSON methods and
  * enforces depth/key-count limits.
  */
-function sanitizeForStringify(data: unknown, depth = 0): unknown {
+function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   if (depth > MAX_DEPTH) {
     throw new ValidationError('JSONB data exceeds maximum nesting depth', 'jsonb');
   }
@@ -61,7 +68,12 @@ function sanitizeForStringify(data: unknown, depth = 0): unknown {
     throw new ValidationError(`JSONB data exceeds maximum key count of ${MAX_KEYS}`, 'jsonb');
   }
 
-  const result: Record<string, unknown> = {};
+  // AUDIT-FIX P1: Use Object.create(null) to prevent __proto__ key injection.
+  // With `result = {}`, assigning `result['__proto__'] = value` triggers the
+  // inherited __proto__ accessor, silently changing the prototype chain instead
+  // of storing a regular property. A null-prototype object has no inherited
+  // accessors, so all keys including '__proto__' are stored as data properties.
+  const result: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
   for (const key of keys) {
     result[key] = sanitizeForStringify((data as Record<string, unknown>)[key], depth + 1);
   }
@@ -71,8 +83,11 @@ function sanitizeForStringify(data: unknown, depth = 0): unknown {
 /**
  * Safe JSON.stringify that sanitizes input first.
  * Prevents toJSON() execution, validates depth, and handles circular refs.
+ *
+ * AUDIT-FIX P1: Exported so packages/database/jsonb can delegate to the
+ * hardened serialization path instead of using raw JSON.stringify.
  */
-function safeStringify(data: unknown): string {
+export function safeStringify(data: unknown): string {
   const sanitized = sanitizeForStringify(data);
   return JSON.stringify(sanitized);
 }
@@ -152,7 +167,7 @@ export function fitsInJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZE): bo
  * @param data - Data to serialize
  * @param maxSize - Maximum allowed size in bytes
  * @returns JSON string
- * @throws Error if data exceeds maximum size
+ * @throws ValidationError if data cannot be serialized or exceeds maximum size
  */
 export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZE): string {
   // AUDIT-FIX C3: Use safeStringify to prevent malicious toJSON() execution.
@@ -160,14 +175,18 @@ export function serializeForJSONB(data: unknown, maxSize: number = MAX_JSONB_SIZ
   try {
     jsonString = safeStringify(data);
   } catch (err) {
-    throw new Error(
-      `Data cannot be serialized to JSON: ${err instanceof Error ? err.message : String(err)}`
+    // AUDIT-FIX P2: Throw ValidationError instead of bare Error.
+    // Callers catching ValidationError for 400 responses would miss this,
+    // causing it to bubble as an unhandled 500.
+    throw new ValidationError(
+      `Data cannot be serialized to JSON: ${err instanceof Error ? err.message : String(err)}`,
+      'jsonb'
     );
   }
   const size = Buffer.byteLength(jsonString, 'utf8');
 
   if (size > maxSize) {
-    throw new Error(`JSONB size ${size} bytes exceeds maximum of ${maxSize} bytes`);
+    throw new ValidationError(`JSONB size ${size} bytes exceeds maximum of ${maxSize} bytes`, 'jsonb');
   }
 
   return jsonString;
@@ -212,10 +231,15 @@ export function truncateJSONB(
     } else {
       result[key] = value;
       // Account for key, quotes, colon, comma overhead
+      // JSON.stringify(key) is safe — key is always a string from Object.keys().
       const keyOverhead = Buffer.byteLength(JSON.stringify(key), 'utf8') + 1; // "key":
       let valSize: number;
       try {
-        valSize = Buffer.byteLength(JSON.stringify(value), 'utf8');
+        // AUDIT-FIX P2: Use safeStringify instead of raw JSON.stringify.
+        // The initial safeStringify on the full object validated the data, but
+        // values here come from the original `data` which may still carry
+        // toJSON methods. safeStringify re-sanitizes each value.
+        valSize = Buffer.byteLength(safeStringify(value), 'utf8');
       } catch {
         valSize = 4; // "null" fallback
         result[key] = null;
@@ -256,7 +280,8 @@ export function truncateJSONB(
   }
 
   // P2-3 FIX: Post-truncation size validation.
-  const finalSize = Buffer.byteLength(JSON.stringify(result), 'utf8');
+  // AUDIT-FIX P2: Use safeStringify for consistency with initial serialization.
+  const finalSize = Buffer.byteLength(safeStringify(result), 'utf8');
   if (finalSize > maxSize) {
     return { _truncated: true, _error: `Data exceeded ${maxSize} bytes after truncation` };
   }
