@@ -444,14 +444,21 @@ export function verifyToken(
         successResult = claims;
       }
     } catch (error) {
-      // Continue to next key (constant-time behavior)
-      if (error instanceof jwt.TokenExpiredError) {
-        // AUDIT-FIX L2: expiredAt is already Date, no need to re-wrap.
-        lastError = new TokenExpiredError();
-      } else if (error instanceof AuthError) {
-        lastError = error;
-      } else {
-        lastError = error instanceof Error ? error : new Error(String(error));
+      // Continue to next key (constant-time behavior).
+      // AUDIT-FIX P3: Only update lastError if we haven't found a success yet.
+      // After success, continuing the loop for timing resistance still catches
+      // errors but we discard them. This prevents a misleading TokenExpiredError
+      // from overwriting lastError when the token actually verified with key1
+      // but key2 threw (different semantics, confusing for debugging).
+      if (successResult === null) {
+        if (error instanceof jwt.TokenExpiredError) {
+          // AUDIT-FIX L2: expiredAt is already Date, no need to re-wrap.
+          lastError = new TokenExpiredError();
+        } else if (error instanceof AuthError) {
+          lastError = error;
+        } else {
+          lastError = error instanceof Error ? error : new Error(String(error));
+        }
       }
     }
   }
@@ -552,6 +559,15 @@ export function getAuthContext(
   // boundOrgId but this function was not checking it, allowing a token issued
   // for Org A to be used against Org B if the orgId claim was manipulated.
   if (claims.boundOrgId && !constantTimeCompare(claims.boundOrgId, claims.orgId)) {
+    // AUDIT-FIX P2: Log a security warning for boundOrgId mismatch. This is a
+    // security-sensitive event (potential cross-org token manipulation) that was
+    // previously silently swallowed. Callers get null (auth denied) but ops teams
+    // need visibility into this pattern for incident response.
+    logger.warn('boundOrgId mismatch detected — possible cross-org token use', {
+      boundOrgId: claims.boundOrgId.substring(0, 8) + '...',
+      claimedOrgId: claims.orgId.substring(0, 8) + '...',
+      sub: claims.sub.substring(0, 8) + '...',
+    });
     return null;
   }
 

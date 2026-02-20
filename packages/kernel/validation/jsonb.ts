@@ -44,7 +44,13 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
  * deserialized payloads). This function rejects objects with toJSON methods and
  * enforces depth/key-count limits.
  */
-function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
+// AUDIT-FIX P2: Added `seen` WeakSet parameter for circular reference detection.
+// Without it, circular references recurse until MAX_DEPTH (50 frames) and throw
+// a misleading "exceeds maximum nesting depth" error. Shared references (not
+// circular but same sub-object referenced from multiple keys) also cause the
+// sub-object to be deep-copied multiple times, enabling a memory multiplication
+// attack (e.g., 10 keys pointing to the same 1MB sub-object → 10MB after sanitize).
+function sanitizeForStringify(data: unknown, depth = 0, seen: WeakSet<object> = new WeakSet()): JsonValue {
   if (depth > MAX_DEPTH) {
     throw new ValidationError('JSONB data exceeds maximum nesting depth', { field: 'jsonb' });
   }
@@ -69,6 +75,12 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   }
   if (typeof data !== 'object') return data as JsonPrimitive;
 
+  // Circular reference detection
+  if (seen.has(data as object)) {
+    throw new ValidationError('JSONB data contains circular references', { field: 'jsonb' });
+  }
+  seen.add(data as object);
+
   // Reject objects with toJSON method (prevents arbitrary code execution)
   if ('toJSON' in (data as object) && typeof (data as Record<string, unknown>)['toJSON'] === 'function') {
     throw new ValidationError('JSONB data contains toJSON method which is not allowed', { field: 'jsonb' });
@@ -81,7 +93,7 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
     if (data.length > MAX_ARRAY_LENGTH) {
       throw new ValidationError(`JSONB array exceeds maximum length of ${MAX_ARRAY_LENGTH}`, { field: 'jsonb' });
     }
-    return data.map((item) => sanitizeForStringify(item, depth + 1));
+    return data.map((item) => sanitizeForStringify(item, depth + 1, seen));
   }
 
   const keys = Object.keys(data as object);
@@ -96,7 +108,7 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   // accessors, so all keys including '__proto__' are stored as data properties.
   const result: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
   for (const key of keys) {
-    result[key] = sanitizeForStringify((data as Record<string, unknown>)[key], depth + 1);
+    result[key] = sanitizeForStringify((data as Record<string, unknown>)[key], depth + 1, seen);
   }
   return result;
 }
@@ -289,9 +301,14 @@ export function truncateJSONB(
       if (field.length > valueBudget && valueBudget > 20) {
         // P3-F NOTE: substring() operates on UTF-16 code units while valueBudget
         // is computed in UTF-8 bytes. For multi-byte characters this may under- or
-        // over-shoot the budget. The post-truncation size check on line 232 is the
-        // safety net that guarantees the final result fits within maxSize.
-        result[field.key] = field.value.substring(0, Math.floor(valueBudget / 2)) + '... [truncated]';
+        // over-shoot the budget. The post-truncation size check below is the safety
+        // net that guarantees the final result fits within maxSize.
+        // AUDIT-FIX P2: Trim unpaired surrogates after substring(). A cut in the
+        // middle of a surrogate pair (emoji, CJK supplement) produces an unpaired
+        // high surrogate that JSON.stringify encodes as \uD800 etc., which
+        // PostgreSQL's JSONB parser rejects as invalid Unicode.
+        const truncated = field.value.substring(0, Math.floor(valueBudget / 2));
+        result[field.key] = truncated.replace(/[\uD800-\uDBFF]$/, '') + '... [truncated]';
       } else if (valueBudget <= 20) {
         result[field.key] = '... [truncated]';
       } else {

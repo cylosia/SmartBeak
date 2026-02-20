@@ -184,7 +184,19 @@ export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<bool
     const count = await getOrgActiveJobCount(db, orgId);
     return count < MAX_ACTIVE_JOBS_PER_ORG;
   } catch (err) {
+    // AUDIT-FIX P2: Catch DatabaseError in addition to RateLimitError.
+    // This is an advisory-only check for UI display (see JSDoc above).
+    // A transient database error during an informational query should not
+    // crash the caller — return false (conservative) with logging.
     if (err instanceof RateLimitError) {
+      return false;
+    }
+    // Database errors are imported from @errors or thrown by getValidatedJobCount.
+    // Check by name to handle cross-module class hierarchy mismatches.
+    if (err instanceof Error && (err.name === 'DatabaseError' || err.constructor.name === 'DatabaseError')) {
+      logger.warn('Database error during advisory capacity check, assuming at capacity', {
+        error: err.message,
+      });
       return false;
     }
     throw err;

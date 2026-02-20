@@ -641,7 +641,17 @@ export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?
     // introduces security-module errors into this try block, instanceof would
     // silently fail, routing auth errors into recordFailure() and polluting
     // the circuit breaker. The name check catches both class variants.
-    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
+    // AUDIT-FIX P1: Extended name-based guard to include TokenInvalidError and
+    // TokenExpiredError (from packages/security/jwt.ts). These subclasses set
+    // their own name property, not 'AuthError', so the previous check missed them.
+    if (
+      error instanceof AuthError ||
+      (error instanceof Error && (
+        error.name === 'AuthError' ||
+        error.name === 'TokenInvalidError' ||
+        error.name === 'TokenExpiredError'
+      ))
+    ) {
       throw error;
     }
     recordFailure(error);
@@ -771,8 +781,20 @@ export async function verifyToken(
       // Reset circuit breaker on success (consistent with isTokenRevoked)
       circuitBreaker.failures = 0;
     } catch (err) {
-      // AUDIT-FIX P1: Name-based secondary guard (same cross-module rationale as isTokenRevoked)
-      if (err instanceof AuthError || (err instanceof Error && err.name === 'AuthError')) throw err;
+      // AUDIT-FIX P1: Name-based secondary guard for cross-module AuthError hierarchy.
+      // packages/security/jwt.ts defines its own AuthError, TokenInvalidError, and
+      // TokenExpiredError classes that are distinct from @kernel/auth.AuthError.
+      // instanceof fails across module boundaries, so we also check by name.
+      // TokenInvalidError.name = 'TokenInvalidError', TokenExpiredError.name = 'TokenExpiredError'
+      // — both must be re-thrown rather than counted as infrastructure failures.
+      if (
+        err instanceof AuthError ||
+        (err instanceof Error && (
+          err.name === 'AuthError' ||
+          err.name === 'TokenInvalidError' ||
+          err.name === 'TokenExpiredError'
+        ))
+      ) throw err;
       recordFailure(err);
       // Fail-closed: if Redis is unavailable, reject the token
       throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
@@ -905,8 +927,12 @@ export const getTokenInfo = unsafeDecodeTokenInfo;
  * AUDIT-FIX M15: Preserves original error details instead of swallowing them.
  */
 export async function refreshToken(token: string): Promise<string> {
-  // SECURITY FIX: Pre-verification algorithm check (defense-in-depth)
-  rejectDisallowedAlgorithm(token);
+  // AUDIT-FIX P3: Removed redundant rejectDisallowedAlgorithm() call.
+  // verifyToken() below delegates to securityVerifyToken() which already
+  // calls rejectDisallowedAlgorithm() (packages/security/jwt.ts:408).
+  // The duplicate call performed an unnecessary jwt.decode + JSON parse
+  // on every refresh. The length guard added to rejectDisallowedAlgorithm
+  // ensures oversized tokens are caught regardless of entry point.
 
   // C1-FIX: Use verifyToken() which includes revocation check via Redis.
   // Previously used raw jwt.verify() which only checked the signature,
@@ -973,5 +999,12 @@ export async function closeJwtRedis(): Promise<void> {
     await redis.quit();
     redis = null;
     // P2-B FIX: Removed `redisInitPromise = null` — variable was removed (dead code).
+    // AUDIT-FIX P2: Reset circuit breaker state on connection close.
+    // Without this, a stale open circuit breaker persists after test teardown
+    // or reconnection, causing all subsequent isTokenRevoked calls to throw
+    // immediately even after a fresh Redis connection is established.
+    circuitBreaker.failures = 0;
+    circuitBreaker.lastFailure = 0;
+    circuitBreaker.isOpen = false;
   }
 }
