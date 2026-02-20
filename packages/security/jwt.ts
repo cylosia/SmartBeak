@@ -45,7 +45,11 @@ export const JwtClaimsSchema = z.object({
   // F31-FIX: orgId is now required. It was optional in the schema but required
   // by getAuthContext(), causing silent auth failures for tokens without orgId.
   orgId: z.string().min(1).max(256),
-  aud: z.union([z.string(), z.array(z.string())]).optional(),
+  // AUDIT-FIX P2: Add .min(1) to array branch to reject empty audiences.
+  // An empty array passes Zod validation but rawAud[0] is undefined, which
+  // would silently change the audience to DEFAULT_AUDIENCE on refresh —
+  // a privilege escalation from "no audience" to the default.
+  aud: z.union([z.string(), z.array(z.string()).min(1)]).optional(),
   iss: z.string().optional(),
   jti: z.string().optional(),
   exp: z.number().optional(),

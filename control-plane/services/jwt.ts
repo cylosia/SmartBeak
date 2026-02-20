@@ -510,7 +510,7 @@ function recordFailure(error: unknown): void {
  * @param userId - The token's subject (sub claim) — used for user-wide revocation
  * @returns Whether the token should be treated as revoked
  */
-export async function isTokenRevoked(jti: string, userId: string): Promise<boolean> {
+export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?: number | undefined): Promise<boolean> {
   // P0-2 FIX: Fail-closed when Redis is unavailable. When the circuit breaker
   // is open, we cannot verify revocation status, so we MUST reject the token.
   // Previously this returned false (fail-open), meaning revoked tokens were
@@ -540,10 +540,15 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
   try {
     const client = getRedisClient();
 
-    // Check both per-token revocation AND user-wide revocation in a single pipeline
+    // Check both per-token revocation AND user-wide revocation in a single pipeline.
+    // AUDIT-FIX P1: Use GET (not EXISTS) for user-wide revocation so we can compare
+    // the revocation timestamp against the token's iat. revokeAllUserTokens stores
+    // Date.now().toString() as the value. With EXISTS, any token — including ones
+    // issued AFTER the revocation — is rejected for 7 days, effectively locking the
+    // user out. Comparing iat allows tokens issued after revocation to pass.
     const results = await client.pipeline()
       .exists(`${REVOCATION_KEY_PREFIX}${jti}`)
-      .exists(`jwt:revoked:user:${userId}`)
+      .get(`jwt:revoked:user:${userId}`)
       .exec();
 
     // AUDIT-FIX H4: Validate pipeline results are non-null and check per-command
@@ -568,10 +573,27 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     // Success - reset failure count
     circuitBreaker.failures = 0;
 
-    // Pipeline results are [error, value] tuples
+    // Per-token revocation: EXISTS returns 1 if revoked
     const jtiResult = jtiRevoked[1];
-    const userResult = userRevoked[1];
-    return jtiResult === 1 || userResult === 1;
+    if (jtiResult === 1) return true;
+
+    // User-wide revocation: GET returns the revocation timestamp or null.
+    // Only revoke tokens issued BEFORE the revocation. Tokens issued after
+    // (e.g., after re-authentication) should be allowed through.
+    const userRevokedAt = userRevoked[1];
+    if (userRevokedAt !== null && typeof userRevokedAt === 'string') {
+      const revokedAtMs = parseInt(userRevokedAt, 10);
+      if (!Number.isNaN(revokedAtMs)) {
+        // If we have the token's iat, compare it against the revocation time.
+        // If iat is not available (legacy callers), fail-closed: treat as revoked.
+        if (tokenIssuedAt === undefined) {
+          return true;
+        }
+        // Token iat is in seconds, revocation timestamp is in ms
+        return tokenIssuedAt * 1000 <= revokedAtMs;
+      }
+    }
+    return false;
   } catch (error) {
     // AUDIT-FIX P2: Don't count our own AuthErrors (pipeline validation failures)
     // toward the circuit breaker. Those are expected fail-closed responses, not
@@ -611,7 +633,9 @@ export async function revokeToken(tokenId: string): Promise<void> {
   await getRedisClient().setex(`${REVOCATION_KEY_PREFIX}${tokenId}`, REVOCATION_TTL_SECONDS, '1');
   } catch (error) {
   logger.error('Error revoking token', error instanceof Error ? error : new Error(String(error)));
-  throw new AuthError('Failed to revoke token', 'REVOCATION_FAILED');
+  // AUDIT-FIX P2: Make error message explicit that the token remains valid.
+  // Callers need to know they must retry — the revocation was NOT applied.
+  throw new AuthError('Failed to revoke token: the token remains valid. Manual retry required.', 'REVOCATION_FAILED');
   }
 }
 
@@ -636,7 +660,8 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
   logger.info('Revoked all tokens for user', { userId: userId.substring(0, 8) + '...' });
   } catch (error) {
   logger.error('Error revoking user tokens', error instanceof Error ? error : new Error(String(error)));
-  throw new AuthError('Failed to revoke user tokens', 'USER_REVOCATION_FAILED');
+  // AUDIT-FIX P2: Explicit message that tokens remain valid on failure.
+  throw new AuthError('Failed to revoke user tokens: existing tokens remain valid. Manual retry required.', 'USER_REVOCATION_FAILED');
   }
 }
 
@@ -675,7 +700,7 @@ export async function verifyToken(
   // always generates a jti, so a missing jti indicates a non-standard token source.
   // User-wide revocation (revokeAllUserTokens) still works via the sub claim.
   if (claims.jti) {
-    const revoked = await isTokenRevoked(claims.jti, claims.sub);
+    const revoked = await isTokenRevoked(claims.jti, claims.sub, claims.iat);
     if (revoked) {
       throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
     }
@@ -698,9 +723,17 @@ export async function verifyToken(
       if (!SAFE_ID_PATTERN.test(claims.sub)) {
         throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
       }
-      const userRevoked = await client.exists(`jwt:revoked:user:${claims.sub}`);
-      if (userRevoked === 1) {
-        throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+      // AUDIT-FIX P1: Use GET instead of EXISTS and compare timestamps, consistent
+      // with the isTokenRevoked fix. Tokens issued after revocation are allowed.
+      const userRevokedAt = await client.get(`jwt:revoked:user:${claims.sub}`);
+      if (userRevokedAt !== null) {
+        const revokedAtMs = parseInt(userRevokedAt, 10);
+        if (!Number.isNaN(revokedAtMs)) {
+          // If iat is present and token was issued after revocation, allow it
+          if (claims.iat === undefined || claims.iat * 1000 <= revokedAtMs) {
+            throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+          }
+        }
       }
       // Reset circuit breaker on success (consistent with isTokenRevoked)
       circuitBreaker.failures = 0;
@@ -785,17 +818,28 @@ export function unsafeDecodeTokenInfo(token: string): TokenInfo | null {
   // AUDIT-FIX P3: Reject tokens missing required claims instead of fabricating
   // data. Empty-string jti could collide with revocation keys. Fabricated
   // new Date() for iat/exp makes tokens appear freshly issued and not expired.
-  if (!decoded['jti'] || !decoded['sub'] || !decoded['iat'] || !decoded['exp']) {
+  //
+  // AUDIT-FIX P3: Use explicit typeof guards instead of truthiness + `as` casts.
+  // Truthiness checks pass for any truthy value (e.g., jti: 42 passes `!decoded['jti']`),
+  // then `as string` is a type lie. typeof ensures structural correctness.
+  const jti = decoded['jti'];
+  const sub = decoded['sub'];
+  const iat = decoded['iat'];
+  const exp = decoded['exp'];
+  const orgId = decoded['orgId'];
+
+  if (typeof jti !== 'string' || typeof sub !== 'string' ||
+      typeof iat !== 'number' || typeof exp !== 'number') {
     return null;
   }
 
   return {
-    jti: decoded['jti'] as string,
-    sub: decoded['sub'] as string,
+    jti,
+    sub,
     role,
-    orgId: decoded['orgId'] as string | undefined,
-    issuedAt: new Date((decoded['iat'] as number) * 1000),
-    expiresAt: new Date((decoded['exp'] as number) * 1000),
+    orgId: typeof orgId === 'string' ? orgId : undefined,
+    issuedAt: new Date(iat * 1000),
+    expiresAt: new Date(exp * 1000),
     // AUDIT-FIX C2: null = unknown. Cannot determine revocation without Redis.
     isRevoked: null,
   };
@@ -849,9 +893,23 @@ export async function refreshToken(token: string): Promise<string> {
   // AUDIT-FIX P2: Guard against empty array — rawAud[0] is undefined for [].
   // Without this, a token with aud:[] would silently change to DEFAULT_AUDIENCE.
   const rawAud = claims.aud;
-  const aud = Array.isArray(rawAud)
-    ? (rawAud.length > 0 ? rawAud[0] : undefined)
-    : rawAud;
+  let aud: string | undefined;
+  if (Array.isArray(rawAud)) {
+    if (rawAud.length === 0) {
+      throw new TokenInvalidError('Cannot refresh token with empty audience array');
+    }
+    // AUDIT-FIX P2: Log when multi-audience tokens are reduced to single audience.
+    // The refreshed token silently loses all audiences except the first, which
+    // could break partner API access if the token was scoped to multiple services.
+    if (rawAud.length > 1) {
+      logger.warn('[jwt] Refreshing multi-audience token; only first audience preserved', {
+        audienceCount: rawAud.length,
+      });
+    }
+    aud = rawAud[0];
+  } else {
+    aud = rawAud;
+  }
   const iss = claims.iss;
 
   // sub is guaranteed non-empty by JwtClaimsSchema (z.string().min(1)),
