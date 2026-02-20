@@ -198,7 +198,11 @@ const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
 * @returns Milliseconds
 */
 function parseMs(timeStr: string): number {
-  const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/i);
+  // AUDIT-FIX P3: Removed /i flag. The Zod schema (JwtClaimsInputSchema.expiresIn)
+  // uses a case-sensitive regex, so validated input is always lowercase. Matching
+  // case-insensitively here but case-sensitively at the schema creates an
+  // inconsistency where parseMs accepts values that Zod would reject.
+  const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/);
   if (!match) {
     // AUDIT-FIX P2: Throw on invalid input instead of silently defaulting.
     // For a security-sensitive function controlling token lifetime, a silent
@@ -209,6 +213,15 @@ function parseMs(timeStr: string): number {
   }
 
   const value = parseInt(match[1]!, 10);
+  // AUDIT-FIX P2: Reject non-safe integers. The regex allows arbitrarily large
+  // digit sequences (e.g. "99999999999999999999d"). parseInt truncates to a
+  // double-precision float, silently losing precision. For a security-sensitive
+  // function controlling token lifetime, this could grant longer access than intended.
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new TokenInvalidError(
+      `Invalid time value: "${timeStr}". Value must be a positive integer within safe bounds.`
+    );
+  }
   const unit = match[2]!.toLowerCase() as TimeUnit;
 
   const multipliers: Record<TimeUnit, number> = {
@@ -387,7 +400,11 @@ function getRedisClient(): Redis {
 * @returns Unique token ID
 */
 function generateTokenId(): string {
-  return `${Date.now()}-${randomBytes(16).toString('hex')}`;
+  // AUDIT-FIX P3: Replaced Date.now() prefix with pure random bytes. The
+  // timestamp leaked server clock information to anyone who decodes the token
+  // (jti is a standard claim visible in the JWT payload). 20 random bytes
+  // (160 bits) provide sufficient uniqueness without clock leakage.
+  return randomBytes(20).toString('hex');
 }
 
 /**
@@ -424,12 +441,18 @@ export function signToken(claimsInput: SignTokenInput): string {
   const expiresInMs = calculateExpiration(validated.expiresIn);
 
   // AUDIT-FIX L4: Removed redundant double-cast.
+  // AUDIT-FIX P3: Added nbf (Not Before) claim. Without nbf, tokens are valid
+  // from the moment of issuance with no explicit start time. While iat is set
+  // by jwt.sign, nbf is a distinct claim that verification libraries enforce
+  // independently (jsonwebtoken checks ignoreNotBefore).
+  const nowSeconds = Math.floor(Date.now() / 1000);
   const payload = {
   sub: validated.sub,
   role: validated.role,
   orgId: validated["orgId"],
   jti: generateTokenId(),
   boundOrgId: validated["orgId"],
+  nbf: nowSeconds,
   };
 
   // AUDIT-FIX H3/H14: Use getCurrentSigningKeys() for hot reload support.
@@ -514,8 +537,14 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
   // the circuit breaker's failure counter, allowing an attacker with a valid signing
   // key to poison the circuit breaker by sending tokens with ':' in jti/userId,
   // opening the breaker and denying service to ALL users for 30 seconds.
-  if (jti.includes(':') || userId.includes(':')) {
-    throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
+  //
+  // AUDIT-FIX P1: Expanded validation beyond ':' to reject newlines, null bytes,
+  // and other control characters that could be used for Redis RESP protocol injection
+  // or key namespace collisions. Only alphanumeric, hyphens, underscores, and dots
+  // are allowed in token identifiers.
+  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+  if (!SAFE_ID_PATTERN.test(jti) || !SAFE_ID_PATTERN.test(userId)) {
+    throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
   }
 
   try {
@@ -582,8 +611,10 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
 * @throws {JwtError} When revocation fails
 */
 export async function revokeToken(tokenId: string): Promise<void> {
-  // AUDIT-FIX M16: Validate tokenId to prevent Redis key injection via colons.
-  if (tokenId.includes(':')) {
+  // AUDIT-FIX P1: Validate tokenId against strict allowlist to prevent Redis
+  // key injection via newlines, null bytes, or control characters.
+  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+  if (!SAFE_ID_PATTERN.test(tokenId)) {
     throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
   }
   try {
@@ -602,8 +633,10 @@ export async function revokeToken(tokenId: string): Promise<void> {
 * @throws {JwtError} When revocation fails
 */
 export async function revokeAllUserTokens(userId: string): Promise<void> {
-  // AUDIT-FIX M16: Validate userId to prevent Redis key injection via colons.
-  if (userId.includes(':')) {
+  // AUDIT-FIX P1: Validate userId against strict allowlist to prevent Redis
+  // key injection via newlines, null bytes, or control characters.
+  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+  if (!SAFE_ID_PATTERN.test(userId)) {
     throw new AuthError('Invalid user identifier', 'INVALID_USER_ID');
   }
   try {
@@ -660,15 +693,31 @@ export async function verifyToken(
     // AUDIT-FIX P2: Even without jti, check user-wide revocation.
     // Previously the entire revocation check was skipped, allowing tokens
     // without jti to bypass revokeAllUserTokens() — a security gap.
+    //
+    // AUDIT-FIX P1: Check circuit breaker even for JTI-less tokens. Previously
+    // this code path bypassed the breaker entirely, causing unnecessary Redis
+    // calls during outages and inconsistent fail-closed behavior.
+    if (isCircuitOpen()) {
+      logger.error('Circuit breaker open, rejecting JTI-less token (fail-closed)');
+      throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
+    }
     try {
       const client = getRedisClient();
+      // AUDIT-FIX P1: Validate sub against safe pattern (same as isTokenRevoked)
+      const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+      if (!SAFE_ID_PATTERN.test(claims.sub)) {
+        throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
+      }
       const userRevoked = await client.exists(`jwt:revoked:user:${claims.sub}`);
       if (userRevoked === 1) {
         throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
       }
+      // Reset circuit breaker on success (consistent with isTokenRevoked)
+      circuitBreaker.failures = 0;
     } catch (err) {
       // AUDIT-FIX P1: Name-based secondary guard (same cross-module rationale as isTokenRevoked)
       if (err instanceof AuthError || (err instanceof Error && err.name === 'AuthError')) throw err;
+      recordFailure(err);
       // Fail-closed: if Redis is unavailable, reject the token
       throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
     }

@@ -5,7 +5,7 @@
  * audience/issuer claims, preventing algorithm confusion attacks.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 
 // Mock kernel dependencies to break circular logger <-> request-context import
@@ -43,10 +43,18 @@ vi.mock('@kernel/auth', () => ({
 }));
 
 // Set env vars BEFORE dynamic import (module-level key validation rejects placeholders)
-process.env.JWT_KEY_1 = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-process.env.JWT_KEY_2 = 'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3';
-process.env.JWT_AUDIENCE = 'smartbeak';
-process.env.JWT_ISSUER = 'smartbeak-api';
+// AUDIT-FIX P2: Save originals so afterEach can restore them, preventing
+// cross-test pollution when this suite runs alongside other JWT tests.
+const savedEnv: Record<string, string | undefined> = {
+  JWT_KEY_1: process.env['JWT_KEY_1'],
+  JWT_KEY_2: process.env['JWT_KEY_2'],
+  JWT_AUDIENCE: process.env['JWT_AUDIENCE'],
+  JWT_ISSUER: process.env['JWT_ISSUER'],
+};
+process.env['JWT_KEY_1'] = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+process.env['JWT_KEY_2'] = 'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3';
+process.env['JWT_AUDIENCE'] = 'smartbeak';
+process.env['JWT_ISSUER'] = 'smartbeak-api';
 
 describe('signToken algorithm enforcement', () => {
   // AUDIT-FIX L12: Reset modules between tests to prevent stale module cache.
@@ -54,6 +62,17 @@ describe('signToken algorithm enforcement', () => {
   // changes between tests have no effect.
   beforeEach(() => {
     vi.resetModules();
+  });
+
+  // AUDIT-FIX P2: Restore env vars after all tests to prevent cross-test pollution.
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   it('should sign tokens with explicit HS256 algorithm', async () => {

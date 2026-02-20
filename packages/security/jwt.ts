@@ -148,21 +148,23 @@ export function constantTimeCompare(a: string, b: string): boolean {
   // allowing an empty secret to "match" an empty challenge.
   if (a.length === 0 || b.length === 0) return false;
 
+  // AUDIT-FIX P1: Reject length mismatch early instead of padding to max length.
+  // The previous padding strategy (Buffer.alloc(maxLen)) leaked length information:
+  // comparing a 10-byte vs 10,000-byte string took measurably longer due to the
+  // 10KB buffer allocation + timingSafeEqual on 10KB. Early length rejection is
+  // the standard approach and does not leak which input is longer (the attacker
+  // controls both inputs for boundOrgId comparison, or only one for auth header).
+  if (a.length !== b.length) return false;
+
   const aBuf = Buffer.from(a, 'utf8');
   const bBuf = Buffer.from(b, 'utf8');
-  const maxLen = Math.max(aBuf.length, bBuf.length);
 
-  const aPadded = Buffer.alloc(maxLen, 0);
-  const bPadded = Buffer.alloc(maxLen, 0);
-  aBuf.copy(aPadded);
-  bBuf.copy(bPadded);
+  // After UTF-8 encoding, byte lengths may differ even if string lengths match
+  // (e.g., multi-byte characters). Reject to avoid timingSafeEqual throwing.
+  if (aBuf.length !== bBuf.length) return false;
 
   try {
-    // AUDIT-FIX M5: Avoid short-circuit evaluation that could leak length info.
-    // Compute both values before combining to maintain constant-time behavior.
-    const contentsEqual = timingSafeEqual(aPadded, bPadded);
-    const lengthEqual = a.length === b.length;
-    return contentsEqual && lengthEqual;
+    return timingSafeEqual(aBuf, bBuf);
   } catch {
     return false;
   }
@@ -411,6 +413,10 @@ export function verifyToken(
         algorithms: ['HS256'],
         clockTolerance: JWT_CLOCK_TOLERANCE,
         // F29-FIX: ignoreExpiration removed - expired tokens must always be rejected
+        // AUDIT-FIX P2: Explicit nbf enforcement (defense-in-depth). The default
+        // is false, but making it explicit prevents regressions if jsonwebtoken
+        // changes defaults or a wrapper layer inadvertently overrides it.
+        ignoreNotBefore: false,
       });
 
       // Runtime validation with Zod
