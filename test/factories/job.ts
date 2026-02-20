@@ -137,6 +137,8 @@ export function createCompletedJob(options: CompletedJobOptions = {}) {
     ...job,
     processed_at: processedAt,
     completed_at: completedAt,
-    returnvalue: options.result || { success: true },
+    // AUDIT-FIX P2: Use ?? instead of ||. Falsy values like 0, "", false, null
+    // are valid job results that || would silently discard.
+    returnvalue: options.result ?? { success: true },
   };
 }

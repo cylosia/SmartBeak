@@ -16,6 +16,9 @@ const MAX_DEPTH = 50;
 /** Maximum number of keys per object to prevent DoS */
 const MAX_KEYS = 10000;
 
+/** Maximum array length to prevent DoS (matches MAX_KEYS for consistency) */
+const MAX_ARRAY_LENGTH = 10000;
+
 /**
  * AUDIT-FIX C3: Sanitize data before JSON.stringify to prevent malicious toJSON()
  * execution. JSON.stringify invokes toJSON() on objects, which can execute arbitrary
@@ -37,6 +40,12 @@ function sanitizeForStringify(data: unknown, depth = 0): unknown {
   }
 
   if (Array.isArray(data)) {
+    // AUDIT-FIX P2: Limit array length to prevent DoS. Object keys are limited
+    // to MAX_KEYS but arrays were unbounded, allowing 10M-element arrays to
+    // exhaust memory during sanitization and JSON.stringify.
+    if (data.length > MAX_ARRAY_LENGTH) {
+      throw new ValidationError(`JSONB array exceeds maximum length of ${MAX_ARRAY_LENGTH}`, 'jsonb');
+    }
     return data.map((item) => sanitizeForStringify(item, depth + 1));
   }
 
@@ -211,6 +220,13 @@ export function truncateJSONB(
   // Sort by length descending and truncate
   stringFields.sort((a, b) => b.length - a.length);
   const availableForStrings = maxSize - nonStringSize;
+
+  // AUDIT-FIX P2: Short-circuit when non-string fields alone exceed the budget.
+  // With negative availableForStrings, the truncation loop runs wastefully
+  // and produces a result that always fails the post-truncation size check.
+  if (availableForStrings <= 0) {
+    return { _truncated: true, _error: `Data exceeded ${maxSize} bytes after truncation` };
+  }
 
   if (stringFields.length > 0) {
     const perFieldBudget = Math.floor(availableForStrings / stringFields.length);

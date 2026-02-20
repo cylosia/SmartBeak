@@ -99,13 +99,19 @@ export const contentIdeaConfig = {
 type ExportFormat = 'json' | 'csv' | 'xlsx';
 const ALLOWED_FORMATS: readonly ExportFormat[] = ['json', 'csv', 'xlsx'] as const;
 
+// AUDIT-FIX P2: Type guard instead of unsafe `as ExportFormat` cast.
+// If ExportFormat and ALLOWED_FORMATS diverge, the cast would be unsound.
+function isExportFormat(value: string): value is ExportFormat {
+  return (ALLOWED_FORMATS as readonly string[]).includes(value);
+}
+
 export const exportConfig = {
   /** Maximum rows per export file */
   maxRowsPerFile: parseIntEnv('EXPORT_MAX_ROWS_PER_FILE', 10000, { min: 1, max: 1000000 }),
   /** Default export format — validated against allowed values */
   defaultFormat: ((): ExportFormat => {
     const raw = process.env['EXPORT_DEFAULT_FORMAT'];
-    if (raw && (ALLOWED_FORMATS as readonly string[]).includes(raw)) return raw as ExportFormat;
+    if (raw && isExportFormat(raw)) return raw;
     return 'json';
   })(),
   /** Export file retention in days */

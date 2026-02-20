@@ -46,6 +46,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   // returning 200 for all requests would previously grant unauthorized access.
   try {
     const response = await authFetch(apiUrl('admin/cache/stats'), { ctx });
+    // AUDIT-FIX P2: Check response.ok before parsing JSON. Non-2xx responses
+    // (e.g. 502 from reverse proxy) may return HTML, causing .json() to throw
+    // with an unhelpful "Unexpected token <" error instead of redirecting.
+    if (!response.ok) {
+      return { redirect: { destination: '/login', permanent: false } };
+    }
     const data = await response.json() as CacheStatsResponse;
 
     // Validate the response contains expected admin-only data structure

@@ -72,7 +72,10 @@ function getValidatedJobCount(countResult: Array<{ count: string | number }>): n
   const count = typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
 
   if (Number.isNaN(count)) {
-    throw new ValidationError(`Invalid job count value: ${String(result["count"])}`, 'count');
+    // AUDIT-FIX P2: Log raw value server-side but don't interpolate into error
+    // message. Database corruption or unexpected data could leak internal state.
+    logger.warn('Invalid job count value', { rawCount: String(result["count"]) });
+    throw new ValidationError('Invalid job count value from job_executions query', 'count');
   }
 
   return count;
