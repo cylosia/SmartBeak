@@ -37,19 +37,22 @@ const logger = getLogger('jwt');
 // producing opaque auth failures for all buyer-role users.
 export const UserRoleSchema = z.enum(['admin', 'editor', 'viewer', 'owner', 'buyer']);
 
+// AUDIT-FIX M2: .strict() rejects unexpected extra claims that could bypass validation.
+// AUDIT-FIX M8: Added nbf (Not Before) support per JWT spec.
 export const JwtClaimsSchema = z.object({
   sub: z.string().min(1).max(256),
   role: UserRoleSchema,
   // F31-FIX: orgId is now required. It was optional in the schema but required
   // by getAuthContext(), causing silent auth failures for tokens without orgId.
   orgId: z.string().min(1).max(256),
-  aud: z.string().optional(),
+  aud: z.union([z.string(), z.array(z.string())]).optional(),
   iss: z.string().optional(),
   jti: z.string().optional(),
   exp: z.number().optional(),
   iat: z.number().optional(),
+  nbf: z.number().optional(),
   boundOrgId: z.string().optional(),
-});
+}).strict();
 
 // ============================================================================
 // Type Definitions
@@ -58,10 +61,11 @@ export const JwtClaimsSchema = z.object({
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export type JwtClaims = z.infer<typeof JwtClaimsSchema>;
 
+// AUDIT-FIX H17: roles typed as UserRole[] for compile-time enforcement.
 export interface AuthContext {
   userId: string;
   orgId: string;
-  roles: string[];
+  roles: UserRole[];
   sessionId?: string | undefined;
 }
 
@@ -88,11 +92,10 @@ export class AuthError extends Error {
 }
 
 export class TokenExpiredError extends AuthError {
-  constructor(expiredAt?: Date) {
-    super(
-      expiredAt ? `Token expired at ${expiredAt.toISOString()}` : 'Token expired',
-      'TOKEN_EXPIRED'
-    );
+  // AUDIT-FIX M3: Don't include exact expiry timestamp in error message.
+  // It leaks server clock information useful for timing attacks.
+  constructor(_expiredAt?: Date) {
+    super('Token expired', 'TOKEN_EXPIRED');
     this.name = 'TokenExpiredError';
   }
 }
@@ -108,8 +111,21 @@ export class TokenInvalidError extends AuthError {
 // Constants
 // ============================================================================
 
+// AUDIT-FIX H7: Log warning when using hardcoded defaults in production.
+// Requiring env vars prevents attackers who know the source code defaults
+// from forging tokens against a misconfigured production deployment.
 const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] || 'smartbeak';
 const DEFAULT_ISSUER = process.env['JWT_ISSUER'] || 'smartbeak-api';
+if (!process.env['JWT_AUDIENCE'] || !process.env['JWT_ISSUER']) {
+  // Defer warning to avoid import-time side effects in tests
+  queueMicrotask(() => {
+    if (process.env['NODE_ENV'] === 'production') {
+      logger.error('JWT_AUDIENCE and JWT_ISSUER must be set in production. Using insecure defaults.');
+    } else if (process.env['NODE_ENV'] !== 'test') {
+      logger.warn('JWT_AUDIENCE/JWT_ISSUER not set, using defaults. Set these in production.');
+    }
+  });
+}
 const JWT_CLOCK_TOLERANCE = 30; // 30 seconds clock skew tolerance
 
 // Token format regex: 3 base64url-encoded parts separated by dots
@@ -140,7 +156,11 @@ export function constantTimeCompare(a: string, b: string): boolean {
   bBuf.copy(bPadded);
 
   try {
-    return timingSafeEqual(aPadded, bPadded) && a.length === b.length;
+    // AUDIT-FIX M5: Avoid short-circuit evaluation that could leak length info.
+    // Compute both values before combining to maintain constant-time behavior.
+    const contentsEqual = timingSafeEqual(aPadded, bPadded);
+    const lengthEqual = a.length === b.length;
+    return contentsEqual && lengthEqual;
   } catch {
     return false;
   }
@@ -197,7 +217,10 @@ export function rejectDisallowedAlgorithm(token: string): void {
   }
   const alg = decoded.header?.alg;
   if (!alg || !ALLOWED_ALGORITHMS.has(alg)) {
-    throw new TokenInvalidError(`Disallowed algorithm: ${alg || 'none'}`);
+    // AUDIT-FIX M4: Don't leak the detected algorithm name to callers.
+    // Log it server-side for debugging but return a generic error.
+    logger.warn('Rejected disallowed JWT algorithm', { algorithm: alg || 'none' });
+    throw new TokenInvalidError('Disallowed signing algorithm');
   }
 }
 
@@ -264,6 +287,14 @@ function getKeys(): string[] {
 // P1-FIX: Support for key rotation without restart
 // Store keys in a mutable array that can be reloaded
 let currentKeys = getKeys();
+// AUDIT-FIX H13: Warn at module init if no keys are configured.
+// Unlike the signing module (which crashes), the verification module allows
+// graceful startup but logs a clear warning.
+if (currentKeys.length === 0 && process.env['NODE_ENV'] !== 'test') {
+  queueMicrotask(() => {
+    logger.error('[jwt] No JWT signing keys configured at startup. All token verification will fail.');
+  });
+}
 let lastKeyReload = Date.now();
 const KEY_RELOAD_INTERVAL_MS = 60000; // Reload every 60 seconds
 
@@ -272,9 +303,18 @@ const KEY_RELOAD_INTERVAL_MS = 60000; // Reload every 60 seconds
  * Call this periodically to support hot key rotation
  */
 export function reloadKeys(): void {
-  currentKeys = getKeys();
-  lastKeyReload = Date.now();
-  logger.info('[jwt] Keys reloaded successfully');
+  // AUDIT-FIX H12: Wrap in try-catch so a transient misconfiguration during
+  // key rotation doesn't crash all in-flight auth requests. Keep existing keys
+  // on failure and retry on next interval.
+  try {
+    currentKeys = getKeys();
+    lastKeyReload = Date.now();
+    logger.info('[jwt] Keys reloaded successfully');
+  } catch (err) {
+    logger.error('[jwt] Failed to reload keys, keeping existing keys', err instanceof Error ? err : new Error(String(err)));
+    // Still update lastKeyReload to prevent retry storm (60s cooldown)
+    lastKeyReload = Date.now();
+  }
 }
 
 /**
@@ -303,7 +343,10 @@ function getCurrentKeys(): string[] {
 function verifyJwtClaims(payload: unknown): JwtClaims {
   const result = JwtClaimsSchema.safeParse(payload);
   if (!result.success) {
-    throw new TokenInvalidError(`Invalid claims: ${result.error.message}`);
+    // AUDIT-FIX H6: Don't leak Zod validation details (field names, enum values)
+    // to callers. Log full error server-side for debugging.
+    logger.warn('JWT claims validation failed', { error: result.error.message });
+    throw new TokenInvalidError('Token claims validation failed');
   }
   return result.data;
 }
@@ -324,9 +367,16 @@ export function verifyToken(
   token: string,
   options: VerifyOptions = {}
 ): JwtClaims {
+  // AUDIT-FIX H5: Reject oversized tokens before expensive operations.
+  // A 10MB Authorization header causes memory/CPU spikes in regex, base64,
+  // and jwt.verify(). 8KB is generous for any legitimate JWT.
+  if (token.length > 8192) {
+    throw new TokenInvalidError('Token exceeds maximum length');
+  }
+
   // P1-FIX: Get current keys with automatic reload
   const keys = getCurrentKeys();
-  
+
   // Check if keys are configured
   if (keys.length === 0) {
     throw new TokenInvalidError('JWT signing keys not configured');
@@ -341,8 +391,9 @@ export function verifyToken(
   // Reject disallowed algorithms before attempting signature verification
   rejectDisallowedAlgorithm(token);
 
-  // SECURITY FIX: Constant-time verification to prevent timing attacks
-  // Process all keys regardless of success/failure to maintain consistent timing
+  // AUDIT-FIX M7: Process all keys to reduce timing variance across key positions.
+  // Note: Not truly constant-time (JWT verification work varies), but minimizes
+  // information leakage about which key signed the token.
   let successResult: JwtClaims | null = null;
   let lastError: Error | null = null;
 
@@ -370,9 +421,8 @@ export function verifyToken(
     } catch (error) {
       // Continue to next key (constant-time behavior)
       if (error instanceof jwt.TokenExpiredError) {
-        // Pre-existing TS18046 fix: narrow type after instanceof guard
-        const expiredErr = error as jwt.TokenExpiredError;
-        lastError = new TokenExpiredError(new Date(expiredErr.expiredAt));
+        // AUDIT-FIX L2: expiredAt is already Date, no need to re-wrap.
+        lastError = new TokenExpiredError();
       } else if (error instanceof AuthError) {
         lastError = error;
       } else {
@@ -443,9 +493,9 @@ export function extractAndVerifyToken(authHeader: string | undefined): {
     if (error instanceof TokenExpiredError) {
       return { valid: false, error: 'Token expired' };
     }
-    if (error instanceof TokenInvalidError) {
-      return { valid: false, error: error.message };
-    }
+    // AUDIT-FIX H6: Return generic error messages to callers to prevent
+    // schema/implementation detail leakage. Specific errors are already
+    // logged server-side by verifyJwtClaims and rejectDisallowedAlgorithm.
     return { valid: false, error: 'Token verification failed' };
   }
 }
@@ -470,6 +520,13 @@ export function getAuthContext(
   const claims = result.claims;
 
   if (!claims.sub || !claims.orgId) {
+    return null;
+  }
+
+  // AUDIT-FIX H1: Enforce boundOrgId on API backend. Tokens are signed with
+  // boundOrgId but this function was not checking it, allowing a token issued
+  // for Org A to be used against Org B if the orgId claim was manipulated.
+  if (claims.boundOrgId && !constantTimeCompare(claims.boundOrgId, claims.orgId)) {
     return null;
   }
 
@@ -506,9 +563,10 @@ export function requireAuthContext(
  * @param event - Event type
  * @param data - Event data (will be sanitized)
  */
+// AUDIT-FIX L3: Cast to the expected logger type after sanitization.
 export function logAuthEvent(event: string, data: Record<string, unknown>): void {
   const sanitized = sanitizeForLogging(data);
-  logger.info(`[Auth:${event}]`, sanitized as Record<string, unknown>);
+  logger.info(`[Auth:${event}]`, sanitized as unknown as Record<string, unknown>);
 }
 
 // ============================================================================

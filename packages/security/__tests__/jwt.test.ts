@@ -21,14 +21,35 @@ import {
 describe('JWT Verification with Key Rotation Tests', () => {
   const mockSecret = 'test-secret-key-minimum-32-characters-long';
 
+  // AUDIT-FIX L12: Save and restore env vars to prevent cross-test pollution.
+  const originalEnv: Record<string, string | undefined> = {};
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Save original env vars
+    originalEnv['JWT_KEY_1'] = process.env.JWT_KEY_1;
+    originalEnv['JWT_KEY_2'] = process.env.JWT_KEY_2;
+    originalEnv['JWT_AUDIENCE'] = process.env.JWT_AUDIENCE;
+    originalEnv['JWT_ISSUER'] = process.env.JWT_ISSUER;
+
     process.env.JWT_KEY_1 = mockSecret;
     process.env.JWT_KEY_2 = 'secondary-key-also-32-chars-minimum';
     process.env.JWT_AUDIENCE = 'test-audience';
     process.env.JWT_ISSUER = 'test-issuer';
-    
+
     // Reload keys to pick up environment changes
+    reloadKeys();
+  });
+
+  afterEach(() => {
+    // Restore original env vars
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     reloadKeys();
   });
 
@@ -516,6 +537,63 @@ describe('JWT Verification with Key Rotation Tests', () => {
 
       // Timing should be consistent
       expect(stdDev / avg).toBeLessThan(0.5);
+    });
+  });
+
+  // AUDIT-FIX H21: Regression tests for algorithm confusion and PEM rejection.
+  // Production code has rejectDisallowedAlgorithm() and isPemKey() defenses
+  // but previously had zero test coverage for these attack vectors.
+  describe('Algorithm Confusion / PEM Rejection', () => {
+    it('should reject RS256 algorithm tokens', () => {
+      // Craft a token header with RS256
+      const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'attacker' })).toString('base64url');
+      const fakeToken = `${header}.${payload}.fake-signature`;
+
+      expect(() => verifyToken(fakeToken)).toThrow();
+    });
+
+    it('should reject ES256 algorithm tokens', () => {
+      const header = Buffer.from(JSON.stringify({ alg: 'ES256', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'attacker' })).toString('base64url');
+      const fakeToken = `${header}.${payload}.fake-signature`;
+
+      expect(() => verifyToken(fakeToken)).toThrow();
+    });
+
+    it('should reject PS256 algorithm tokens', () => {
+      const header = Buffer.from(JSON.stringify({ alg: 'PS256', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'attacker' })).toString('base64url');
+      const fakeToken = `${header}.${payload}.fake-signature`;
+
+      expect(() => verifyToken(fakeToken)).toThrow();
+    });
+
+    it('should reject none algorithm tokens', () => {
+      const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'attacker' })).toString('base64url');
+      const fakeToken = `${header}.${payload}.`;
+
+      expect(() => verifyToken(fakeToken)).toThrow();
+    });
+
+    it('should reject PEM-formatted keys in env vars', () => {
+      // If a PEM key is accidentally set, it should be rejected
+      process.env.JWT_KEY_1 = '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA\n-----END PUBLIC KEY-----';
+      delete process.env.JWT_KEY_2;
+      reloadKeys();
+
+      const token = jwt.sign({ sub: 'user-123' }, 'any-key', { algorithm: 'HS256' });
+
+      // Should fail because PEM keys are rejected
+      expect(() => verifyToken(token)).toThrow('JWT signing keys not configured');
+    });
+
+    it('should reject oversized tokens (H5)', () => {
+      // Token exceeding 8KB should be rejected immediately
+      const oversizedToken = 'eyJhbGciOiJIUzI1NiJ9.' + 'a'.repeat(10000) + '.signature';
+
+      expect(() => verifyToken(oversizedToken)).toThrow('Token exceeds maximum length');
     });
   });
 });

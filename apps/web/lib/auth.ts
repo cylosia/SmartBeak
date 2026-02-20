@@ -60,7 +60,10 @@ function isValidIP(ip: string): boolean {
 }
 // Role hierarchy for authorization checks
 // P0-FIX: Added owner:4 — was missing, causing owners to be denied access
+// AUDIT-FIX H2: Added 'buyer: 0'. Without this, buyer-role users hit
+// roleHierarchy[role] === undefined, failing all authorization checks.
 const roleHierarchy: Record<string, number> = {
+  buyer: 0,
   viewer: 1,
   editor: 2,
   admin: 3,
@@ -163,7 +166,9 @@ const BEARER_REGEX = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
  * SECURITY FIX: Don't silently default to viewer role - throw error for invalid roles
  */
 function mapRole(jwtRole: unknown): UserRole {
-  const validRoles: UserRole[] = ['owner', 'admin', 'editor', 'viewer'];
+  // AUDIT-FIX H2: Added 'buyer' to validRoles. Without this, buyer-role tokens
+  // cause a 500 error because the role fails validation here.
+  const validRoles: UserRole[] = ['owner', 'admin', 'editor', 'viewer', 'buyer'];
   if (typeof jwtRole === 'string' && validRoles.includes(jwtRole as UserRole)) {
     return jwtRole as UserRole;
   }

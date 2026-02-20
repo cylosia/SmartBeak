@@ -8,6 +8,8 @@
 /**
  * Auth error types
  */
+// AUDIT-FIX: Added REVOCATION_CHECK_FAILED, INVALID_TOKEN_ID, INVALID_USER_ID
+// for proper error classification in revocation pipeline checks.
 export type AuthErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
@@ -17,8 +19,11 @@ export type AuthErrorCode =
   | 'MISSING_CLAIM'
   | 'INVALID_KEY'
   | 'REVOCATION_FAILED'
+  | 'REVOCATION_CHECK_FAILED'
   | 'USER_REVOCATION_FAILED'
-  | 'TOKEN_BINDING_ERROR';
+  | 'TOKEN_BINDING_ERROR'
+  | 'INVALID_TOKEN_ID'
+  | 'INVALID_USER_ID';
 
 /**
  * Auth error class

@@ -171,6 +171,14 @@ const config: Config = {
       lines: 70,
       statements: 70,
     },
+    // AUDIT-FIX H20: Security-critical JWT/auth code must have high coverage.
+    // Previously fell under 70% global minimum — far below the 90% billing threshold.
+    './packages/security/**/*.ts': {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
+    },
   },
 
   // Coverage reporters

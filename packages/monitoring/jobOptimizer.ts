@@ -63,11 +63,13 @@ export interface JobDependency {
 
 export class JobOptimizer extends EventEmitter {
   private readonly scheduler: IJobScheduler;
-  // P1-4 FIX: Use a plain Map instead of LRUCache for pendingJobs. LRUCache silently
-  // evicts entries without calling clearTimeout on the stored timeout handles, causing
-  // both timer leaks and ghost job scheduling from stale data.
-  private readonly pendingJobs = new Map<string, { data: unknown; timeout: NodeJS.Timeout }>();
+  // P1-4 FIX: Use a plain Map instead of LRUCache for pendingJobs.
+  // AUDIT-FIX H22: Added per-entry size limit and options tracking (M27).
+  private readonly pendingJobs = new Map<string, { data: unknown; timeout: NodeJS.Timeout; options?: { priority?: JobPriority; delay?: number } | undefined }>();
   private readonly MAX_PENDING_JOBS = 10000;
+  private static readonly MAX_ENTRY_SIZE_BYTES = 64 * 1024; // 64KB per entry
+  // AUDIT-FIX H24: Track in-flight promises so destroy() can await them.
+  private readonly inFlightPromises = new Set<Promise<unknown>>();
   private readonly coalescingRules = new LRUCache<string, CoalescingRule>({ maxSize: 1000, ttlMs: undefined });
   private scheduledWindows: ScheduledWindow[] = [];
   private readonly dependencies = new LRUCache<string, JobDependency>({ maxSize: 1000, ttlMs: undefined });
@@ -181,7 +183,8 @@ export class JobOptimizer extends EventEmitter {
     case 'replace':
     // Clear existing timeout and set new one
     clearTimeout(existing.timeout);
-    this.scheduleCoalesced(key, jobName, data, rule.windowMs);
+    // AUDIT-FIX M27: Pass options through to coalesced job.
+    this.scheduleCoalesced(key, jobName, data, rule.windowMs, options);
     this.emit('coalesced', { jobName, key, strategy: 'replace' });
     break;
 
@@ -189,7 +192,7 @@ export class JobOptimizer extends EventEmitter {
     // Merge data
     const mergedData = this.mergeData(existing["data"] as JobData, data as JobData);
     clearTimeout(existing.timeout);
-    this.scheduleCoalesced(key, jobName, mergedData, rule.windowMs);
+    this.scheduleCoalesced(key, jobName, mergedData, rule.windowMs, options);
     this.emit('coalesced', { jobName, key, strategy: 'combine' });
     break;
     }
@@ -201,19 +204,43 @@ export class JobOptimizer extends EventEmitter {
     }
   } else {
     // Schedule new coalesced job
-    this.scheduleCoalesced(key, jobName, data, rule.windowMs);
+    this.scheduleCoalesced(key, jobName, data, rule.windowMs, options);
   }
   }
 
   /**
   * Schedule a coalesced job
+  * AUDIT-FIX M27: Now accepts and passes through priority/delay options.
   */
   private scheduleCoalesced(
   key: string,
   jobName: string,
   data: JobData,
-  windowMs: number
+  windowMs: number,
+  options?: { priority?: JobPriority; delay?: number }
   ): void {
+  // AUDIT-FIX H22: Enforce per-entry size limit to prevent memory exhaustion.
+  // 10K entries x 64KB = 640MB max instead of unbounded.
+  try {
+    const dataSize = Buffer.byteLength(JSON.stringify(data), 'utf8');
+    if (dataSize > JobOptimizer.MAX_ENTRY_SIZE_BYTES) {
+      logger.warn('Job data exceeds per-entry size limit, scheduling immediately', {
+        key, jobName, dataSize, maxSize: JobOptimizer.MAX_ENTRY_SIZE_BYTES,
+      });
+      // Schedule immediately without coalescing to avoid dropping the job
+      const directPromise = this.scheduler.schedule(jobName, data, options).catch(err => {
+        logger.error('Failed to schedule oversized job', undefined, {
+          jobName, key, error: err instanceof Error ? err.message : String(err),
+        });
+      });
+      this.inFlightPromises.add(directPromise);
+      void directPromise.finally(() => this.inFlightPromises.delete(directPromise));
+      return;
+    }
+  } catch {
+    // Data can't be serialized; skip size check, let scheduler handle it
+  }
+
   // P1-4 FIX: Clear timeout of existing entry before overwriting to prevent leak
   const existing = this.pendingJobs.get(key);
   if (existing) {
@@ -221,7 +248,6 @@ export class JobOptimizer extends EventEmitter {
   }
 
   // P1-FIX: Enforce max size with proper timeout cleanup on eviction.
-  // P1-FIX: Log eviction so silently-dropped jobs are visible in observability.
   if (this.pendingJobs.size >= this.MAX_PENDING_JOBS && !this.pendingJobs.has(key)) {
     // Evict oldest entry (first key in Map insertion order)
     const oldestKey = this.pendingJobs.keys().next().value;
@@ -238,14 +264,12 @@ export class JobOptimizer extends EventEmitter {
     }
   }
 
-  // P1-3 FIX: Add .catch() to prevent unhandled promise rejection from crashing
-  // the process. Previously, if schedule() threw inside the async setTimeout
-  // callback, it was an unhandled rejection (process crash in Node 15+).
+  // P1-3 FIX: Add .catch() to prevent unhandled promise rejection.
   // P2-9 FIX: Delete from pendingJobs only AFTER successful scheduling.
-  // Previously, the key was deleted before scheduler.schedule(), so on failure
-  // the job data was permanently lost (logged but never retried).
+  // AUDIT-FIX M27: Pass priority/delay options to scheduler.
+  // AUDIT-FIX H24: Track the promise so destroy() can await it.
   const timeout = setTimeout(() => {
-    this.scheduler.schedule(jobName, data).then(() => {
+    const schedulePromise = this.scheduler.schedule(jobName, data, options).then(() => {
       this.pendingJobs.delete(key);
     }).catch(err => {
       // Keep the entry in pendingJobs so it can be retried or flushed
@@ -256,9 +280,11 @@ export class JobOptimizer extends EventEmitter {
       });
       this.emit('coalescingError', { jobName, key, error: err });
     });
+    this.inFlightPromises.add(schedulePromise);
+    void schedulePromise.finally(() => this.inFlightPromises.delete(schedulePromise));
   }, windowMs);
 
-  this.pendingJobs.set(key, { data, timeout });
+  this.pendingJobs.set(key, { data, timeout, options });
   }
 
   /**
@@ -395,17 +421,11 @@ export class JobOptimizer extends EventEmitter {
 
   /**
   * Mark job as completed (for dependency tracking)
+  * AUDIT-FIX M28: LRUCache handles TTL-based eviction automatically (ttlMs: 3600000).
+  * Removed manual O(n) iteration that ran on every call.
   */
   markCompleted(jobName: string): void {
   this.completedJobs.set(jobName, new Date());
-
-  // Clean up old entries
-  const oneHourAgo = new Date(Date.now() - 3600000);
-  for (const [name, time] of this.completedJobs.entries()) {
-    if (time < oneHourAgo) {
-    this.completedJobs.delete(name);
-    }
-  }
   }
 
   /**
@@ -495,10 +515,16 @@ export class JobOptimizer extends EventEmitter {
   this.pendingJobs.clear();
   }
 
-  // P2-11 FIX: Add destroy() method to cleanly tear down the optimizer.
-  // Clears all pending timeouts, removes all event listeners, and resets state.
-  destroy(): void {
+  // AUDIT-FIX H24: destroy() now returns a Promise that resolves after all
+  // in-flight scheduler.schedule() promises settle. Previously, clearTimeout
+  // only prevented unfired timers; already-executing promises continued after
+  // destroy(), potentially interacting with a torn-down system.
+  async destroy(): Promise<void> {
   this.flush();
+  // Wait for any in-flight scheduling promises to settle
+  if (this.inFlightPromises.size > 0) {
+    await Promise.allSettled([...this.inFlightPromises]);
+  }
   this.removeAllListeners();
   }
 }

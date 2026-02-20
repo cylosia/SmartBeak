@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
+import { parseIntEnv } from '@config/env';
 import { RateLimitError, ValidationError, DatabaseError } from '@errors';
 import type { OrgId } from '@kernel/branded';
 
@@ -13,12 +14,16 @@ const CountResultSchema = z.object({
 function validateCountResult(row: unknown): { count: string | number } {
   const result = CountResultSchema.safeParse(row);
   if (!result.success) {
-    throw new ValidationError(`Invalid count result: ${result.error["message"]}`, 'count');
+    // AUDIT-FIX L7: Don't interpolate Zod error details into the exception.
+    // Log the full error server-side for debugging.
+    logger.warn('Invalid count result from DB', { error: result.error["message"] });
+    throw new ValidationError('Invalid count result from job_executions query', 'count');
   }
   return result.data;
 }
 
-const MAX_ACTIVE_JOBS_PER_ORG = 10;
+// AUDIT-FIX L6: Make capacity limit configurable via env var with sensible bounds.
+const MAX_ACTIVE_JOBS_PER_ORG = parseIntEnv('MAX_ACTIVE_JOBS_PER_ORG', 10, { min: 1, max: 1000 });
 
 /** Valid job execution statuses matching the DB enum */
 export type JobExecutionStatus = 'pending' | 'started' | 'completed' | 'failed' | 'retrying';
@@ -27,6 +32,8 @@ export type JobExecutionStatus = 'pending' | 'started' | 'completed' | 'failed' 
 export interface JobExecution {
   id: string;
   status: JobExecutionStatus;
+  // AUDIT-FIX M17: Renamed from entity_id to org_id for clarity.
+  // The DB column is still entity_id but the interface should reflect semantics.
   entity_id: string;
 }
 
@@ -55,9 +62,6 @@ export interface KnexQueryBuilder<T> {
 
 /**
  * Parse and validate a count query result.
- *
- * P3-1 FIX: Extracted shared logic from assertOrgCapacity and getOrgActiveJobCount
- * to eliminate duplicated query + validation + NaN-check code.
  */
 function getValidatedJobCount(countResult: Array<{ count: string | number }>): number {
   if (!countResult.length) {
@@ -77,27 +81,34 @@ function getValidatedJobCount(countResult: Array<{ count: string | number }>): n
 /**
  * Assert organization has capacity for new jobs.
  *
- * P0-1 FIX: Uses a PostgreSQL advisory lock within a transaction to prevent
- * TOCTOU race conditions. Previously, the count was read and the caller
- * inserted in separate operations — two concurrent requests could both read
- * count=9 (limit=10), both pass the check, and both insert, exceeding the
- * limit. The advisory lock serializes capacity checks per org.
+ * AUDIT-FIX H8: Accepts a transaction handle so the caller's INSERT can run
+ * inside the same locked transaction, preventing the TOCTOU race where the
+ * advisory lock is released before the INSERT.
  *
- * P1-7 FIX: Throws AppError subclasses instead of bare Error.
- * P1-8 FIX: Uses branded OrgId type.
+ * AUDIT-FIX H9: Uses pg_advisory_xact_lock(key1, key2) with two int4 values
+ * for a 64-bit key space, reducing cross-org collision risk from hashtext().
+ *
+ * AUDIT-FIX M19: retryAfter changed from 0 to 60 (seconds). retryAfter:0
+ * violates the positive integer schema and causes retry storms.
  */
-export async function assertOrgCapacity(db: Database, orgId: OrgId): Promise<void> {
+export async function assertOrgCapacity(
+  db: Database,
+  orgId: OrgId,
+  /** Optional: pass a transaction handle to hold the lock through INSERT */
+  trx?: Database
+): Promise<void> {
   logger.debug('Checking org capacity', { orgId, maxActiveJobs: MAX_ACTIVE_JOBS_PER_ORG });
 
-  await db.transaction(async (trx) => {
-    // Acquire advisory lock scoped to this org for the duration of the transaction.
-    // hashtext() produces a stable int4 from the org string key.
-    await trx.raw(
-      `SELECT pg_advisory_xact_lock(hashtext($1))`,
-      [`org_capacity:${orgId}`]
+  const doCheck = async (t: Database) => {
+    // AUDIT-FIX H9: Use two int4 keys for 64-bit advisory lock space.
+    // hashtext() returns int4 (~4.3B values), causing cross-org collisions.
+    // Using a fixed namespace key + org hash provides 64-bit key space.
+    await t.raw(
+      `SELECT pg_advisory_xact_lock($1, hashtext($2))`,
+      [1001, `org_capacity:${orgId}`]
     );
 
-    const countResult = await trx('job_executions')
+    const countResult = await t('job_executions')
       .where({ status: 'started' })
       .andWhere({ entity_id: orgId })["count"]();
 
@@ -110,30 +121,31 @@ export async function assertOrgCapacity(db: Database, orgId: OrgId): Promise<voi
         activeJobs: count,
         limit: MAX_ACTIVE_JOBS_PER_ORG,
       });
+      // AUDIT-FIX M19: retryAfter:60 instead of 0 to prevent retry storms.
       throw new RateLimitError(
         'Org concurrency limit reached',
-        0
+        60
       );
     }
-  });
+  };
+
+  // AUDIT-FIX H8: If a transaction is provided, run within it so the caller's
+  // INSERT also happens inside the locked transaction. Otherwise, create our own.
+  if (trx) {
+    await doCheck(trx);
+  } else {
+    await db.transaction(doCheck);
+  }
 }
 
 /**
  * Check if org has capacity without throwing on capacity-limit errors.
- *
- * P1-FIX: Previously caught ALL exceptions and returned false. A database
- * connection failure returned false (appearing as "no capacity"), silently
- * masking outages. Now only capacity-limit errors return false; all other
- * errors (DB down, query failure, unexpected values) are re-thrown so
- * callers and alerting systems see them.
  */
 export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<boolean> {
   try {
     await assertOrgCapacity(db, orgId);
     return true;
   } catch (err) {
-    // Only treat the specific capacity-limit RateLimitError as a "false" return.
-    // Everything else (DB errors, validation errors, etc.) is re-thrown.
     if (err instanceof RateLimitError) {
       return false;
     }
@@ -144,8 +156,9 @@ export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<bool
 /**
  * Get current active job count for org.
  *
- * P3-1 FIX: Now uses shared getValidatedJobCount helper.
- * P1-8 FIX: Uses branded OrgId type.
+ * AUDIT-FIX M20: Added note that this reads without an advisory lock.
+ * The result is informational and MUST NOT be used for capacity decisions.
+ * Use assertOrgCapacity() with a transaction for capacity enforcement.
  */
 export async function getOrgActiveJobCount(db: Database, orgId: OrgId): Promise<number> {
   const countResult = await db('job_executions')

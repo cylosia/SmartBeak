@@ -45,9 +45,11 @@ export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
     queue: options.queue || 'default',
     data: options.data || {},
     opts: {
-      priority: options.priority || 50,
-      delay: options.delay || 0,
-      attempts: options.attempts || 1,
+      // AUDIT-FIX L11: Use ?? instead of ||. priority: 0 is a valid value
+      // (highest BullMQ priority) but || coerces it to the default of 50.
+      priority: options.priority ?? 50,
+      delay: options.delay ?? 0,
+      attempts: options.attempts ?? 1,
       backoff: {
         type: 'exponential',
         delay: 1000,
@@ -114,7 +116,8 @@ export function createFailedJob(options: FailedJobOptions = {}) {
     failed_at: new Date(),
     failedReason: options.error?.message || 'Unknown error',
     stacktrace: options.stacktrace || [options.error?.stack || ''],
-    attemptsMade: options.attemptsMade || options.attempts || 1,
+    // AUDIT-FIX L11: Use ?? to preserve 0 values.
+    attemptsMade: options.attemptsMade ?? options.attempts ?? 1,
   };
 }
 
