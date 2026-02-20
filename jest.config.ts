@@ -158,6 +158,21 @@ const config: Config = {
       lines: 90,
       statements: 90,
     },
+    // AUDIT-FIX P2: control-plane JWT/auth services handle token signing,
+    // revocation, and refresh. These are security-critical paths that must
+    // meet the same threshold as packages/security.
+    './control-plane/services/jwt.ts': {
+      branches: 85,
+      functions: 85,
+      lines: 85,
+      statements: 85,
+    },
+    './control-plane/services/auth.ts': {
+      branches: 85,
+      functions: 85,
+      lines: 85,
+      statements: 85,
+    },
   },
 
   // Coverage reporters

@@ -36,11 +36,17 @@ export interface JwtClaims {
   role: UserRole;
   // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
   orgId: string;
-  aud?: string | undefined;
+  // AUDIT-FIX P1: aud type must match packages/security/jwt.ts JwtClaimsSchema which
+  // uses z.union([z.string(), z.array(z.string())]). JWT spec (RFC 7519 §4.1.3)
+  // allows aud to be a single string or an array of strings. Without the array type,
+  // the return from securityVerifyToken was not assignable to this interface.
+  aud?: string | string[] | undefined;
   iss?: string | undefined;
   jti?: string | undefined;
   iat?: number | undefined;
   exp?: number | undefined;
+  // AUDIT-FIX P1: Added nbf to match security package JwtClaimsSchema
+  nbf?: number | undefined;
   boundOrgId?: string | undefined;
 }
 
@@ -411,8 +417,8 @@ export function signToken(claimsInput: SignTokenInput): string {
   const validated = JwtClaimsInputSchema.parse(claimsInput);
 
   // AUDIT-FIX P2: Use ?? to prevent empty-string values from falling through.
-  const _aud = validated.aud ?? DEFAULT_AUDIENCE;
-  const _iss = validated.iss ?? DEFAULT_ISSUER;
+  const tokenAud = validated.aud ?? DEFAULT_AUDIENCE;
+  const tokenIss = validated.iss ?? DEFAULT_ISSUER;
 
   // SECURITY FIX: Enforce maximum token lifetime of 24 hours
   const expiresInMs = calculateExpiration(validated.expiresIn);
@@ -437,8 +443,8 @@ export function signToken(claimsInput: SignTokenInput): string {
   const signOptions: jwt.SignOptions = {
     algorithm: 'HS256',
     expiresIn: Math.floor(expiresInMs / 1000),
-    audience: _aud,
-    issuer: _iss,
+    audience: tokenAud,
+    issuer: tokenIss,
   };
   return jwt.sign(payload, primaryKey, signOptions);
 }
@@ -552,7 +558,14 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     // toward the circuit breaker. Those are expected fail-closed responses, not
     // infrastructure failures. Counting them allows transient Redis pipeline
     // anomalies to open the circuit breaker, causing a 30s full auth outage.
-    if (error instanceof AuthError) {
+    //
+    // AUDIT-FIX P1: Use name-based check as secondary guard for cross-module
+    // AuthError class mismatch. This file imports AuthError from @kernel/auth,
+    // but packages/security/jwt.ts defines its own AuthError. If a refactor
+    // introduces security-module errors into this try block, instanceof would
+    // silently fail, routing auth errors into recordFailure() and polluting
+    // the circuit breaker. The name check catches both class variants.
+    if (error instanceof AuthError || (error instanceof Error && error.name === 'AuthError')) {
       throw error;
     }
     recordFailure(error);
@@ -654,7 +667,8 @@ export async function verifyToken(
         throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
       }
     } catch (err) {
-      if (err instanceof AuthError) throw err;
+      // AUDIT-FIX P1: Name-based secondary guard (same cross-module rationale as isTokenRevoked)
+      if (err instanceof AuthError || (err instanceof Error && err.name === 'AuthError')) throw err;
       // Fail-closed: if Redis is unavailable, reject the token
       throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
     }
@@ -793,10 +807,16 @@ export async function refreshToken(token: string): Promise<string> {
   // subsequent null check was dead code. Use the value directly.
   const orgId = claims['orgId'];
   // AUDIT-FIX M12: JWT spec allows aud to be string | string[]. Extract first.
+  // AUDIT-FIX P2: Guard against empty array — rawAud[0] is undefined for [].
+  // Without this, a token with aud:[] would silently change to DEFAULT_AUDIENCE.
   const rawAud = claims.aud;
-  const aud = Array.isArray(rawAud) ? rawAud[0] : rawAud;
+  const aud = Array.isArray(rawAud)
+    ? (rawAud.length > 0 ? rawAud[0] : undefined)
+    : rawAud;
   const iss = claims.iss;
 
+  // sub is guaranteed non-empty by JwtClaimsSchema (z.string().min(1)),
+  // but defensive check is kept as belt-and-suspenders for a security path.
   if (!sub) {
     throw new TokenInvalidError('Token missing required claim: sub');
   }
@@ -805,6 +825,7 @@ export async function refreshToken(token: string): Promise<string> {
     sub,
     role,
     orgId,
+    // Only include aud/iss if defined; omitting delegates to DEFAULT_AUDIENCE/DEFAULT_ISSUER
     ...(aud !== undefined && { aud }),
     ...(iss !== undefined && { iss }),
   });

@@ -39,10 +39,12 @@ export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
   const randomSuffix = crypto.randomBytes(4).toString('hex');
 
   return {
-    id: options.id || `job-${timestamp}-${randomSuffix}`,
-    name: options.name || 'test-job',
-    queue: options.queue || 'default',
-    data: options.data || {},
+    // AUDIT-FIX P3: Use ?? instead of || for string fields. Empty string ""
+    // is a valid test value but || treats it as falsy, generating defaults.
+    id: options.id ?? `job-${timestamp}-${randomSuffix}`,
+    name: options.name ?? 'test-job',
+    queue: options.queue ?? 'default',
+    data: options.data ?? {},
     opts: {
       // AUDIT-FIX L11: Use ?? instead of ||. priority: 0 is a valid value
       // (highest BullMQ priority) but || coerces it to the default of 50.
@@ -55,7 +57,7 @@ export function createJob(options: JobFactoryOptions = {}): JobFactoryResult {
       },
     },
     attemptsMade: 0,
-    created_at: options.createdAt || new Date(),
+    created_at: options.createdAt ?? new Date(),
     processed_at: null,
     completed_at: null,
     failed_at: null,

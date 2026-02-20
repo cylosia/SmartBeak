@@ -61,6 +61,17 @@ export interface JobDependency {
   parallel: boolean;
 }
 
+// AUDIT-FIX P2: Document emitted events for type safety.
+// EventEmitter<T> generic requires @types/node >=20.13; use string literal constants
+// to prevent typos in event names until the generic can be adopted.
+/** Event names emitted by JobOptimizer */
+export const JOB_OPTIMIZER_EVENTS = {
+  COALESCED: 'coalesced',
+  COALESCING_ERROR: 'coalescingError',
+  JOB_EVICTED: 'jobEvicted',
+  DEPENDENCY_WAIT: 'dependencyWait',
+} as const;
+
 export class JobOptimizer extends EventEmitter {
   private readonly scheduler: IJobScheduler;
   // P1-4 FIX: Use a plain Map instead of LRUCache for pendingJobs.
@@ -185,7 +196,7 @@ export class JobOptimizer extends EventEmitter {
     clearTimeout(existing.timeout);
     // AUDIT-FIX M27: Pass options through to coalesced job.
     this.scheduleCoalesced(key, jobName, data, rule.windowMs, options);
-    this.emit('coalesced', { jobName, key, strategy: 'replace' });
+    this.emit(JOB_OPTIMIZER_EVENTS.COALESCED, { jobName, key, strategy: 'replace' });
     break;
 
     case 'combine': {
@@ -193,13 +204,13 @@ export class JobOptimizer extends EventEmitter {
     const mergedData = this.mergeData(existing["data"] as JobData, data as JobData);
     clearTimeout(existing.timeout);
     this.scheduleCoalesced(key, jobName, mergedData, rule.windowMs, options);
-    this.emit('coalesced', { jobName, key, strategy: 'combine' });
+    this.emit(JOB_OPTIMIZER_EVENTS.COALESCED, { jobName, key, strategy: 'combine' });
     break;
     }
 
     case 'discard':
     // Don't schedule new job
-    this.emit('coalesced', { jobName, key, strategy: 'discard' });
+    this.emit(JOB_OPTIMIZER_EVENTS.COALESCED, { jobName, key, strategy: 'discard' });
     return;
     }
   } else {
@@ -260,7 +271,7 @@ export class JobOptimizer extends EventEmitter {
         incomingKey: key,
         maxPendingJobs: this.MAX_PENDING_JOBS,
       });
-      this.emit('jobEvicted', { evictedKey: oldestKey });
+      this.emit(JOB_OPTIMIZER_EVENTS.JOB_EVICTED, { evictedKey: oldestKey });
     }
   }
 
@@ -283,7 +294,7 @@ export class JobOptimizer extends EventEmitter {
         key,
         error: err instanceof Error ? err.message : String(err),
       });
-      this.emit('coalescingError', { jobName, key, error: err });
+      this.emit(JOB_OPTIMIZER_EVENTS.COALESCING_ERROR, { jobName, key, error: err });
     });
     this.inFlightPromises.add(schedulePromise);
     void schedulePromise.finally(() => this.inFlightPromises.delete(schedulePromise));
@@ -420,7 +431,7 @@ export class JobOptimizer extends EventEmitter {
     await this.scheduleIntelligent(jobName, data, options);
   } else {
     // Schedule dependencies first
-    this.emit('dependencyWait', { jobName, waitingFor: unmetDeps });
+    this.emit(JOB_OPTIMIZER_EVENTS.DEPENDENCY_WAIT, { jobName, waitingFor: unmetDeps });
 
     // In a real implementation, you'd set up listeners for dependency completion
     // For now, schedule with delay

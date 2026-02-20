@@ -32,6 +32,13 @@ function sanitizeForStringify(data: unknown, depth = 0): unknown {
   }
 
   if (data === null || data === undefined) return data;
+  // AUDIT-FIX P2: Reject BigInt values early. JSON.stringify throws
+  // "Do not know how to serialize a BigInt" which was caught by calculateJSONBSize's
+  // try/catch but produced unhelpful MAX_SAFE_INTEGER size. Explicit rejection gives
+  // a clear error message for debugging.
+  if (typeof data === 'bigint') {
+    throw new ValidationError('JSONB data contains BigInt which cannot be serialized to JSON. Convert to number or string first.', 'jsonb');
+  }
   if (typeof data !== 'object') return data;
 
   // Reject objects with toJSON method (prevents arbitrary code execution)

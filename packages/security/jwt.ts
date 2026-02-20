@@ -416,7 +416,9 @@ export function verifyToken(
       // Runtime validation with Zod
       const claims = verifyJwtClaims(payload);
 
-      // Validate required claims
+      // AUDIT-FIX P3: claims.sub is guaranteed non-empty by JwtClaimsSchema
+      // (z.string().min(1)), so this branch is unreachable. Kept as defense-in-depth
+      // for the security-critical verification path.
       if (!claims.sub) {
         lastError = new TokenInvalidError('Token missing required claim: sub');
       } else if (successResult === null) {

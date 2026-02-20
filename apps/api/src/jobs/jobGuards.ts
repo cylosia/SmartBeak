@@ -32,8 +32,8 @@ export type JobExecutionStatus = 'pending' | 'started' | 'completed' | 'failed' 
 export interface JobExecution {
   id: string;
   status: JobExecutionStatus;
-  // AUDIT-FIX M17: Renamed from entity_id to org_id for clarity.
-  // The DB column is still entity_id but the interface should reflect semantics.
+  // AUDIT-FIX M17: entity_id maps to org_id semantically. The DB column
+  // name is entity_id; the interface matches the column for Knex query compatibility.
   entity_id: string;
 }
 
@@ -64,11 +64,14 @@ export interface KnexQueryBuilder<T> {
  * Parse and validate a count query result.
  */
 function getValidatedJobCount(countResult: Array<{ count: string | number }>): number {
-  if (!countResult.length) {
+  // AUDIT-FIX P3: Extract first row with explicit undefined check for noUncheckedIndexedAccess.
+  // TypeScript doesn't narrow array[0] from .length checks.
+  const firstRow = countResult[0];
+  if (!firstRow) {
     throw new DatabaseError('No count result returned from job_executions query');
   }
 
-  const result = validateCountResult(countResult[0]);
+  const result = validateCountResult(firstRow);
   const count = typeof result["count"] === 'string' ? parseInt(result["count"], 10) : result["count"];
 
   if (Number.isNaN(count)) {
