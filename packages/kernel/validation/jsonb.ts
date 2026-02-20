@@ -29,7 +29,13 @@ const MAX_ARRAY_LENGTH = 10000;
 type JsonPrimitive = string | number | boolean | null;
 type JsonArray = JsonValue[];
 type JsonObject = { [key: string]: JsonValue };
-export type JsonValue = JsonPrimitive | JsonArray | JsonObject | undefined;
+// AUDIT-FIX P3: Removed `undefined` from JsonValue. JSON has no undefined
+// value — JSON.stringify(undefined) returns the JS value `undefined` (not a
+// string), and JSON.stringify({ a: undefined }) omits the key. Including
+// `undefined` in JsonValue implied it was a valid JSON-serializable value
+// when it is not. sanitizeForStringify now returns `undefined` only for
+// symbol/function inputs, which callers should filter out.
+export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 
 /**
  * AUDIT-FIX C3: Sanitize data before JSON.stringify to prevent malicious toJSON()
@@ -43,7 +49,10 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
     throw new ValidationError('JSONB data exceeds maximum nesting depth', { field: 'jsonb' });
   }
 
-  if (data === null || data === undefined) return data;
+  // AUDIT-FIX P3: Convert undefined to null. JSON has no undefined value;
+  // JSON.stringify({ a: undefined }) omits the key entirely. Explicit null
+  // conversion makes the output predictable and consistent.
+  if (data === null || data === undefined) return null;
   // AUDIT-FIX P2: Reject BigInt values early. JSON.stringify throws
   // "Do not know how to serialize a BigInt" which was caught by calculateJSONBSize's
   // try/catch but produced unhelpful MAX_SAFE_INTEGER size. Explicit rejection gives
@@ -51,7 +60,14 @@ function sanitizeForStringify(data: unknown, depth = 0): JsonValue {
   if (typeof data === 'bigint') {
     throw new ValidationError('JSONB data contains BigInt which cannot be serialized to JSON. Convert to number or string first.', { field: 'jsonb' });
   }
-  if (typeof data !== 'object') return data;
+  // AUDIT-FIX P3: Filter out symbol and function values. JSON.stringify silently
+  // omits these types (or converts them to null in arrays). Returning them as-is
+  // violates the JsonValue return type contract and produces data that doesn't
+  // round-trip through JSON serialization.
+  if (typeof data === 'symbol' || typeof data === 'function') {
+    return null;
+  }
+  if (typeof data !== 'object') return data as JsonPrimitive;
 
   // Reject objects with toJSON method (prevents arbitrary code execution)
   if ('toJSON' in (data as object) && typeof (data as Record<string, unknown>)['toJSON'] === 'function') {

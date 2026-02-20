@@ -25,9 +25,12 @@ import { rejectDisallowedAlgorithm, verifyToken as securityVerifyToken, UserRole
 const logger = getLogger('JwtService');
 
 // Type exports at top level
-// P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
-// SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
-export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
+// AUDIT-FIX P2: Derive UserRole from the canonical Zod schema instead of
+// maintaining a manual string union. The previous manual definition drifted
+// from SecurityUserRoleSchema whenever a new role was added (e.g., 'owner',
+// 'buyer' were both added as catch-up fixes). Using z.infer ensures the type
+// stays in sync with the single source of truth.
+export type UserRole = z.infer<typeof SecurityUserRoleSchema>;
 // AUDIT-FIX P2: Import JwtClaims from the security package's Zod-derived type
 // instead of maintaining a manual copy. The previous manual interface drifted
 // from the Zod schema (e.g., missing nbf until manually added). Importing
@@ -170,6 +173,11 @@ const DEFAULT_TOKEN_LIFETIME = '1h';
 const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] ?? 'smartbeak';
 const DEFAULT_ISSUER = process.env['JWT_ISSUER'] ?? 'smartbeak-api';
 
+// AUDIT-FIX P3: Extracted to module-level constant. Previously defined three
+// times as local consts in isTokenRevoked, revokeToken, and verifyToken.
+// A single definition ensures consistency and reduces duplication.
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
+
 const REVOCATION_KEY_PREFIX = 'jwt:revoked:';
 const REVOCATION_TTL_SECONDS = 86400 * 7; // 7 days
 
@@ -223,7 +231,17 @@ function parseMs(timeStr: string): number {
   w: 7 * 24 * 60 * 60 * 1000,
   };
 
-  return value * multipliers[unit];
+  // AUDIT-FIX P2: Check that the multiplication result is a safe integer.
+  // Individual values pass Number.isSafeInteger but multiplication can overflow:
+  // e.g. 999999999 * 86400000 (days multiplier) exceeds MAX_SAFE_INTEGER,
+  // silently losing precision and potentially granting longer token lifetimes.
+  const result = value * multipliers[unit];
+  if (!Number.isSafeInteger(result)) {
+    throw new TokenInvalidError(
+      `Time value "${timeStr}" exceeds safe integer bounds after unit conversion.`
+    );
+  }
+  return result;
 }
 
 // ============================================================================
@@ -362,13 +380,26 @@ function getRedisClient(): Redis {
     throw new Error('REDIS_URL environment variable is required');
   }
 
+  // AUDIT-FIX P2: Validate Redis URL scheme. A misconfigured REDIS_URL
+  // pointing to an attacker-controlled server could exfiltrate JTIs and
+  // user IDs from revocation queries. Only redis:// and rediss:// (TLS)
+  // schemes are valid.
+  if (!url.startsWith('redis://') && !url.startsWith('rediss://')) {
+    throw new Error('REDIS_URL must use redis:// or rediss:// scheme');
+  }
+
   // AUDIT-FIX P3: Removed dead double-check. Node.js is single-threaded and no
   // async operation occurs between the first `if (redis)` check and this point,
   // so no other code can initialize redis in the interim.
 
+  // AUDIT-FIX P1: Added commandTimeout. Without it, if Redis becomes unresponsive
+  // (accepts connections but doesn't respond to commands), the isTokenRevoked
+  // pipeline hangs indefinitely, blocking auth middleware and eventually exhausting
+  // the Node.js event loop. 5 seconds is generous for a local/network-adjacent Redis.
   const client = new Redis(url, {
     retryStrategy: (times: number): number => Math.min(times * 50, 2000),
     maxRetriesPerRequest: 3,
+    commandTimeout: 5000,
   });
 
   client.on('error', (err: Error) => {
@@ -532,7 +563,6 @@ export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?
   // and other control characters that could be used for Redis RESP protocol injection
   // or key namespace collisions. Only alphanumeric, hyphens, underscores, and dots
   // are allowed in token identifiers.
-  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
   if (!SAFE_ID_PATTERN.test(jti) || !SAFE_ID_PATTERN.test(userId)) {
     throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
   }
@@ -589,8 +619,13 @@ export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?
         if (tokenIssuedAt === undefined) {
           return true;
         }
-        // Token iat is in seconds, revocation timestamp is in ms
-        return tokenIssuedAt * 1000 <= revokedAtMs;
+        // AUDIT-FIX P2: Use < (strictly less than) instead of <=. With <=,
+        // a token issued at exactly the same millisecond as the revocation
+        // (Date.now() in revokeAllUserTokens) is treated as revoked. This is
+        // a race condition where a user calls revokeAllUserTokens and immediately
+        // re-authenticates — the fresh token's iat*1000 may equal the revocation
+        // timestamp, locking the user out.
+        return tokenIssuedAt * 1000 < revokedAtMs;
       }
     }
     return false;
@@ -625,7 +660,6 @@ export async function isTokenRevoked(jti: string, userId: string, tokenIssuedAt?
 export async function revokeToken(tokenId: string): Promise<void> {
   // AUDIT-FIX P1: Validate tokenId against strict allowlist to prevent Redis
   // key injection via newlines, null bytes, or control characters.
-  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
   if (!SAFE_ID_PATTERN.test(tokenId)) {
     throw new AuthError('Invalid token identifier', 'INVALID_TOKEN_ID');
   }
@@ -649,7 +683,6 @@ export async function revokeToken(tokenId: string): Promise<void> {
 export async function revokeAllUserTokens(userId: string): Promise<void> {
   // AUDIT-FIX P1: Validate userId against strict allowlist to prevent Redis
   // key injection via newlines, null bytes, or control characters.
-  const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
   if (!SAFE_ID_PATTERN.test(userId)) {
     throw new AuthError('Invalid user identifier', 'INVALID_USER_ID');
   }
@@ -719,7 +752,6 @@ export async function verifyToken(
     try {
       const client = getRedisClient();
       // AUDIT-FIX P1: Validate sub against safe pattern (same as isTokenRevoked)
-      const SAFE_ID_PATTERN = /^[a-zA-Z0-9_\-.]+$/;
       if (!SAFE_ID_PATTERN.test(claims.sub)) {
         throw new AuthError('Invalid token identifier format', 'INVALID_TOKEN_ID');
       }
@@ -729,8 +761,9 @@ export async function verifyToken(
       if (userRevokedAt !== null) {
         const revokedAtMs = parseInt(userRevokedAt, 10);
         if (!Number.isNaN(revokedAtMs)) {
-          // If iat is present and token was issued after revocation, allow it
-          if (claims.iat === undefined || claims.iat * 1000 <= revokedAtMs) {
+          // If iat is present and token was issued after revocation, allow it.
+          // AUDIT-FIX P2: Use < instead of <= (same race-condition fix as isTokenRevoked).
+          if (claims.iat === undefined || claims.iat * 1000 < revokedAtMs) {
             throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
           }
         }

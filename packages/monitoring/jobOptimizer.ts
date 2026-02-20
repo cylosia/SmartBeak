@@ -83,6 +83,10 @@ export class JobOptimizer extends EventEmitter {
   private static readonly MAX_ENTRY_SIZE_BYTES = 64 * 1024; // 64KB per entry
   // AUDIT-FIX H24: Track in-flight promises so destroy() can await them.
   private readonly inFlightPromises = new Set<Promise<unknown>>();
+  // AUDIT-FIX P2: Lifecycle flag to reject scheduling after destroy().
+  // Without this, a caller holding a reference can re-populate pendingJobs
+  // and create new timers against a potentially torn-down scheduler.
+  private destroyed = false;
   private readonly coalescingRules = new LRUCache<string, CoalescingRule>({ maxSize: 1000, ttlMs: undefined });
   // AUDIT-FIX P3: Made readonly with inline initialization. Mutable scheduledWindows
   // could introduce gaps in time coverage if modified after construction, causing
@@ -174,6 +178,9 @@ export class JobOptimizer extends EventEmitter {
   data: JobData,
   options: { priority?: JobPriority; delay?: number } = {}
   ): Promise<void> {
+  if (this.destroyed) {
+    throw new Error('JobOptimizer has been destroyed. Cannot schedule new jobs.');
+  }
   const rule = this.coalescingRules.get(jobName);
 
   if (!rule) {
@@ -230,6 +237,11 @@ export class JobOptimizer extends EventEmitter {
   // AUDIT-FIX H22: Enforce per-entry size limit to prevent memory exhaustion.
   // 10K entries x 64KB = 640MB max instead of unbounded.
   try {
+    // NOTE: Uses JSON.stringify (not safeStringify from @kernel/validation/jsonb)
+    // intentionally. safeStringify rejects objects with toJSON() methods (e.g.
+    // Date), which is correct for untrusted user input going to PostgreSQL but
+    // overly strict for internal job data that may legitimately contain Date
+    // objects. The try/catch below handles serialization failures gracefully.
     const dataSize = Buffer.byteLength(JSON.stringify(data), 'utf8');
     if (dataSize > JobOptimizer.MAX_ENTRY_SIZE_BYTES) {
       logger.warn('Job data exceeds per-entry size limit, scheduling immediately', {
@@ -337,7 +349,17 @@ export class JobOptimizer extends EventEmitter {
     // not overwritten. Now concatenates arrays and shallow-merges objects at the top
     // level, which handles the common patterns (items arrays, config objects).
     if (existing && typeof existing === 'object' && incoming && typeof incoming === 'object') {
-      const result: JobData = { ...existing };
+      // AUDIT-FIX P1: Use Object.create(null) to prevent prototype pollution.
+      // With a regular `{}`, assigning `result['__proto__'] = maliciousObj`
+      // triggers the inherited __proto__ setter, potentially polluting
+      // Object.prototype for the entire process. A null-prototype object has
+      // no inherited accessors, so all keys are stored as data properties.
+      const result: JobData = Object.create(null) as JobData;
+      // Copy existing properties
+      for (const [key, value] of Object.entries(existing)) {
+        result[key] = value;
+      }
+      // Merge incoming properties
       for (const [key, value] of Object.entries(incoming)) {
         const existingVal = result[key];
         if (Array.isArray(existingVal) && Array.isArray(value)) {
@@ -395,6 +417,9 @@ export class JobOptimizer extends EventEmitter {
   data: JobData,
   options: { priority?: JobPriority; delay?: number } = {}
   ): Promise<void> {
+  if (this.destroyed) {
+    throw new Error('JobOptimizer has been destroyed. Cannot schedule new jobs.');
+  }
   const optimalPriority = this.getOptimalPriority(options.priority);
 
   // Adjust delay based on load
@@ -502,26 +527,32 @@ export class JobOptimizer extends EventEmitter {
     groups.set('default', items);
   }
 
-  // AUDIT-FIX P2: Schedule batches in parallel instead of sequential awaits.
-  // The previous nested for-loop with sequential awaits caused O(n) latency
-  // where n = total batches. For 10,000 items / 10 batch size = 1,000 serial
-  // awaits. Promise.all reduces this to O(1) * max(batch scheduling time).
-  const batchPromises: Promise<void>[] = [];
+  // AUDIT-FIX P1: Schedule batches with bounded concurrency instead of
+  // unbounded Promise.all. For 100,000 items / 10 batch size = 10,000
+  // concurrent promises, each retaining closure references to data. This
+  // causes memory pressure and scheduler/Redis connection pool exhaustion.
+  // Process in chunks of BATCH_CONCURRENCY_LIMIT to bound resource usage.
+  const BATCH_CONCURRENCY_LIMIT = 50;
+  const allBatches: Array<{ batch: JobData[] }> = [];
   for (const [_key, groupItems] of groups) {
     for (let i = 0; i < groupItems.length; i += batchSize) {
     const batch = groupItems.slice(i, i + batchSize);
-    // P1-3 FIX: Wrap the batch array in an object to maintain the
-    // Record<string,unknown> contract. The previous `batch as unknown as JobData`
-    // was a type lie — downstream code calling Object.entries(data) or
-    // data['domainId'] on an array produced garbage coalescing keys.
-    batchPromises.push(this.scheduleWithCoalescing(
-    jobName,
-    { items: batch },
-    { priority: 'background' }
-    ));
+    allBatches.push({ batch });
     }
   }
-  await Promise.all(batchPromises);
+  // Process in chunks to bound concurrency
+  for (let i = 0; i < allBatches.length; i += BATCH_CONCURRENCY_LIMIT) {
+    const chunk = allBatches.slice(i, i + BATCH_CONCURRENCY_LIMIT);
+    await Promise.all(chunk.map(({ batch }) =>
+    // P1-3 FIX: Wrap the batch array in an object to maintain the
+    // Record<string,unknown> contract.
+    this.scheduleWithCoalescing(
+      jobName,
+      { items: batch },
+      { priority: 'background' }
+    )
+    ));
+  }
   }
 
   /**
@@ -574,6 +605,7 @@ export class JobOptimizer extends EventEmitter {
   // only prevented unfired timers; already-executing promises continued after
   // destroy(), potentially interacting with a torn-down system.
   async destroy(): Promise<void> {
+  this.destroyed = true;
   this.flush();
   // Wait for any in-flight scheduling promises to settle
   if (this.inFlightPromises.size > 0) {

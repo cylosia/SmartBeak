@@ -92,7 +92,11 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       return { redirect: { destination, permanent: false } };
     }
 
-    const data = await response.json() as CacheStatsResponse;
+    // AUDIT-FIX P3: Use `unknown` instead of `as CacheStatsResponse` to avoid
+    // type assertion before runtime validation. The subsequent typeof checks
+    // handle validation, but the `as` cast is misleading — it implies the data
+    // is already validated when it isn't.
+    const data: unknown = await response.json();
 
     // AUDIT-FIX P2: Use typeof checks instead of `in` operator. The `in`
     // operator only checks key existence, not value type — `{"hitRate": null}`
@@ -100,14 +104,22 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     if (
       typeof data !== 'object' ||
       data === null ||
-      (typeof data['hitRate'] !== 'number' && typeof data['memoryUsage'] !== 'number')
+      (typeof (data as Record<string, unknown>)['hitRate'] !== 'number' && typeof (data as Record<string, unknown>)['memoryUsage'] !== 'number')
     ) {
       return { redirect: { destination: '/', permanent: false } };
     }
 
     return { props: {} };
-  } catch {
-    // Network error, timeout, or parse failure → redirect to sign-in
+  } catch (err: unknown) {
+    // AUDIT-FIX P3: Distinguish abort/timeout errors from auth errors.
+    // A legitimate admin experiencing a slow API response (>3s) was previously
+    // redirected to sign-in, creating confusing UX where the page "works" when
+    // the API is fast but "requires login" when the API is slow.
+    if (err instanceof Error && err.name === 'AbortError') {
+      // Timeout → redirect to home with implicit "try again" rather than sign-in
+      return { redirect: { destination: '/', permanent: false } };
+    }
+    // Parse failure or other network error → redirect to sign-in
     return { redirect: { destination: SIGN_IN_PATH, permanent: false } };
   }
 };

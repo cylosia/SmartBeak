@@ -50,7 +50,10 @@ export interface CountResult {
  */
 export interface Database {
   <T = Record<string, unknown>>(tableName: string): KnexQueryBuilder<T>;
-  raw: (sql: string, bindings?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+  // AUDIT-FIX P3: Made bindings required to prevent accidental SQL injection.
+  // The previous optional parameter allowed `db.raw('SELECT ... WHERE id = ' + input)`
+  // without type errors. Callers with no bindings should pass an empty array.
+  raw: (sql: string, bindings: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
   transaction: <T>(fn: (trx: Database) => Promise<T>) => Promise<T>;
 }
 
@@ -129,12 +132,14 @@ export async function assertOrgCapacity(
       throw new RateLimitError('Could not acquire capacity lock, try again', 5);
     }
 
-    // AUDIT-FIX P1: Count both 'started' AND 'pending' jobs. Previously only
-    // 'started' was counted. Under high throughput, an org can enqueue unlimited
-    // 'pending' jobs that all transition to 'started' simultaneously, bursting
-    // past the concurrency limit.
+    // AUDIT-FIX P1: Count 'started', 'pending', AND 'retrying' jobs.
+    // Previously only 'started' was counted. 'pending' was added to prevent
+    // burst-past. 'retrying' must also be counted because jobs in this status
+    // are transitioning back to 'started' and will imminently consume resources.
+    // Under heavy failure/retry scenarios, an org could exceed the concurrency
+    // limit by 2-3x from uncounted retrying jobs.
     const countResult = await t('job_executions')
-      .whereIn('status', ['started', 'pending'])
+      .whereIn('status', ['started', 'pending', 'retrying'])
       .andWhere({ entity_id: orgId })["count"]();
 
     const count = getValidatedJobCount(countResult);
@@ -194,10 +199,10 @@ export async function checkOrgCapacity(db: Database, orgId: OrgId): Promise<bool
  * Use assertOrgCapacity() with a transaction for capacity enforcement.
  */
 export async function getOrgActiveJobCount(db: Database, orgId: OrgId): Promise<number> {
-  // AUDIT-FIX P1: Count both 'started' and 'pending' for consistency with
-  // assertOrgCapacity(). Informational reads should reflect the same semantics.
+  // AUDIT-FIX P1: Count 'started', 'pending', and 'retrying' for consistency
+  // with assertOrgCapacity(). Informational reads should reflect the same semantics.
   const countResult = await db('job_executions')
-    .whereIn('status', ['started', 'pending'])
+    .whereIn('status', ['started', 'pending', 'retrying'])
     .andWhere({ entity_id: orgId })["count"]();
 
   return getValidatedJobCount(countResult);

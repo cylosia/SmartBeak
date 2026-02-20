@@ -219,6 +219,14 @@ const ALLOWED_ALGORITHMS = new Set(['HS256']);
  * @throws {TokenInvalidError} if algorithm is not in ALLOWED_ALGORITHMS
  */
 export function rejectDisallowedAlgorithm(token: string): void {
+  // AUDIT-FIX P3: Length guard. verifyToken checks token.length > 8192 before
+  // calling this function, but refreshToken (control-plane/services/jwt.ts)
+  // calls rejectDisallowedAlgorithm BEFORE verifyToken. Without this guard,
+  // an oversized token passed to refreshToken causes jwt.decode to process
+  // the full payload before the length check in verifyToken runs.
+  if (token.length > 8192) {
+    throw new TokenInvalidError('Token exceeds maximum length');
+  }
   const decoded = jwt.decode(token, { complete: true });
   if (!decoded || typeof decoded === 'string') {
     throw new TokenInvalidError('Unable to decode token header');
