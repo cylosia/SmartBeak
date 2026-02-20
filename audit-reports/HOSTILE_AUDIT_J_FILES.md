@@ -200,8 +200,9 @@
 
 - **File:Line**: `apps/web/pages/system/jobs.tsx:20-28`
 - **Category**: Security
-- **Violation**: `getServerSideProps` checks authentication but not role. Any authenticated user (viewer, editor) can access the admin system jobs page.
-- **Fix**: Check user role from auth response and redirect non-admin users.
+- **Violation**: `getServerSideProps` calls `authFetch(apiUrl('system/health'))` which is a PUBLIC endpoint (confirmed at `control-plane/api/http.ts:542`) — it only checks that the user is logged in, not their role. Any viewer-role user can access the admin system jobs page. Compare to the CORRECT pattern in `apps/web/pages/system/feature-flags.tsx:177-191` which calls `admin/flags` (role-gated endpoint) and `apps/web/pages/system/cache.tsx:325-347` which queries the DB for owner/admin role.
+- **Related finding** (out-of-scope but critical): `apps/web/pages/system/incidents.tsx` has NO `getServerSideProps` at all — zero auth, accessible by unauthenticated users.
+- **Fix**: Call a role-gated endpoint like `admin/jobs` or check user role explicitly, matching the pattern in `feature-flags.tsx`.
 
 ### P2-5: Admin Page Renders Hardcoded Static Content
 
