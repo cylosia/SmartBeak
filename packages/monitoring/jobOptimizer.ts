@@ -272,7 +272,12 @@ export class JobOptimizer extends EventEmitter {
     const schedulePromise = this.scheduler.schedule(jobName, data, options).then(() => {
       this.pendingJobs.delete(key);
     }).catch(err => {
-      // Keep the entry in pendingJobs so it can be retried or flushed
+      // AUDIT-FIX P1: Delete from pendingJobs on failure. The previous comment
+      // said "keep for retry" but no retry mechanism exists — the timeout has
+      // already fired. Stale entries accumulate under scheduler failures,
+      // consuming capacity slots until MAX_PENDING_JOBS (10000) is hit,
+      // after which legitimate pending jobs are evicted.
+      this.pendingJobs.delete(key);
       logger.error('Failed to schedule coalesced job', undefined, {
         jobName,
         key,
@@ -302,7 +307,9 @@ export class JobOptimizer extends EventEmitter {
       return { items: [...existing, ...incoming] };
     }
 
-    if (typeof existing === 'object' && typeof incoming === 'object') {
+    // AUDIT-FIX P2: Guard against null. typeof null === 'object', so without
+    // the truthiness check, { ...null, ...incoming } silently drops incoming data.
+    if (existing && typeof existing === 'object' && incoming && typeof incoming === 'object') {
       return { ...existing, ...incoming };
     }
 
@@ -340,7 +347,8 @@ export class JobOptimizer extends EventEmitter {
     }
   }
 
-  return requestedPriority || 'normal';
+  // AUDIT-FIX P3: Use ?? for consistency with project conventions.
+  return requestedPriority ?? 'normal';
   }
 
   /**
@@ -358,7 +366,8 @@ export class JobOptimizer extends EventEmitter {
     this.getQueueForJob(jobName)
   );
 
-  let delay = options.delay || 0;
+  // AUDIT-FIX P2: Use ?? to preserve explicit delay: 0 (no delay).
+  let delay = options.delay ?? 0;
 
   // If queue is backed up, add delay
   if (queueMetrics.waiting > 50) {
@@ -487,7 +496,8 @@ export class JobOptimizer extends EventEmitter {
     'publish-execution': 'publishing',
   };
 
-  return queueMap[jobName] || 'default';
+  // AUDIT-FIX P3: Use ?? so an empty-string queue name is preserved, not discarded.
+  return queueMap[jobName] ?? 'default';
   }
 
   /**

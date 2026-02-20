@@ -25,17 +25,23 @@ const logger = getLogger('JwtService');
 // P0-FIX: Added 'owner' role to match packages/security/jwt.ts UserRoleSchema
 // SECURITY-FIX: Added 'buyer' role — buyer-role JWTs must parse without throwing
 export type UserRole = 'admin' | 'editor' | 'viewer' | 'owner' | 'buyer';
+// AUDIT-FIX P1: jti, iat, exp are optional in the security package's Zod schema
+// (JwtClaimsSchema). Declaring them required here was a type-lie: verifyToken()
+// returns the security package's type where these are optional, so callers that
+// access claims.jti / claims.iat / claims.exp believing they are guaranteed
+// non-undefined can crash or produce NaN. Aligned to match the actual runtime
+// shape. Callers MUST null-check before using these fields.
 export interface JwtClaims {
   sub: string;
   role: UserRole;
   // P0-5 FIX: orgId is required to match verification schema in packages/security/jwt.ts
   orgId: string;
-  aud?: string;
-  iss?: string;
-  jti: string;
-  iat: number;
-  exp: number;
-  boundOrgId?: string;
+  aud?: string | undefined;
+  iss?: string | undefined;
+  jti?: string | undefined;
+  iat?: number | undefined;
+  exp?: number | undefined;
+  boundOrgId?: string | undefined;
 }
 
 // Re-export from unified auth package for backward compatibility
@@ -163,8 +169,10 @@ export class InvalidKeyError extends AuthError {
 
 const MAX_TOKEN_LIFETIME = '24h';
 const DEFAULT_TOKEN_LIFETIME = '1h';
-const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] || 'smartbeak';
-const DEFAULT_ISSUER = process.env['JWT_ISSUER'] || 'smartbeak-api';
+// AUDIT-FIX P2: Use ?? so an empty-string env var surfaces as a mismatch
+// instead of silently falling through to hardcoded defaults.
+const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] ?? 'smartbeak';
+const DEFAULT_ISSUER = process.env['JWT_ISSUER'] ?? 'smartbeak-api';
 
 const REVOCATION_KEY_PREFIX = 'jwt:revoked:';
 const REVOCATION_TTL_SECONDS = 86400 * 7; // 7 days
@@ -186,9 +194,12 @@ const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
 function parseMs(timeStr: string): number {
   const match = timeStr.match(/^(\d+)\s*(ms|s|m|h|d|w)$/i);
   if (!match) {
-    // AUDIT-FIX M13: Log warning on invalid input instead of silent default.
-    logger.warn('Invalid time string, using 1h default', { timeStr });
-    return 3600000; // Default 1 hour
+    // AUDIT-FIX P2: Throw on invalid input instead of silently defaulting.
+    // For a security-sensitive function controlling token lifetime, a silent
+    // 1h default could grant longer access than intended.
+    throw new TokenInvalidError(
+      `Invalid time string: "${timeStr}". Expected format: <number><unit> (e.g., "1h", "30m", "7d")`
+    );
   }
 
   const value = parseInt(match[1]!, 10);
@@ -342,8 +353,9 @@ function getRedisClient(): Redis {
     throw new Error('REDIS_URL environment variable is required');
   }
 
-  // Double-check after getting url (another call may have initialized)
-  if (redis) return redis;
+  // AUDIT-FIX P3: Removed dead double-check. Node.js is single-threaded and no
+  // async operation occurs between the first `if (redis)` check and this point,
+  // so no other code can initialize redis in the interim.
 
   const client = new Redis(url, {
     retryStrategy: (times: number): number => Math.min(times * 50, 2000),
@@ -398,8 +410,9 @@ export function signToken(claimsInput: SignTokenInput): string {
   // Validate input
   const validated = JwtClaimsInputSchema.parse(claimsInput);
 
-  const _aud = validated.aud || DEFAULT_AUDIENCE;
-  const _iss = validated.iss || DEFAULT_ISSUER;
+  // AUDIT-FIX P2: Use ?? to prevent empty-string values from falling through.
+  const _aud = validated.aud ?? DEFAULT_AUDIENCE;
+  const _iss = validated.iss ?? DEFAULT_ISSUER;
 
   // SECURITY FIX: Enforce maximum token lifetime of 24 hours
   const expiresInMs = calculateExpiration(validated.expiresIn);
@@ -419,12 +432,15 @@ export function signToken(claimsInput: SignTokenInput): string {
   if (!primaryKey) {
     throw new TokenInvalidError('No signing keys available');
   }
-  return jwt.sign(payload as object, primaryKey, {
+  // AUDIT-FIX P3: Removed double `as` cast. Assign to typed variable so
+  // TypeScript checks the options object structurally.
+  const signOptions: jwt.SignOptions = {
     algorithm: 'HS256',
     expiresIn: Math.floor(expiresInMs / 1000),
     audience: _aud,
     issuer: _iss,
-  } as jwt.SignOptions);
+  };
+  return jwt.sign(payload, primaryKey, signOptions);
 }
 
 // ============================================================================
@@ -511,8 +527,16 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     if (!results || results.length < 2) {
       throw new AuthError('Revocation check failed: incomplete pipeline result', 'REVOCATION_CHECK_FAILED');
     }
-    const [jtiRevoked, userRevoked] = results;
-    if (jtiRevoked![0] || userRevoked![0]) {
+    // AUDIT-FIX P1: Replace non-null assertions with explicit null guards.
+    // TypeScript can't narrow array element types from a length check, so
+    // destructured values are `T | undefined`. Explicit guards prevent
+    // TypeError if Redis returns malformed pipeline data.
+    const jtiRevoked = results[0];
+    const userRevoked = results[1];
+    if (!jtiRevoked || !userRevoked) {
+      throw new AuthError('Revocation check failed: malformed pipeline result', 'REVOCATION_CHECK_FAILED');
+    }
+    if (jtiRevoked[0] || userRevoked[0]) {
       throw new AuthError('Revocation check failed: pipeline command error', 'REVOCATION_CHECK_FAILED');
     }
 
@@ -520,10 +544,17 @@ export async function isTokenRevoked(jti: string, userId: string): Promise<boole
     circuitBreaker.failures = 0;
 
     // Pipeline results are [error, value] tuples
-    const jtiResult = jtiRevoked![1];
-    const userResult = userRevoked![1];
+    const jtiResult = jtiRevoked[1];
+    const userResult = userRevoked[1];
     return jtiResult === 1 || userResult === 1;
   } catch (error) {
+    // AUDIT-FIX P2: Don't count our own AuthErrors (pipeline validation failures)
+    // toward the circuit breaker. Those are expected fail-closed responses, not
+    // infrastructure failures. Counting them allows transient Redis pipeline
+    // anomalies to open the circuit breaker, causing a 30s full auth outage.
+    if (error instanceof AuthError) {
+      throw error;
+    }
     recordFailure(error);
     // P0-2 FIX: Fail-closed — reject token when revocation status cannot be determined.
     // Token signature verification alone is insufficient when revocation is a security control.
@@ -613,6 +644,20 @@ export async function verifyToken(
       throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
     }
   } else {
+    // AUDIT-FIX P2: Even without jti, check user-wide revocation.
+    // Previously the entire revocation check was skipped, allowing tokens
+    // without jti to bypass revokeAllUserTokens() — a security gap.
+    try {
+      const client = getRedisClient();
+      const userRevoked = await client.exists(`jwt:revoked:user:${claims.sub}`);
+      if (userRevoked === 1) {
+        throw new AuthError('Token has been revoked', 'TOKEN_REVOKED');
+      }
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+      // Fail-closed: if Redis is unavailable, reject the token
+      throw new AuthError('Token verification unavailable (revocation check failed)', 'REVOCATION_CHECK_FAILED');
+    }
     logger.warn('[jwt] Token verified without jti claim — individual revocation is not possible for this token', {
       sub: claims.sub.substring(0, 8) + '...',
     });
@@ -675,17 +720,29 @@ export function unsafeDecodeTokenInfo(token: string): TokenInfo | null {
   if (!raw || typeof raw === 'string') return null;
   const decoded = raw as { jti?: string; sub?: string; role?: string; orgId?: string; iat?: number; exp?: number };
 
-  // AUDIT-FIX H15: Validate role with schema instead of unsafe cast.
+  // AUDIT-FIX P2: Reject tokens with unknown/invalid roles instead of silently
+  // assigning 'viewer'. A token with role: "superadmin" was previously downgraded
+  // to viewer, granting read access to an unrecognized principal.
   const roleResult = UserRoleSchema.safeParse(decoded['role']);
-  const role: UserRole = roleResult.success ? roleResult.data : 'viewer';
+  if (!roleResult.success) {
+    return null;
+  }
+  const role: UserRole = roleResult.data;
+
+  // AUDIT-FIX P3: Reject tokens missing required claims instead of fabricating
+  // data. Empty-string jti could collide with revocation keys. Fabricated
+  // new Date() for iat/exp makes tokens appear freshly issued and not expired.
+  if (!decoded['jti'] || !decoded['sub'] || !decoded['iat'] || !decoded['exp']) {
+    return null;
+  }
 
   return {
-    jti: decoded['jti'] ?? '',
-    sub: decoded['sub'] ?? '',
+    jti: decoded['jti'] as string,
+    sub: decoded['sub'] as string,
     role,
-    orgId: decoded['orgId'],
-    issuedAt: decoded['iat'] ? new Date(decoded['iat'] * 1000) : new Date(),
-    expiresAt: decoded['exp'] ? new Date(decoded['exp'] * 1000) : new Date(),
+    orgId: decoded['orgId'] as string | undefined,
+    issuedAt: new Date((decoded['iat'] as number) * 1000),
+    expiresAt: new Date((decoded['exp'] as number) * 1000),
     // AUDIT-FIX C2: null = unknown. Cannot determine revocation without Redis.
     isRevoked: null,
   };

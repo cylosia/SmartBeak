@@ -114,8 +114,10 @@ export class TokenInvalidError extends AuthError {
 // AUDIT-FIX H7: Log warning when using hardcoded defaults in production.
 // Requiring env vars prevents attackers who know the source code defaults
 // from forging tokens against a misconfigured production deployment.
-const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] || 'smartbeak';
-const DEFAULT_ISSUER = process.env['JWT_ISSUER'] || 'smartbeak-api';
+// AUDIT-FIX P2: Use ?? so an empty-string env var surfaces as a mismatch
+// instead of silently falling through to hardcoded defaults.
+const DEFAULT_AUDIENCE = process.env['JWT_AUDIENCE'] ?? 'smartbeak';
+const DEFAULT_ISSUER = process.env['JWT_ISSUER'] ?? 'smartbeak-api';
 if (!process.env['JWT_AUDIENCE'] || !process.env['JWT_ISSUER']) {
   // Defer warning to avoid import-time side effects in tests
   queueMicrotask(() => {
@@ -401,8 +403,11 @@ export function verifyToken(
     try {
       // SECURITY: Explicitly specify allowed algorithms to prevent algorithm confusion
       const payload = jwt.verify(token, key, {
-        audience: options.audience || DEFAULT_AUDIENCE,
-        issuer: options.issuer || DEFAULT_ISSUER,
+        // AUDIT-FIX P2: Use ?? to prevent empty-string audience/issuer from
+        // silently falling through to defaults. An explicit '' must be forwarded
+        // to jwt.verify() so it rejects (mismatch), not silently match defaults.
+        audience: options.audience ?? DEFAULT_AUDIENCE,
+        issuer: options.issuer ?? DEFAULT_ISSUER,
         algorithms: ['HS256'],
         clockTolerance: JWT_CLOCK_TOLERANCE,
         // F29-FIX: ignoreExpiration removed - expired tokens must always be rejected
@@ -533,7 +538,8 @@ export function getAuthContext(
   return {
     userId: claims.sub,
     orgId: claims.orgId,
-    roles: claims.role ? [claims.role] : [],
+    // AUDIT-FIX P2: role is required in JwtClaimsSchema; ternary was dead code.
+    roles: [claims.role],
     sessionId: claims.jti,
   };
 }
@@ -571,7 +577,9 @@ export function logAuthEvent(event: string, data: Record<string, unknown>): void
   const logData: Record<string, unknown> = (typeof sanitized === 'object' && sanitized !== null && !Array.isArray(sanitized))
     ? sanitized as Record<string, unknown>
     : { _sanitized: sanitized };
-  logger.info(`[Auth:${event}]`, logData);
+  // AUDIT-FIX P3: Use structured field for event name instead of template literal.
+  // Log aggregation systems can filter on metadata.event without string parsing.
+  logger.info('Auth event', { event, ...logData });
 }
 
 // ============================================================================

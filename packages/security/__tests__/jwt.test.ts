@@ -4,7 +4,10 @@
  * Tests JWT verification, token format validation, and key rotation support.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+// AUDIT-FIX P3: Added afterEach to explicit imports (was used but not imported,
+// relying on vitest globals). Explicit imports are consistent with the other
+// imports from vitest in this file.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
   verifyToken,
