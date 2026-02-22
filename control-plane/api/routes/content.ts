@@ -32,11 +32,6 @@ const CreateContentSchema = z.object({
   tags: z.array(z.string().max(50)).max(20).optional(),
 });
 
-function hasErrorCode(err: unknown): err is { code: string } {
-  return typeof err === 'object' && err !== null && 'code' in err &&
-    typeof (err as Record<string, unknown>)['code'] === 'string';
-}
-
 const UpdateContentSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   body: z.string().max(50000).optional(),
@@ -66,18 +61,12 @@ const ContentQuerySchema = z.object({
 export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const ownership = new DomainOwnershipService(pool);
 
-  // Note: Body limit should be set when creating the Fastify instance in http.ts
-
   // GET /content - List content with filtering
   app.get('/content', async (req: FastifyRequest, res: FastifyReply) => {
-  try {
-    // P1-11 FIX: Rate limit BEFORE auth to prevent CPU exhaustion via JWT verification DDoS.
-    // Previously auth (expensive JWT verify) ran before rate limit.
-    await rateLimit('content', 50, req, res);
+    rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
 
-    // Validate orgId
     if (!ctx["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required');
     }
@@ -87,7 +76,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     return errors.badRequest(res, 'Invalid organization ID');
     }
 
-    // Validate query params
     const queryResult = ContentQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
     return errors.validationFailed(res, queryResult["error"].issues);
@@ -96,12 +84,10 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     const { domainId, status, contentType, page, limit, search } = queryResult.data;
     const offset = (page - 1) * limit;
 
-    // P2 FIX: Cap OFFSET to prevent deep-page O(n) table scans
     if (offset > DB.MAX_OFFSET) {
     return errors.badRequest(res, `Page depth exceeds maximum safe offset (${DB.MAX_OFFSET}). Use cursor-based pagination for deeper access.`);
     }
 
-    // If domainId provided, verify ownership
     if (domainId) {
     const domainResult = await pool.query(
     'SELECT 1 FROM domains WHERE id = $1 AND org_id = $2',
@@ -112,7 +98,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     }
     }
 
-    // Build query
     // C4-FIX: Changed table name from 'content' to 'content_items' to match migration schema
     let query = `
     SELECT c.id, c.title, c.status, c.content_type, c.domain_id,
@@ -141,32 +126,24 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     }
 
     if (search) {
-    // P1-SECURITY-FIX: Escape LIKE wildcards and use ESCAPE clause to prevent injection.
-    // Escape special characters: \ (backslash), % (percent), _ (underscore)
     const escapedSearch = search
-      .replace(/\\/g, '\\\\')   // Escape backslashes first
-      .replace(/%/g, '\\%')     // Escape percent wildcards
-      .replace(/_/g, '\\_');    // Escape underscore wildcards
-    // PERFORMANCE: Only search `title` here.  Searching `body` (up to 50 KB per row)
-    // with ILIKE '%...%' forces a full sequential scan because ILIKE cannot use a
-    // B-tree index and there is no pg_trgm GIN index on the body column.
-    // Add a GIN trgm index on body and re-enable body search once that migration lands.
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
     query += ` AND c.title ILIKE $${paramIndex} ESCAPE '\\'`;
     params.push(`%${escapedSearch}%`);
     paramIndex++;
     }
 
-    // Snapshot paramIndex before the transaction so both queries use consistent indices
     const paginationStartIndex = paramIndex;
     const paginatedQuery =
       query + ` ORDER BY c.updated_at DESC LIMIT $${paginationStartIndex} OFFSET $${paginationStartIndex + 1}`;
     const paginatedParams = [...params, limit, offset];
 
-    // Wrap COUNT and data fetch in one transaction for a consistent read
     const { rows, total } = await withTransaction(async (client) => {
       const countResult = await client.query(
         `SELECT COUNT(*) FROM (${query}) as count_query`,
-        params  // P0-FIX: Pass params to count query to ensure tenant isolation
+        params
       );
       const countRow = countResult.rows[0] as { count: string } | undefined;
       const innerTotal = countRow ? parseInt(countRow.count, 10) : 0;
@@ -194,20 +171,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     totalPages: Math.ceil(total / limit),
     }
     };
-  } catch (error: unknown) {
-    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 
   // POST /content - Create new content draft
   app.post('/content', async (req: FastifyRequest, res: FastifyReply) => {
-  try {
-    await rateLimit('content', 50, req, res);
+    rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
-    // Validate orgId
     if (!ctx["orgId"]) {
     return errors.badRequest(res, 'Organization ID is required');
     }
@@ -223,7 +194,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     }
     const validated = bodyResult.data;
 
-    // Verify org owns the domain
     await ownership.assertOrgOwnsDomain(ctx.orgId, validated.domainId);
 
     const repo = getContentRepository('content');
@@ -237,26 +207,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     validated.contentType
     );
     return { success: true, item };
-  } catch (error: unknown) {
-    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
-    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
-    }
-    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
-    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
-    }
-    return errors.internal(res);
-  }
   });
 
   // GET /content/:id - Get specific content
   app.get('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
-  try {
-    await rateLimit('content', 50, req, res);
+    rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor', 'viewer']);
 
-    // Validate params
     const paramsResult = ContentParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
     return errors.validationFailed(res, paramsResult["error"].issues);
@@ -265,7 +223,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     const repo = getContentRepository('content');
 
-    // Get the item to verify domain ownership
     const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
@@ -274,33 +231,20 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
     return { success: true, item };
-  } catch (error: unknown) {
-    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
-    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
-    }
-    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
-    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
-    }
-    return errors.internal(res);
-  }
   });
 
   // PATCH /content/:id - Update content draft
   app.patch('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
-  try {
-    await rateLimit('content', 50, req, res);
+    rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
-    // Validate params
     const paramsResult = ContentParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
     return errors.validationFailed(res, paramsResult["error"].issues);
     }
     const params = paramsResult.data;
 
-    // Validate body
     const bodyResult = UpdateContentSchema.safeParse(req.body);
     if (!bodyResult.success) {
     return errors.validationFailed(res, bodyResult["error"].issues);
@@ -309,7 +253,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     const repo = getContentRepository('content');
 
-    // Get the item to verify domain ownership
     const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
@@ -317,12 +260,10 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     await ownership.assertOrgOwnsDomain(ctx.orgId, item.domainId);
 
-    // Validate content state before updating (avoids second repo.getById in UpdateDraft handler)
     if (item['status'] !== 'draft' && item['status'] !== 'scheduled') {
     return errors.badRequest(res, `Cannot update content with status '${item['status']}'`);
     }
 
-    // Apply update directly to avoid the double-fetch inside UpdateDraft.execute
     const updatedItem = item.updateDraft(
     validated.title ?? item.title,
     validated.body ?? item.body
@@ -330,26 +271,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     await repo.save(updatedItem);
 
     return { success: true, item: updatedItem };
-  } catch (error: unknown) {
-    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
-    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
-    }
-    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
-    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
-    }
-    return errors.internal(res);
-  }
   });
 
   // POST /content/:id/publish - Publish content
   app.post('/content/:id/publish', async (req: FastifyRequest, res: FastifyReply) => {
-  try {
-    await rateLimit('content', 20, req, res);
+    rateLimit('content', 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
-    // Validate params
     const paramsResult = ContentParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
     return errors.validationFailed(res, paramsResult["error"].issues);
@@ -358,7 +287,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     const repo = getContentRepository('content');
 
-    // Get the item to verify domain ownership
     const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
@@ -370,26 +298,14 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     const event = await handler.execute(params.id);
 
     return { success: true, event };
-  } catch (error: unknown) {
-    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
-    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
-    }
-    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
-    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
-    }
-    return errors.internal(res);
-  }
   });
 
   // DELETE /content/:id - Delete content (soft delete)
   app.delete('/content/:id', async (req: FastifyRequest, res: FastifyReply) => {
-  try {
-    await rateLimit('content', 20, req, res);
+    rateLimit('content', 20);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin']);
 
-    // Validate params
     const paramsResult = ContentParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
     return errors.validationFailed(res, paramsResult["error"].issues);
@@ -398,7 +314,6 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
 
     const repo = getContentRepository('content');
 
-    // Get the item to verify domain ownership
     const item = await repo.getById(params.id);
     if (!item) {
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
@@ -413,23 +328,11 @@ export async function contentRoutes(app: FastifyInstance, pool: Pool): Promise<v
     ['archived', params.id, ctx.orgId]
     );
 
-    // P1-FIX: If the domain was transferred between the ownership check and the UPDATE,
-    // rowCount will be 0. Return a clear error instead of silently reporting success.
     if ((rowCount ?? 0) === 0) {
     logger.warn('[content] Soft delete affected 0 rows — possible TOCTOU domain transfer', { id: params.id, orgId: ctx.orgId });
     return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
     }
 
     return { success: true, id: params.id, deleted: true };
-  } catch (error: unknown) {
-    logger.error('[content] Internal error', error instanceof Error ? error : new Error(String(error)));
-    if (hasErrorCode(error) && error.code === 'DOMAIN_NOT_OWNED') {
-    return errors.forbidden(res, 'Domain not owned by organization', ErrorCodes.DOMAIN_NOT_OWNED);
-    }
-    if (hasErrorCode(error) && error.code === 'CONTENT_NOT_FOUND') {
-    return errors.notFound(res, 'Content', ErrorCodes.CONTENT_NOT_FOUND);
-    }
-    return errors.internal(res);
-  }
   });
 }

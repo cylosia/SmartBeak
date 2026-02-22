@@ -82,121 +82,102 @@ export default async function shardRoutes(fastify: FastifyInstance) {
    * Deploy a new shard version
    */
   fastify.post('/deploy', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const parseResult = DeployBodySchema.safeParse(request.body);
-      if (!parseResult.success) {
-        return errors.badRequest(reply, `Invalid request body: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
-      }
-      const body = parseResult.data;
-
-      // SECURITY FIX P1 #17: Validate themeId against known themes
-      if (!VALID_THEME_IDS.includes(body.themeId)) {
-        return errors.badRequest(reply, `Invalid themeId. Must be one of: ${VALID_THEME_IDS.join(', ')}`);
-      }
-
-      // SECURITY FIX P0 #4: Verify site ownership
-      if (!(await verifySiteOwnership(request, body.siteId))) {
-        return errors.forbidden(reply);
-      }
-
-      // 1. Generate shard files from template
-      const files = generateShardFiles(body.themeId, body.themeConfig);
-
-      // 2. Save to storage and database
-      const { shardId } = await createShardVersion(
-        {
-          siteId: body.siteId,
-          themeId: body.themeId,
-          themeConfig: body.themeConfig,
-        },
-        files
-      );
-
-      // 3. Deploy to Vercel
-      const deployment = await deployShardToVercel(shardId, body.vercelProjectId);
-
-      if (!deployment.success) {
-        return errors.internal(reply, 'Deployment failed');
-      }
-
-      return reply.send({
-        success: true,
-        shardId,
-        deploymentId: deployment.deploymentId,
-        url: deployment.url,
-      });
-
-    } catch (error) {
-      // SECURITY FIX P1 #13: Don't expose internal error messages
-      fastify.log.error(error);
-      return errors.internal(reply);
+    const parseResult = DeployBodySchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return errors.badRequest(reply, `Invalid request body: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
     }
+    const body = parseResult.data;
+
+    // SECURITY FIX P1 #17: Validate themeId against known themes
+    if (!VALID_THEME_IDS.includes(body.themeId)) {
+      return errors.badRequest(reply, `Invalid themeId. Must be one of: ${VALID_THEME_IDS.join(', ')}`);
+    }
+
+    // SECURITY FIX P0 #4: Verify site ownership
+    if (!(await verifySiteOwnership(request, body.siteId))) {
+      return errors.forbidden(reply);
+    }
+
+    // 1. Generate shard files from template
+    const files = generateShardFiles(body.themeId, body.themeConfig);
+
+    // 2. Save to storage and database
+    const { shardId } = await createShardVersion(
+      {
+        siteId: body.siteId,
+        themeId: body.themeId,
+        themeConfig: body.themeConfig,
+      },
+      files
+    );
+
+    // 3. Deploy to Vercel
+    const deployment = await deployShardToVercel(shardId, body.vercelProjectId);
+
+    if (!deployment.success) {
+      return errors.internal(reply, 'Deployment failed');
+    }
+
+    return reply.send({
+      success: true,
+      shardId,
+      deploymentId: deployment.deploymentId,
+      url: deployment.url,
+    });
   });
 
   /**
    * List all shard versions for a site
    */
   fastify.get('/:siteId/versions', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { siteId } = request.params as { siteId: string };
+    const { siteId } = request.params as { siteId: string };
 
-      // SECURITY FIX P0 #4: Verify site ownership
-      if (!(await verifySiteOwnership(request, siteId))) {
-        return errors.forbidden(reply);
-      }
-
-      const versions = await listShardVersions(siteId);
-
-      return reply.send({
-        siteId,
-        versions: versions.map((v: { id: string; version: number; status: string; vercel_url: string; created_at: string; deployed_at: string }) => ({
-          id: v.id,
-          version: v.version,
-          status: v.status,
-          url: v.vercel_url,
-          createdAt: v.created_at,
-          deployedAt: v.deployed_at,
-        })),
-      });
-
-    } catch (error) {
-      fastify.log.error(error);
-      return errors.internal(reply, 'Failed to fetch versions');
+    // SECURITY FIX P0 #4: Verify site ownership
+    if (!(await verifySiteOwnership(request, siteId))) {
+      return errors.forbidden(reply);
     }
+
+    const versions = await listShardVersions(siteId);
+
+    return reply.send({
+      siteId,
+      versions: versions.map((v: { id: string; version: number; status: string; vercel_url: string; created_at: string; deployed_at: string }) => ({
+        id: v.id,
+        version: v.version,
+        status: v.status,
+        url: v.vercel_url,
+        createdAt: v.created_at,
+        deployedAt: v.deployed_at,
+      })),
+    });
   });
 
   /**
    * Rollback to a specific version
    */
   fastify.post('/:siteId/rollback', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { siteId } = request.params as { siteId: string };
-      const parseResult = RollbackBodySchema.safeParse(request.body);
-      if (!parseResult.success) {
-        return errors.badRequest(reply, `Invalid request body: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
-      }
-      const { targetVersion, vercelProjectId } = parseResult.data;
+    const { siteId } = request.params as { siteId: string };
+    const parseResult = RollbackBodySchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return errors.badRequest(reply, `Invalid request body: ${parseResult.error.issues.map(i => i.message).join(', ')}`);
+    }
+    const { targetVersion, vercelProjectId } = parseResult.data;
 
-      // SECURITY FIX P0 #4: Verify site ownership
-      if (!(await verifySiteOwnership(request, siteId))) {
-        return errors.forbidden(reply);
-      }
+    // SECURITY FIX P0 #4: Verify site ownership
+    if (!(await verifySiteOwnership(request, siteId))) {
+      return errors.forbidden(reply);
+    }
 
-      const result = await rollbackShard(siteId, targetVersion, vercelProjectId);
+    const result = await rollbackShard(siteId, targetVersion, vercelProjectId);
 
-      if (!result.success) {
-        return errors.internal(reply, 'Rollback failed');
-      }
-
-      return reply.send({
-        success: true,
-        deploymentId: result.deploymentId,
-        url: result.url,
-      });
-
-    } catch (error) {
-      fastify.log.error(error);
+    if (!result.success) {
       return errors.internal(reply, 'Rollback failed');
     }
+
+    return reply.send({
+      success: true,
+      deploymentId: result.deploymentId,
+      url: result.url,
+    });
   });
 }

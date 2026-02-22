@@ -86,19 +86,12 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   req: FastifyRequest,
   res: FastifyReply
   ): Promise<void> => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
-    // P1-FIX: Rate limit now enforced; catch rejection for 429 already sent
-    try {
-      await rateLimit('llm', 30, req, res);
-    } catch (_e) {
-      logger.warn('LLM rate limit exceeded', { route: req.url });
-      return;
-    }
+    rateLimit('llm', 30);
 
     // P0-FIX: Fixed SQL aliases (double quotes for PG identifiers) + org_id filter
     const result = await pool.query(
@@ -112,11 +105,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     const models: LlmModel[] = result.rows;
 
     return res.send({ models });
-  } catch (error) {
-    logger.error('[llm/models] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to fetch LLM models');
-  }
   });
 
   // GET /llm/preferences - Get user's LLM preferences
@@ -124,18 +112,12 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   req: FastifyRequest,
   res: FastifyReply
   ): Promise<void> => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin', 'editor']);
-    try {
-      await rateLimit('llm', 30, req, res);
-    } catch (_e) {
-      logger.warn('LLM rate limit exceeded', { route: req.url });
-      return;
-    }
+    rateLimit('llm', 30);
 
     const defaults: LlmPreferences = {
     defaultModel: 'gpt-4',
@@ -187,11 +169,6 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
 
     return res.send(preferences);
-  } catch (error) {
-    logger.error('[llm/preferences] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to fetch LLM preferences');
-  }
   });
 
   // POST /llm/preferences - Update LLM preferences
@@ -199,18 +176,12 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   req: FastifyRequest,
   res: FastifyReply
   ): Promise<void> => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
     }
     requireRole(ctx, ['owner', 'admin']);
-    try {
-      await rateLimit('llm', 30, req, res);
-    } catch (_e) {
-      logger.warn('LLM rate limit exceeded', { route: req.url });
-      return;
-    }
+    rateLimit('llm', 30);
 
     // Validate input
     const parseResult = UpdatePreferencesSchema.safeParse(req.body);
@@ -244,10 +215,5 @@ export async function llmRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     }
 
     return res.send({ updated: true, preferences: updates });
-  } catch (error) {
-    logger.error('[llm/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to update LLM preferences');
-  }
   });
 }

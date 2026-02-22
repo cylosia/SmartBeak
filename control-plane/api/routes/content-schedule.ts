@@ -3,7 +3,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { getAuthContext } from '../types';
 import { getContentRepository } from '../../services/repository-factory';
 import { DomainOwnershipService } from '../../services/domain-ownership';
@@ -13,8 +12,6 @@ import { ScheduleContent } from '../../../domains/content/application/handlers/S
 import { getContainer } from '../../services/container';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-
-const logger = getLogger('content-schedule');
 
 const ParamsSchema = z.object({
   id: z.string().uuid(),
@@ -26,9 +23,8 @@ const BodySchema = z.object({
 
 export async function contentScheduleRoutes(app: FastifyInstance) {
   app.post('/content/:id/schedule', async (req, res) => {
-  try {
     // SECURITY FIX: Rate limit BEFORE auth to prevent DoS (per-IP isolation)
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor']);
 
@@ -78,9 +74,5 @@ export async function contentScheduleRoutes(app: FastifyInstance) {
     scheduledAt: publishDate.toISOString(),
     }
     };
-  } catch (error: unknown) {
-    logger.error('[content/schedule] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to schedule content');
-  }
   });
 }

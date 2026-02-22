@@ -4,7 +4,6 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { DomainOwnershipService } from '../../services/domain-ownership';
 import { getAuthContext } from '../types';
 import { PostgresContentRevisionRepository } from '../../../domains/content/infra/persistence/PostgresContentRevisionRepository';
@@ -12,8 +11,6 @@ import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-
-const logger = getLogger('content-revisions');
 
 export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   const ownership = new DomainOwnershipService(pool);
@@ -23,9 +20,8 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
   });
 
   app.get('/content/:id/revisions', async (req, res) => {
-  try {
     // SECURITY FIX: Rate limit BEFORE auth to prevent DoS (per-IP isolation)
-    await rateLimit('content', 50, req, res);
+    await rateLimit('content', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor','viewer']);
 
@@ -57,9 +53,5 @@ export async function contentRevisionRoutes(app: FastifyInstance, pool: Pool) {
     const repo = new PostgresContentRevisionRepository(pool);
     const revisions = await repo.listByContent(id, 20);
     return { revisions };
-  } catch (error: unknown) {
-    logger.error('[content-revisions] Internal error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 }

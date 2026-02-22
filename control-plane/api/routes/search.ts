@@ -4,14 +4,11 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { SearchQueryService } from '../../services/search-query';
 import { errors } from '@errors/responses';
-
-const logger = getLogger('search-routes');
 
 export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   const svc = new SearchQueryService(pool);
@@ -29,8 +26,7 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
   }).strict();
 
   app.get('/search', async (req, res) => {
-  try {
-    await rateLimit('search', 30, req, res);
+    await rateLimit('search', 30);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
@@ -61,10 +57,6 @@ export async function searchRoutes(app: FastifyInstance, pool: Pool): Promise<vo
       totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error) {
-    logger.error('[search] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 }
 

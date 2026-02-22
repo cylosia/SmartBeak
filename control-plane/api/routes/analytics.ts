@@ -1,18 +1,16 @@
 
 
+
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { AnalyticsReadModel } from '../../services/analytics-read-model';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-
-const logger = getLogger('analytics-routes');
 
 export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
   const rm = new AnalyticsReadModel(pool);
@@ -22,11 +20,10 @@ export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
   }).strict();
 
   app.get('/analytics/content/:id', async (req, res) => {
-  try {
     // Rate limit BEFORE auth to prevent DoS
     // P1-FIX: Include client IP in the key — static 'analytics' key shared
     // one bucket for all tenants.
-    await rateLimit(`analytics:${req.ip ?? 'unknown'}`, 50, req, res);
+    await rateLimit(`analytics:${req.ip ?? 'unknown'}`, 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin','editor','viewer']);
 
@@ -48,9 +45,5 @@ export async function analyticsRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     return rm.getContentStats(id);
-  } catch (error) {
-    logger.error('[analytics] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 }

@@ -5,11 +5,8 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { PublishingUIService } from '../../services/publishing-ui';
 import { rateLimit } from '../../services/rate-limit';
-
-const logger = getLogger('publishing-routes');
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
@@ -32,7 +29,6 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
   const svc = new PublishingUIService(pool);
 
   app.get('/publishing/targets', async (req, res) => {
-  try {
     await rateLimit('publishing', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor']);
@@ -42,16 +38,10 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
-    // P1-FIX: await so rejections are caught by the try-catch above
     return await svc.listTargets(queryResult.data.domainId);
-  } catch (error) {
-    logger.error('[publishing/targets] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 
   app.post('/publishing/targets', async (req, res) => {
-  try {
     await rateLimit('publishing', 30);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
@@ -67,16 +57,10 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
     }
 
     const { type, config } = bodyResult.data;
-    // P1-FIX: await so rejections are caught by the try-catch above
     return await svc.createTarget(queryResult.data.domainId, type, config);
-  } catch (error) {
-    logger.error('[publishing/targets] Create error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 
   app.get('/publishing/jobs', async (req, res) => {
-  try {
     await rateLimit('publishing', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor']);
@@ -86,19 +70,10 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
       return errors.badRequest(res, 'Domain ID is required', ErrorCodes.MISSING_PARAMETER);
     }
 
-    // P1-FIX: await so rejections are caught by the try-catch above
     return await svc.listJobs(queryResult.data.domainId);
-  } catch (error) {
-    logger.error('[publishing/jobs] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 
-  // P1-FIX: Add try-catch — without it any throw (requireRole, rateLimit,
-  // getJobWithOwnership) propagates unhandled, skips structured logging,
-  // and may leak stack traces.
   app.get('/publishing/jobs/:id', async (req, res) => {
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor']);
     await rateLimit('publishing', 50);
@@ -122,15 +97,9 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
     // Return job without the internal hasAccess flag
     const { hasAccess: _, ...jobData } = job;
     return jobData;
-  } catch (error) {
-    logger.error('[publishing/jobs/:id] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 
-  // P1-FIX: Add try-catch — same issue as GET handler above.
   app.post('/publishing/jobs/:id/retry', async (req, res) => {
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
     await rateLimit('publishing', 30);
@@ -148,10 +117,6 @@ export async function publishingRoutes(app: FastifyInstance, pool: Pool): Promis
     }
 
     return await svc.retryJob(id);
-  } catch (error) {
-    logger.error('[publishing/jobs/:id/retry] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 }
 
