@@ -1,14 +1,11 @@
 import fetch from 'node-fetch';
 import { createHmac, createHash } from 'crypto';
 
-import { timeoutConfig } from '@config';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
+import { BaseExternalAdapter } from '../base';
 import { AffiliateRevenueAdapter, AffiliateRevenueReport } from './types';
-
-import { AbortController } from 'abort-controller';
 
 
 /**
@@ -25,15 +22,14 @@ export interface AmazonCredentials {
   marketplace?: string | undefined;
 }
 
-export class AmazonAdapter implements AffiliateRevenueAdapter {
+export class AmazonAdapter extends BaseExternalAdapter implements AffiliateRevenueAdapter {
   readonly provider = 'amazon';
   private readonly credentials: AmazonCredentials;
   private readonly baseUrls: Record<string, string>;
-  private readonly timeoutMs = timeoutConfig.long;
-  private readonly logger: StructuredLogger;
-  private readonly metrics: MetricsCollector;
 
   constructor(credentials?: Partial<AmazonCredentials>) {
+  super('AmazonAdapter');
+
   this.credentials = {
     accessKey: credentials?.accessKey || process.env['AMAZON_ACCESS_KEY'] || '',
     secretKey: credentials?.secretKey || process.env['AMAZON_SECRET_KEY'] || '',
@@ -63,9 +59,6 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
     'SG': 'https://webservices.amazon.sg',
     'TR': 'https://webservices.amazon.com.tr',
   };
-
-  this.logger = new StructuredLogger('AmazonAdapter');
-  this.metrics = new MetricsCollector('AmazonAdapter');
   }
 
   /**
@@ -79,18 +72,13 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
   currency?: string | undefined;
   url: string;
   }>> {
-  const context = createRequestContext('AmazonAdapter', 'searchProducts');
-
   validateNonEmptyString(keywords, 'keywords');
 
-  this.logger.info('Searching Amazon products', context, { keywords, category });
+  return this.instrumented('searchProducts', async (context) => {
+    const baseUrl = this.baseUrls[this.credentials.marketplace || 'US'];
 
-  const startTime = Date.now();
-
-  const baseUrl = this.baseUrls[this.credentials.marketplace || 'US'];
-
-  const timestamp = new Date().toISOString();
-  const payload = {
+    const timestamp = new Date().toISOString();
+    const payload = {
     Keywords: keywords,
     SearchIndex: category || 'All',
     ItemPage: 1,
@@ -99,14 +87,14 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
     'ItemInfo.Title',
     'Offers.Listings.Price',
     ],
-  };
+    };
 
-  const headers = this.buildPAAPIHeaders(payload, timestamp);
+    const headers = this.buildPAAPIHeaders(payload, timestamp);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-  try {
+    try {
     const res = await withRetry(async () => {
     // Content-Type is now included in buildPAAPIHeaders output
     // as part of the SigV4 signed headers
@@ -119,11 +107,7 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
 
     if (!response.ok) {
     if (response.status === 429) {
-    const retryAfter = response.headers.get('retry-after');
-    const error = new Error(`Amazon PAAPI rate limited: ${response.status}`);
-    (error as Error & { status: number; retryAfter?: string }).status = response.status;
-    (error as Error & { status: number; retryAfter?: string | undefined }).retryAfter = retryAfter || undefined;
-    throw error;
+    throw this.createRateLimitError('Amazon PAAPI', response.status, response.headers);
     }
 
     throw new Error(`Amazon PAAPI error: ${response.status} ${response.statusText}`);
@@ -186,21 +170,13 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
     }
     }
 
-    const latency = Date.now() - startTime;
-    this.metrics.recordLatency('searchProducts', latency, true);
-    this.metrics.recordSuccess('searchProducts');
     this.logger.info('Successfully searched Amazon products', context, { count: products.length });
 
     return products;
-  } catch (error) {
-    const latency = Date.now() - startTime;
-    this.metrics.recordLatency('searchProducts', latency, false);
-    this.metrics.recordError('searchProducts', error instanceof Error ? error.name : 'Unknown');
-    this.logger.error('Failed to search Amazon products', context, error as Error);
-    throw error;
-  } finally {
+    } finally {
     clearTimeout(timeoutId);
-  }
+    }
+  }, { keywords, category });
   }
 
   /**
@@ -301,9 +277,10 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
   endDate: Date;
   credentialsRef: string;
   }): Promise<AffiliateRevenueReport[]> {
-  const context = createRequestContext('AmazonAdapter', 'fetchReports');
-  this.logger.warn('Amazon Associates earnings API not available', context);
-  return [];
+  return this.instrumented('fetchReports', async (context) => {
+    this.logger.warn('Amazon Associates earnings API not available', context);
+    return [];
+  });
   }
 
   /**
@@ -339,20 +316,12 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
 
   async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }> {
   const start = Date.now();
-
   try {
-    // Try a simple search as health check
     await this.searchProducts('test');
-
-    return {
-    healthy: true,
-    latency: Date.now() - start,
-    };
+    return { healthy: true, latency: Date.now() - start };
   } catch (error) {
-    // If error is auth-related, service is reachable
     const errorMessage = error instanceof Error ? error.message : '';
     const isAuthError = errorMessage.includes('401') || errorMessage.includes('403');
-
     return {
     healthy: isAuthError,
     latency: Date.now() - start,
@@ -362,5 +331,12 @@ export class AmazonAdapter implements AffiliateRevenueAdapter {
   }
 }
 
-// Backward-compatible default export
-export const amazonAdapter = new AmazonAdapter();
+let _amazonAdapter: AmazonAdapter | null = null;
+export function getAmazonAdapter(): AmazonAdapter {
+  if (!_amazonAdapter) {
+    _amazonAdapter = new AmazonAdapter();
+  }
+  return _amazonAdapter;
+}
+// Backward-compatible lazy alias
+export const amazonAdapter = { get instance() { return getAmazonAdapter(); } };

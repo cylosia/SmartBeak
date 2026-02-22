@@ -1,45 +1,29 @@
 import fetch from 'node-fetch';
 
-import { apiConfig, timeoutConfig } from '@config';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
+import { apiConfig } from '@config';
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 import type { PublishAdapter, PublishInput } from '@domain/publishing/application/ports/PublishAdapter';
 
-import { AbortController } from 'abort-controller';
+import { BaseExternalAdapter, AdapterApiError } from '../base';
 
 
 /**
-* LinkedIn Publishing Adapter
-* Uses LinkedIn UGC (User Generated Content) API v2
-*
-*
-* Required: LINKEDIN_ACCESS_TOKEN with w_member_social or w_organization_social scope
-*/
-
-/**
-* API Error with status code and retry information
-*/
-class ApiError extends Error {
-  constructor(
-  message: string,
-  public status: number,
-  public retryAfter?: string
-  ) {
-  super(message);
-  this.name = 'ApiError';
-  }
-}
+ * LinkedIn Publishing Adapter
+ * Uses LinkedIn UGC (User Generated Content) API v2
+ *
+ * Required: LINKEDIN_ACCESS_TOKEN with w_member_social or w_organization_social scope
+ */
 
 export interface LinkedInPost {
   text: string;
   visibility?: 'PUBLIC' | 'CONNECTIONS' | undefined;
   media?: Array<{
-  type: 'IMAGE' | 'VIDEO' | 'ARTICLE';
-  url?: string | undefined;
-  title?: string | undefined;
-  description?: string | undefined;
-  thumbnailUrl?: string | undefined;
+    type: 'IMAGE' | 'VIDEO' | 'ARTICLE';
+    url?: string | undefined;
+    title?: string | undefined;
+    description?: string | undefined;
+    thumbnailUrl?: string | undefined;
   }> | undefined;
 }
 
@@ -50,239 +34,184 @@ export interface LinkedInPostResponse {
   permalink?: string | undefined;
 }
 
-export class LinkedInAdapter implements PublishAdapter {
+export class LinkedInAdapter extends BaseExternalAdapter implements PublishAdapter {
   private readonly baseUrl: string;
-  private readonly timeoutMs = timeoutConfig.long;
-  private readonly logger: StructuredLogger;
-  private readonly metrics: MetricsCollector;
 
   constructor(private readonly accessToken: string) {
-  validateNonEmptyString(accessToken, 'accessToken');
-
-  this.baseUrl = `${apiConfig.baseUrls.linkedin}/${apiConfig.versions.linkedin}`;
-  this.logger = new StructuredLogger('LinkedInAdapter');
-  this.metrics = new MetricsCollector('LinkedInAdapter');
+    super('LinkedInAdapter');
+    validateNonEmptyString(accessToken, 'accessToken');
+    this.baseUrl = `${apiConfig.baseUrls.linkedin}/${apiConfig.versions.linkedin}`;
   }
 
   /**
-  * Get current user profile
-  */
+   * Get current user profile
+   */
   async getProfile(): Promise<{
-  id: string;
-  firstName?: string | undefined;
-  lastName?: string | undefined;
-  vanityName?: string | undefined;
-  }> {
-  // P1-FIX: Move AbortController + res.json() INSIDE withRetry callback
-  const data = await withRetry(async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-    const response = await fetch(
-    `${this.baseUrl}/me?projection=(id,firstName,lastName,vanityName)`,
-    {
-    headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'X-Restli-Protocol-Version': '2.0.0',
-        'Accept': 'application/json',
-    },
-    signal: controller.signal,
-    }
-    );
-
-    if (!response.ok) {
-    if (response.status === 429) {
-    const retryAfter = response.headers.get('retry-after') || undefined;
-    throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
-    }
-
-    throw new Error(`LinkedIn API error: ${response.status} ${response.statusText}`);
-    }
-
-    const rawData = await response.json();
-    if (!rawData || typeof rawData !== 'object') {
-    throw new ApiError('Invalid response format from LinkedIn API', 500);
-    }
-    const data = rawData as { id?: unknown; firstName?: unknown; lastName?: unknown; vanityName?: unknown };
-    if (typeof data['id'] !== 'string' || !data['id']) {
-    throw new ApiError('Invalid response format from LinkedIn API: missing or non-string id', 500);
-    }
-    if (data['firstName'] !== undefined && (typeof data['firstName'] !== 'object' || data['firstName'] === null)) {
-    throw new ApiError('Invalid response format from LinkedIn API: invalid firstName shape', 500);
-    }
-    if (data['lastName'] !== undefined && (typeof data['lastName'] !== 'object' || data['lastName'] === null)) {
-    throw new ApiError('Invalid response format from LinkedIn API: invalid lastName shape', 500);
-    }
-    return data as {
     id: string;
-    firstName?: { localized?: { en_US?: string } };
-    lastName?: { localized?: { en_US?: string } };
-    vanityName?: string;
-    };
-    } finally {
-    clearTimeout(timeoutId);
-    }
-  }, { maxRetries: 3 });
+    firstName?: string | undefined;
+    lastName?: string | undefined;
+    vanityName?: string | undefined;
+  }> {
+    const data = await withRetry(async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-  return {
-    id: data["id"],
-    firstName: data.firstName?.localized?.en_US,
-    lastName: data.lastName?.localized?.en_US,
-    vanityName: data.vanityName,
-  };
-  }
+      try {
+        const response = await fetch(
+          `${this.baseUrl}/me?projection=(id,firstName,lastName,vanityName)`,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'X-Restli-Protocol-Version': '2.0.0',
+              'Accept': 'application/json',
+            },
+            signal: controller.signal,
+          },
+        );
 
-  /**
-  * Create a post on LinkedIn (personal profile)
-  */
-  async createPost(post: LinkedInPost): Promise<LinkedInPostResponse> {
-  const profile = await this.getProfile();
-  const authorUrn = `urn:li:person:${profile["id"]}`;
-  return this.createUgcPost(authorUrn, post);
-  }
+        if (!response.ok) {
+          if (response.status === 429) {
+            throw this.createRateLimitError('LinkedIn', response.status, response.headers);
+          }
+          throw new Error(`LinkedIn API error: ${response.status} ${response.statusText}`);
+        }
 
-  /**
-  * Create a post on a LinkedIn Company Page
-  */
-  async createCompanyPost(organizationId: string, post: LinkedInPost): Promise<LinkedInPostResponse> {
-  validateNonEmptyString(organizationId, 'organizationId');
-  const authorUrn = `urn:li:organization:${organizationId}`;
-  return this.createUgcPost(authorUrn, post);
-  }
-
-  /**
-  * Create UGC Post (core method)
-  */
-  private async createUgcPost(authorUrn: string, post: LinkedInPost): Promise<LinkedInPostResponse> {
-  const context = createRequestContext('LinkedInAdapter', 'createUgcPost');
-
-  validateNonEmptyString(post.text, 'post.text');
-
-  this.logger.info('Creating LinkedIn post', context);
-
-  const startTime = Date.now();
-
-  const visibility = post.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
-
-  const requestBody: Record<string, unknown> = {
-    author: authorUrn,
-    lifecycleState: 'PUBLISHED',
-    visibility: {
-    'com.linkedin.ugc.MemberNetworkVisibility': visibility,
-    },
-    specificContent: {
-    'com.linkedin.ugc.ShareContent': {
-    shareCommentary: {
-    text: post.text,
-    },
-    shareMediaCategory: 'NONE',
-    },
-    },
-  };
-
-  // P1-FIX: Move AbortController INSIDE withRetry + only retry on transport errors (not HTTP errors)
-  try {
-    const { postId } = await withRetry(async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    try {
-    const response = await fetch(`${this.baseUrl}/ugcPosts`, {
-    method: 'POST',
-    headers: {
-    'Authorization': `Bearer ${this.accessToken}`,
-    'Content-Type': 'application/json',
-    'X-Restli-Protocol-Version': '2.0.0',
-    },
-    body: JSON.stringify(requestBody),
-    signal: controller.signal,
-    });
-
-    if (!response.ok) {
-    if (response.status === 429) {
-    const retryAfter = response.headers.get('retry-after') || undefined;
-    throw new ApiError(`LinkedIn rate limited: ${response.status}`, response.status, retryAfter);
-    }
-
-    // P1-FIX: Don't retry non-idempotent POST on HTTP errors — only throw, don't retry
-    const err = new Error(`LinkedIn UGC post failed: ${response.status} ${response.statusText}`);
-    (err as Error & { noRetry: boolean }).noRetry = true;
-    throw err;
-    }
-
-    const postIdHeader = response.headers.get('x-restli-id') || '';
-    return { postId: postIdHeader };
-    } finally {
-    clearTimeout(timeoutId);
-    }
-    }, { maxRetries: 3, shouldRetry: (err) => !(err as Error & { noRetry?: boolean }).noRetry });
-
-    const latency = Date.now() - startTime;
-    this.metrics.recordLatency('createUgcPost', latency, true);
-    this.metrics.recordSuccess('createUgcPost');
-    this.logger.info('Successfully created LinkedIn post', context, { postId });
+        const rawData = await response.json();
+        if (!rawData || typeof rawData !== 'object') {
+          throw new AdapterApiError('Invalid response format from LinkedIn API', 500);
+        }
+        const parsed = rawData as { id?: unknown; firstName?: unknown; lastName?: unknown; vanityName?: unknown };
+        if (typeof parsed['id'] !== 'string' || !parsed['id']) {
+          throw new AdapterApiError('Invalid response format from LinkedIn API: missing or non-string id', 500);
+        }
+        if (parsed['firstName'] !== undefined && (typeof parsed['firstName'] !== 'object' || parsed['firstName'] === null)) {
+          throw new AdapterApiError('Invalid response format from LinkedIn API: invalid firstName shape', 500);
+        }
+        if (parsed['lastName'] !== undefined && (typeof parsed['lastName'] !== 'object' || parsed['lastName'] === null)) {
+          throw new AdapterApiError('Invalid response format from LinkedIn API: invalid lastName shape', 500);
+        }
+        return parsed as {
+          id: string;
+          firstName?: { localized?: { en_US?: string } };
+          lastName?: { localized?: { en_US?: string } };
+          vanityName?: string;
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }, { maxRetries: 3 });
 
     return {
-    id: postId,
-    status: 'created',
+      id: data["id"],
+      firstName: data.firstName?.localized?.en_US,
+      lastName: data.lastName?.localized?.en_US,
+      vanityName: data.vanityName,
     };
-  } catch (error) {
-    const latency = Date.now() - startTime;
-    this.metrics.recordLatency('createUgcPost', latency, false);
-    this.metrics.recordError('createUgcPost', error instanceof Error ? error.name : 'Unknown');
-    this.logger["error"]('Failed to create LinkedIn post', context, error as Error);
-    throw error;
-  }
   }
 
   /**
-  * Publish content via the PublishAdapter interface.
-  * Delegates to createPost using the target config.
-  */
-  async publish(input: PublishInput): Promise<void> {
-  const text = input.targetConfig.options?.['text'];
-  if (typeof text !== 'string' || !text) {
-    throw new Error('LinkedIn publish requires targetConfig.options.text');
+   * Create a post on LinkedIn (personal profile)
+   */
+  async createPost(post: LinkedInPost): Promise<LinkedInPostResponse> {
+    const profile = await this.getProfile();
+    const authorUrn = `urn:li:person:${profile["id"]}`;
+    return this.createUgcPost(authorUrn, post);
   }
-  await this.createPost({ text });
+
+  /**
+   * Create a post on a LinkedIn Company Page
+   */
+  async createCompanyPost(organizationId: string, post: LinkedInPost): Promise<LinkedInPostResponse> {
+    validateNonEmptyString(organizationId, 'organizationId');
+    const authorUrn = `urn:li:organization:${organizationId}`;
+    return this.createUgcPost(authorUrn, post);
+  }
+
+  /**
+   * Create UGC Post (core method)
+   */
+  private async createUgcPost(authorUrn: string, post: LinkedInPost): Promise<LinkedInPostResponse> {
+    validateNonEmptyString(post.text, 'post.text');
+
+    return this.instrumented('createUgcPost', async (context) => {
+      const visibility = post.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
+
+      const requestBody: Record<string, unknown> = {
+        author: authorUrn,
+        lifecycleState: 'PUBLISHED',
+        visibility: {
+          'com.linkedin.ugc.MemberNetworkVisibility': visibility,
+        },
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': {
+            shareCommentary: { text: post.text },
+            shareMediaCategory: 'NONE',
+          },
+        },
+      };
+
+      const { postId } = await withRetry(async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+        try {
+          const response = await fetch(`${this.baseUrl}/ugcPosts`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0',
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              throw this.createRateLimitError('LinkedIn', response.status, response.headers);
+            }
+            // Don't retry non-idempotent POST on HTTP errors
+            const err = new Error(`LinkedIn UGC post failed: ${response.status} ${response.statusText}`);
+            (err as Error & { noRetry: boolean }).noRetry = true;
+            throw err;
+          }
+
+          const postIdHeader = response.headers.get('x-restli-id') || '';
+          return { postId: postIdHeader };
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }, { maxRetries: 3, shouldRetry: (err) => !(err as Error & { noRetry?: boolean }).noRetry });
+
+      this.logger.info('Successfully created LinkedIn post', context, { postId });
+
+      return {
+        id: postId,
+        status: 'created',
+      };
+    });
+  }
+
+  /**
+   * Publish content via the PublishAdapter interface.
+   */
+  async publish(input: PublishInput): Promise<void> {
+    const text = input.targetConfig.options?.['text'];
+    if (typeof text !== 'string' || !text) {
+      throw new Error('LinkedIn publish requires targetConfig.options.text');
+    }
+    await this.createPost({ text });
   }
 
   async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }> {
-  const start = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutConfig.short);
-
-  try {
-    const res = await fetch(
-    `${this.baseUrl}/me?projection=(id)`,
-    {
-    headers: {
-    'Authorization': `Bearer ${this.accessToken}`,
-    'X-Restli-Protocol-Version': '2.0.0',
-    },
-    signal: controller.signal,
-    }
-    );
-
-    const latency = Date.now() - start;
-
-    // Only 200-299 status codes indicate a healthy service
-    const healthy = res.ok;
-
-    return {
-    healthy,
-    latency,
-    error: healthy ? undefined : `LinkedIn API returned status ${res.status}`,
-    };
-  } catch (error) {
-    return {
-    healthy: false,
-    latency: Date.now() - start,
-    error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    return this.healthProbe(async (signal) => {
+      return await fetch(`${this.baseUrl}/me?projection=(id)`, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'X-Restli-Protocol-Version': '2.0.0',
+        },
+        signal,
+      });
+    });
   }
 }

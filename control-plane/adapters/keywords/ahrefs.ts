@@ -1,13 +1,12 @@
 import fetch from 'node-fetch';
 
-import { apiConfig, timeoutConfig } from '@config';
-import { StructuredLogger, createRequestContext, MetricsCollector } from '@kernel/request';
+import { apiConfig } from '@config';
 import { validateNonEmptyString } from '@kernel/validation';
 import { withRetry } from '@kernel/retry';
 
 import { KeywordIngestionAdapter, KeywordSuggestion } from './types';
 
-import { AbortController } from 'abort-controller';
+import { BaseExternalAdapter } from '../base';
 
 
 /**
@@ -28,15 +27,13 @@ export interface AhrefsKeywordMetrics {
   parent_topic?: string;
 }
 
-export class AhrefsAdapter implements KeywordIngestionAdapter {
+export class AhrefsAdapter extends BaseExternalAdapter implements KeywordIngestionAdapter {
   readonly source = 'ahrefs';
   private readonly apiToken: string;
   private readonly baseUrl: string;
-  private readonly timeoutMs = timeoutConfig.long;
-  private readonly logger: StructuredLogger;
-  private readonly metrics: MetricsCollector;
 
   constructor(apiToken?: string) {
+  super('AhrefsAdapter');
   this.apiToken = apiToken || process.env['AHREFS_API_TOKEN'] || '';
 
   if (!this.apiToken) {
@@ -44,23 +41,15 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
   }
 
   this.baseUrl = apiConfig.baseUrls.ahrefs;
-  this.logger = new StructuredLogger('AhrefsAdapter');
-  this.metrics = new MetricsCollector('AhrefsAdapter');
   }
 
   /**
   * Fetch keywords for a domain using Ahrefs API
   */
   async fetch(domain: string): Promise<KeywordSuggestion[]> {
-  const context = createRequestContext('AhrefsAdapter', 'fetch');
-
   validateNonEmptyString(domain, 'domain');
 
-  this.logger.info('Fetching keywords from Ahrefs', context, { domain });
-
-  const startTime = Date.now();
-
-  try {
+  return this.instrumented('fetch', async (context) => {
     // Clean domain (remove protocol)
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
@@ -86,11 +75,7 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
 
     if (!response.ok) {
     if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        const error = new Error(`Ahrefs rate limited: ${response.status}`);
-        (error as Error & { status: number; retryAfter?: string }).status = response.status;
-        (error as Error & { status: number; retryAfter?: string | undefined }).retryAfter = retryAfter || undefined;
-        throw error;
+        throw this.createRateLimitError('Ahrefs', response.status, response.headers);
     }
 
     throw new Error(`Ahrefs API error: ${response.status} ${response.statusText}`);
@@ -132,9 +117,6 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     });
     }
 
-    const latency = Date.now() - startTime;
-    this.metrics.recordLatency('fetch', latency, true);
-    this.metrics.recordSuccess('fetch');
     this.logger.info('Successfully fetched keywords from Ahrefs', context, {
     count: suggestions.length
     });
@@ -143,25 +125,17 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     } finally {
     clearTimeout(timeoutId);
     }
-  } catch (error) {
-    const latency = Date.now() - startTime;
-    this.metrics.recordLatency('fetch', latency, false);
-    this.metrics.recordError('fetch', error instanceof Error ? error.name : 'Unknown');
-    this.logger["error"]('Failed to fetch keywords from Ahrefs', context, error as Error);
-    throw error;
-  }
+  }, { domain });
   }
 
   /**
   * Fetch keyword ideas for a seed keyword
   */
   async fetchKeywordIdeas(seedKeyword: string, country: string = 'us'): Promise<KeywordSuggestion[]> {
-  const context = createRequestContext('AhrefsAdapter', 'fetchKeywordIdeas');
-
   validateNonEmptyString(seedKeyword, 'seedKeyword');
   validateNonEmptyString(country, 'country');
 
-  try {
+  return this.instrumented('fetchKeywordIdeas', async (context) => {
     const url = new URL(`${this.baseUrl}/keywords-explorer/ideas`);
     url.searchParams.append('keyword', seedKeyword);
     url.searchParams.append('country', country);
@@ -183,11 +157,7 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
 
     if (!response.ok) {
     if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        const error = new Error(`Ahrefs rate limited: ${response.status}`);
-        (error as Error & { status: number; retryAfter?: string }).status = response.status;
-        (error as Error & { status: number; retryAfter?: string | undefined }).retryAfter = retryAfter || undefined;
-        throw error;
+        throw this.createRateLimitError('Ahrefs', response.status, response.headers);
     }
 
     throw new Error(`Ahrefs API error: ${response.status}`);
@@ -228,53 +198,24 @@ export class AhrefsAdapter implements KeywordIngestionAdapter {
     });
     }
 
-    this.metrics.recordSuccess('fetchKeywordIdeas');
     return suggestions;
     } finally {
     clearTimeout(timeoutId);
     }
-  } catch (error) {
-    this.metrics.recordError('fetchKeywordIdeas', error instanceof Error ? error.name : 'Unknown');
-    this.logger["error"]('Failed to fetch keyword ideas from Ahrefs', context, error as Error);
-    throw error;
-  }
+  }, { seedKeyword, country });
   }
 
-  async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string }> {
-  const start = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutConfig.short);
-
-  try {
-    // Use the API root or a lightweight endpoint for health check
-    const res = await fetch(`${this.baseUrl}/v3/hello`, {
+  async healthCheck(): Promise<{ healthy: boolean; latency: number; error?: string | undefined }> {
+  return this.healthProbe(async (signal) => {
+    return await fetch(`${this.baseUrl}/v3/hello`, {
     method: 'GET',
     headers: {
     'Authorization': `Bearer ${this.apiToken}`,
     'Accept': 'application/json',
     },
-    signal: controller.signal,
+    signal,
     });
-
-    const latency = Date.now() - start;
-
-    // Only 200-299 status codes indicate a healthy service
-    const healthy = res.ok;
-
-    return {
-    healthy,
-    latency,
-    error: healthy ? undefined : `Ahrefs API returned status ${res.status}`,
-    } as { healthy: boolean; latency: number; error?: string } | { healthy: boolean; latency: number; error: string };
-  } catch (error) {
-    return {
-    healthy: false,
-    latency: Date.now() - start,
-    error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  });
   }
 }
 
