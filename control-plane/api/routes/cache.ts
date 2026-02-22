@@ -6,6 +6,7 @@ import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
 import { getGlobalCache } from '@smartbeak/cache';
 import { getLogger } from '@kernel/logger';
+import { errors } from '@errors/responses';
 
 const logger = getLogger('CacheRoutes');
 
@@ -53,11 +54,7 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
 
     const queryResult = CacheKeysQuerySchema.safeParse(req.query);
     if (!queryResult.success) {
-      return res.status(400).send({
-        error: 'Invalid query parameters',
-        code: 'VALIDATION_ERROR',
-        details: queryResult.error.issues,
-      });
+      return errors.validationFailed(res, queryResult.error.issues);
     }
 
     const { pattern, offset, limit } = queryResult.data;
@@ -74,10 +71,7 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
         // P2-FIX: Log the pattern and error so operators can diagnose malformed
         // patterns instead of silently swallowing the failure.
         logger.warn('Cache key pattern compilation failed', { pattern }, patternErr instanceof Error ? patternErr : new Error(String(patternErr)));
-        return res.status(400).send({
-          error: 'Invalid search pattern',
-          code: 'INVALID_PATTERN',
-        });
+        return errors.badRequest(res, 'Invalid search pattern');
       }
     }
 
@@ -94,11 +88,7 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
 
     const paramsResult = CacheKeyParamsSchema.safeParse(req.params);
     if (!paramsResult.success) {
-      return res.status(400).send({
-        error: 'Invalid cache key',
-        code: 'VALIDATION_ERROR',
-        details: paramsResult.error.issues,
-      });
+      return errors.validationFailed(res, paramsResult.error.issues);
     }
 
     const { key } = paramsResult.data;
@@ -121,11 +111,7 @@ export async function cacheRoutes(app: FastifyInstance, _pool: Pool): Promise<vo
 
     const bodyResult = CacheClearBodySchema.safeParse(req.body);
     if (!bodyResult.success) {
-      return res.status(400).send({
-        error: 'Invalid request body',
-        code: 'VALIDATION_ERROR',
-        details: bodyResult.error.issues,
-      });
+      return errors.validationFailed(res, bodyResult.error.issues);
     }
 
     const { tier } = bodyResult.data;

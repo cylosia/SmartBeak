@@ -69,9 +69,6 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   // GET /domains - List all domains for the organization
   app.get('/domains', async (req, res) => {
-  // DM-1-FIX (P1): Auth/validation moved inside try so requireRole/getAuthContext
-  // errors are caught and returned as structured responses instead of raw Fastify 500s.
-  try {
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
@@ -100,55 +97,43 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
 
   const offset = (page - 1) * limit;
 
-  try {
-    // H11-FIX: Filter out archived (soft-deleted) domains by default
-    let query = `SELECT
+  // H11-FIX: Filter out archived (soft-deleted) domains by default
+  let query = `SELECT
     d.id, d.name, d.status, d.created_at, d.updated_at,
     dr.domain_type, dr.revenue_confidence, dr.replaceability
     FROM domains d
     LEFT JOIN domain_registry dr ON d.id = dr.id
     WHERE d.org_id = $1 AND d.archived_at IS NULL
     `;
-    const params: unknown[] = [ctx["orgId"]];
+  const params: unknown[] = [ctx["orgId"]];
 
-    if (status !== 'all') {
+  if (status !== 'all') {
     query += ` AND d.status = $${params.length + 1}`;
     params.push(status);
-    }
-
-    query += ` ORDER BY d.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
-
-    const { rows } = await pool.query(query, params);
-
-    // Transform snake_case to camelCase for frontend
-    const domains = rows.map(row => ({
-      id: row['id'],
-      name: row.name,
-      status: row.status,
-      domainType: row.domain_type,
-      revenueConfidence: row.revenue_confidence,
-      replaceability: row.replaceability,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
-
-    return domains;
-  } catch (error) {
-    logger.error('[domains] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch domains');
   }
-  // Outer catch for DM-1-FIX: catches auth/validation errors above the inner try
-  } catch (error) {
-    logger.error('[domains] Auth/validation error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch domains');
-  }
+
+  query += ` ORDER BY d.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(limit, offset);
+
+  const { rows } = await pool.query(query, params);
+
+  // Transform snake_case to camelCase for frontend
+  const domains = rows.map(row => ({
+    id: row['id'],
+    name: row.name,
+    status: row.status,
+    domainType: row.domain_type,
+    revenueConfidence: row.revenue_confidence,
+    replaceability: row.replaceability,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+
+  return domains;
   });
 
   // GET /domains/allowance - Get domain allowance for organization
   app.get('/domains/allowance', async (req, res) => {
-  // DM-1-FIX (P1) / DM-13-FIX (P2): Auth + getDomainAllowance wrapped in try/catch
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
 
@@ -163,16 +148,10 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
     }
 
     return await pricing.getDomainAllowance(ctx['orgId']);
-  } catch (error) {
-    logger.error('[domains/allowance] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch domain allowance');
-  }
   });
 
   // POST /domains - Create a new domain
   app.post('/domains', async (req, res) => {
-  // DM-1-FIX (P1): Auth/validation inside top-level try to return structured errors
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
 
@@ -268,21 +247,14 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
       try { await client.query('ROLLBACK'); } catch (rollbackError) {
         logger.error('Rollback failed during POST', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
       }
-      logger.error('[domains POST] Error', error instanceof Error ? error : new Error(String(error)));
-      return errors.internal(res, 'Failed to create domain');
+      throw error;
     } finally {
       client.release();
     }
-  } catch (error) {
-    logger.error('[domains POST] Auth/validation error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to create domain');
-  }
   });
 
   // GET /domains/:domainId - Get a specific domain
   app.get('/domains/:domainId', async (req, res) => {
-  // DM-1-FIX (P1): All errors including auth wrapped in single try/catch
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
@@ -328,16 +300,10 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
-  } catch (error) {
-    logger.error('[domains/:domainId] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch domain');
-  }
   });
 
   // PATCH /domains/:domainId - Update a domain
   app.patch('/domains/:domainId', async (req, res) => {
-  // DM-1-FIX (P1): Auth/validation inside try for structured error responses
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin']);
 
@@ -428,21 +394,14 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
       try { await client.query('ROLLBACK'); } catch (rollbackError) {
         logger.error('Rollback failed during PATCH', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
       }
-      logger.error('[domains/:domainId PATCH] Error:', error instanceof Error ? error : new Error(String(error)));
-      return errors.internal(res, 'Failed to update domain');
+      throw error;
     } finally {
       client.release();
     }
-  } catch (error) {
-    logger.error('[domains/:domainId PATCH] Auth/validation error:', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to update domain');
-  }
   });
 
   // DELETE /domains/:domainId - Delete a domain (soft delete)
   app.delete('/domains/:domainId', async (req, res) => {
-  // DM-1-FIX (P1): Auth/validation inside try for structured error responses
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner']);
 
@@ -505,14 +464,9 @@ export async function domainRoutes(app: FastifyInstance, pool: Pool) {
       try { await client.query('ROLLBACK'); } catch (rollbackError) {
         logger.error('Rollback failed during DELETE', rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError)));
       }
-      logger.error('[domains/:domainId DELETE] Error:', error instanceof Error ? error : new Error(String(error)));
-      return errors.internal(res, 'Failed to delete domain');
+      throw error;
     } finally {
       client.release();
     }
-  } catch (error) {
-    logger.error('[domains/:domainId DELETE] Auth/validation error:', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to delete domain');
-  }
   });
 }

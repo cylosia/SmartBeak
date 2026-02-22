@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import { getLogger } from '@kernel/logger';
 import { MediaLifecycleService } from '../../services/media-lifecycle';
-import { requireRole, RoleAccessError, AuthContext } from '../../services/auth';
+import { requireRole, AuthContext } from '../../services/auth';
 import { checkRateLimitAsync } from '../../services/rate-limit';
 import { errors } from '@errors/responses';
 
@@ -40,50 +40,41 @@ export async function mediaLifecycleRoutes(app: FastifyInstance, pool: Pool): Pr
     req: FastifyRequest,
     res: FastifyReply
   ): Promise<void> => {
-    try {
-      const { auth: ctx } = req as AuthenticatedRequest;
-      if (!ctx) {
-        return errors.unauthorized(res);
-      }
-      requireRole(ctx, ['owner', 'admin']);
-      // FIX(P0): Use checkRateLimitAsync to avoid double-send (same issue as media.ts)
-      const rlResult = await checkRateLimitAsync(`admin:media:${ctx.userId}`, 'admin.media');
-      if (!rlResult.allowed) {
-        return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
-      }
-
-      const queryResult = QuerySchema.safeParse(req.query);
-      if (!queryResult.success) {
-        return errors.validationFailed(res, queryResult['error'].issues);
-      }
-
-      const { days } = queryResult.data;
-
-      let hot: number;
-      let coldCandidates: number;
-
-      try {
-        // FIX(P0): Pass orgId — getHotCount now requires tenant scoping
-        hot = await svc.getHotCount(ctx.orgId);
-        coldCandidates = await svc.countColdCandidates(days);
-      } catch (serviceError) {
-        logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
-        return errors.serviceUnavailable(res);
-      }
-
-      const result: LifecycleStats = {
-        hot,
-        coldCandidates
-      };
-
-      return res.send(result);
-    } catch (error) {
-      // P0-3 FIX: Surface RoleAccessError as 403 instead of masking as 500
-      if (error instanceof RoleAccessError) {
-        return errors.forbidden(res, error.message);
-      }
-      logger.error('[media-lifecycle] Unexpected error:', error instanceof Error ? error : new Error(String(error)));
-      return errors.internal(res);
+    const { auth: ctx } = req as AuthenticatedRequest;
+    if (!ctx) {
+      return errors.unauthorized(res);
     }
+    requireRole(ctx, ['owner', 'admin']);
+    // FIX(P0): Use checkRateLimitAsync to avoid double-send (same issue as media.ts)
+    const rlResult = await checkRateLimitAsync(`admin:media:${ctx.userId}`, 'admin.media');
+    if (!rlResult.allowed) {
+      return res.status(429).send({ error: 'Too many requests', retryAfter: Math.ceil((rlResult.resetTime - Date.now()) / 1000) });
+    }
+
+    const queryResult = QuerySchema.safeParse(req.query);
+    if (!queryResult.success) {
+      return errors.validationFailed(res, queryResult['error'].issues);
+    }
+
+    const { days } = queryResult.data;
+
+    let hot: number;
+    let coldCandidates: number;
+
+    try {
+      // FIX(P0): Pass orgId — getHotCount now requires tenant scoping
+      hot = await svc.getHotCount(ctx.orgId);
+      coldCandidates = await svc.countColdCandidates(days);
+    } catch (serviceError) {
+      logger.error('[media-lifecycle] Service error:', serviceError instanceof Error ? serviceError : new Error(String(serviceError)));
+      return errors.serviceUnavailable(res);
+    }
+
+    const result: LifecycleStats = {
+      hot,
+      coldCandidates
+    };
+
+    return res.send(result);
   });
 }

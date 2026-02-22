@@ -4,14 +4,10 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { PublishingCreateJobService } from '../../services/publishing-create-job';
 import { rateLimit } from '../../services/rate-limit';
-import { requireRole, RoleAccessError, type Role } from '../../services/auth';
-import { NotFoundError } from '@errors';
-import { errors, sendError } from '@errors/responses';
-
-const logger = getLogger('publishing-create-job');
+import { requireRole, type Role } from '../../services/auth';
+import { errors } from '@errors/responses';
 
 // P3-FIX: Moved schema and interface to module level.
 // Previously both were redefined inside `publishingCreateJobRoutes` on every
@@ -39,7 +35,6 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
   const svc = new PublishingCreateJobService(pool);
 
   app.post('/publishing/jobs', async (req, res) => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
@@ -71,15 +66,5 @@ export async function publishingCreateJobRoutes(app: FastifyInstance, pool: Pool
     ...(scheduleAt !== undefined && { scheduleAt }),
     });
     return res.status(201).send(result);
-  } catch (error) {
-    if (error instanceof RoleAccessError) {
-    return errors.forbidden(res);
-    }
-    if (error instanceof NotFoundError) {
-    return sendError(res, 404, error.code, error.message);
-    }
-    logger.error('[publishing/jobs] Route error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 }

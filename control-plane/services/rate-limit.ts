@@ -2,6 +2,7 @@ import { LRUCache } from 'lru-cache';
 
 import { getLogger } from '@kernel/logger';
 import { getClientIp as kernelGetClientIp } from '@kernel/ip-utils';
+import { RateLimitError } from '@errors';
 
 import { RedisRateLimiter, getRateLimitConfig } from './rate-limiter-redis';
 
@@ -113,7 +114,8 @@ export function rateLimit(identifier: string, limit: number = DEFAULT_RATE_LIMIT
   memoryCounters.set(key, entry);
 
   if (entry.count > limit) {
-    throw new Error('Rate limit exceeded');
+    const retryAfter = Math.ceil((entry.reset - Date.now()) / 1000);
+    throw new RateLimitError('Rate limit exceeded', retryAfter > 0 ? retryAfter : 60);
   }
 }
 

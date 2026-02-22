@@ -1,16 +1,14 @@
 
 
+
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
 import { getAuthContext } from '../types';
 import { requireRole } from '../../services/auth';
-import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-
-const logger = getLogger('domain-details');
 
 // P2-STRICT-FIX: Added .strict() per CLAUDE.md conventions — reject extra URL params.
 const DomainIdParamSchema = z.object({
@@ -20,11 +18,6 @@ const DomainIdParamSchema = z.object({
 export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
   // GET /domains/:id - Get detailed domain information
   app.get('/domains/:id', async (req, res) => {
-  // P1-FIX: Auth + validation moved inside try so errors from requireRole and
-  // safeParse are caught and returned as structured responses. Previously, .parse()
-  // threw ZodError outside the try block, bypassing the sanitized error handler and
-  // potentially exposing schema internals or auth details in the raw Fastify 500.
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
@@ -84,9 +77,5 @@ export async function domainDetailsRoutes(app: FastifyInstance, pool: Pool) {
     content: contentStats[0],
     },
     };
-  } catch (error) {
-    logger.error('Failed to fetch domain details', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch domain details');
-  }
   });
 }

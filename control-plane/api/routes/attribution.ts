@@ -1,30 +1,26 @@
 
 
+
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
-import { getLogger } from '@kernel/logger';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
-import { errors } from '@errors/responses';
-
-const logger = getLogger('attribution-routes');
 
 export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
   // GET /attribution/llm - LLM attribution report
-  app.get('/attribution/llm', async (req, res) => {
+  app.get('/attribution/llm', async (req, _res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
   // P1-FIX: Include client IP — static 'attribution' key was a shared global bucket.
   await rateLimit(`attribution:${req.ip ?? 'unknown'}`, 50);
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
-  try {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { rows } = await pool.query(
+  const { rows } = await pool.query(
     `SELECT service as source,
         operation as usage,
         COALESCE(SUM(cost), 0) as cost,
@@ -35,9 +31,9 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
     GROUP BY service, operation
     ORDER BY cost DESC`,
     [ctx.orgId, thirtyDaysAgo.toISOString().split('T')[0]]
-    );
+  );
 
-    const report = {
+  const report = {
     citations: rows.map(r => ({
       source: r.source,
       usage: r.usage,
@@ -46,39 +42,28 @@ export async function attributionRoutes(app: FastifyInstance, pool: Pool) {
     })),
     totalCost: rows.reduce((sum: number, r: { cost: string }) => sum + parseFloat(r.cost), 0),
     period: 'last_30_days',
-    };
+  };
 
-    return report;
-  } catch (error) {
-    logger.error('[attribution/llm] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to fetch LLM attribution');
-  }
+  return report;
   });
 
   // GET /attribution/buyer-safe - Buyer-safe attribution summary
-  app.get('/attribution/buyer-safe', async (req, res) => {
+  app.get('/attribution/buyer-safe', async (req, _res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
   // P1-FIX: Include client IP — static 'attribution' key was a shared global bucket.
   await rateLimit(`attribution:${req.ip ?? 'unknown'}`, 50);
   const ctx = getAuthContext(req);
   requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
-  try {
-    // Return anonymized attribution data suitable for buyers
-    const summary = {
+  // Return anonymized attribution data suitable for buyers
+  const summary = {
     aiAssisted: true,
     humanReviewed: true,
     aiPercentage: 40,
     tools: ['GPT-4', 'DALL-E', 'Custom models'],
     disclosure: 'Content is AI-assisted with human editorial oversight',
-    };
+  };
 
-    return summary;
-  } catch (error) {
-    logger.error('[attribution/buyer-safe] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to fetch attribution summary');
-  }
+  return summary;
   });
 }

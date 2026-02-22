@@ -5,10 +5,6 @@ import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { billingConfig } from '@config/billing';
-import { getLogger } from '@kernel/logger';
-import { errors } from '@errors/responses';
-
-const logger = getLogger('billing-invoices');
 
 // P1-FIX: Initialize Stripe eagerly at module load, not lazily per-request.
 // The previous lazy-singleton used a non-atomic check-then-assign that allowed
@@ -22,35 +18,34 @@ const stripe = new Stripe(billingConfig.stripeSecretKey, {
 
 export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /billing/invoices - List invoices for the organization
-  app.get('/billing/invoices', async (req, res) => {
+  app.get('/billing/invoices', async (req, _res) => {
   // SECURITY FIX: Rate limit BEFORE auth to prevent DoS
-  await rateLimit('billing:invoices', 50, req, res);
+  await rateLimit('billing:invoices', 50);
   const ctx = getAuthContext(req);
   // M3-FIX: Restrict invoice access to owner/admin only (was allowing viewers to see financial data)
   requireRole(ctx, ['owner', 'admin']);
 
-  try {
-    // Fetch the organization's Stripe customer ID
-    const { rows: orgRows } = await pool.query(
+  // Fetch the organization's Stripe customer ID
+  const { rows: orgRows } = await pool.query(
     'SELECT stripe_customer_id FROM organizations WHERE id = $1',
     [ctx["orgId"]]
-    );
+  );
 
-    const stripeCustomerId = orgRows[0]?.stripe_customer_id;
+  const stripeCustomerId = orgRows[0]?.stripe_customer_id;
 
-    // If no Stripe customer ID, return empty array
-    if (!stripeCustomerId) {
+  // If no Stripe customer ID, return empty array
+  if (!stripeCustomerId) {
     return { invoices: [] };
-    }
+  }
 
-    const invoices = await stripe.invoices.list({
+  const invoices = await stripe.invoices.list({
     customer: stripeCustomerId,
     limit: 50,
     status: 'paid'
-    });
+  });
 
-    // Transform to frontend-friendly format with camelCase
-    const formattedInvoices = invoices.data.map(inv => ({
+  // Transform to frontend-friendly format with camelCase
+  const formattedInvoices = invoices.data.map(inv => ({
     id: inv["id"],
     number: inv.number,
     amountPaid: inv.amount_paid,
@@ -65,16 +60,9 @@ export async function billingInvoiceRoutes(app: FastifyInstance, pool: Pool) {
     description: inv.description,
     periodStart: inv.period_start ? new Date(inv.period_start * 1000).toISOString() : null,
     periodEnd: inv.period_end ? new Date(inv.period_end * 1000).toISOString() : null,
-    }));
+  }));
 
-    return { invoices: formattedInvoices };
-  } catch (error) {
-    // P2-FIX: Removed silent swallow of 'Stripe'-message errors. Any error whose
-    // message contained "Stripe" was returned as an empty invoice list with no
-    // logging — hiding API key rotations, timeouts, and config failures in prod.
-    logger.error('Error fetching invoices', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch invoices');
-  }
+  return { invoices: formattedInvoices };
   });
 
   // P2-FIX: Removed duplicate GET /billing/invoices/export registration.

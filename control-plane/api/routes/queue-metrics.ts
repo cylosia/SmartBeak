@@ -6,10 +6,7 @@ import { Pool } from 'pg';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
-import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
-
-const logger = getLogger('queue-metrics');
 
 // Interface for queue metrics
 export interface QueueMetrics {
@@ -103,7 +100,6 @@ async function fetchQueueMetrics(pool: Pool, orgId: string): Promise<QueueMetric
 
 export async function queueMetricsRoutes(app: FastifyInstance, pool: Pool) {
   app.get('/admin/queues/metrics', async (req, res) => {
-  try {
     // P1-3 FIX: Rate limit BEFORE auth checks. Previously rate limiting ran
     // after requireRole(), meaning unauthenticated/unauthorized callers could
     // spam auth failures without consuming any rate-limit quota.
@@ -123,12 +119,5 @@ export async function queueMetricsRoutes(app: FastifyInstance, pool: Pool) {
 
     const metrics = await fetchQueueMetrics(pool, ctx['orgId']);
     return res.send(metrics);
-  } catch (error) {
-    // P2-2 FIX: Pass the error object directly — the logger auto-redacts sensitive
-    // fields. Previously the message string was extracted manually, which loses
-    // stack traces and structured fields needed for distributed tracing.
-    logger.error('[admin/queues/metrics] Error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to retrieve queue metrics');
-  }
   });
 }

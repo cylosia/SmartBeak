@@ -1,17 +1,15 @@
 
 
+
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { generateETag, setCacheHeaders } from '../middleware/cache';
 import { getAuthContext } from '../types';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { errors } from '@errors/responses';
-
-const logger = getLogger('affiliate-routes');
 
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -36,10 +34,9 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
   const { page, limit } = queryResult.data;
   const offset = (page - 1) * limit;
 
-  try {
-    // In production, fetch from affiliate APIs (Amazon, CJ, Impact)
-    // For now, return placeholder data with frontend-compatible property names
-    const allOffers = [
+  // In production, fetch from affiliate APIs (Amazon, CJ, Impact)
+  // For now, return placeholder data with frontend-compatible property names
+  const allOffers = [
     {
     id: 'amz-001',
     merchantName: 'Amazon',
@@ -58,13 +55,13 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
     commission: 15.0,
     price: 49.99,
     },
-    ];
+  ];
 
-    // Apply pagination
-    const offers = allOffers.slice(offset, offset + limit);
-    const total = allOffers.length;
+  // Apply pagination
+  const offers = allOffers.slice(offset, offset + limit);
+  const total = allOffers.length;
 
-    const result = {
+  const result = {
     offers,
     pagination: {
     total,
@@ -72,16 +69,11 @@ export async function affiliateRoutes(app: FastifyInstance, _pool: Pool) {
     currentPage: page,
     perPage: limit,
     }
-    };
+  };
 
-    const etag = generateETag(result);
-    setCacheHeaders(res, { etag, maxAge: 300, private: true });
+  const etag = generateETag(result);
+  setCacheHeaders(res, { etag, maxAge: 300, private: true });
 
-    return result;
-  } catch (error) {
-    logger.error('[affiliates/offers] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to fetch affiliate offers');
-  }
+  return result;
   });
 }

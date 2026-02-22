@@ -1,16 +1,13 @@
 
 
+
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
-import { getLogger } from '@kernel/logger';
 
 import { rateLimit } from '../../services/rate-limit';
 import { getClientIp } from '@kernel/ip-utils';
 import { errors } from '@errors/responses';
-
-// H14-FIX: Use structured logger instead of console.error
-const logger = getLogger('diligence-routes');
 
 const TokenParamSchema = z.object({
   token: z.string().min(10).max(100).regex(/^[a-zA-Z0-9_-]+$/)
@@ -19,9 +16,6 @@ const TokenParamSchema = z.object({
 export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
   // GET /diligence/:token/overview - Get diligence overview for buyer
   app.get('/diligence/:token/overview', async (req, res) => {
-  try {
-    // C1-FIX: parse and rateLimit moved inside try so Zod/Redis errors
-    // return a structured 400 instead of crashing the process.
     const tokenResult = TokenParamSchema.safeParse(req.params);
     if (!tokenResult.success) {
       return errors.badRequest(res, 'Invalid token format');
@@ -93,16 +87,10 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     };
 
     return overview;
-  } catch (error) {
-    logger.error('Diligence overview error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch diligence overview');
-  }
   });
 
   // GET /diligence/:token/affiliate-revenue - Get affiliate revenue breakdown
   app.get('/diligence/:token/affiliate-revenue', async (req, res) => {
-  try {
-    // C1-FIX: parse and rateLimit moved inside try so Zod/Redis errors return 400.
     const tokenResult = TokenParamSchema.safeParse(req.params);
     if (!tokenResult.success) {
       return errors.badRequest(res, 'Invalid token format');
@@ -146,9 +134,5 @@ export async function diligenceRoutes(app: FastifyInstance, pool: Pool) {
     estimated: r.estimated_monthly,
     })),
     };
-  } catch (error) {
-    logger.error('Diligence affiliate-revenue error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to fetch affiliate revenue');
-  }
   });
 }

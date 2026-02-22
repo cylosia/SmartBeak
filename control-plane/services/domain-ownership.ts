@@ -3,16 +3,34 @@
 import { Pool, PoolClient } from 'pg';
 
 import { getLogger } from '@kernel/logger';
+import { AppError, ForbiddenError, NotFoundError, ConflictError, ErrorCodes } from '@errors';
 
 const logger = getLogger('domain-ownership');
 
-// P2-FIX: Proper class instead of `new Error(...) as DomainError` cast.
-// The old cast produces objects where `instanceof DomainError` returns false,
-// silently breaking any caller that type-narrows on it.
-export class DomainError extends Error {
-  constructor(message: string, public readonly code: string) {
-    super(message);
+/**
+ * Domain-specific error that extends AppError for proper HTTP error handling.
+ * Maps domain error codes to appropriate HTTP status codes so the global
+ * Fastify error handler returns the correct response without per-route
+ * try/catch blocks.
+ */
+export class DomainError extends AppError {
+  constructor(message: string, code: string) {
+    const { statusCode, errorCode } = DomainError.mapCode(code);
+    super(message, errorCode, statusCode);
     this.name = 'DomainError';
+  }
+
+  private static mapCode(code: string): { statusCode: number; errorCode: typeof ErrorCodes[keyof typeof ErrorCodes] } {
+    switch (code) {
+      case 'DOMAIN_NOT_FOUND':
+        return { statusCode: 404, errorCode: ErrorCodes.DOMAIN_NOT_FOUND };
+      case 'DOMAIN_NOT_OWNED':
+        return { statusCode: 403, errorCode: ErrorCodes.DOMAIN_NOT_OWNED };
+      case 'TRANSFER_FAILED':
+        return { statusCode: 409, errorCode: ErrorCodes.CONFLICT };
+      default:
+        return { statusCode: 403, errorCode: ErrorCodes.FORBIDDEN };
+    }
   }
 }
 

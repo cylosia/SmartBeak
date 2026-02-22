@@ -5,11 +5,8 @@ import { z } from 'zod';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
-import { getLogger } from '@kernel/logger';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-
-const logger = getLogger('timeline');
 
 const DomainParamsSchema = z.object({
   domainId: z.string().uuid(),
@@ -101,34 +98,26 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex}`;
     params.push(limit);
 
-    // FIXED (TIMELINE-ROUTE-2): Wrap DB query in try/catch to prevent raw pg errors leaking
     // FIXED (TIMELINE-TIMEOUT-1): Race against 30 s wall-clock to prevent connection pool
     // exhaustion from slow/hung PostgreSQL backends.
-    try {
-      const queryPromise = pool.query(`SELECT ${query}`, params);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeline query timeout after 30s')), 30000)
-      );
-      const { rows } = await Promise.race([queryPromise, timeoutPromise]);
+    const queryPromise = pool.query(`SELECT ${query}`, params);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeline query timeout after 30s')), 30000)
+    );
+    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
 
-      return {
-        events: rows.map(row => ({
-          id: row['id'],
-          action: row['action'],
-          entityType: row['entity_type'],
-          entityId: row['entity_id'],
-          domainName: row['domain_name'],
-          createdAt: row['created_at'],
-        })),
-        // NOTE: `returned` is the count of rows in this page (capped by `limit`).
-        // This is NOT the total record count. Use cursor-based pagination for full counts.
-        returned: rows.length,
-        filters: { startDate, endDate, action, entityType },
-      };
-    } catch (dbErr) {
-      logger.error('Timeline org query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
-      return errors.internal(res, 'Failed to fetch timeline');
-    }
+    return {
+      events: rows.map(row => ({
+        id: row['id'],
+        action: row['action'],
+        entityType: row['entity_type'],
+        entityId: row['entity_id'],
+        domainName: row['domain_name'],
+        createdAt: row['created_at'],
+      })),
+      returned: rows.length,
+      filters: { startDate, endDate, action, entityType },
+    };
   });
 
   // GET /timeline/domain/:domainId - Get domain-specific timeline
@@ -208,32 +197,24 @@ export async function timelineRoutes(app: FastifyInstance, pool: Pool) {
     query += ` ORDER BY al.created_at DESC LIMIT $${paramIndex}`;
     params.push(limit);
 
-    // FIXED (TIMELINE-ROUTE-2): Wrap DB query in try/catch to prevent raw pg errors leaking
-    // FIXED (TIMELINE-ROUTE-4): metadata column removed from SELECT — raw JSONB must not be
-    //   returned to API consumers without schema validation (XSS and info-disclosure risk).
     // FIXED (TIMELINE-TIMEOUT-2): Race against 30 s wall-clock to prevent connection pool
     // exhaustion from slow/hung PostgreSQL backends.
-    try {
-      const queryPromise = pool.query(`SELECT ${query}`, params);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Domain timeline query timeout after 30s')), 30000)
-      );
-      const { rows } = await Promise.race([queryPromise, timeoutPromise]);
+    const queryPromise = pool.query(`SELECT ${query}`, params);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Domain timeline query timeout after 30s')), 30000)
+    );
+    const { rows } = await Promise.race([queryPromise, timeoutPromise]);
 
-      return {
-        events: rows.map(row => ({
-          id: row['id'],
-          action: row['action'],
-          entityType: row['entity_type'],
-          entityId: row['entity_id'],
-          createdAt: row['created_at'],
-        })),
-        returned: rows.length,
-        filters: { startDate, endDate, action, entityType },
-      };
-    } catch (dbErr) {
-      logger.error('Timeline domain query failed', dbErr instanceof Error ? dbErr : new Error(String(dbErr)));
-      return errors.internal(res, 'Failed to fetch timeline');
-    }
+    return {
+      events: rows.map(row => ({
+        id: row['id'],
+        action: row['action'],
+        entityType: row['entity_type'],
+        entityId: row['entity_id'],
+        createdAt: row['created_at'],
+      })),
+      returned: rows.length,
+      filters: { startDate, endDate, action, entityType },
+    };
   });
 }

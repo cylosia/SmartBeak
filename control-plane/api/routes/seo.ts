@@ -5,8 +5,6 @@ import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
-
 import { PostgresSeoRepository } from '../../../domains/seo/infra/persistence/PostgresSeoRepository';
 import { rateLimit } from '../../services/rate-limit';
 import { requireRole } from '../../services/auth';
@@ -14,8 +12,6 @@ import { getAuthContext } from '../types';
 import { UpdateSeo } from '../../../domains/seo/application/handlers/UpdateSeo';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
-
-const logger = getLogger('seo-routes');
 
 async function verifyContentOwnership(userId: string, contentId: string, pool: Pool): Promise<boolean> {
   const result = await pool.query(
@@ -42,8 +38,7 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
   });
 
   app.post('/seo/:id', async (req, res) => {
-  try {
-    await rateLimit('seo', 50, req, res);
+    await rateLimit('seo', 50);
     const ctx = getAuthContext(req);
     requireRole(ctx, ['admin', 'editor']);
 
@@ -75,9 +70,5 @@ export async function seoRoutes(app: FastifyInstance, pool: Pool): Promise<void>
     // Route handlers must only expose public API surface.
     await handler.execute(id, title, description);
     return res.send({ ok: true });
-  } catch (error) {
-    logger.error('[seo] Route error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res);
-  }
   });
 }

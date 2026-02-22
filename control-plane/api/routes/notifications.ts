@@ -1,5 +1,6 @@
 
 
+
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
@@ -45,7 +46,6 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
   req: FastifyRequest,
   res: FastifyReply
   ): Promise<void> => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
@@ -118,18 +118,12 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     totalPages: Math.ceil(total / limit),
     }
     });
-  } catch (error) {
-    logger.error('[notifications] Unexpected error', error instanceof Error ? error : new Error(String(error)));
-    // P1-FIX: Removed error.message leak to client
-    return errors.internal(res);
-  }
   });
 
   app.get('/notifications/preferences', async (
   req: FastifyRequest,
   res: FastifyReply
   ): Promise<void> => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
@@ -144,18 +138,12 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     return errors.internal(res, 'Failed to fetch preferences');
     }
     return res.send(result.preferences ?? []);
-  } catch (error) {
-    logger.error('[notifications/preferences] Error', error instanceof Error ? error : new Error(String(error)));
-    // P1-FIX: Removed error.message leak to client
-    return errors.internal(res, 'Failed to fetch preferences');
-  }
   });
 
   app.post('/notifications/preferences', async (
   req: FastifyRequest,
   res: FastifyReply
   ): Promise<void> => {
-  try {
     const { auth: ctx } = req as AuthenticatedRequest;
     if (!ctx) {
     return errors.unauthorized(res);
@@ -190,9 +178,5 @@ export async function notificationRoutes(app: FastifyInstance, pool: Pool): Prom
     enabled: pref.isEnabled(),
     frequency: pref.frequency,
     } : null);
-  } catch (error) {
-    logger.error('[notifications/preferences] Update error', error instanceof Error ? error : new Error(String(error)));
-    return errors.internal(res, 'Failed to update preferences');
-  }
   });
 }

@@ -1,15 +1,16 @@
 
 
+
 import { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
-import { getLogger } from '@kernel/logger';
 import { checkRateLimitAsync } from '../../services/rate-limit';
-import { requireRole, RoleAccessError } from '../../services/auth';
+import { requireRole } from '../../services/auth';
 import { getAuthContext } from '../types';
 import { errors } from '@errors/responses';
 import { ErrorCodes } from '@errors';
+import { getLogger } from '@kernel/logger';
 
 const AssetParamsSchema = z.object({
   assetId: z.string().uuid(),
@@ -25,7 +26,6 @@ async function verifyAssetOwnership(orgId: string, assetId: string, pool: Pool):
 export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<void> {
   // GET /roi-risk/:assetId - Get ROI and risk analysis for an asset
   app.get('/roi-risk/:assetId', async (req, res) => {
-  try {
     const ctx = getAuthContext(req);
     requireRole(ctx, ['owner', 'admin', 'editor', 'viewer']);
 
@@ -121,13 +121,5 @@ export async function roiRiskRoutes(app: FastifyInstance, pool: Pool): Promise<v
     };
 
     return analysis;
-  } catch (error) {
-    if (error instanceof RoleAccessError) {
-    return errors.forbidden(res);
-    }
-    logger.error('[roi-risk] Error', error instanceof Error ? error : new Error(String(error)));
-    // FIX: Added return before reply.send()
-    return errors.internal(res, 'Failed to fetch ROI/Risk analysis');
-  }
   });
 }
