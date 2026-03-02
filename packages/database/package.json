@@ -1,11 +1,11 @@
 {
 	"dependencies": {
-		"@paralleldrive/cuid2": "^3.1.0",
-		"@prisma/adapter-pg": "^6.19.0",
-		"@prisma/client": "7.1.0",
-		"drizzle-orm": "^0.44.7",
+		"@paralleldrive/cuid2": "^3.3.0",
+		"@prisma/adapter-pg": "^7.4.2",
+		"@prisma/client": "7.4.2",
+		"drizzle-orm": "^0.45.1",
 		"drizzle-zod": "0.8.3",
-		"pg": "^8.16.0",
+		"pg": "^8.19.0",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
