@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-03-02 v2.0.4
+
+### Dependency updates
+
+#### oRPC upgrade
+- **@orpc packages**: Upgraded from 1.13.2 to 1.13.6 across the monorepo
+- **apps/web**: Updated `@orpc/client` to 1.13.6
+- **packages/api**: Updated `@orpc/client`, `@orpc/json-schema`, `@orpc/openapi`, `@orpc/server`, and `@orpc/zod` to 1.13.6
+
+---
+
 ## 2026-02-05 v2.0.3
 
 ### Radix UI dependency consolidation
