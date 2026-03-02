@@ -12,14 +12,21 @@ import { useSession } from "@saas/auth/hooks/use-session";
 import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
 import { UserMenu } from "@saas/shared/components/UserMenu";
 import {
+	BarChart2Icon,
 	BotMessageSquareIcon,
 	ChevronRightIcon,
+	FileTextIcon,
+	GlobeIcon,
 	HomeIcon,
 	PanelLeftCloseIcon,
 	PanelLeftOpenIcon,
+	ReceiptIcon,
+	RocketIcon,
 	SettingsIcon,
+	ShieldIcon,
 	UserCog2Icon,
 	UserCogIcon,
+	ZapIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -48,6 +55,54 @@ export function NavBar() {
 			icon: HomeIcon,
 			isActive: pathname === basePath,
 		},
+		// ── SmartBeak core ──────────────────────────────────────────────
+		...(activeOrganization
+			? [
+					{
+						label: "Dashboard",
+						href: `${basePath}/dashboard`,
+						icon: BarChart2Icon,
+						isActive: pathname.startsWith(`${basePath}/dashboard`),
+					},
+					{
+						label: "Domains",
+						href: `${basePath}/domains`,
+						icon: GlobeIcon,
+						isActive: pathname.startsWith(`${basePath}/domains`),
+					},
+					{
+						label: "Portfolio",
+						href: `${basePath}/portfolio`,
+						icon: RocketIcon,
+						isActive: pathname.startsWith(`${basePath}/portfolio`),
+					},
+					{
+						label: "Billing",
+						href: `${basePath}/billing`,
+						icon: ReceiptIcon,
+						isActive: pathname.startsWith(`${basePath}/billing`),
+					},
+					{
+						label: "SmartDeploy",
+						href: `${basePath}/smart-deploy`,
+						icon: ZapIcon,
+						isActive: pathname.startsWith(`${basePath}/smart-deploy`),
+					},
+					{
+						label: "Audit Log",
+						href: `${basePath}/audit`,
+						icon: ShieldIcon,
+						isActive: pathname.startsWith(`${basePath}/audit`),
+					},
+					{
+						label: "Get Started",
+						href: `${basePath}/onboarding-wizard`,
+						icon: FileTextIcon,
+						isActive: pathname.startsWith(`${basePath}/onboarding-wizard`),
+					},
+				]
+			: []),
+		// ── AI Chatbot ───────────────────────────────────────────────────
 		{
 			label: t("app.menu.aiChatbot"),
 			href: activeOrganization
@@ -56,6 +111,7 @@ export function NavBar() {
 			icon: BotMessageSquareIcon,
 			isActive: pathname.includes("/chatbot"),
 		},
+		// ── Settings ─────────────────────────────────────────────────────
 		...(activeOrganization && isOrganizationAdmin
 			? [
 					{

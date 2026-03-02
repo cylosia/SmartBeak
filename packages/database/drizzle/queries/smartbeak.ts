@@ -1,0 +1,872 @@
+/**
+ * SmartBeak v9 — Database Query Functions
+ * All queries use the locked v9 schema from smartbeak.ts.
+ * Do NOT modify table/column names here — they must match the schema exactly.
+ */
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { db } from "../client";
+import {
+  auditEvents,
+  buyerSessions,
+  contentItems,
+  contentRevisions,
+  diligenceChecks,
+  domains,
+  featureFlags,
+  guardrails,
+  integrations,
+  invoices,
+  keywordTracking,
+  mediaAssets,
+  monetizationDecaySignals,
+  onboardingProgress,
+  organizationMembers,
+  organizations,
+  portfolioSummaries,
+  publishAttempts,
+  publishTargets,
+  publishingJobs,
+  seoDocuments,
+  siteShards,
+  subscriptions,
+  timelineEvents,
+  usageRecords,
+  webhookEvents,
+} from "../schema/smartbeak";
+
+// ─── Organizations ────────────────────────────────────────────────────────────
+
+export async function getSmartBeakOrgBySlug(slug: string) {
+  return db.query.organizations.findFirst({
+    where: (o, { eq }) => eq(o.slug, slug),
+  });
+}
+
+export async function getSmartBeakOrgById(id: string) {
+  return db.query.organizations.findFirst({
+    where: (o, { eq }) => eq(o.id, id),
+  });
+}
+
+export async function upsertSmartBeakOrg(data: {
+  id: string;
+  name: string;
+  slug: string;
+  settings?: Record<string, unknown>;
+}) {
+  return db
+    .insert(organizations)
+    .values(data)
+    .onConflictDoUpdate({
+      target: organizations.id,
+      set: { name: data.name, settings: data.settings ?? {} },
+    })
+    .returning();
+}
+
+// ─── Organization Members ─────────────────────────────────────────────────────
+
+export async function getSmartBeakOrgMembers(orgId: string) {
+  return db.query.organizationMembers.findMany({
+    where: (m, { eq }) => eq(m.orgId, orgId),
+  });
+}
+
+export async function getSmartBeakOrgMember(orgId: string, userId: string) {
+  return db.query.organizationMembers.findFirst({
+    where: (m, { and, eq }) =>
+      and(eq(m.orgId, orgId), eq(m.userId, userId)),
+  });
+}
+
+export async function upsertSmartBeakOrgMember(data: {
+  orgId: string;
+  userId: string;
+  role: "owner" | "admin" | "editor" | "viewer";
+}) {
+  return db
+    .insert(organizationMembers)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [organizationMembers.orgId, organizationMembers.userId],
+      set: { role: data.role },
+    })
+    .returning();
+}
+
+// ─── Domains ──────────────────────────────────────────────────────────────────
+
+export async function getDomainsForOrg(
+  orgId: string,
+  opts?: { query?: string; limit?: number; offset?: number },
+) {
+  return db.query.domains.findMany({
+    where: (d, { eq, and, ilike, or }) =>
+      opts?.query
+        ? and(eq(d.orgId, orgId), ilike(d.name, `%${opts.query}%`))
+        : eq(d.orgId, orgId),
+    limit: opts?.limit ?? 50,
+    offset: opts?.offset ?? 0,
+    orderBy: (d, { desc }) => [desc(d.createdAt)],
+  });
+}
+
+export async function countDomainsForOrg(orgId: string) {
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(domains)
+    .where(eq(domains.orgId, orgId));
+  return Number(result[0]?.count ?? 0);
+}
+
+export async function getDomainById(id: string) {
+  return db.query.domains.findFirst({
+    where: (d, { eq }) => eq(d.id, id),
+  });
+}
+
+export async function getDomainBySlug(slug: string) {
+  return db.query.domains.findFirst({
+    where: (d, { eq }) => eq(d.slug, slug),
+  });
+}
+
+export async function createDomain(data: {
+  orgId: string;
+  name: string;
+  slug: string;
+  themeId?: string;
+}) {
+  return db.insert(domains).values(data).returning();
+}
+
+export async function updateDomain(
+  id: string,
+  data: Partial<{
+    name: string;
+    status: "active" | "pending" | "suspended" | "deployed";
+    themeId: string;
+    deployedUrl: string | null;
+    registryData: Record<string, unknown> | null;
+    health: Record<string, unknown> | null;
+    lifecycle: Record<string, unknown> | null;
+  }>,
+) {
+  return db
+    .update(domains)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(domains.id, id))
+    .returning();
+}
+
+export async function deleteDomain(id: string) {
+  return db.delete(domains).where(eq(domains.id, id));
+}
+
+// ─── Content Items ────────────────────────────────────────────────────────────
+
+export async function getContentItemsForDomain(
+  domainId: string,
+  opts?: {
+    status?: "draft" | "published" | "scheduled" | "archived";
+    limit?: number;
+    offset?: number;
+    query?: string;
+  },
+) {
+  return db.query.contentItems.findMany({
+    where: (c, { eq, and, ilike, isNull }) => {
+      const conditions = [eq(c.domainId, domainId), isNull(c.deletedAt)];
+      if (opts?.status) conditions.push(eq(c.status, opts.status));
+      if (opts?.query) conditions.push(ilike(c.title, `%${opts.query}%`));
+      return and(...conditions);
+    },
+    limit: opts?.limit ?? 50,
+    offset: opts?.offset ?? 0,
+    orderBy: (c, { desc }) => [desc(c.updatedAt)],
+  });
+}
+
+export async function countContentItemsForDomain(
+  domainId: string,
+  status?: "draft" | "published" | "scheduled" | "archived",
+) {
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(contentItems)
+    .where(
+      status
+        ? and(
+            eq(contentItems.domainId, domainId),
+            eq(contentItems.status, status),
+            sql`${contentItems.deletedAt} IS NULL`,
+          )
+        : and(
+            eq(contentItems.domainId, domainId),
+            sql`${contentItems.deletedAt} IS NULL`,
+          ),
+    );
+  return Number(result[0]?.count ?? 0);
+}
+
+export async function getContentItemById(id: string) {
+  return db.query.contentItems.findFirst({
+    where: (c, { eq }) => eq(c.id, id),
+  });
+}
+
+export async function createContentItem(data: {
+  domainId: string;
+  title: string;
+  body?: string;
+  status?: "draft" | "published" | "scheduled" | "archived";
+  createdBy?: string;
+}) {
+  return db.insert(contentItems).values(data).returning();
+}
+
+export async function updateContentItem(
+  id: string,
+  data: Partial<{
+    title: string;
+    body: string | null;
+    status: "draft" | "published" | "scheduled" | "archived";
+    revisions: unknown[];
+    publishedAt: Date | null;
+    scheduledFor: Date | null;
+    version: number;
+    updatedBy: string;
+  }>,
+) {
+  return db
+    .update(contentItems)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(contentItems.id, id))
+    .returning();
+}
+
+export async function softDeleteContentItem(id: string) {
+  return db
+    .update(contentItems)
+    .set({ deletedAt: new Date() })
+    .where(eq(contentItems.id, id))
+    .returning();
+}
+
+// ─── Content Revisions ────────────────────────────────────────────────────────
+
+export async function getContentRevisions(contentId: string) {
+  return db.query.contentRevisions.findMany({
+    where: (r, { eq }) => eq(r.contentId, contentId),
+    orderBy: (r, { desc }) => [desc(r.version)],
+  });
+}
+
+export async function createContentRevision(data: {
+  contentId: string;
+  version: number;
+  body?: string;
+  changedBy?: string;
+}) {
+  return db.insert(contentRevisions).values(data).returning();
+}
+
+// ─── Media Assets ─────────────────────────────────────────────────────────────
+
+export async function getMediaAssetsForDomain(
+  domainId: string,
+  opts?: { limit?: number; offset?: number; type?: string },
+) {
+  return db.query.mediaAssets.findMany({
+    where: (m, { eq, and }) =>
+      opts?.type
+        ? and(eq(m.domainId, domainId), eq(m.type, opts.type))
+        : eq(m.domainId, domainId),
+    limit: opts?.limit ?? 50,
+    offset: opts?.offset ?? 0,
+    orderBy: (m, { desc }) => [desc(m.createdAt)],
+  });
+}
+
+export async function getMediaAssetById(id: string) {
+  return db.query.mediaAssets.findFirst({
+    where: (m, { eq }) => eq(m.id, id),
+  });
+}
+
+export async function createMediaAsset(data: {
+  domainId: string;
+  fileName: string;
+  url: string;
+  type: string;
+  size?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  return db.insert(mediaAssets).values(data).returning();
+}
+
+export async function updateMediaAsset(
+  id: string,
+  data: Partial<{
+    lifecycle: Record<string, unknown> | null;
+    metadata: Record<string, unknown> | null;
+  }>,
+) {
+  return db
+    .update(mediaAssets)
+    .set(data)
+    .where(eq(mediaAssets.id, id))
+    .returning();
+}
+
+export async function deleteMediaAsset(id: string) {
+  return db.delete(mediaAssets).where(eq(mediaAssets.id, id));
+}
+
+// ─── Publish Targets ──────────────────────────────────────────────────────────
+
+export async function getPublishTargetsForDomain(domainId: string) {
+  return db.query.publishTargets.findMany({
+    where: (t, { eq }) => eq(t.domainId, domainId),
+  });
+}
+
+export async function createPublishTarget(data: {
+  domainId: string;
+  target:
+    | "web"
+    | "linkedin"
+    | "facebook"
+    | "instagram"
+    | "youtube"
+    | "wordpress"
+    | "email"
+    | "tiktok"
+    | "pinterest"
+    | "vimeo"
+    | "soundcloud";
+  encryptedConfig: Buffer;
+  enabled?: boolean;
+}) {
+  return db.insert(publishTargets).values(data).returning();
+}
+
+export async function updatePublishTarget(
+  id: string,
+  data: Partial<{ enabled: boolean; encryptedConfig: Buffer }>,
+) {
+  return db
+    .update(publishTargets)
+    .set(data)
+    .where(eq(publishTargets.id, id))
+    .returning();
+}
+
+export async function deletePublishTarget(id: string) {
+  return db.delete(publishTargets).where(eq(publishTargets.id, id));
+}
+
+// ─── Publishing Jobs ──────────────────────────────────────────────────────────
+
+export async function getPublishingJobsForDomain(
+  domainId: string,
+  opts?: { limit?: number; offset?: number },
+) {
+  return db.query.publishingJobs.findMany({
+    where: (j, { eq }) => eq(j.domainId, domainId),
+    limit: opts?.limit ?? 50,
+    offset: opts?.offset ?? 0,
+    orderBy: (j, { desc }) => [desc(j.createdAt)],
+  });
+}
+
+export async function getPublishingJobById(id: string) {
+  return db.query.publishingJobs.findFirst({
+    where: (j, { eq }) => eq(j.id, id),
+  });
+}
+
+export async function createPublishingJob(data: {
+  contentId?: string;
+  domainId: string;
+  target:
+    | "web"
+    | "linkedin"
+    | "facebook"
+    | "instagram"
+    | "youtube"
+    | "wordpress"
+    | "email"
+    | "tiktok"
+    | "pinterest"
+    | "vimeo"
+    | "soundcloud";
+  scheduledFor?: Date;
+}) {
+  return db.insert(publishingJobs).values(data).returning();
+}
+
+export async function updatePublishingJob(
+  id: string,
+  data: Partial<{
+    status: string;
+    executedAt: Date | null;
+    error: string | null;
+  }>,
+) {
+  return db
+    .update(publishingJobs)
+    .set(data)
+    .where(eq(publishingJobs.id, id))
+    .returning();
+}
+
+export async function createPublishAttempt(data: {
+  jobId: string;
+  status: string;
+  response?: Record<string, unknown>;
+}) {
+  return db.insert(publishAttempts).values(data).returning();
+}
+
+export async function getPublishAttemptsForJob(jobId: string) {
+  return db.query.publishAttempts.findMany({
+    where: (a, { eq }) => eq(a.jobId, jobId),
+    orderBy: (a, { desc }) => [desc(a.attemptedAt)],
+  });
+}
+
+// ─── SEO Documents ────────────────────────────────────────────────────────────
+
+export async function getSeoDocumentForDomain(domainId: string) {
+  return db.query.seoDocuments.findFirst({
+    where: (s, { eq }) => eq(s.domainId, domainId),
+  });
+}
+
+export async function upsertSeoDocument(data: {
+  domainId: string;
+  keywords?: unknown[];
+  gscData?: Record<string, unknown> | null;
+  ahrefsData?: Record<string, unknown> | null;
+  decaySignals?: Record<string, unknown> | null;
+  score?: number;
+}) {
+  return db
+    .insert(seoDocuments)
+    .values(data)
+    .onConflictDoUpdate({
+      target: seoDocuments.domainId,
+      set: {
+        keywords: data.keywords ?? [],
+        gscData: data.gscData,
+        ahrefsData: data.ahrefsData,
+        decaySignals: data.decaySignals,
+        score: data.score ?? 0,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+}
+
+// ─── Keyword Tracking ─────────────────────────────────────────────────────────
+
+export async function getKeywordsForDomain(domainId: string) {
+  return db.query.keywordTracking.findMany({
+    where: (k, { eq }) => eq(k.domainId, domainId),
+    orderBy: (k, { desc }) => [desc(k.lastUpdated)],
+  });
+}
+
+export async function upsertKeyword(data: {
+  domainId: string;
+  keyword: string;
+  volume?: number;
+  difficulty?: number;
+  position?: number;
+  decayFactor?: string;
+}) {
+  return db.insert(keywordTracking).values(data).returning();
+}
+
+export async function deleteKeyword(id: string) {
+  return db.delete(keywordTracking).where(eq(keywordTracking.id, id));
+}
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+
+export async function getSubscriptionForOrg(orgId: string) {
+  return db.query.subscriptions.findFirst({
+    where: (s, { eq }) => eq(s.orgId, orgId),
+  });
+}
+
+export async function upsertSubscription(data: {
+  orgId: string;
+  stripeSubscriptionId?: string;
+  status?: string;
+  plan: string;
+  currentPeriodEnd?: Date;
+}) {
+  return db
+    .insert(subscriptions)
+    .values(data)
+    .onConflictDoUpdate({
+      target: subscriptions.stripeSubscriptionId,
+      set: {
+        status: data.status ?? "active",
+        plan: data.plan,
+        currentPeriodEnd: data.currentPeriodEnd,
+      },
+    })
+    .returning();
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
+export async function getInvoicesForOrg(
+  orgId: string,
+  opts?: { limit?: number; offset?: number },
+) {
+  return db.query.invoices.findMany({
+    where: (i, { eq }) => eq(i.orgId, orgId),
+    limit: opts?.limit ?? 50,
+    offset: opts?.offset ?? 0,
+    orderBy: (i, { desc }) => [desc(i.createdAt)],
+  });
+}
+
+export async function createInvoice(data: {
+  orgId: string;
+  stripeInvoiceId?: string;
+  amountCents: number;
+  status?: string;
+  pdfUrl?: string;
+}) {
+  return db.insert(invoices).values(data).returning();
+}
+
+// ─── Usage Records ────────────────────────────────────────────────────────────
+
+export async function getUsageRecordsForOrg(
+  orgId: string,
+  opts?: { metric?: string; limit?: number },
+) {
+  return db.query.usageRecords.findMany({
+    where: (u, { eq, and }) =>
+      opts?.metric
+        ? and(eq(u.orgId, orgId), eq(u.metric, opts.metric))
+        : eq(u.orgId, orgId),
+    limit: opts?.limit ?? 100,
+    orderBy: (u, { desc }) => [desc(u.recordedAt)],
+  });
+}
+
+export async function createUsageRecord(data: {
+  orgId: string;
+  metric: string;
+  value: number;
+}) {
+  return db.insert(usageRecords).values(data).returning();
+}
+
+// ─── Monetization Decay Signals ───────────────────────────────────────────────
+
+export async function getDecaySignalsForDomain(domainId: string) {
+  return db.query.monetizationDecaySignals.findMany({
+    where: (d, { eq }) => eq(d.domainId, domainId),
+    orderBy: (d, { desc }) => [desc(d.recordedAt)],
+    limit: 30,
+  });
+}
+
+export async function createDecaySignal(data: {
+  domainId: string;
+  decayFactor: string;
+  signalType: string;
+}) {
+  return db.insert(monetizationDecaySignals).values(data).returning();
+}
+
+// ─── Site Shards ──────────────────────────────────────────────────────────────
+
+export async function getSiteShardsForDomain(domainId: string) {
+  return db.query.siteShards.findMany({
+    where: (s, { eq }) => eq(s.domainId, domainId),
+    orderBy: (s, { desc }) => [desc(s.version)],
+  });
+}
+
+export async function createSiteShard(data: {
+  domainId: string;
+  version: number;
+  deployedUrl?: string;
+  status?: string;
+}) {
+  return db.insert(siteShards).values(data).returning();
+}
+
+export async function updateSiteShard(
+  id: string,
+  data: Partial<{ deployedUrl: string; status: string }>,
+) {
+  return db
+    .update(siteShards)
+    .set(data)
+    .where(eq(siteShards.id, id))
+    .returning();
+}
+
+// ─── Diligence Checks ─────────────────────────────────────────────────────────
+
+export async function getDiligenceChecksForDomain(domainId: string) {
+  return db.query.diligenceChecks.findMany({
+    where: (d, { eq }) => eq(d.domainId, domainId),
+    orderBy: (d, { desc }) => [desc(d.completedAt)],
+  });
+}
+
+export async function createDiligenceCheck(data: {
+  domainId: string;
+  type: string;
+  result?: Record<string, unknown>;
+  status?: string;
+}) {
+  return db.insert(diligenceChecks).values(data).returning();
+}
+
+export async function updateDiligenceCheck(
+  id: string,
+  data: Partial<{
+    result: Record<string, unknown>;
+    status: string;
+    completedAt: Date;
+  }>,
+) {
+  return db
+    .update(diligenceChecks)
+    .set(data)
+    .where(eq(diligenceChecks.id, id))
+    .returning();
+}
+
+// ─── Portfolio Summaries ──────────────────────────────────────────────────────
+
+export async function getPortfolioSummaryForOrg(orgId: string) {
+  return db.query.portfolioSummaries.findFirst({
+    where: (p, { eq }) => eq(p.orgId, orgId),
+  });
+}
+
+export async function upsertPortfolioSummary(data: {
+  orgId: string;
+  totalDomains?: number;
+  totalValue?: string;
+  avgRoi?: string;
+}) {
+  return db
+    .insert(portfolioSummaries)
+    .values(data)
+    .onConflictDoUpdate({
+      target: portfolioSummaries.orgId,
+      set: {
+        totalDomains: data.totalDomains ?? 0,
+        totalValue: data.totalValue,
+        avgRoi: data.avgRoi,
+        lastUpdated: new Date(),
+      },
+    })
+    .returning();
+}
+
+// ─── Audit Events ─────────────────────────────────────────────────────────────
+
+export async function getAuditEventsForOrg(
+  orgId: string,
+  opts?: { limit?: number; offset?: number; entityType?: string },
+) {
+  return db.query.auditEvents.findMany({
+    where: (a, { eq, and }) =>
+      opts?.entityType
+        ? and(eq(a.orgId, orgId), eq(a.entityType, opts.entityType))
+        : eq(a.orgId, orgId),
+    limit: opts?.limit ?? 50,
+    offset: opts?.offset ?? 0,
+    orderBy: (a, { desc }) => [desc(a.createdAt)],
+  });
+}
+
+export async function createAuditEvent(data: {
+  orgId: string;
+  actorId?: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  details?: Record<string, unknown>;
+}) {
+  return db.insert(auditEvents).values(data).returning();
+}
+
+// ─── Webhook Events ───────────────────────────────────────────────────────────
+
+export async function getPendingWebhookEvents() {
+  return db.query.webhookEvents.findMany({
+    where: (w, { eq }) => eq(w.processed, false),
+    orderBy: (w, { asc }) => [asc(w.createdAt)],
+    limit: 100,
+  });
+}
+
+export async function createWebhookEvent(data: {
+  provider: string;
+  eventType: string;
+  payload?: Record<string, unknown>;
+}) {
+  return db.insert(webhookEvents).values(data).returning();
+}
+
+export async function markWebhookEventProcessed(id: string) {
+  return db
+    .update(webhookEvents)
+    .set({ processed: true, outboxStatus: "processed" })
+    .where(eq(webhookEvents.id, id));
+}
+
+// ─── Integrations ─────────────────────────────────────────────────────────────
+
+export async function getIntegrationsForOrg(orgId: string) {
+  return db.query.integrations.findMany({
+    where: (i, { eq }) => eq(i.orgId, orgId),
+  });
+}
+
+export async function createIntegration(data: {
+  orgId: string;
+  domainId?: string;
+  provider: string;
+  encryptedConfig: Buffer;
+  enabled?: boolean;
+}) {
+  return db.insert(integrations).values(data).returning();
+}
+
+export async function updateIntegration(
+  id: string,
+  data: Partial<{ enabled: boolean; encryptedConfig: Buffer }>,
+) {
+  return db
+    .update(integrations)
+    .set(data)
+    .where(eq(integrations.id, id))
+    .returning();
+}
+
+// ─── Buyer Sessions ───────────────────────────────────────────────────────────
+
+export async function getBuyerSessionsForDomain(domainId: string) {
+  return db.query.buyerSessions.findMany({
+    where: (b, { eq }) => eq(b.domainId, domainId),
+    orderBy: (b, { desc }) => [desc(b.createdAt)],
+    limit: 100,
+  });
+}
+
+export async function createBuyerSession(data: {
+  domainId: string;
+  sessionId: string;
+  buyerEmail?: string;
+  intent?: string;
+}) {
+  return db.insert(buyerSessions).values(data).returning();
+}
+
+// ─── Timeline Events ──────────────────────────────────────────────────────────
+
+export async function getTimelineEventsForDomain(domainId: string) {
+  return db.query.timelineEvents.findMany({
+    where: (t, { eq }) => eq(t.domainId, domainId),
+    orderBy: (t, { desc }) => [desc(t.createdAt)],
+    limit: 100,
+  });
+}
+
+export async function createTimelineEvent(data: {
+  domainId: string;
+  eventType: string;
+  details?: Record<string, unknown>;
+}) {
+  return db.insert(timelineEvents).values(data).returning();
+}
+
+// ─── Guardrails ───────────────────────────────────────────────────────────────
+
+export async function getGuardrailsForOrg(orgId: string) {
+  return db.query.guardrails.findMany({
+    where: (g, { eq }) => eq(g.orgId, orgId),
+  });
+}
+
+export async function upsertGuardrail(data: {
+  orgId: string;
+  rule: string;
+  value: number;
+  enabled?: boolean;
+}) {
+  return db.insert(guardrails).values(data).returning();
+}
+
+// ─── Feature Flags ────────────────────────────────────────────────────────────
+
+export async function getFeatureFlagsForOrg(orgId: string) {
+  return db.query.featureFlags.findMany({
+    where: (f, { eq }) => eq(f.orgId, orgId),
+  });
+}
+
+export async function getFeatureFlag(orgId: string, key: string) {
+  return db.query.featureFlags.findFirst({
+    where: (f, { and, eq }) => and(eq(f.orgId, orgId), eq(f.key, key)),
+  });
+}
+
+export async function upsertFeatureFlag(data: {
+  orgId: string;
+  key: string;
+  enabled?: boolean;
+  config?: Record<string, unknown>;
+}) {
+  return db
+    .insert(featureFlags)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [featureFlags.orgId, featureFlags.key],
+      set: { enabled: data.enabled ?? false, config: data.config },
+    })
+    .returning();
+}
+
+// ─── Onboarding Progress ──────────────────────────────────────────────────────
+
+export async function getOnboardingProgressForOrg(orgId: string) {
+  return db.query.onboardingProgress.findMany({
+    where: (o, { eq }) => eq(o.orgId, orgId),
+  });
+}
+
+export async function upsertOnboardingStep(data: {
+  orgId: string;
+  step: string;
+  completed?: boolean;
+}) {
+  return db
+    .insert(onboardingProgress)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [onboardingProgress.orgId, onboardingProgress.step],
+      set: {
+        completed: data.completed ?? false,
+        completedAt: data.completed ? new Date() : null,
+      },
+    })
+    .returning();
+}
