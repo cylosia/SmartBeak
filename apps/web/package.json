@@ -30,7 +30,7 @@
 		"date-fns": "^4.1.0",
 		"deepmerge": "^4.3.1",
 		"es-toolkit": "^1.41.0",
-		"hono": "^4.11.7",
+		"hono": "^4.11.10",
 		"input-otp": "^1.4.2",
 		"js-cookie": "^3.0.5",
 		"lucide-react": "^0.553.0",
