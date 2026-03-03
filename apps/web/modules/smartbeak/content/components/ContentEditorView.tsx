@@ -1,6 +1,6 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
@@ -26,17 +26,19 @@ import {
   TabsTrigger,
 } from "@repo/ui/components/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { PageSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
+  ArrowLeftIcon,
   SaveIcon,
   SparklesIcon,
   HistoryIcon,
   SendIcon,
   Loader2Icon,
 } from "lucide-react";
+import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
 export function ContentEditorView({
@@ -115,12 +117,12 @@ export function ContentEditorView({
             context.previous,
           );
         }
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     updateMutation.mutate({
       organizationSlug,
       id: contentId,
@@ -128,18 +130,19 @@ export function ContentEditorView({
       body,
       status: status as "draft" | "published" | "scheduled" | "archived",
     });
-  };
+  }, [updateMutation, organizationSlug, contentId, title, body, status]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
+        if (!item) return;
         handleSave();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  });
+  }, [handleSave, item]);
 
   const handleGenerateIdeas = async () => {
     if (!ideaInput.trim()) return;
@@ -166,18 +169,36 @@ export function ContentEditorView({
         setAiIdeas((prev) => prev + decoder.decode(value));
       }
     } catch (err) {
-      toast({ title: "AI Error", description: "Failed to generate ideas.", variant: "error" });
+      toastError("AI Error", "Failed to generate ideas.");
     } finally {
       setAiLoading(false);
     }
   };
 
   if (contentQuery.isLoading) return <PageSkeleton />;
+  if (contentQuery.isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load content.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => contentQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   if (!item) return <div className="text-muted-foreground py-8 text-center">Content not found.</div>;
 
   return (
     <ErrorBoundary>
       <div className="space-y-4">
+        <Link
+          href={`/app/${organizationSlug}/domains/${domainId}/content`}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back to content
+        </Link>
+
         {/* Editor Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -241,7 +262,7 @@ export function ContentEditorView({
                           size="sm"
                           onClick={() => {
                             setBody(rev.body ?? "");
-                            toast({ title: "Revision restored" });
+                            toast({ title: "Revision loaded", description: "Save to apply changes." });
                           }}
                         >
                           Restore
@@ -333,12 +354,7 @@ export function ContentEditorView({
               <CardContent>
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   {body ? (
-                    body.split("\n").map((line, i) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: preview lines
-                      <p key={i} className="mb-2">
-                        {line || <br />}
-                      </p>
-                    ))
+                    <div dangerouslySetInnerHTML={{ __html: body }} />
                   ) : (
                     <p className="text-muted-foreground">No content yet.</p>
                   )}

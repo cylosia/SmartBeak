@@ -20,10 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
-import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
-import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
@@ -84,14 +83,14 @@ export function SmartDeployView({
         });
       },
       onError: (err) => {
-        toast({ title: "Deploy failed", description: err.message, variant: "error" });
+        toastError("Deploy failed", err.message);
       },
     }),
   );
 
   const handleDeploy = () => {
     if (!selectedDomainId) {
-      toast({ title: "Select a domain", description: "Choose a domain to deploy.", variant: "error" });
+      toastError("Select a domain", "Choose a domain to deploy.");
       return;
     }
     deployMutation.mutate({
@@ -129,7 +128,7 @@ export function SmartDeployView({
                       <SelectValue placeholder="Select domain" />
                     </SelectTrigger>
                     <SelectContent>
-                      {domainsQuery.data?.items.map((d) => (
+                      {(domainsQuery.data?.items ?? []).map((d) => (
                         <SelectItem key={d.id} value={d.id}>
                           {d.name}
                         </SelectItem>
@@ -142,7 +141,7 @@ export function SmartDeployView({
                       <SelectValue placeholder="Select theme" />
                     </SelectTrigger>
                     <SelectContent>
-                      {themesQuery.data?.themes.map((t) => (
+                      {(themesQuery.data?.themes ?? []).map((t) => (
                         <SelectItem key={t.id} value={t.id}>
                           {t.name}
                         </SelectItem>
@@ -239,7 +238,7 @@ export function SmartDeployView({
                 <iframe
                   src={previewUrl}
                   title="Site preview"
-                  className="w-full h-[600px] bg-white"
+                  className="w-full h-[600px] bg-muted"
                   sandbox="allow-scripts allow-same-origin"
                 />
               </div>
@@ -254,7 +253,14 @@ export function SmartDeployView({
               <CardTitle className="text-sm font-medium">Deployment History</CardTitle>
             </CardHeader>
             <CardContent>
-              {deployStatusQuery.isLoading ? (
+              {deployStatusQuery.isError ? (
+                <div className="flex flex-col items-center py-8 text-center">
+                  <p className="text-sm text-destructive">Failed to load deployment status.</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => deployStatusQuery.refetch()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : deployStatusQuery.isLoading ? (
                 <TableSkeleton rows={3} />
               ) : shards.length === 0 ? (
                 <EmptyState
@@ -289,7 +295,7 @@ export function SmartDeployView({
                               rel="noopener noreferrer"
                               className="text-sm text-primary underline-offset-4 hover:underline flex items-center gap-1"
                             >
-                              {new URL(shard.deployedUrl).hostname}
+                              {(() => { try { return new URL(shard.deployedUrl).hostname; } catch { return shard.deployedUrl; } })()}
                               <ExternalLinkIcon className="h-3 w-3" />
                             </a>
                           ) : (

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Button } from "@repo/ui/components/button";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -68,12 +68,14 @@ export function DomainDetailView({
         });
       },
       onError: (err) => {
-        toast({ title: "Deploy failed", description: err.message, variant: "error" });
+        toastError("Deploy failed", err.message);
       },
     }),
   );
 
   const domain = domainQuery.data?.domain;
+  const registry = (domain?.registryData ?? {}) as Record<string, unknown>;
+  const healthData = (domain?.health ?? {}) as Record<string, unknown>;
   const latestShard = deployStatusQuery.data?.latest;
   const isDeploying = latestShard?.status === "building" || latestShard?.status === "deploying";
 
@@ -120,7 +122,14 @@ export function DomainDetailView({
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Domain Info Cards */}
-        {domainQuery.isLoading ? (
+        {domainQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load domain.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => domainQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : domainQuery.isLoading ? (
           <CardGridSkeleton count={4} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -138,18 +147,22 @@ export function DomainDetailView({
             />
             <MetricCard
               title="DNS Verified"
-              value={domain?.dnsVerified ? "Yes" : "No"}
+              value={registry.dnsVerified ? "Yes" : "No"}
               subtitle={
-                domain?.dnsVerifiedAt
-                  ? `Verified ${formatDistanceToNow(new Date(domain.dnsVerifiedAt), { addSuffix: true })}`
+                registry.dnsVerifiedAt
+                  ? `Verified ${formatDistanceToNow(new Date(registry.dnsVerifiedAt as string), { addSuffix: true })}`
                   : "Not yet verified"
               }
               icon={ShieldCheckIcon}
             />
             <MetricCard
-              title="Transfer Ready"
-              value={domain?.transferReady ? "Yes" : "No"}
-              subtitle="Domain transfer readiness"
+              title="Health Score"
+              value={healthData.score != null ? `${healthData.score}/100` : "—"}
+              subtitle={
+                healthData.lastCheck
+                  ? `Checked ${formatDistanceToNow(new Date(healthData.lastCheck as string), { addSuffix: true })}`
+                  : "No checks yet"
+              }
               icon={TrendingUpIcon}
             />
           </div>
@@ -170,7 +183,7 @@ export function DomainDetailView({
                     Registrar
                   </p>
                   <p className="text-sm font-medium mt-1">
-                    {domain.registrar ?? "—"}
+                    {(registry.registrar as string) ?? "—"}
                   </p>
                 </div>
                 <div>
@@ -178,8 +191,8 @@ export function DomainDetailView({
                     Expiry Date
                   </p>
                   <p className="text-sm font-medium mt-1">
-                    {domain.expiryDate
-                      ? new Date(domain.expiryDate).toLocaleDateString()
+                    {registry.expiryDate
+                      ? new Date(registry.expiryDate as string).toLocaleDateString()
                       : "—"}
                   </p>
                 </div>
@@ -188,7 +201,7 @@ export function DomainDetailView({
                     DNS Provider
                   </p>
                   <p className="text-sm font-medium mt-1">
-                    {domain.dnsProvider ?? "—"}
+                    {(registry.dnsProvider as string) ?? "—"}
                   </p>
                 </div>
                 <div>
@@ -196,27 +209,26 @@ export function DomainDetailView({
                     Nameservers
                   </p>
                   <p className="text-sm font-medium mt-1 font-mono text-xs">
-                    {domain.nameservers
-                      ? (domain.nameservers as string[]).join(", ")
+                    {Array.isArray(registry.nameservers)
+                      ? (registry.nameservers as string[]).join(", ")
                       : "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Health Score
+                    Theme
                   </p>
-                  <p className="text-sm font-medium mt-1">
-                    {domain.healthScore ?? "—"}
-                    {domain.healthScore ? "/100" : ""}
+                  <p className="text-sm font-medium mt-1 capitalize">
+                    {domain.themeId?.replace(/-/g, " ") ?? "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Last Health Check
+                    Created
                   </p>
                   <p className="text-sm font-medium mt-1">
-                    {domain.lastHealthCheck
-                      ? formatDistanceToNow(new Date(domain.lastHealthCheck), {
+                    {domain.createdAt
+                      ? formatDistanceToNow(new Date(domain.createdAt), {
                           addSuffix: true,
                         })
                       : "—"}
@@ -287,7 +299,7 @@ export function DomainDetailView({
                 <iframe
                   src={latestShard.deployedUrl}
                   title="Site preview"
-                  className="w-full h-[500px] bg-white rounded-b-xl"
+                  className="w-full h-[500px] bg-muted rounded-b-xl"
                   sandbox="allow-scripts allow-same-origin"
                 />
               </div>

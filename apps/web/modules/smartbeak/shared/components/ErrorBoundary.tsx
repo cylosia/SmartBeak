@@ -44,6 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
             variant="outline"
             size="sm"
             className="mt-6"
+            aria-label="Try again"
             onClick={() => this.setState({ hasError: false, error: undefined })}
           >
             Try again

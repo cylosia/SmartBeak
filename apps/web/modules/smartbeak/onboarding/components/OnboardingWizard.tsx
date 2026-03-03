@@ -4,7 +4,7 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent } from "@repo/ui/components/card";
 import { Progress } from "@repo/ui/components/progress";
-import { toast } from "@repo/ui/components/toast";
+import { toastError } from "@repo/ui/components/toast";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
   CheckCircleIcon,
@@ -14,6 +14,7 @@ import {
   ZapIcon,
   SearchIcon,
   SendIcon,
+  Loader2Icon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -95,7 +96,7 @@ export function OnboardingWizard({
         });
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -116,6 +117,15 @@ export function OnboardingWizard({
   return (
     <ErrorBoundary>
       <div className="space-y-6">
+        {progressQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load onboarding progress.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => progressQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+        <>
         {/* Progress Header */}
         <div className="rounded-xl border border-border bg-card p-6">
           <div className="flex items-center justify-between mb-3">
@@ -208,6 +218,7 @@ export function OnboardingWizard({
                           }
                           disabled={completeMutation.isPending}
                         >
+                          {completeMutation.isPending && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
                           Mark done
                         </Button>
                       </>
@@ -223,6 +234,8 @@ export function OnboardingWizard({
             );
           })}
         </div>
+        </>
+        )}
       </div>
     </ErrorBoundary>
   );

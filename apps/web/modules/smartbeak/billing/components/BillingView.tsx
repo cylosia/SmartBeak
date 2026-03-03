@@ -68,7 +68,14 @@ export function BillingView({
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Plan Cards */}
-        {billingQuery.isLoading ? (
+        {billingQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load billing data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => billingQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : billingQuery.isLoading ? (
           <CardGridSkeleton count={3} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -79,23 +86,23 @@ export function BillingView({
               icon={ZapIcon}
             />
             <MetricCard
-              title="Billing Cycle"
-              value={subscription?.interval ?? "—"}
+              title="Billing Period"
+              value={
+                subscription?.currentPeriodEnd
+                  ? format(new Date(subscription.currentPeriodEnd), "MMM d, yyyy")
+                  : "—"
+              }
               subtitle={
                 subscription?.currentPeriodEnd
-                  ? `Renews ${format(new Date(subscription.currentPeriodEnd), "MMM d, yyyy")}`
+                  ? `Renews ${formatDistanceToNow(new Date(subscription.currentPeriodEnd), { addSuffix: true })}`
                   : "No active subscription"
               }
               icon={CalendarIcon}
             />
             <MetricCard
-              title="Next Invoice"
-              value={
-                subscription?.nextInvoiceAmount
-                  ? `$${(Number(subscription.nextInvoiceAmount) / 100).toFixed(2)}`
-                  : "—"
-              }
-              subtitle="Estimated amount"
+              title="Invoices"
+              value={invoices.length}
+              subtitle={invoices.length > 0 ? `Latest: ${invoices[0]?.status ?? "—"}` : "No invoices yet"}
               icon={CreditCardIcon}
             />
           </div>
@@ -124,9 +131,9 @@ export function BillingView({
                   value={ratio * 100}
                   className={`h-2 ${
                     ratio > 0.95
-                      ? "[&>div]:bg-red-500"
+                      ? "[&>div]:bg-red-500 dark:[&>div]:bg-red-400"
                       : ratio > 0.8
-                        ? "[&>div]:bg-amber-500"
+                        ? "[&>div]:bg-amber-500 dark:[&>div]:bg-amber-400"
                         : ""
                   }`}
                 />
@@ -173,7 +180,7 @@ export function BillingView({
                         {inv.stripeInvoiceId ?? inv.id.slice(0, 8)}
                       </TableCell>
                       <TableCell>
-                        ${(Number(inv.amount) / 100).toFixed(2)}
+                        ${(Number(inv.amountCents) / 100).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={inv.status ?? "pending"} />

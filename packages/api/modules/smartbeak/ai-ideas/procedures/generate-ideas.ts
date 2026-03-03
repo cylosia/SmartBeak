@@ -1,10 +1,9 @@
-import { ORPCError } from "@orpc/server";
 import { streamToEventIterator } from "@orpc/client";
 import { streamText, textModel } from "@repo/ai";
-import { getOrganizationBySlug } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const generateContentIdeas = protectedProcedure
   .route({
@@ -17,16 +16,15 @@ export const generateContentIdeas = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainName: z.string().min(1).max(255),
       niche: z.string().min(1).max(255).optional(),
       count: z.number().int().min(1).max(20).default(5),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const { domainName, niche, count } = input;
     const prompt = `You are a premium content strategist for a SaaS publishing platform.
 Generate ${count} high-quality, SEO-optimized content ideas for a website called "${domainName}"${niche ? ` in the "${niche}" niche` : ""}.

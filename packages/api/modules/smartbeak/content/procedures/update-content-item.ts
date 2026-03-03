@@ -3,12 +3,12 @@ import {
   createContentRevision,
   getDomainById,
   getContentItemById,
-  getOrganizationBySlug,
   updateContentItem,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { requireOrgEditor } from "../../lib/membership";
 
 export const updateContentItemProcedure = protectedProcedure
@@ -20,22 +20,21 @@ export const updateContentItemProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       id: z.string().uuid(),
       title: z.string().min(1).max(500).optional(),
-      body: z.string().optional(),
+      body: z.string().max(500000).optional(),
       status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
       scheduledFor: z.string().datetime().nullable().optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgEditor(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgEditor(org.supastarterOrgId, user.id);
     const existing = await getContentItemById(input.id);
     if (!existing) throw new ORPCError("NOT_FOUND", { message: "Content item not found." });
     const domain = await getDomainById(existing.domainId);
-    if (!domain || domain.orgId !== org.id) throw new ORPCError("FORBIDDEN");
+    if (!domain || domain.orgId !== org.id) throw new ORPCError("FORBIDDEN", { message: "Access denied." });
 
     // Snapshot current body as a revision before overwriting
     if (input.body !== undefined && input.body !== existing.body) {
@@ -51,7 +50,11 @@ export const updateContentItemProcedure = protectedProcedure
     const { organizationSlug, id, ...updateData } = input;
     const [item] = await updateContentItem(id, {
       ...updateData,
-      scheduledFor: updateData.scheduledFor ? new Date(updateData.scheduledFor) : undefined,
+      scheduledFor: updateData.scheduledFor === null
+        ? null
+        : updateData.scheduledFor
+          ? new Date(updateData.scheduledFor)
+          : undefined,
       version: newVersion,
       updatedBy: user.id,
       publishedAt:

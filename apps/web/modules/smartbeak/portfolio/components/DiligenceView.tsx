@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { orpc } from "@shared/lib/orpc-query-utils";
+import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import {
   Table,
@@ -60,14 +61,21 @@ export function DiligenceView({
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Summary Cards */}
-        {diligenceQuery.isLoading ? (
+        {diligenceQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load diligence data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => diligenceQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : diligenceQuery.isLoading ? (
           <CardGridSkeleton count={3} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <MetricCard
               title="Checks Passing"
               value={passCount}
-              subtitle={`of ${diligenceChecks.length} total checks`}
+              subtitle={`${warnCount} warnings, ${failCount} failures`}
               icon={CheckCircleIcon}
             />
             <MetricCard

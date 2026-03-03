@@ -1,13 +1,12 @@
-import { ORPCError } from "@orpc/server";
 import {
   getInvoicesForOrg,
-  getOrganizationBySlug,
   getSubscriptionForOrg,
   getUsageRecordsForOrg,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getBilling = protectedProcedure
   .route({
@@ -18,13 +17,12 @@ export const getBilling = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const [subscription, invoices, usageRecords] = await Promise.all([
       getSubscriptionForOrg(org.id),
       getInvoicesForOrg(org.id, { limit: 10 }),

@@ -1,9 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import {
-  createAuditEvent,
   createSiteShard,
   getDomainById,
-  getOrganizationBySlug,
   getSiteShardsForDomain,
   updateDomain,
   updateSiteShard,
@@ -12,6 +10,7 @@ import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
 import { audit } from "../../lib/audit";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { generateThemeHtml, THEME_IDS } from "../lib/themes";
 
 const VERCEL_API = "https://api.vercel.com";
@@ -34,18 +33,14 @@ export const triggerDeploy = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
-      themeId: z.string().optional(),
+      themeId: z.enum(THEME_IDS).optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org)
-      throw new ORPCError("NOT_FOUND", {
-        message: "Organization not found.",
-      });
-    await requireOrgAdmin(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
 
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {
@@ -72,6 +67,12 @@ export const triggerDeploy = protectedProcedure
       version: nextVersion,
       status: "building",
     });
+
+    if (!shard) {
+      throw new ORPCError("INTERNAL_SERVER_ERROR", {
+        message: "Failed to create deployment shard.",
+      });
+    }
 
     await audit({
       orgId: org.id,
@@ -127,9 +128,13 @@ export const triggerDeploy = protectedProcedure
 
         const deployData = (await deployRes.json()) as {
           id: string;
-          url: string;
+          url?: string;
           readyState: string;
         };
+
+        if (!deployData.url) {
+          throw new Error("Vercel response missing deployment URL");
+        }
 
         const deployedUrl = `https://${deployData.url}`;
         await updateSiteShard(shard.id, {
@@ -139,6 +144,7 @@ export const triggerDeploy = protectedProcedure
 
         let ready = false;
         let attempts = 0;
+        let consecutive4xx = 0;
         const maxAttempts = 60;
 
         while (!ready && attempts < maxAttempts) {
@@ -151,7 +157,19 @@ export const triggerDeploy = protectedProcedure
               headers: { Authorization: `Bearer ${token}` },
             },
           );
-          if (!statusRes.ok) continue;
+          if (!statusRes.ok) {
+            const errBody = await statusRes.text();
+            if (statusRes.status >= 400 && statusRes.status < 500) {
+              consecutive4xx++;
+              if (consecutive4xx >= 3) {
+                throw new Error(
+                  `Vercel API returned ${statusRes.status} on 3 consecutive status checks: ${errBody.slice(0, 200)}`,
+                );
+              }
+            }
+            continue;
+          }
+          consecutive4xx = 0;
 
           const statusData = (await statusRes.json()) as {
             readyState: string;

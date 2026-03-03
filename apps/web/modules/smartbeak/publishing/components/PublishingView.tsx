@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -37,6 +37,7 @@ import {
   GlobeIcon,
   MailIcon,
   LinkedinIcon,
+  Loader2Icon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -88,7 +89,7 @@ export function PublishingView({
         setOpen(false);
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -99,7 +100,7 @@ export function PublishingView({
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            {jobsQuery.data?.jobs.length ?? 0} publishing jobs
+            {(jobsQuery.data?.items ?? []).length} publishing jobs
           </p>
           <Button onClick={() => setOpen(true)}>
             <PlusIcon className="mr-2 h-4 w-4" />
@@ -108,9 +109,16 @@ export function PublishingView({
         </div>
 
         {/* Jobs Table */}
-        {jobsQuery.isLoading ? (
+        {jobsQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load publishing jobs.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => jobsQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : jobsQuery.isLoading ? (
           <TableSkeleton rows={5} />
-        ) : jobsQuery.data?.jobs.length === 0 ? (
+        ) : (jobsQuery.data?.items ?? []).length === 0 ? (
           <EmptyState
             icon={SendIcon}
             title="No publishing jobs"
@@ -135,7 +143,7 @@ export function PublishingView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {jobsQuery.data?.jobs.map((job) => (
+                {(jobsQuery.data?.items ?? []).map((job) => (
                   <TableRow key={job.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -186,7 +194,7 @@ export function PublishingView({
                     <SelectValue placeholder="Select content to publish" />
                   </SelectTrigger>
                   <SelectContent>
-                    {contentQuery.data?.items.map((item) => (
+                    {(contentQuery.data?.items ?? []).map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {item.title}
                       </SelectItem>
@@ -236,6 +244,7 @@ export function PublishingView({
                 }
                 disabled={createMutation.isPending}
               >
+                {createMutation.isPending && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
                 {createMutation.isPending ? "Queuing..." : "Queue Job"}
               </Button>
             </DialogFooter>

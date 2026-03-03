@@ -15,6 +15,7 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Badge } from "@repo/ui/components/badge";
 import {
@@ -37,9 +38,9 @@ const RADAR_DATA = [
 
 const BUYER_PIE_DATA = [
   { name: "Organic Search", value: 45, color: "hsl(var(--primary))" },
-  { name: "Direct", value: 25, color: "#10b981" },
-  { name: "Referral", value: 18, color: "#f59e0b" },
-  { name: "Social", value: 12, color: "#8b5cf6" },
+  { name: "Direct", value: 25, color: "hsl(var(--chart-2))" },
+  { name: "Referral", value: 18, color: "hsl(var(--chart-3))" },
+  { name: "Social", value: 12, color: "hsl(var(--chart-4))" },
 ];
 
 const SELL_READY_CHECKS = [
@@ -68,7 +69,14 @@ export function PortfolioView({
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Metric Cards */}
-        {portfolioQuery.isLoading ? (
+        {portfolioQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load portfolio data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => portfolioQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : portfolioQuery.isLoading ? (
           <CardGridSkeleton count={4} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -225,7 +233,7 @@ export function PortfolioView({
                     {!check.pass && (
                       <Badge
                         variant="outline"
-                        className="ml-auto text-xs text-amber-600 border-amber-300"
+                        className="ml-auto text-xs text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700"
                       >
                         Action needed
                       </Badge>

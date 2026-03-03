@@ -3,11 +3,11 @@ import {
   getContentItemById,
   getContentRevisions,
   getDomainById,
-  getOrganizationBySlug,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getContentItem = protectedProcedure
   .route({
@@ -18,19 +18,18 @@ export const getContentItem = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       id: z.string().uuid(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const item = await getContentItemById(input.id);
     if (!item) throw new ORPCError("NOT_FOUND", { message: "Content item not found." });
     const domain = await getDomainById(item.domainId);
     if (!domain || domain.orgId !== org.id) {
-      throw new ORPCError("FORBIDDEN");
+      throw new ORPCError("FORBIDDEN", { message: "Access denied." });
     }
     const revisions = await getContentRevisions(input.id);
     return { item, revisions };

@@ -4,13 +4,13 @@ import {
   getDecaySignalsForDomain,
   getDiligenceChecksForDomain,
   getDomainById,
-  getOrganizationBySlug,
   getPortfolioSummaryForOrg,
   getTimelineEventsForDomain,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getPortfolioSummary = protectedProcedure
   .route({
@@ -19,11 +19,10 @@ export const getPortfolioSummary = protectedProcedure
     tags: ["SmartBeak - Portfolio"],
     summary: "Get portfolio summary for an organization",
   })
-  .input(z.object({ organizationSlug: z.string() }))
+  .input(z.object({ organizationSlug: z.string().min(1) }))
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const summary = await getPortfolioSummaryForOrg(org.id);
     return { summary };
   });
@@ -37,14 +36,13 @@ export const getDomainDiligence = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });

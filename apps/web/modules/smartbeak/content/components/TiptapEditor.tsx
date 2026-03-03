@@ -121,6 +121,14 @@ export function TiptapEditor({ content, onChange }: TiptapEditorProps) {
           onClick={() => {
             const url = window.prompt("Enter URL:");
             if (url) {
+              try {
+                const parsed = new URL(url);
+                if (!["http:", "https:", "mailto:"].includes(parsed.protocol)) {
+                  return;
+                }
+              } catch {
+                return;
+              }
               editor.chain().focus().setLink({ href: url }).run();
             }
           }}

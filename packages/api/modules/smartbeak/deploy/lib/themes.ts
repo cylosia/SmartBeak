@@ -5,6 +5,15 @@ interface ThemeConfig {
   fontFamily: string;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export const THEME_IDS = [
   "affiliate-comparison",
   "authority-site",
@@ -138,18 +147,19 @@ function generateMediaNewsletter(d: string): string {
 }
 
 export function generateThemeHtml(themeId: string, domainName: string): string {
+  const safeName = escapeHtml(domainName);
   switch (themeId) {
     case "affiliate-comparison":
-      return generateAffiliateComparison(domainName);
+      return generateAffiliateComparison(safeName);
     case "authority-site":
-      return generateAuthoritySite(domainName);
+      return generateAuthoritySite(safeName);
     case "landing-leadgen":
-      return generateLandingLeadgen(domainName);
+      return generateLandingLeadgen(safeName);
     case "local-business":
-      return generateLocalBusiness(domainName);
+      return generateLocalBusiness(safeName);
     case "media-newsletter":
-      return generateMediaNewsletter(domainName);
+      return generateMediaNewsletter(safeName);
     default:
-      return generateLandingLeadgen(domainName);
+      return generateLandingLeadgen(safeName);
   }
 }

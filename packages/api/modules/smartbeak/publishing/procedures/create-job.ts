@@ -1,13 +1,14 @@
 import { ORPCError } from "@orpc/server";
 import {
   createPublishingJob,
+  getContentItemById,
   getDomainById,
-  getOrganizationBySlug,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 const PUBLISH_TARGETS = [
   "web",
@@ -32,7 +33,7 @@ export const createPublishingJobProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       contentId: z.string().uuid().optional(),
       target: z.enum(PUBLISH_TARGETS),
@@ -40,12 +41,19 @@ export const createPublishingJobProcedure = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgEditor(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgEditor(org.supastarterOrgId, user.id);
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
+    }
+    if (input.contentId) {
+      const content = await getContentItemById(input.contentId);
+      if (!content || content.domainId !== input.domainId) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Content must belong to the specified domain.",
+        });
+      }
     }
     const [job] = await createPublishingJob({
       domainId: input.domainId,

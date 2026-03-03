@@ -14,11 +14,11 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
-import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { SearchIcon, PlusIcon, TrashIcon, TrendingUpIcon } from "lucide-react";
+import { SearchIcon, PlusIcon, TrashIcon, TrendingUpIcon, Loader2Icon } from "lucide-react";
 
 export function SeoView({
   organizationSlug,
@@ -74,7 +74,7 @@ export function SeoView({
         if (context?.previous) {
           queryClient.setQueryData(seoQueryKey, context.previous);
         }
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -102,7 +102,7 @@ export function SeoView({
         if (context?.previous) {
           queryClient.setQueryData(seoQueryKey, context.previous);
         }
-        toast({ title: "Error", description: "Failed to remove keyword.", variant: "error" });
+        toastError("Error", "Failed to remove keyword.");
       },
     }),
   );
@@ -114,6 +114,16 @@ export function SeoView({
     <ErrorBoundary>
       <div className="space-y-6">
         {/* SEO Score Card */}
+        {seoQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load SEO data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => seoQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : seoQuery.isLoading ? (
+          <CardGridSkeleton count={3} />
+        ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
@@ -168,6 +178,7 @@ export function SeoView({
             </CardContent>
           </Card>
         </div>
+        )}
 
         {/* Add Keyword */}
         <div className="flex items-center gap-2">
@@ -175,6 +186,7 @@ export function SeoView({
             placeholder="Add keyword to track..."
             value={newKeyword}
             onChange={(e) => setNewKeyword(e.target.value)}
+            aria-label="Add keyword to track"
             onKeyDown={(e) => {
               if (e.key === "Enter" && newKeyword.trim()) {
                 addKeywordMutation.mutate({
@@ -198,7 +210,11 @@ export function SeoView({
             }}
             disabled={addKeywordMutation.isPending}
           >
-            <PlusIcon className="mr-2 h-4 w-4" />
+            {addKeywordMutation.isPending ? (
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PlusIcon className="mr-2 h-4 w-4" />
+            )}
             Add
           </Button>
         </div>

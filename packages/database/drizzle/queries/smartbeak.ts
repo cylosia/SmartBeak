@@ -3,8 +3,12 @@
  * All queries use the locked v9 schema from smartbeak.ts.
  * Do NOT modify table/column names here — they must match the schema exactly.
  */
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "../client";
+
+function escapeLikePattern(pattern: string): string {
+  return pattern.replace(/[%_\\]/g, "\\$&");
+}
 import {
   auditEvents,
   buyerSessions,
@@ -58,8 +62,11 @@ export async function upsertSmartBeakOrg(data: {
     .insert(organizations)
     .values(data)
     .onConflictDoUpdate({
-      target: organizations.id,
-      set: { name: data.name, settings: data.settings ?? {} },
+      target: organizations.slug,
+      set: {
+        name: data.name,
+        ...(data.settings !== undefined && { settings: data.settings }),
+      },
     })
     .returning();
 }
@@ -84,14 +91,18 @@ export async function upsertSmartBeakOrgMember(data: {
   userId: string;
   role: "owner" | "admin" | "editor" | "viewer";
 }) {
-  return db
-    .insert(organizationMembers)
-    .values(data)
-    .onConflictDoUpdate({
-      target: [organizationMembers.orgId, organizationMembers.userId],
-      set: { role: data.role },
-    })
-    .returning();
+  const existing = await db.query.organizationMembers.findFirst({
+    where: (m, { and: a, eq: e }) =>
+      a(e(m.orgId, data.orgId), e(m.userId, data.userId)),
+  });
+  if (existing) {
+    return db
+      .update(organizationMembers)
+      .set({ role: data.role })
+      .where(eq(organizationMembers.id, existing.id))
+      .returning();
+  }
+  return db.insert(organizationMembers).values(data).returning();
 }
 
 // ─── Domains ──────────────────────────────────────────────────────────────────
@@ -103,7 +114,7 @@ export async function getDomainsForOrg(
   return db.query.domains.findMany({
     where: (d, { eq, and, ilike, or }) =>
       opts?.query
-        ? and(eq(d.orgId, orgId), ilike(d.name, `%${opts.query}%`))
+        ? and(eq(d.orgId, orgId), ilike(d.name, `%${escapeLikePattern(opts.query)}%`))
         : eq(d.orgId, orgId),
     limit: opts?.limit ?? 50,
     offset: opts?.offset ?? 0,
@@ -111,23 +122,24 @@ export async function getDomainsForOrg(
   });
 }
 
-export async function countDomainsForOrg(orgId: string) {
+export async function countDomainsForOrg(
+  orgId: string,
+  opts?: { query?: string },
+) {
+  const conditions = [eq(domains.orgId, orgId)];
+  if (opts?.query) {
+    conditions.push(ilike(domains.name, `%${escapeLikePattern(opts.query)}%`));
+  }
   const result = await db
     .select({ count: sql<number>`count(*)` })
     .from(domains)
-    .where(eq(domains.orgId, orgId));
+    .where(and(...conditions));
   return Number(result[0]?.count ?? 0);
 }
 
 export async function getDomainById(id: string) {
   return db.query.domains.findFirst({
     where: (d, { eq }) => eq(d.id, id),
-  });
-}
-
-export async function getDomainBySlug(slug: string) {
-  return db.query.domains.findFirst({
-    where: (d, { eq }) => eq(d.slug, slug),
   });
 }
 
@@ -178,7 +190,7 @@ export async function getContentItemsForDomain(
     where: (c, { eq, and, ilike, isNull }) => {
       const conditions = [eq(c.domainId, domainId), isNull(c.deletedAt)];
       if (opts?.status) conditions.push(eq(c.status, opts.status));
-      if (opts?.query) conditions.push(ilike(c.title, `%${opts.query}%`));
+      if (opts?.query) conditions.push(ilike(c.title, `%${escapeLikePattern(opts.query)}%`));
       return and(...conditions);
     },
     limit: opts?.limit ?? 50,
@@ -189,29 +201,31 @@ export async function getContentItemsForDomain(
 
 export async function countContentItemsForDomain(
   domainId: string,
-  status?: "draft" | "published" | "scheduled" | "archived",
+  opts?: {
+    status?: "draft" | "published" | "scheduled" | "archived";
+    query?: string;
+  },
 ) {
+  const conditions = [
+    eq(contentItems.domainId, domainId),
+    sql`${contentItems.deletedAt} IS NULL`,
+  ];
+  if (opts?.status) {
+    conditions.push(eq(contentItems.status, opts.status));
+  }
+  if (opts?.query) {
+    conditions.push(ilike(contentItems.title, `%${escapeLikePattern(opts.query)}%`));
+  }
   const result = await db
     .select({ count: sql<number>`count(*)` })
     .from(contentItems)
-    .where(
-      status
-        ? and(
-            eq(contentItems.domainId, domainId),
-            eq(contentItems.status, status),
-            sql`${contentItems.deletedAt} IS NULL`,
-          )
-        : and(
-            eq(contentItems.domainId, domainId),
-            sql`${contentItems.deletedAt} IS NULL`,
-          ),
-    );
+    .where(and(...conditions));
   return Number(result[0]?.count ?? 0);
 }
 
 export async function getContentItemById(id: string) {
   return db.query.contentItems.findFirst({
-    where: (c, { eq }) => eq(c.id, id),
+    where: (c, { eq, and, isNull }) => and(eq(c.id, id), isNull(c.deletedAt)),
   });
 }
 
@@ -220,6 +234,7 @@ export async function createContentItem(data: {
   title: string;
   body?: string;
   status?: "draft" | "published" | "scheduled" | "archived";
+  scheduledFor?: Date;
   createdBy?: string;
 }) {
   return db.insert(contentItems).values(data).returning();
@@ -286,6 +301,21 @@ export async function getMediaAssetsForDomain(
     offset: opts?.offset ?? 0,
     orderBy: (m, { desc }) => [desc(m.createdAt)],
   });
+}
+
+export async function countMediaAssetsForDomain(
+  domainId: string,
+  opts?: { type?: string },
+) {
+  const conditions = [eq(mediaAssets.domainId, domainId)];
+  if (opts?.type) {
+    conditions.push(eq(mediaAssets.type, opts.type));
+  }
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(mediaAssets)
+    .where(and(...conditions));
+  return Number(result[0]?.count ?? 0);
 }
 
 export async function getMediaAssetById(id: string) {
@@ -380,6 +410,14 @@ export async function getPublishingJobsForDomain(
   });
 }
 
+export async function countPublishingJobsForDomain(domainId: string) {
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(publishingJobs)
+    .where(eq(publishingJobs.domainId, domainId));
+  return Number(result[0]?.count ?? 0);
+}
+
 export async function getPublishingJobById(id: string) {
   return db.query.publishingJobs.findFirst({
     where: (j, { eq }) => eq(j.id, id),
@@ -452,21 +490,24 @@ export async function upsertSeoDocument(data: {
   decaySignals?: Record<string, unknown> | null;
   score?: number;
 }) {
-  return db
-    .insert(seoDocuments)
-    .values(data)
-    .onConflictDoUpdate({
-      target: seoDocuments.domainId,
-      set: {
+  const existing = await db.query.seoDocuments.findFirst({
+    where: (s, { eq: e }) => e(s.domainId, data.domainId),
+  });
+  if (existing) {
+    return db
+      .update(seoDocuments)
+      .set({
         keywords: data.keywords ?? [],
         gscData: data.gscData,
         ahrefsData: data.ahrefsData,
         decaySignals: data.decaySignals,
         score: data.score ?? 0,
         updatedAt: new Date(),
-      },
-    })
-    .returning();
+      })
+      .where(eq(seoDocuments.id, existing.id))
+      .returning();
+  }
+  return db.insert(seoDocuments).values(data).returning();
 }
 
 // ─── Keyword Tracking ─────────────────────────────────────────────────────────
@@ -492,6 +533,23 @@ export async function upsertKeyword(data: {
   position?: number;
   decayFactor?: string;
 }) {
+  const existing = await db.query.keywordTracking.findFirst({
+    where: (k, { and: a, eq: e }) =>
+      a(e(k.domainId, data.domainId), e(k.keyword, data.keyword)),
+  });
+  if (existing) {
+    return db
+      .update(keywordTracking)
+      .set({
+        volume: data.volume,
+        difficulty: data.difficulty,
+        position: data.position,
+        decayFactor: data.decayFactor,
+        lastUpdated: new Date(),
+      })
+      .where(eq(keywordTracking.id, existing.id))
+      .returning();
+  }
   return db.insert(keywordTracking).values(data).returning();
 }
 
@@ -514,18 +572,22 @@ export async function upsertSubscription(data: {
   plan: string;
   currentPeriodEnd?: Date;
 }) {
-  return db
-    .insert(subscriptions)
-    .values(data)
-    .onConflictDoUpdate({
-      target: subscriptions.stripeSubscriptionId,
-      set: {
+  const existing = await db.query.subscriptions.findFirst({
+    where: (s, { eq: e }) => e(s.orgId, data.orgId),
+  });
+  if (existing) {
+    return db
+      .update(subscriptions)
+      .set({
+        stripeSubscriptionId: data.stripeSubscriptionId ?? existing.stripeSubscriptionId,
         status: data.status ?? "active",
         plan: data.plan,
         currentPeriodEnd: data.currentPeriodEnd,
-      },
-    })
-    .returning();
+      })
+      .where(eq(subscriptions.id, existing.id))
+      .returning();
+  }
+  return db.insert(subscriptions).values(data).returning();
 }
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
@@ -670,19 +732,22 @@ export async function upsertPortfolioSummary(data: {
   totalValue?: string;
   avgRoi?: string;
 }) {
-  return db
-    .insert(portfolioSummaries)
-    .values(data)
-    .onConflictDoUpdate({
-      target: portfolioSummaries.orgId,
-      set: {
+  const existing = await db.query.portfolioSummaries.findFirst({
+    where: (p, { eq: e }) => e(p.orgId, data.orgId),
+  });
+  if (existing) {
+    return db
+      .update(portfolioSummaries)
+      .set({
         totalDomains: data.totalDomains ?? 0,
         totalValue: data.totalValue,
         avgRoi: data.avgRoi,
         lastUpdated: new Date(),
-      },
-    })
-    .returning();
+      })
+      .where(eq(portfolioSummaries.id, existing.id))
+      .returning();
+  }
+  return db.insert(portfolioSummaries).values(data).returning();
 }
 
 // ─── Audit Events ─────────────────────────────────────────────────────────────
@@ -700,6 +765,21 @@ export async function getAuditEventsForOrg(
     offset: opts?.offset ?? 0,
     orderBy: (a, { desc }) => [desc(a.createdAt)],
   });
+}
+
+export async function countAuditEventsForOrg(
+  orgId: string,
+  opts?: { entityType?: string },
+) {
+  const conditions = [eq(auditEvents.orgId, orgId)];
+  if (opts?.entityType) {
+    conditions.push(eq(auditEvents.entityType, opts.entityType));
+  }
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(auditEvents)
+    .where(and(...conditions));
+  return Number(result[0]?.count ?? 0);
 }
 
 export async function createAuditEvent(data: {
@@ -818,6 +898,17 @@ export async function upsertGuardrail(data: {
   value: number;
   enabled?: boolean;
 }) {
+  const existing = await db.query.guardrails.findFirst({
+    where: (g, { and: a, eq: e }) =>
+      a(e(g.orgId, data.orgId), e(g.rule, data.rule)),
+  });
+  if (existing) {
+    return db
+      .update(guardrails)
+      .set({ value: data.value, enabled: data.enabled ?? true })
+      .where(eq(guardrails.id, existing.id))
+      .returning();
+  }
   return db.insert(guardrails).values(data).returning();
 }
 
@@ -841,14 +932,18 @@ export async function upsertFeatureFlag(data: {
   enabled?: boolean;
   config?: Record<string, unknown>;
 }) {
-  return db
-    .insert(featureFlags)
-    .values(data)
-    .onConflictDoUpdate({
-      target: [featureFlags.orgId, featureFlags.key],
-      set: { enabled: data.enabled ?? false, config: data.config },
-    })
-    .returning();
+  const existing = await db.query.featureFlags.findFirst({
+    where: (f, { and: a, eq: e }) =>
+      a(e(f.orgId, data.orgId), e(f.key, data.key)),
+  });
+  if (existing) {
+    return db
+      .update(featureFlags)
+      .set({ enabled: data.enabled ?? false, config: data.config })
+      .where(eq(featureFlags.id, existing.id))
+      .returning();
+  }
+  return db.insert(featureFlags).values(data).returning();
 }
 
 // ─── Onboarding Progress ──────────────────────────────────────────────────────
@@ -864,15 +959,19 @@ export async function upsertOnboardingStep(data: {
   step: string;
   completed?: boolean;
 }) {
-  return db
-    .insert(onboardingProgress)
-    .values(data)
-    .onConflictDoUpdate({
-      target: [onboardingProgress.orgId, onboardingProgress.step],
-      set: {
+  const existing = await db.query.onboardingProgress.findFirst({
+    where: (o, { and: a, eq: e }) =>
+      a(e(o.orgId, data.orgId), e(o.step, data.step)),
+  });
+  if (existing) {
+    return db
+      .update(onboardingProgress)
+      .set({
         completed: data.completed ?? false,
         completedAt: data.completed ? new Date() : null,
-      },
-    })
-    .returning();
+      })
+      .where(eq(onboardingProgress.id, existing.id))
+      .returning();
+  }
+  return db.insert(onboardingProgress).values(data).returning();
 }

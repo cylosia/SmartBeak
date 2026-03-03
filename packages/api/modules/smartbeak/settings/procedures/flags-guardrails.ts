@@ -1,14 +1,13 @@
-import { ORPCError } from "@orpc/server";
 import {
   getFeatureFlagsForOrg,
   getGuardrailsForOrg,
-  getOrganizationBySlug,
   upsertFeatureFlag,
   upsertGuardrail,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getOrgSettings = protectedProcedure
   .route({
@@ -17,11 +16,10 @@ export const getOrgSettings = protectedProcedure
     tags: ["SmartBeak - Settings"],
     summary: "Get feature flags and guardrails for an organization",
   })
-  .input(z.object({ organizationSlug: z.string() }))
+  .input(z.object({ organizationSlug: z.string().min(1) }))
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgAdmin(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
     const [featureFlags, guardrails] = await Promise.all([
       getFeatureFlagsForOrg(org.id),
       getGuardrailsForOrg(org.id),
@@ -38,16 +36,15 @@ export const upsertFlag = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       key: z.string().min(1).max(100),
       enabled: z.boolean().optional(),
       config: z.record(z.unknown()).optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgAdmin(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
     const [flag] = await upsertFeatureFlag({
       orgId: org.id,
       key: input.key,
@@ -66,16 +63,15 @@ export const upsertGuardrailProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       rule: z.string().min(1).max(100),
-      value: z.number().int(),
+      value: z.number().int().min(0),
       enabled: z.boolean().optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgAdmin(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
     const [guardrail] = await upsertGuardrail({
       orgId: org.id,
       rule: input.rule,

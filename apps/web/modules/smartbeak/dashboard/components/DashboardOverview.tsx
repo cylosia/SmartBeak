@@ -19,8 +19,6 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import {
   GlobeIcon,
-  FileTextIcon,
-  ImageIcon,
   TrendingUpIcon,
   ActivityIcon,
   ZapIcon,
@@ -76,6 +74,17 @@ export function DashboardOverview({
     portfolioQuery.isLoading ||
     billingQuery.isLoading;
 
+  const isError =
+    domainsQuery.isError ||
+    portfolioQuery.isError ||
+    billingQuery.isError;
+
+  const refetchAll = () => {
+    domainsQuery.refetch();
+    portfolioQuery.refetch();
+    billingQuery.refetch();
+  };
+
   const summary = portfolioQuery.data?.summary;
   const subscription = billingQuery.data?.subscription;
 
@@ -83,7 +92,14 @@ export function DashboardOverview({
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Metric Cards */}
-        {isLoading ? (
+        {isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load dashboard data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={refetchAll}>
+              Retry
+            </Button>
+          </div>
+        ) : isLoading ? (
           <CardGridSkeleton count={4} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -231,7 +247,7 @@ export function DashboardOverview({
           <CardContent>
             {domainsQuery.isLoading ? (
               <TableSkeleton rows={3} />
-            ) : domainsQuery.data?.items.length === 0 ? (
+            ) : (domainsQuery.data?.items ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
                 No domains yet.{" "}
                 <Link
@@ -243,7 +259,7 @@ export function DashboardOverview({
               </p>
             ) : (
               <div className="divide-y divide-border">
-                {domainsQuery.data?.items.map((domain) => (
+                {(domainsQuery.data?.items ?? []).map((domain) => (
                   <div
                     key={domain.id}
                     className="flex items-center justify-between py-3"
