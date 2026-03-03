@@ -1,7 +1,7 @@
 import { getActiveOrganization } from "@saas/auth/lib/server";
 import { PageHeader } from "@saas/shared/components/PageHeader";
 import { notFound } from "next/navigation";
-import { SmartDeployStub } from "@/modules/smartbeak/smart-deploy/components/SmartDeployStub";
+import { SmartDeployView } from "@/modules/smartbeak/smart-deploy/components/SmartDeployView";
 
 export default async function SmartDeployPage({
   params,
@@ -18,7 +18,7 @@ export default async function SmartDeployPage({
         title="SmartDeploy"
         subtitle="One-click site deployment engine — edge-powered global publishing."
       />
-      <SmartDeployStub organizationSlug={organizationSlug} />
+      <SmartDeployView organizationSlug={organizationSlug} />
     </div>
   );
 }

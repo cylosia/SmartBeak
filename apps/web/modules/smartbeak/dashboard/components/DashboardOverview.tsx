@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
+import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
@@ -129,10 +130,13 @@ export function DashboardOverview({
         {/* Charts Row */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-medium">
                 Publishing Activity
               </CardTitle>
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                Sample data
+              </span>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -163,10 +167,13 @@ export function DashboardOverview({
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-medium">
                 Traffic Overview
               </CardTitle>
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                Sample data
+              </span>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
@@ -253,17 +260,7 @@ export function DashboardOverview({
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                          domain.status === "active"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            : domain.status === "deployed"
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                        }`}
-                      >
-                        {domain.status}
-                      </span>
+                      <StatusBadge status={domain.status ?? "pending"} />
                       <Button variant="ghost" size="sm" asChild>
                         <Link
                           href={`/app/${organizationSlug}/domains/${domain.id}/content`}

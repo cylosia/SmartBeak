@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import {
   getDomainById,
   getOrganizationBySlug,
+  getPublishAttemptsForJob,
   getPublishingJobsForDomain,
 } from "@repo/database";
 import z from "zod";
@@ -31,9 +32,19 @@ export const listPublishingJobs = protectedProcedure
     if (!domain || domain.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
     }
-    const jobs = await getPublishingJobsForDomain(input.domainId, {
+    const rawJobs = await getPublishingJobsForDomain(input.domainId, {
       limit: input.limit,
       offset: input.offset,
     });
+    const jobs = await Promise.all(
+      rawJobs.map(async (job) => {
+        const attempts = await getPublishAttemptsForJob(job.id);
+        return {
+          ...job,
+          attemptCount: attempts.length,
+          maxAttempts: 3,
+        };
+      }),
+    );
     return { jobs };
   });

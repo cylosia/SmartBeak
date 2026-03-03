@@ -36,16 +36,44 @@ export function SeoView({
     }),
   );
 
+  const seoQueryKey = orpc.smartbeak.seo.get.key({
+    input: { organizationSlug, domainId },
+  });
+
   const addKeywordMutation = useMutation(
     orpc.smartbeak.seo.addKeyword.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: orpc.smartbeak.seo.get.key(),
+      onMutate: async (variables) => {
+        await queryClient.cancelQueries({ queryKey: seoQueryKey });
+        const previous = queryClient.getQueryData(seoQueryKey);
+        queryClient.setQueryData(seoQueryKey, (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const data = old as { keywords: unknown[]; seoDoc: unknown };
+          return {
+            ...data,
+            keywords: [
+              ...data.keywords,
+              {
+                id: `temp-${Date.now()}`,
+                keyword: variables.keyword,
+                volume: variables.volume ?? null,
+                difficulty: variables.difficulty ?? null,
+                position: variables.position ?? null,
+                domainId,
+              },
+            ],
+          };
         });
-        toast({ title: "Keyword added" });
         setNewKeyword("");
+        return { previous };
       },
-      onError: (err) => {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: seoQueryKey });
+        toast({ title: "Keyword added" });
+      },
+      onError: (err, _vars, context) => {
+        if (context?.previous) {
+          queryClient.setQueryData(seoQueryKey, context.previous);
+        }
         toast({ title: "Error", description: err.message, variant: "error" });
       },
     }),
@@ -53,11 +81,28 @@ export function SeoView({
 
   const removeKeywordMutation = useMutation(
     orpc.smartbeak.seo.removeKeyword.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: orpc.smartbeak.seo.get.key(),
+      onMutate: async (variables) => {
+        await queryClient.cancelQueries({ queryKey: seoQueryKey });
+        const previous = queryClient.getQueryData(seoQueryKey);
+        queryClient.setQueryData(seoQueryKey, (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const data = old as { keywords: Array<{ id: string }>; seoDoc: unknown };
+          return {
+            ...data,
+            keywords: data.keywords.filter((k) => k.id !== variables.id),
+          };
         });
+        return { previous };
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: seoQueryKey });
         toast({ title: "Keyword removed" });
+      },
+      onError: (_err, _vars, context) => {
+        if (context?.previous) {
+          queryClient.setQueryData(seoQueryKey, context.previous);
+        }
+        toast({ title: "Error", description: "Failed to remove keyword.", variant: "error" });
       },
     }),
   );
@@ -217,6 +262,7 @@ export function SeoView({
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Remove keyword ${kw.keyword}`}
                         onClick={() =>
                           removeKeywordMutation.mutate({
                             organizationSlug,

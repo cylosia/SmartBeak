@@ -2,6 +2,7 @@ import { aiIdeasRouter } from "./ai-ideas/router";
 import { auditRouter } from "./audit/router";
 import { billingRouter } from "./billing/router";
 import { contentRouter } from "./content/router";
+import { deployRouter } from "./deploy/router";
 import { domainsRouter } from "./domains/router";
 import { mediaRouter } from "./media/router";
 import { onboardingRouter } from "./onboarding/router";
@@ -22,4 +23,5 @@ export const smartbeakRouter = {
   aiIdeas: aiIdeasRouter,
   portfolio: portfolioRouter,
   settings: settingsRouter,
+  deploy: deployRouter,
 };

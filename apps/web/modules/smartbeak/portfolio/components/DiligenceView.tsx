@@ -45,8 +45,12 @@ export function DiligenceView({
     }),
   );
 
-  const { diligenceChecks = [], decaySignals = [], buyerSessions = [] } =
-    diligenceQuery.data ?? {};
+  const {
+    diligenceChecks = [],
+    decaySignals = [],
+    buyerSessions = [],
+    timeline = [],
+  } = diligenceQuery.data ?? {};
 
   const passCount = diligenceChecks.filter((c) => c.status === "pass").length;
   const warnCount = diligenceChecks.filter((c) => c.status === "warn").length;
@@ -241,6 +245,60 @@ export function DiligenceView({
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Timeline */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <ClockIcon className="h-4 w-4" />
+              Domain Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {diligenceQuery.isLoading ? (
+              <TableSkeleton rows={3} />
+            ) : timeline.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No timeline events recorded.
+              </p>
+            ) : (
+              <div className="relative space-y-0">
+                {timeline.map((event, idx) => (
+                  <div key={event.id} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 ring-2 ring-background">
+                        <ClockIcon className="h-3 w-3 text-primary" />
+                      </div>
+                      {idx < timeline.length - 1 && (
+                        <div className="w-px flex-1 bg-border" />
+                      )}
+                    </div>
+                    <div className="pb-6">
+                      <p className="text-sm font-medium capitalize">
+                        {(event.eventType ?? "event").replace(/_/g, " ")}
+                      </p>
+                      {event.details && typeof event.details === "object" && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {Object.entries(event.details as Record<string, unknown>)
+                            .slice(0, 3)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(" · ")}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {event.createdAt
+                          ? formatDistanceToNow(new Date(event.createdAt), {
+                              addSuffix: true,
+                            })
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

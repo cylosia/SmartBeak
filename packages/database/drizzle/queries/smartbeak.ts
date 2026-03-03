@@ -478,6 +478,12 @@ export async function getKeywordsForDomain(domainId: string) {
   });
 }
 
+export async function getKeywordById(id: string) {
+  return db.query.keywordTracking.findFirst({
+    where: (k, { eq }) => eq(k.id, id),
+  });
+}
+
 export async function upsertKeyword(data: {
   domainId: string;
   keyword: string;

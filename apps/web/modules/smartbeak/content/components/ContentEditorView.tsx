@@ -1,10 +1,10 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
-import { Textarea } from "@repo/ui/components/textarea";
+import { TiptapEditor } from "./TiptapEditor";
 import {
   Select,
   SelectContent,
@@ -62,24 +62,59 @@ export function ContentEditorView({
   const [aiIdeas, setAiIdeas] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [ideaInput, setIdeaInput] = useState("");
+  const initializedRef = useRef<string | null>(null);
 
-  // Sync state when data loads
   const item = contentQuery.data?.item;
-  if (item && !title && !body) {
-    setTitle(item.title);
-    setBody(item.body ?? "");
-    setStatus(item.status ?? "draft");
-  }
+
+  useEffect(() => {
+    if (item && initializedRef.current !== item.id) {
+      initializedRef.current = item.id;
+      setTitle(item.title);
+      setBody(item.body ?? "");
+      setStatus(item.status ?? "draft");
+    }
+  }, [item]);
 
   const updateMutation = useMutation(
     orpc.smartbeak.content.update.mutationOptions({
+      onMutate: async (variables) => {
+        await queryClient.cancelQueries({
+          queryKey: orpc.smartbeak.content.get.key(),
+        });
+        const previous = queryClient.getQueryData(
+          orpc.smartbeak.content.get.key({ input: { organizationSlug, id: contentId } }),
+        );
+        queryClient.setQueryData(
+          orpc.smartbeak.content.get.key({ input: { organizationSlug, id: contentId } }),
+          (old: unknown) => {
+            if (!old || typeof old !== "object") return old;
+            const data = old as Record<string, unknown>;
+            return {
+              ...data,
+              item: {
+                ...(data.item as Record<string, unknown>),
+                title: variables.title ?? (data.item as Record<string, unknown>).title,
+                body: variables.body ?? (data.item as Record<string, unknown>).body,
+                status: variables.status ?? (data.item as Record<string, unknown>).status,
+              },
+            };
+          },
+        );
+        return { previous };
+      },
       onSuccess: () => {
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.content.get.key(),
         });
         toast({ title: "Saved", description: "Content updated successfully." });
       },
-      onError: (err) => {
+      onError: (err, _vars, context) => {
+        if (context?.previous) {
+          queryClient.setQueryData(
+            orpc.smartbeak.content.get.key({ input: { organizationSlug, id: contentId } }),
+            context.previous,
+          );
+        }
         toast({ title: "Error", description: err.message, variant: "error" });
       },
     }),
@@ -95,6 +130,17 @@ export function ContentEditorView({
     });
   };
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   const handleGenerateIdeas = async () => {
     if (!ideaInput.trim()) return;
     setAiLoading(true);
@@ -105,6 +151,7 @@ export function ContentEditorView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          organizationSlug,
           domainName: ideaInput,
           count: 5,
         }),
@@ -232,6 +279,7 @@ export function ContentEditorView({
                       size="icon"
                       onClick={handleGenerateIdeas}
                       disabled={aiLoading}
+                      aria-label="Generate AI ideas"
                     >
                       {aiLoading ? (
                         <Loader2Icon className="h-4 w-4 animate-spin" />
@@ -275,19 +323,7 @@ export function ContentEditorView({
               placeholder="Article title..."
               className="text-xl font-semibold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
             />
-            <Textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Start writing your content here...
-
-This editor supports rich text. In production, this textarea is replaced with a full Tiptap ProseMirror editor with:
-• Bold, italic, headings, lists, blockquotes
-• Image embedding from the media library
-• Code blocks with syntax highlighting
-• Link management
-• AI-powered writing suggestions"
-              className="min-h-[500px] resize-none border-0 rounded-none px-0 focus-visible:ring-0 font-mono text-sm leading-relaxed"
-            />
+            <TiptapEditor content={body} onChange={setBody} />
           </TabsContent>
           <TabsContent value="preview">
             <Card>

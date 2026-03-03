@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import {
   deleteKeyword,
   getDomainById,
+  getKeywordById,
   getOrganizationBySlug,
   upsertKeyword,
 } from "@repo/database";
@@ -61,6 +62,12 @@ export const removeKeyword = protectedProcedure
     const org = await getOrganizationBySlug(input.organizationSlug);
     if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
     await requireOrgEditor(org.id, user.id);
+    const keyword = await getKeywordById(input.id);
+    if (!keyword) throw new ORPCError("NOT_FOUND", { message: "Keyword not found." });
+    const domain = await getDomainById(keyword.domainId);
+    if (!domain || domain.orgId !== org.id) {
+      throw new ORPCError("FORBIDDEN", { message: "Access denied." });
+    }
     await deleteKeyword(input.id);
     return { success: true };
   });

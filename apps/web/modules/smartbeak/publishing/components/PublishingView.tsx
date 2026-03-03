@@ -63,7 +63,14 @@ export function PublishingView({
 }) {
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<string>("web");
+  const [selectedContentId, setSelectedContentId] = useState<string>("");
   const queryClient = useQueryClient();
+
+  const contentQuery = useQuery(
+    orpc.smartbeak.content.list.queryOptions({
+      input: { organizationSlug, domainId, limit: 100, offset: 0 },
+    }),
+  );
 
   const jobsQuery = useQuery(
     orpc.smartbeak.publishing.listJobs.queryOptions({
@@ -90,7 +97,7 @@ export function PublishingView({
     <ErrorBoundary>
       <div className="space-y-4">
         {/* Toolbar */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {jobsQuery.data?.jobs.length ?? 0} publishing jobs
           </p>
@@ -173,6 +180,21 @@ export function PublishingView({
             </DialogHeader>
             <div className="space-y-4">
               <div>
+                <label className="text-sm font-medium">Content Item</label>
+                <Select value={selectedContentId} onValueChange={setSelectedContentId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select content to publish" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contentQuery.data?.items.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-sm font-medium">Publish Target</label>
                 <Select value={target} onValueChange={setTarget}>
                   <SelectTrigger className="mt-1">
@@ -197,6 +219,7 @@ export function PublishingView({
                   createMutation.mutate({
                     organizationSlug,
                     domainId,
+                    contentId: selectedContentId || undefined,
                     target: target as
                       | "web"
                       | "linkedin"
