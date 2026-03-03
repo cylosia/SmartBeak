@@ -8,8 +8,16 @@
 // migrations only — never by altering existing definitions.
 // =============================================================================
 
-import { pgTable, uuid, text, timestamp, jsonb, integer, boolean, pgEnum, numeric, bytea } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, integer, boolean, pgEnum, numeric, customType } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+
+// bytea custom type — drizzle-orm 0.44.x does not export bytea from pg-core;
+// we define it via customType to preserve the exact v9 column type.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 // Enums
 export const contentStatus = pgEnum('content_status', ['draft', 'published', 'scheduled', 'archived']);
