@@ -25,9 +25,9 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.3.13",
+		"@biomejs/biome": "2.4.5",
 		"@repo/tsconfig": "workspace:*",
-		"@types/react": "19.2.3",
+		"@types/react": "19.2.14",
 		"encoding": "^0.1.13",
 		"typescript": "5.9.3"
 	},

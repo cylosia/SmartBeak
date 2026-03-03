@@ -1,8 +1,321 @@
-# supastarter for Next.js
+# SmartBeak — Premium AI-Powered Multi-Tenant Content Publishing SaaS
 
-supastarter is the ultimate starter kit for production-ready, scalable SaaS applications.
+SmartBeak is a production-ready, multi-tenant content publishing platform built on **Supastarter Pro** (Turborepo + Next.js 15 + Hono + Drizzle ORM + Supabase). It delivers a premium SaaS experience for domain portfolio management, AI-assisted content creation, multi-channel publishing, SEO tracking, and investor-grade diligence dashboards.
 
-## Helpful links
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Cylosia/SmartBeak)
 
-- [📘 Documentation](https://supastarter.dev/docs/nextjs)
-- [🚀 Demo](https://demo.supastarter.dev)
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#architecture-overview)
+2. [Feature Set](#feature-set)
+3. [Tech Stack](#tech-stack)
+4. [Local Development Setup](#local-development-setup)
+5. [Environment Variables](#environment-variables)
+6. [Database Setup](#database-setup)
+7. [Deploying to Vercel + Supabase](#deploying-to-vercel--supabase)
+8. [Schema Governance](#schema-governance)
+9. [RBAC and Multi-Tenancy](#rbac-and-multi-tenancy)
+10. [SmartDeploy](#smartdeploy)
+
+---
+
+## Architecture Overview
+
+The monorepo is structured as follows:
+
+- `apps/web` — Next.js 15 App Router (main SaaS frontend)
+- `packages/api` — Hono + oRPC API server with all SmartBeak modules (domains, content, media, publishing, SEO, billing, audit, portfolio, onboarding, AI ideas, settings)
+- `packages/database` — Drizzle ORM + Prisma dual adapter
+  - `drizzle/schema/smartbeak.ts` — **LOCKED v9 schema** (single source of truth)
+  - `drizzle/schema/postgres.ts` — Supastarter base tables
+- `packages/auth` — better-auth configuration
+- `packages/payments` — Stripe / Lemonsqueezy / Polar adapters
+- `packages/mail` — Resend / Nodemailer / Postmark adapters
+- `packages/storage` — S3-compatible storage
+- `packages/ai` — Vercel AI SDK configuration
+- `packages/ui` — shadcn/ui component library
+- `tooling/` — Shared ESLint, Tailwind, TypeScript configs
+
+---
+
+## Feature Set
+
+### Core Platform
+
+- **Multi-tenant organizations** with full RBAC (owner / admin / editor / viewer)
+- **Domain management** — DNS verification, registry info, health scores, transfer readiness
+- **Rich content editor** — Tiptap-powered with revision history and AI idea generation
+- **Media library** — S3-backed upload, lifecycle management, and analytics
+- **Publishing orchestration** — web themes, email via Resend, social adapters with retry and live status
+- **SEO tools** — per-domain SEO documents and keyword tracking
+
+### Premium Dashboards
+
+- **Portfolio ROI Dashboard** — aggregate domain value, revenue, and ROI metrics
+- **Diligence Report** — per-domain checks, decay signals, and sell-readiness score
+- **Timeline** — chronological event history per domain
+- **Buyer Attribution** — session tracking and attribution for domain sale pipelines
+
+### Operations
+
+- **Billing and Usage** — Stripe sync, quota enforcement, monetization decay signals
+- **Immutable Audit Log** — every mutation recorded via database trigger
+- **Onboarding Wizard** — step-by-step guided setup with progress tracking
+- **Feature Flags and Guardrails** — per-org feature toggles and abuse protection
+- **SmartDeploy Stub** — placeholder for the Replit Agent-powered deploy engine
+
+### Developer Experience
+
+- Strict TypeScript throughout
+- Zod validation on all API inputs and outputs
+- Optimistic updates via TanStack Query
+- Loading skeletons and error boundaries on every page
+- Dark mode and responsive premium UI (shadcn/ui + Tailwind)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 15 (App Router), React 19, TypeScript |
+| **Styling** | Tailwind CSS v4, shadcn/ui, Lucide Icons |
+| **API** | Hono, oRPC (type-safe RPC over HTTP) |
+| **Database** | PostgreSQL via Supabase, Drizzle ORM + Prisma |
+| **Auth** | better-auth (email/password, OAuth, organizations, RBAC) |
+| **Payments** | Stripe (primary), Lemonsqueezy / Polar / Creem adapters |
+| **Email** | Resend (primary), Nodemailer / Postmark / Mailgun adapters |
+| **Storage** | S3-compatible (Supabase Storage, MinIO for local dev) |
+| **AI** | Vercel AI SDK (OpenAI GPT-4.1) |
+| **Charts** | Recharts |
+| **Monorepo** | Turborepo + pnpm workspaces |
+| **Deploy** | Vercel (frontend + API), Supabase (database + storage) |
+
+---
+
+## Local Development Setup
+
+### Prerequisites
+
+- **Node.js** >= 22 (via `nvm` or `fnm`)
+- **pnpm** >= 9 (`npm install -g pnpm`)
+- **Docker** (for local PostgreSQL + MinIO via Docker Compose)
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/Cylosia/SmartBeak.git
+cd SmartBeak
+pnpm install
+```
+
+### 2. Start local services
+
+```bash
+docker-compose up -d
+```
+
+This starts PostgreSQL on `localhost:5432`, MinIO on `localhost:9000`, and MailHog on `localhost:8025`.
+
+### 3. Configure environment
+
+```bash
+cp .env.local.example .env.local
+```
+
+Minimum required variables for local development:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/supastarter"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5432/supastarter"
+NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+BETTER_AUTH_SECRET="any-random-32-char-string"
+S3_ACCESS_KEY_ID="minioadmin"
+S3_SECRET_ACCESS_KEY="minioadmin"
+S3_ENDPOINT="http://localhost:9000"
+S3_REGION="us-east-1"
+NEXT_PUBLIC_AVATARS_BUCKET_NAME="avatars"
+NEXT_PUBLIC_MEDIA_BUCKET_NAME="media"
+OPENAI_API_KEY="sk-..."
+```
+
+### 4. Run database migrations
+
+```bash
+# Push the Prisma schema (Supastarter base tables)
+pnpm --filter @repo/database push
+
+# Push the Drizzle schema (SmartBeak v9 tables)
+pnpm --filter @repo/database drizzle:push
+```
+
+### 5. Start the development server
+
+```bash
+pnpm dev
+```
+
+The app will be available at http://localhost:3000.
+
+---
+
+## Environment Variables
+
+### Required
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (with connection pooling) |
+| `DIRECT_URL` | Direct PostgreSQL connection string (for migrations) |
+| `NEXT_PUBLIC_SITE_URL` | Public URL of the application |
+| `BETTER_AUTH_SECRET` | Random secret for better-auth session signing |
+
+### Authentication (OAuth)
+
+| Variable | Description |
+|---|---|
+| `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+
+### Email
+
+| Variable | Description |
+|---|---|
+| `RESEND_API_KEY` | Resend API key (recommended for production) |
+| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USER` / `MAIL_PASS` | SMTP credentials (alternative) |
+
+### Payments (Stripe)
+
+| Variable | Description |
+|---|---|
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `NEXT_PUBLIC_PRICE_ID_PRO_MONTHLY` | Stripe Price ID for Pro Monthly |
+| `NEXT_PUBLIC_PRICE_ID_PRO_YEARLY` | Stripe Price ID for Pro Yearly |
+| `NEXT_PUBLIC_PRICE_ID_LIFETIME` | Stripe Price ID for Lifetime |
+
+### Storage
+
+| Variable | Description |
+|---|---|
+| `S3_ACCESS_KEY_ID` | S3 access key ID |
+| `S3_SECRET_ACCESS_KEY` | S3 secret access key |
+| `S3_ENDPOINT` | S3 endpoint URL (e.g., Supabase Storage endpoint) |
+| `S3_REGION` | S3 region |
+| `NEXT_PUBLIC_AVATARS_BUCKET_NAME` | Bucket for user avatars |
+| `NEXT_PUBLIC_MEDIA_BUCKET_NAME` | Bucket for SmartBeak media assets |
+
+### AI
+
+| Variable | Description |
+|---|---|
+| `OPENAI_API_KEY` | OpenAI API key for AI content idea generation |
+
+### Analytics (optional)
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_PIRSCH_CODE` | Pirsch analytics site code |
+| `NEXT_PUBLIC_PLAUSIBLE_URL` | Plausible analytics URL |
+| `NEXT_PUBLIC_MIXPANEL_TOKEN` | Mixpanel project token |
+| `NEXT_PUBLIC_GOOGLE_ANALYTICS_ID` | Google Analytics measurement ID |
+
+---
+
+## Database Setup
+
+SmartBeak uses a **dual-adapter** database strategy:
+
+- **Prisma** manages the Supastarter base tables (users, sessions, organizations, members, invitations, purchases).
+- **Drizzle ORM** manages the SmartBeak v9 tables (domains, content, media, publishing, SEO, billing, audit, portfolio, etc.).
+
+```bash
+# Prisma (Supastarter base)
+pnpm --filter @repo/database migrate
+
+# Drizzle (SmartBeak v9)
+pnpm --filter @repo/database drizzle:push
+```
+
+---
+
+## Deploying to Vercel + Supabase
+
+### One-click deploy
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Cylosia/SmartBeak)
+
+### Manual steps
+
+1. Create a Supabase project at https://supabase.com. Copy the connection strings.
+2. Create storage buckets: `avatars` and `media`.
+3. Connect your GitHub repo to Vercel with these settings:
+   - **Root Directory:** `apps/web`
+   - **Build Command:** `cd ../.. && pnpm build --filter=web`
+   - **Install Command:** `pnpm install`
+4. Add all environment variables to Vercel.
+5. Run migrations against Supabase:
+
+```bash
+DATABASE_URL="your-supabase-url" pnpm --filter @repo/database push
+DATABASE_URL="your-supabase-url" pnpm --filter @repo/database drizzle:push
+```
+
+6. Configure Stripe webhook at `https://your-domain.vercel.app/api/payments/webhook`.
+
+---
+
+## Schema Governance
+
+The file `packages/database/drizzle/schema/smartbeak.ts` is the **locked v9 schema** and must never be modified. All future schema changes must be additive-only in new migration files. This file contains 26 tables, 4 enums, and all relationships, indexes, triggers, materialized views, and RLS policies for the SmartBeak platform.
+
+---
+
+## RBAC and Multi-Tenancy
+
+| Role | Permissions |
+|---|---|
+| **owner** | Full access, billing management, member management, delete org |
+| **admin** | All content operations, domain management, member management |
+| **editor** | Create/edit/publish content, upload media |
+| **viewer** | Read-only access to all resources |
+
+Enforcement happens at three layers:
+
+1. **API layer** — `requireOrgMembership()` validates membership on every procedure.
+2. **Database layer** — Row-Level Security (RLS) policies on all SmartBeak tables.
+3. **UI layer** — `useActiveOrganization()` hook gates admin-only UI elements.
+
+---
+
+## SmartDeploy
+
+SmartDeploy is a planned one-click site deployment engine. The current implementation is a stub/placeholder accessible at `/app/[org]/smart-deploy`.
+
+> **SmartDeploy engine will be implemented via Replit Agent.**
+
+The stub includes a premium card UI with a "Deploy Site" button and route scaffolding ready for the engine integration.
+
+---
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `pnpm dev` | Start all apps in development mode |
+| `pnpm build` | Build all apps and packages |
+| `pnpm type-check` | TypeScript type checking across the monorepo |
+| `pnpm lint` | Biome linting across the monorepo |
+| `pnpm --filter @repo/database push` | Push Prisma schema to database |
+| `pnpm --filter @repo/database drizzle:push` | Push Drizzle schema to database |
+| `pnpm --filter @repo/database studio` | Open Prisma Studio |
+
+---
+
+## License
+
+Proprietary — SmartBeak / Cylosia. All rights reserved.

@@ -5,6 +5,7 @@ import { contactRouter } from "../modules/contact/router";
 import { newsletterRouter } from "../modules/newsletter/router";
 import { organizationsRouter } from "../modules/organizations/router";
 import { paymentsRouter } from "../modules/payments/router";
+import { smartbeakRouter } from "../modules/smartbeak/router";
 import { usersRouter } from "../modules/users/router";
 import { publicProcedure } from "./procedures";
 
@@ -16,6 +17,7 @@ export const router = publicProcedure.router({
 	users: usersRouter,
 	payments: paymentsRouter,
 	ai: aiRouter,
+	smartbeak: smartbeakRouter,
 });
 
 export type ApiRouterClient = RouterClient<typeof router>;

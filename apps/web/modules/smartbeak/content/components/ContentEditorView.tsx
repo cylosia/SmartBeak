@@ -1,0 +1,317 @@
+"use client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
+import { orpc } from "@shared/lib/orpc-query-utils";
+import { Button } from "@repo/ui/components/button";
+import { Input } from "@repo/ui/components/input";
+import { Textarea } from "@repo/ui/components/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@repo/ui/components/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@repo/ui/components/sheet";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@repo/ui/components/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { toast } from "@repo/ui/components/toast";
+import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
+import { PageSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import {
+  SaveIcon,
+  SparklesIcon,
+  HistoryIcon,
+  SendIcon,
+  Loader2Icon,
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+
+export function ContentEditorView({
+  organizationSlug,
+  domainId,
+  contentId,
+}: {
+  organizationSlug: string;
+  domainId: string;
+  contentId: string;
+}) {
+  const queryClient = useQueryClient();
+
+  const contentQuery = useQuery(
+    orpc.smartbeak.content.get.queryOptions({
+      input: { organizationSlug, id: contentId },
+    }),
+  );
+
+  const [title, setTitle] = useState<string>("");
+  const [body, setBody] = useState<string>("");
+  const [status, setStatus] = useState<string>("draft");
+  const [aiIdeas, setAiIdeas] = useState<string>("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [ideaInput, setIdeaInput] = useState("");
+
+  // Sync state when data loads
+  const item = contentQuery.data?.item;
+  if (item && !title && !body) {
+    setTitle(item.title);
+    setBody(item.body ?? "");
+    setStatus(item.status ?? "draft");
+  }
+
+  const updateMutation = useMutation(
+    orpc.smartbeak.content.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: orpc.smartbeak.content.get.key(),
+        });
+        toast({ title: "Saved", description: "Content updated successfully." });
+      },
+      onError: (err) => {
+        toast({ title: "Error", description: err.message, variant: "error" });
+      },
+    }),
+  );
+
+  const handleSave = () => {
+    updateMutation.mutate({
+      organizationSlug,
+      id: contentId,
+      title,
+      body,
+      status: status as "draft" | "published" | "scheduled" | "archived",
+    });
+  };
+
+  const handleGenerateIdeas = async () => {
+    if (!ideaInput.trim()) return;
+    setAiLoading(true);
+    setAiIdeas("");
+    try {
+      // Use the existing AI stream endpoint pattern from Supastarter
+      const response = await fetch("/api/orpc/smartbeak.aiIdeas.generateIdeas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domainName: ideaInput,
+          count: 5,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate ideas");
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setAiIdeas((prev) => prev + decoder.decode(value));
+      }
+    } catch (err) {
+      toast({ title: "AI Error", description: "Failed to generate ideas.", variant: "error" });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  if (contentQuery.isLoading) return <PageSkeleton />;
+  if (!item) return <div className="text-muted-foreground py-8 text-center">Content not found.</div>;
+
+  return (
+    <ErrorBoundary>
+      <div className="space-y-4">
+        {/* Editor Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <StatusBadge status={status} />
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(v)}
+            >
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Revisions Sheet */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <HistoryIcon className="mr-2 h-4 w-4" />
+                  Revisions ({contentQuery.data?.revisions?.length ?? 0})
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Revision History</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4 space-y-3">
+                  {contentQuery.data?.revisions?.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No revisions yet. Save changes to create a revision.
+                    </p>
+                  ) : (
+                    contentQuery.data?.revisions?.map((rev) => (
+                      <div
+                        key={rev.id}
+                        className="rounded-lg border border-border p-3 space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
+                            Version {rev.version}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {rev.createdAt
+                              ? formatDistanceToNow(new Date(rev.createdAt), {
+                                  addSuffix: true,
+                                })
+                              : "—"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {rev.body?.slice(0, 100) ?? "Empty"}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setBody(rev.body ?? "");
+                            toast({ title: "Revision restored" });
+                          }}
+                        >
+                          Restore
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            {/* AI Ideas Sheet */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <SparklesIcon className="mr-2 h-4 w-4" />
+                  AI Ideas
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>AI Content Ideas</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Enter your domain or niche to generate content ideas.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g. SaaS marketing blog"
+                      value={ideaInput}
+                      onChange={(e) => setIdeaInput(e.target.value)}
+                    />
+                    <Button
+                      size="icon"
+                      onClick={handleGenerateIdeas}
+                      disabled={aiLoading}
+                    >
+                      {aiLoading ? (
+                        <Loader2Icon className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <SendIcon className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {aiIdeas && (
+                    <div className="rounded-lg border border-border bg-muted/50 p-3">
+                      <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">
+                        {aiIdeas}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <Button onClick={handleSave} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <SaveIcon className="mr-2 h-4 w-4" />
+              )}
+              Save
+            </Button>
+          </div>
+        </div>
+
+        {/* Editor */}
+        <Tabs defaultValue="editor">
+          <TabsList>
+            <TabsTrigger value="editor">Editor</TabsTrigger>
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+          </TabsList>
+          <TabsContent value="editor" className="space-y-3">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Article title..."
+              className="text-xl font-semibold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
+            />
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Start writing your content here...
+
+This editor supports rich text. In production, this textarea is replaced with a full Tiptap ProseMirror editor with:
+• Bold, italic, headings, lists, blockquotes
+• Image embedding from the media library
+• Code blocks with syntax highlighting
+• Link management
+• AI-powered writing suggestions"
+              className="min-h-[500px] resize-none border-0 rounded-none px-0 focus-visible:ring-0 font-mono text-sm leading-relaxed"
+            />
+          </TabsContent>
+          <TabsContent value="preview">
+            <Card>
+              <CardHeader>
+                <CardTitle>{title || "Untitled"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  {body ? (
+                    body.split("\n").map((line, i) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: preview lines
+                      <p key={i} className="mb-2">
+                        {line || <br />}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">No content yet.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </ErrorBoundary>
+  );
+}
