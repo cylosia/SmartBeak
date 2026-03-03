@@ -1,10 +1,10 @@
 {
 	"dependencies": {
-		"@ai-sdk/anthropic": "^2.0.44",
-		"@ai-sdk/openai": "^2.0.65",
-		"@ai-sdk/react": "^2.0.93",
-		"ai": "^5.0.93",
-		"openai": "^6.9.0"
+		"@ai-sdk/anthropic": "^3.0.53",
+		"@ai-sdk/openai": "^3.0.39",
+		"@ai-sdk/react": "^3.0.110",
+		"ai": "^6.0.108",
+		"openai": "^6.25.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.5",
