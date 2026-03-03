@@ -1,13 +1,13 @@
 {
 	"dependencies": {
-		"@better-auth/passkey": "^1.4.7",
+		"@better-auth/passkey": "^1.5.2",
 		"@repo/database": "workspace:*",
 		"@repo/i18n": "workspace:*",
 		"@repo/logs": "workspace:*",
 		"@repo/mail": "workspace:*",
 		"@repo/payments": "workspace:*",
 		"@repo/utils": "workspace:*",
-		"better-auth": "1.4.7",
+		"better-auth": "1.5.2",
 		"cookie": "^1.0.2"
 	},
 	"devDependencies": {
