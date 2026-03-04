@@ -12,7 +12,8 @@ import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
 import { cancelSubscription } from "@repo/payments";
 import { getBaseUrl } from "@repo/utils";
-import { betterAuth, createAuthMiddleware } from "better-auth";
+import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import {
 	admin,
