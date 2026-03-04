@@ -29,6 +29,7 @@ export function OnboardingForm() {
 	};
 
 	const onCompleted = async () => {
+		// @ts-expect-error better-auth additionalFields not in client type
 		await authClient.updateUser({
 			onboardingComplete: true,
 		});
