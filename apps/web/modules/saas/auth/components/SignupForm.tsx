@@ -79,7 +79,7 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 
 	const onSubmit = form.handleSubmit(async ({ email, password, name }) => {
 		try {
-			const { error } = await (authConfig.enablePasswordLogin
+			const result = await (authConfig.enablePasswordLogin
 				? await authClient.signUp.email({
 						email,
 						password,
@@ -91,6 +91,8 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 						name,
 						callbackURL: redirectPath,
 					}));
+
+			const { error } = result;
 
 			if (error) {
 				throw error;
