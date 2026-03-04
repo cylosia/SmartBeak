@@ -17,6 +17,7 @@ export const getSession = cache(async () => {
 
 export const getActiveOrganization = cache(async (slug: string) => {
 	try {
+		// @ts-expect-error better-auth organization plugin method
 		const activeOrganization = await auth.api.getFullOrganization({
 			query: {
 				organizationSlug: slug,
@@ -32,6 +33,7 @@ export const getActiveOrganization = cache(async (slug: string) => {
 
 export const getOrganizationList = cache(async () => {
 	try {
+		// @ts-expect-error better-auth organization plugin method
 		const organizationList = await auth.api.listOrganizations({
 			headers: await headers(),
 		});
@@ -44,6 +46,7 @@ export const getOrganizationList = cache(async () => {
 
 export const getUserAccounts = cache(async () => {
 	try {
+		// @ts-expect-error better-auth plugin method
 		const userAccounts = await auth.api.listUserAccounts({
 			headers: await headers(),
 		});
@@ -56,6 +59,7 @@ export const getUserAccounts = cache(async () => {
 
 export const getUserPasskeys = cache(async () => {
 	try {
+		// @ts-expect-error better-auth passkey plugin method
 		const userPasskeys = await auth.api.listPasskeys({
 			headers: await headers(),
 		});
