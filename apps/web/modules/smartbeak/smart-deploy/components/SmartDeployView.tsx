@@ -122,10 +122,31 @@ export function SmartDeployView({
               </div>
 
               <div className="flex flex-col gap-4 w-full max-w-md">
+                {(domainsQuery.isError || themesQuery.isError) && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center justify-between">
+                    <span>
+                      {domainsQuery.isError && themesQuery.isError
+                        ? "Failed to load domains and themes."
+                        : domainsQuery.isError
+                          ? "Failed to load domains."
+                          : "Failed to load themes."}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (domainsQuery.isError) domainsQuery.refetch();
+                        if (themesQuery.isError) themesQuery.refetch();
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Select value={selectedDomainId} onValueChange={setSelectedDomainId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select domain" />
+                      <SelectValue placeholder={domainsQuery.isLoading ? "Loading..." : "Select domain"} />
                     </SelectTrigger>
                     <SelectContent>
                       {(domainsQuery.data?.items ?? []).map((d) => (
@@ -138,7 +159,7 @@ export function SmartDeployView({
 
                   <Select value={selectedThemeId} onValueChange={setSelectedThemeId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select theme" />
+                      <SelectValue placeholder={themesQuery.isLoading ? "Loading..." : "Select theme"} />
                     </SelectTrigger>
                     <SelectContent>
                       {(themesQuery.data?.themes ?? []).map((t) => (
