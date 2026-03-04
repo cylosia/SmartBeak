@@ -42,7 +42,7 @@ export function SmartDeployView({
 }) {
   const queryClient = useQueryClient();
   const [selectedDomainId, setSelectedDomainId] = useState<string>("");
-  const [selectedThemeId, setSelectedThemeId] = useState<string>("landing-leadgen");
+  const [selectedThemeId, setSelectedThemeId] = useState("landing-leadgen" as "affiliate-comparison" | "authority-site" | "landing-leadgen" | "local-business" | "media-newsletter");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const domainsQuery = useQuery(
