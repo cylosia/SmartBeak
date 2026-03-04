@@ -24,9 +24,9 @@ export const updateDomainProcedure = protectedProcedure
         (v) => v.startsWith("https://") || v.startsWith("http://"),
         { message: "URL must use http or https" },
       ).nullable().optional(),
-      registryData: z.record(z.unknown()).nullable().optional(),
-      health: z.record(z.unknown()).nullable().optional(),
-      lifecycle: z.record(z.unknown()).nullable().optional(),
+      registryData: z.record(z.string(), z.unknown()).nullable().optional(),
+      health: z.record(z.string(), z.unknown()).nullable().optional(),
+      lifecycle: z.record(z.string(), z.unknown()).nullable().optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {

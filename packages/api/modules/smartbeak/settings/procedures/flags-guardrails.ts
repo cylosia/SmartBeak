@@ -39,7 +39,7 @@ export const upsertFlag = protectedProcedure
       organizationSlug: z.string().min(1),
       key: z.string().min(1).max(100),
       enabled: z.boolean().optional(),
-      config: z.record(z.unknown()).optional(),
+      config: z.record(z.string(), z.unknown()).optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
