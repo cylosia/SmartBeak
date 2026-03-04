@@ -1,11 +1,11 @@
 import "server-only";
-import type { ActiveOrganization, Organization } from "@repo/auth";
+import type { ActiveOrganization, Organization, Session } from "@repo/auth";
 import { auth } from "@repo/auth";
 import { getInvitationById } from "@repo/database";
 import { headers } from "next/headers";
 import { cache } from "react";
 
-export const getSession = cache(async () => {
+export const getSession = cache(async (): Promise<Session | null> => {
 	const session = await auth.api.getSession({
 		headers: await headers(),
 		query: {
@@ -13,7 +13,7 @@ export const getSession = cache(async () => {
 		},
 	});
 
-	return session;
+	return session as Session | null;
 });
 
 export const getActiveOrganization = cache(
