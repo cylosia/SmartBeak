@@ -36,6 +36,7 @@ export const invitationOnlyPlugin = () =>
 	$ERROR_CODES: {
 		INVALID_INVITATION: {
 			message: "No invitation found for this email",
+			code: "INVALID_INVITATION",
 		},
 	},
 	}) satisfies BetterAuthPlugin;
