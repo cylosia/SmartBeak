@@ -1,4 +1,4 @@
 {
 	"installCommand": "corepack enable && pnpm install",
-	"buildCommand": "pnpm build"
+	"buildCommand": "cd ../.. && npx turbo run build --filter=web"
 }

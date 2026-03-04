@@ -1,6 +1,7 @@
 {
 	"dependencies": {
-		"@better-auth/passkey": "^1.5.3",
+		"@better-auth/passkey": "1.5.3",
+		"@better-auth/prisma-adapter": "^1.5.3",
 		"@repo/database": "workspace:*",
 		"@repo/i18n": "workspace:*",
 		"@repo/logs": "workspace:*",
