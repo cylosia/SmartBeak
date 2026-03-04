@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
+import { orpcClient } from "@shared/lib/orpc-client";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
 import { TiptapEditor } from "./TiptapEditor";
@@ -149,26 +150,13 @@ export function ContentEditorView({
     setAiLoading(true);
     setAiIdeas("");
     try {
-      // Use the existing AI stream endpoint pattern from Supastarter
-      const response = await fetch("/api/orpc/smartbeak.aiIdeas.generateIdeas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          organizationSlug,
-          domainName: ideaInput,
-          count: 5,
-        }),
+      const result = await orpcClient.smartbeak.aiIdeas.generateIdeas({
+        organizationSlug,
+        domainName: ideaInput,
+        count: 5,
       });
-      if (!response.ok) throw new Error("Failed to generate ideas");
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setAiIdeas((prev) => prev + decoder.decode(value));
-      }
-    } catch (err) {
+      setAiIdeas(result.ideas);
+    } catch {
       toastError("AI Error", "Failed to generate ideas.");
     } finally {
       setAiLoading(false);

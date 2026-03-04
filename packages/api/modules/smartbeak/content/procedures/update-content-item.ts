@@ -62,6 +62,9 @@ export const updateContentItemProcedure = protectedProcedure
           ? new Date()
           : undefined,
     });
+    if (!item) {
+      throw new ORPCError("CONFLICT", { message: "Content was modified or deleted." });
+    }
     await audit({
       orgId: org.id,
       actorId: user.id,

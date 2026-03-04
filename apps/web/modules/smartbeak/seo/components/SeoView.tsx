@@ -47,11 +47,11 @@ export function SeoView({
         const previous = queryClient.getQueryData(seoQueryKey);
         queryClient.setQueryData(seoQueryKey, (old: unknown) => {
           if (!old || typeof old !== "object") return old;
-          const data = old as { keywords: unknown[]; seoDoc: unknown };
+          const data = old as { keywords?: unknown[]; seoDoc: unknown };
           return {
             ...data,
             keywords: [
-              ...data.keywords,
+              ...(data.keywords ?? []),
               {
                 id: `temp-${Date.now()}`,
                 keyword: variables.keyword,
@@ -86,10 +86,10 @@ export function SeoView({
         const previous = queryClient.getQueryData(seoQueryKey);
         queryClient.setQueryData(seoQueryKey, (old: unknown) => {
           if (!old || typeof old !== "object") return old;
-          const data = old as { keywords: Array<{ id: string }>; seoDoc: unknown };
+          const data = old as { keywords?: Array<{ id: string }>; seoDoc: unknown };
           return {
             ...data,
-            keywords: data.keywords.filter((k) => k.id !== variables.id),
+            keywords: (data.keywords ?? []).filter((k) => k.id !== variables.id),
           };
         });
         return { previous };

@@ -1,5 +1,4 @@
-import { streamToEventIterator } from "@orpc/client";
-import { streamText, textModel } from "@repo/ai";
+import { generateText, textModel } from "@repo/ai";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
@@ -11,8 +10,6 @@ export const generateContentIdeas = protectedProcedure
     path: "/smartbeak/ai/ideas",
     tags: ["SmartBeak - AI"],
     summary: "Generate AI content ideas for a domain",
-    description:
-      "Uses the Vercel AI SDK to stream content idea suggestions based on domain context.",
   })
   .input(
     z.object({
@@ -37,10 +34,10 @@ For each idea, provide:
 
 Format each idea as a numbered list. Be specific, actionable, and commercially valuable.`;
 
-    const response = streamText({
+    const response = await generateText({
       model: textModel,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 1500,
     });
-    return streamToEventIterator(response.toUIMessageStream());
+    return { ideas: response.text };
   });

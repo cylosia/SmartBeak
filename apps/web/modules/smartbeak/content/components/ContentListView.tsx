@@ -215,7 +215,7 @@ export function ContentListView({
                       <StatusBadge status={item.status ?? "draft"} />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      v{item.version}
+                      v{item.version ?? 1}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {item.updatedAt

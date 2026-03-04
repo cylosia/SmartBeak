@@ -38,6 +38,9 @@ export const updateDomainProcedure = protectedProcedure
     }
     const { organizationSlug, id, ...updateData } = input;
     const [domain] = await updateDomain(id, updateData);
+    if (!domain) {
+      throw new ORPCError("CONFLICT", { message: "Domain was modified or deleted." });
+    }
     await audit({
       orgId: org.id,
       actorId: user.id,
