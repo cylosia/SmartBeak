@@ -42,7 +42,7 @@ export function SmartDeployView({
 }) {
   const queryClient = useQueryClient();
   const [selectedDomainId, setSelectedDomainId] = useState<string>("");
-  const [selectedThemeId, setSelectedThemeId] = useState("landing-leadgen" as "affiliate-comparison" | "authority-site" | "landing-leadgen" | "local-business" | "media-newsletter");
+  const [selectedThemeId, setSelectedThemeId] = useState<string>("landing-leadgen");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const domainsQuery = useQuery(
@@ -96,7 +96,7 @@ export function SmartDeployView({
     deployMutation.mutate({
       organizationSlug,
       domainId: selectedDomainId,
-      themeId: selectedThemeId,
+      themeId: selectedThemeId as "affiliate-comparison" | "authority-site" | "landing-leadgen" | "local-business" | "media-newsletter",
     });
   };
 
