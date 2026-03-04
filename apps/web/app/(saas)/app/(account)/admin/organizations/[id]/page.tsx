@@ -26,7 +26,6 @@ export default async function OrganizationFormPage({
 	await queryClient.prefetchQuery({
 		queryKey: fullOrganizationQueryKey(id),
 		queryFn: async () =>
-			// @ts-expect-error better-auth organization plugin method
 			await auth.api.getFullOrganization({
 				query: {
 					organizationId: id,

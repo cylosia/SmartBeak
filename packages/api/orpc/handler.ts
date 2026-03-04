@@ -24,7 +24,6 @@ export const openApiHandler = new OpenAPIHandler(router, {
 		new OpenAPIReferencePlugin({
 			schemaConverters: [new ZodToJsonSchemaConverter()],
 			specGenerateOptions: async () => {
-				// @ts-expect-error better-auth openAPI plugin method
 				const authSchema = await auth.api.generateOpenAPISchema();
 
 				authSchema.paths = Object.fromEntries(

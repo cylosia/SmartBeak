@@ -12,7 +12,6 @@ export default async function OrganizationInvitationPage({
 }) {
 	const { invitationId } = await params;
 
-	// @ts-expect-error better-auth organization plugin method
 	const invitation = await auth.api.getInvitation({
 		query: {
 			id: invitationId,
