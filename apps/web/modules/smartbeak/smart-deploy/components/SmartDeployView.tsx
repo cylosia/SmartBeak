@@ -226,7 +226,7 @@ export function SmartDeployView({
               )}
 
               {latest?.status === "error" && (
-                <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+                <Badge className="border text-red-600 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
                   Last deployment failed — try again
                 </Badge>
               )}

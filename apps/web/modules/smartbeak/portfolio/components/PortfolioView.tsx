@@ -232,8 +232,7 @@ export function PortfolioView({
                     </span>
                     {!check.pass && (
                       <Badge
-                        variant="outline"
-                        className="ml-auto text-xs text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700"
+                        className="ml-auto text-xs text-amber-600 border border-amber-300 dark:text-amber-400 dark:border-amber-700"
                       >
                         Action needed
                       </Badge>
