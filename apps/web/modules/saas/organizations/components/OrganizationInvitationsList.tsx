@@ -106,12 +106,13 @@ export function OrganizationInvitationsList({
 			accessorKey: "email",
 			accessorFn: (row) => row.email,
 			cell: ({ row }) => {
-				const InvitationStatusIcon = {
+				const statusIcons: Record<string, typeof ClockIcon> = {
 					pending: ClockIcon,
 					accepted: CheckIcon,
 					rejected: XIcon,
 					canceled: XIcon,
-				}[row.original.status as string];
+				};
+				const InvitationStatusIcon = statusIcons[row.original.status as string] ?? ClockIcon;
 				return (
 					<div className="leading-normal">
 						<strong
