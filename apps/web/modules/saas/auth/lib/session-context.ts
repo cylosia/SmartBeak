@@ -27,6 +27,8 @@ interface AppUserData {
 	banExpires?: Date | null;
 	onboardingComplete?: boolean | null;
 	locale?: string | null;
+	twoFactorEnabled?: boolean | null;
+	username?: string | null;
 }
 
 export const SessionContext = React.createContext<

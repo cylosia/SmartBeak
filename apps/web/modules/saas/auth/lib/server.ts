@@ -32,6 +32,8 @@ interface AppSession {
 		banExpires?: Date | null;
 		onboardingComplete?: boolean | null;
 		locale?: string | null;
+		twoFactorEnabled?: boolean | null;
+		username?: string | null;
 	};
 }
 
