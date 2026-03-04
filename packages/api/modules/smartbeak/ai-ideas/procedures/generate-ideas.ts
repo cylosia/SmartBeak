@@ -23,21 +23,36 @@ export const generateContentIdeas = protectedProcedure
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
     const { domainName, niche, count } = input;
-    const prompt = `You are a premium content strategist for a SaaS publishing platform.
-Generate ${count} high-quality, SEO-optimized content ideas for a website called "${domainName}"${niche ? ` in the "${niche}" niche` : ""}.
+    const prompt = `You are a premium content strategist. Generate ${count} SEO-optimized content ideas for "${domainName}"${niche ? ` in the "${niche}" niche` : ""}.
 
-For each idea, provide:
-1. A compelling title (under 70 characters)
-2. A one-sentence meta description
-3. 3 target keywords
-4. Estimated content type (article, listicle, guide, case study, etc.)
+Return ONLY a JSON array (no markdown fences) where each object has:
+- "title": string (compelling, under 70 chars)
+- "outline": string (one-sentence summary/meta description)
+- "keywords": string[] (exactly 3 target keywords)
+- "contentType": string (article | listicle | guide | case-study | how-to)
+- "estimatedReadTime": number (minutes, 3-15)
+- "seoScore": number (estimated SEO potential 0-100)
 
-Format each idea as a numbered list. Be specific, actionable, and commercially valuable.`;
+Be specific, actionable, and commercially valuable.`;
 
     const response = await generateText({
       model: textModel,
       messages: [{ role: "user", content: prompt }],
-      maxOutputTokens: 1500,
+      maxOutputTokens: 2000,
     });
-    return { ideas: response.text };
+
+    try {
+      const cleaned = response.text.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned) as Array<{
+        title: string;
+        outline: string;
+        keywords: string[];
+        contentType: string;
+        estimatedReadTime: number;
+        seoScore: number;
+      }>;
+      return { ideas: JSON.stringify(parsed), structured: parsed };
+    } catch {
+      return { ideas: response.text, structured: [] };
+    }
   });

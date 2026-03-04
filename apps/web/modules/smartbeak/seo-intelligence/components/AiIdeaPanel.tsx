@@ -1,29 +1,34 @@
 "use client";
 
+import type { ChangeEvent } from "react";
 import { orpc } from "@/modules/smartbeak/shared/lib/api";
 import { useMutation } from "@tanstack/react-query";
+import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
 import {
-  Badge,
-  Button,
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
-  Input,
-  Label,
+} from "@repo/ui/components/card";
+import { Input } from "@repo/ui/components/input";
+import { Label } from "@repo/ui/components/label";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+} from "@repo/ui/components/select";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@ui/components";
-import { toast } from "@ui/components/toast";
+} from "@repo/ui/components/sheet";
+import { toastError } from "@repo/ui/components/toast";
 import {
   BookOpenIcon,
   CheckIcon,
@@ -99,7 +104,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
               <span className="text-xs font-mono text-muted-foreground">
                 #{index + 1}
               </span>
-              <Badge variant="outline" className="text-xs capitalize">
+              <Badge className="border border-border text-xs capitalize">
                 {idea.contentType}
               </Badge>
             </div>
@@ -147,7 +152,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
           </p>
           <div className="flex flex-wrap gap-1">
             {idea.targetKeywords.map((kw) => (
-              <Badge key={kw} variant="secondary" className="text-xs">
+              <Badge key={kw} className="bg-muted text-muted-foreground text-xs">
                 {kw}
               </Badge>
             ))}
@@ -182,17 +187,13 @@ export function AiIdeaPanel({ organizationSlug, domainId, onClose }: Props) {
         setIdeas(data.ideas as Idea[]);
       },
       onError: (err) => {
-        toast({
-          title: "Generation failed",
-          description: err.message ?? "Please try again.",
-          variant: "destructive",
-        });
+        toastError("Generation failed", err.message ?? "Please try again.");
       },
     }),
   );
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Sheet open onOpenChange={(open: boolean) => !open && onClose()}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-2xl overflow-y-auto"
@@ -216,14 +217,14 @@ export function AiIdeaPanel({ organizationSlug, domainId, onClose }: Props) {
               <Input
                 placeholder="e.g. B2B SaaS, e-commerce..."
                 value={niche}
-                onChange={(e) => setNiche(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setNiche(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Content Type</Label>
               <Select
                 value={contentType}
-                onValueChange={(v) => setContentType(v as typeof contentType)}
+                onValueChange={(v: string) => setContentType(v as typeof contentType)}
               >
                 <SelectTrigger>
                   <SelectValue />

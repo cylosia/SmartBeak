@@ -5,32 +5,15 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  Input,
-  Progress,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@ui/components";
-import { toast } from "@ui/components/toast";
+import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/components/card";
+import { Input } from "@repo/ui/components/input";
+import { Progress } from "@repo/ui/components/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/components/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@repo/ui/components/tooltip";
+import { toast } from "@repo/ui/components/toast";
 import {
   AlertTriangleIcon,
   BarChart3Icon,
@@ -47,7 +30,7 @@ import {
   XCircleIcon,
   ZapIcon,
 } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 import { AiIdeaPanel } from "./AiIdeaPanel";
 import { ContentOptimizerPanel } from "./ContentOptimizerPanel";
 import { GscSyncDialog } from "./GscSyncDialog";
@@ -148,10 +131,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             input: { organizationSlug, domainId },
           }),
         );
-        toast({ title: "Keyword added", description: "Tracking started." });
+        toast({ title: "Keyword added", description: "Tracking started.", type: "success" });
       },
       onError: () => {
-        toast({ title: "Failed to add keyword", variant: "destructive" });
+        toast({ title: "Failed to add keyword", type: "error" });
       },
     }),
   );
@@ -164,10 +147,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             input: { organizationSlug, domainId },
           }),
         );
-        toast({ title: "Keyword removed" });
+        toast({ title: "Keyword removed", type: "success" });
       },
       onError: () => {
-        toast({ title: "Failed to remove keyword", variant: "destructive" });
+        toast({ title: "Failed to remove keyword", type: "error" });
       },
     }),
   );
@@ -212,6 +195,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
                 toast({
                   title: "Ahrefs sync",
                   description: "Configure your Ahrefs API key in settings to enable this.",
+                  type: "info",
                 })
               }
             >
@@ -369,8 +353,8 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               <Input
                 placeholder="Add keyword to track (e.g. 'best crm software')..."
                 value={newKeyword}
-                onChange={(e) => setNewKeyword(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewKeyword(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter" && newKeyword.trim()) {
                     addKeywordMutation.mutate({
                       organizationSlug,

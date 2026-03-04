@@ -38,9 +38,12 @@ import {
   HistoryIcon,
   SendIcon,
   Loader2Icon,
+  BarChart3Icon,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
+import { AiIdeaCard, AiIdeaCardSkeleton } from "./AiIdeaCard";
+import { ContentSeoSidebar } from "./ContentSeoSidebar";
 
 export function ContentEditorView({
   organizationSlug,
@@ -62,9 +65,18 @@ export function ContentEditorView({
   const [title, setTitle] = useState<string>("");
   const [body, setBody] = useState<string>("");
   const [status, setStatus] = useState<string>("draft");
-  const [aiIdeas, setAiIdeas] = useState<string>("");
+  const [aiIdeas, setAiIdeas] = useState<Array<{
+    title: string;
+    outline: string;
+    keywords: string[];
+    contentType: string;
+    estimatedReadTime: number;
+    seoScore: number;
+  }>>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [ideaInput, setIdeaInput] = useState("");
+  const [ideaCount, setIdeaCount] = useState("5");
+  const [seoSidebarOpen, setSeoSidebarOpen] = useState(false);
   const initializedRef = useRef<string | null>(null);
 
   const item = contentQuery.data?.item;
@@ -148,14 +160,32 @@ export function ContentEditorView({
   const handleGenerateIdeas = async () => {
     if (!ideaInput.trim()) return;
     setAiLoading(true);
-    setAiIdeas("");
+    setAiIdeas([]);
     try {
       const result = await orpcClient.smartbeak.aiIdeas.generateIdeas({
         organizationSlug,
         domainName: ideaInput,
-        count: 5,
+        count: Number.parseInt(ideaCount, 10),
       });
-      setAiIdeas(result.ideas);
+      const structured = (result as { structured?: Array<{
+        title: string;
+        outline: string;
+        keywords: string[];
+        contentType: string;
+        estimatedReadTime: number;
+        seoScore: number;
+      }> }).structured;
+      if (structured && structured.length > 0) {
+        setAiIdeas(structured);
+      } else {
+        try {
+          const parsed = JSON.parse(result.ideas);
+          setAiIdeas(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setAiIdeas([]);
+          toastError("AI Error", "Could not parse AI response.");
+        }
+      }
     } catch {
       toastError("AI Error", "Failed to generate ideas.");
     } finally {
@@ -274,7 +304,7 @@ export function ContentEditorView({
                 <SheetHeader>
                   <SheetTitle>AI Content Ideas</SheetTitle>
                 </SheetHeader>
-                <div className="mt-4 space-y-3">
+                <div className="mt-4 space-y-4">
                   <p className="text-sm text-muted-foreground">
                     Enter your domain or niche to generate content ideas.
                   </p>
@@ -283,7 +313,21 @@ export function ContentEditorView({
                       placeholder="e.g. SaaS marketing blog"
                       value={ideaInput}
                       onChange={(e) => setIdeaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleGenerateIdeas();
+                      }}
+                      className="flex-1"
                     />
+                    <Select value={ideaCount} onValueChange={setIdeaCount}>
+                      <SelectTrigger className="w-16">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="5">5</SelectItem>
+                        <SelectItem value="10">10</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="icon"
                       onClick={handleGenerateIdeas}
@@ -297,16 +341,51 @@ export function ContentEditorView({
                       )}
                     </Button>
                   </div>
-                  {aiIdeas && (
-                    <div className="rounded-lg border border-border bg-muted/50 p-3">
-                      <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">
-                        {aiIdeas}
-                      </pre>
+
+                  {aiLoading && (
+                    <div className="space-y-3">
+                      <AiIdeaCardSkeleton />
+                      <AiIdeaCardSkeleton />
+                      <AiIdeaCardSkeleton />
+                    </div>
+                  )}
+
+                  {!aiLoading && aiIdeas.length > 0 && (
+                    <div className="space-y-3">
+                      {aiIdeas.map((idea) => (
+                        <AiIdeaCard
+                          key={idea.title}
+                          idea={idea}
+                          onUseTitle={(t) => {
+                            setTitle(t);
+                            toast({ title: "Title set", description: t });
+                          }}
+                        />
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={handleGenerateIdeas}
+                        disabled={aiLoading}
+                      >
+                        <SparklesIcon className="mr-1.5 h-3.5 w-3.5" />
+                        Generate More
+                      </Button>
                     </div>
                   )}
                 </div>
               </SheetContent>
             </Sheet>
+
+            <Button
+              variant={seoSidebarOpen ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setSeoSidebarOpen((v) => !v)}
+            >
+              <BarChart3Icon className="mr-2 h-4 w-4" />
+              SEO
+            </Button>
 
             <Button onClick={handleSave} disabled={updateMutation.isPending}>
               {updateMutation.isPending ? (
@@ -319,38 +398,47 @@ export function ContentEditorView({
           </div>
         </div>
 
-        {/* Editor */}
-        <Tabs defaultValue="editor">
-          <TabsList>
-            <TabsTrigger value="editor">Editor</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
-          <TabsContent value="editor" className="space-y-3">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Article title..."
-              className="text-xl font-semibold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
-            />
-            <TiptapEditor content={body} onChange={setBody} />
-          </TabsContent>
-          <TabsContent value="preview">
-            <Card>
-              <CardHeader>
-                <CardTitle>{title || "Untitled"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  {body ? (
-                    <div dangerouslySetInnerHTML={{ __html: body }} />
-                  ) : (
-                    <p className="text-muted-foreground">No content yet.</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Editor + SEO Sidebar */}
+        <div className="flex gap-0">
+          <div className="flex-1 min-w-0">
+            <Tabs defaultValue="editor">
+              <TabsList>
+                <TabsTrigger value="editor">Editor</TabsTrigger>
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+              </TabsList>
+              <TabsContent value="editor" className="space-y-3">
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Article title..."
+                  className="text-xl font-semibold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
+                />
+                <TiptapEditor content={body} onChange={setBody} />
+              </TabsContent>
+              <TabsContent value="preview">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{title || "Untitled"}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      {body ? (
+                        <div dangerouslySetInnerHTML={{ __html: body }} />
+                      ) : (
+                        <p className="text-muted-foreground">No content yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+          <ContentSeoSidebar
+            html={body}
+            isOpen={seoSidebarOpen}
+            onClose={() => setSeoSidebarOpen(false)}
+          />
+        </div>
       </div>
     </ErrorBoundary>
   );

@@ -5,21 +5,11 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Progress,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@ui/components";
+import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { Progress } from "@repo/ui/components/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/components/table";
 import {
   AlertTriangleIcon,
   BarChart3Icon,
