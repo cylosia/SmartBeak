@@ -1,11 +1,41 @@
 import "server-only";
-import type { ActiveOrganization, Organization, Session } from "@repo/auth";
+import type { ActiveOrganization, Organization } from "@repo/auth";
 import { auth } from "@repo/auth";
 import { getInvitationById } from "@repo/database";
 import { headers } from "next/headers";
 import { cache } from "react";
 
-export const getSession = cache(async (): Promise<Session | null> => {
+interface AppSession {
+	session: {
+		id: string;
+		userId: string;
+		expiresAt: Date;
+		token: string;
+		createdAt: Date;
+		updatedAt: Date;
+		ipAddress?: string | null;
+		userAgent?: string | null;
+		impersonatedBy?: string | null;
+		activeOrganizationId?: string | null;
+	};
+	user: {
+		id: string;
+		name: string;
+		email: string;
+		emailVerified: boolean;
+		image?: string | null;
+		createdAt: Date;
+		updatedAt: Date;
+		role?: string | null;
+		banned?: boolean | null;
+		banReason?: string | null;
+		banExpires?: Date | null;
+		onboardingComplete?: boolean | null;
+		locale?: string | null;
+	};
+}
+
+export const getSession = cache(async (): Promise<AppSession | null> => {
 	const session = await auth.api.getSession({
 		headers: await headers(),
 		query: {
@@ -13,7 +43,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
 		},
 	});
 
-	return session as Session | null;
+	return session as AppSession | null;
 });
 
 export const getActiveOrganization = cache(
