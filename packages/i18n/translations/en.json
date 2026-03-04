@@ -909,6 +909,83 @@
       "title": "Getting Started",
       "progress": "Setup Progress",
       "complete": "Mark done"
+    },
+    "seoIntelligence": {
+      "title": "SEO Intelligence",
+      "subtitle": "Keyword tracking, decay signals, AI idea generation, and real-time content optimization.",
+      "keywords": "Keywords",
+      "clusters": "Clusters",
+      "decaySignals": "Decay Signals",
+      "addKeyword": "Track Keyword",
+      "keywordPlaceholder": "Add keyword to track...",
+      "syncGsc": "Sync GSC",
+      "syncAhrefs": "Sync Ahrefs",
+      "aiIdeaGenerator": "AI Idea Generator",
+      "contentOptimizer": "Content Optimizer",
+      "seoScore": "SEO Score",
+      "avgPosition": "Avg. Position",
+      "top10": "Top 10",
+      "decaying": "Decaying",
+      "integrations": "Integrations",
+      "fresh": "Fresh",
+      "aging": "Aging",
+      "decayingBadge": "Decaying",
+      "noKeywords": "No keywords tracked yet",
+      "noKeywordsDesc": "Add keywords manually or sync from Google Search Console or Ahrefs.",
+      "noClusters": "No keyword clusters yet",
+      "noClustersDesc": "Add at least 3 keywords to see topic clusters emerge.",
+      "allFresh": "All keywords are fresh",
+      "allFreshDesc": "No keywords are currently showing decay signals. Keep tracking!",
+      "report": {
+        "title": "SEO Report",
+        "subtitle": "Org-wide SEO health overview: all domains, keyword counts, scores, and decay signals.",
+        "totalDomains": "Domains",
+        "avgScore": "Avg SEO Score",
+        "totalKeywords": "Total Keywords",
+        "totalDecaying": "Decaying"
+      },
+      "aiIdeas": {
+        "title": "AI Content Idea Generator",
+        "subtitle": "Generate SEO-optimized content ideas with outlines, keyword targets, and SEO scores.",
+        "niche": "Niche / Topic",
+        "contentType": "Content Type",
+        "count": "Number of Ideas",
+        "generate": "Generate Ideas",
+        "generating": "Generating ideas...",
+        "outline": "Outline",
+        "targetKeywords": "Target Keywords",
+        "readTime": "min read",
+        "difficulty": {
+          "easy": "Easy",
+          "medium": "Medium",
+          "hard": "Hard"
+        }
+      },
+      "optimizer": {
+        "title": "Real-time Content Optimizer",
+        "subtitle": "SEO scores update live as you type — no save required.",
+        "overallScore": "Overall SEO Score",
+        "breakdown": "Score Breakdown",
+        "keywordDensity": "Keyword Density",
+        "suggestions": "Suggestions",
+        "noIssues": "No issues found. Content looks great!",
+        "title_label": "Title",
+        "meta": "Meta Description",
+        "targetKeywords": "Target Keywords",
+        "body": "Body Content"
+      },
+      "gscSync": {
+        "title": "Sync Google Search Console",
+        "subtitle": "Import keyword rankings and impressions from your GSC property.",
+        "siteUrl": "Site URL (GSC property)",
+        "accessToken": "OAuth2 Access Token",
+        "startDate": "Start Date",
+        "endDate": "End Date",
+        "sync": "Sync Now",
+        "syncing": "Syncing...",
+        "success": "GSC sync complete",
+        "failed": "GSC sync failed"
+      }
     }
   }
 }

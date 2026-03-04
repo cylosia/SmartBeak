@@ -8,6 +8,7 @@ import { onboardingRouter } from "./onboarding/router";
 import { portfolioRouter } from "./portfolio/router";
 import { publishingRouter } from "./publishing/router";
 import { seoRouter } from "./seo/router";
+import { seoIntelligenceRouter } from "./seo-intelligence/router";
 import { settingsRouter } from "./settings/router";
 
 export const smartbeakRouter = {
@@ -21,5 +22,6 @@ export const smartbeakRouter = {
   onboarding: onboardingRouter,
   aiIdeas: aiIdeasRouter,
   portfolio: portfolioRouter,
+  seoIntelligence: seoIntelligenceRouter,
   settings: settingsRouter,
 };

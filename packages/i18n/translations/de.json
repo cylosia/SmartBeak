@@ -881,6 +881,41 @@
     "onboarding": {
       "title": "Erste Schritte",
       "progress": "Einrichtungsfortschritt"
+    },
+    "seoIntelligence": {
+      "title": "SEO-Intelligenz",
+      "subtitle": "Keyword-Tracking, Verfallssignale, KI-Ideengenerierung und Echtzeit-Inhaltsoptimierung.",
+      "keywords": "Keywords",
+      "clusters": "Cluster",
+      "decaySignals": "Verfallssignale",
+      "addKeyword": "Keyword verfolgen",
+      "keywordPlaceholder": "Keyword zum Verfolgen hinzufügen...",
+      "syncGsc": "GSC synchronisieren",
+      "syncAhrefs": "Ahrefs synchronisieren",
+      "aiIdeaGenerator": "KI-Ideengenerator",
+      "contentOptimizer": "Inhaltsoptimierer",
+      "seoScore": "SEO-Score",
+      "avgPosition": "Durchschn. Position",
+      "top10": "Top 10",
+      "decaying": "Verfallend",
+      "integrations": "Integrationen",
+      "fresh": "Frisch",
+      "aging": "Alternd",
+      "decayingBadge": "Verfallend",
+      "noKeywords": "Noch keine Keywords verfolgt",
+      "noKeywordsDesc": "Keywords manuell hinzufügen oder aus Google Search Console oder Ahrefs synchronisieren.",
+      "noClusters": "Noch keine Keyword-Cluster",
+      "noClustersDesc": "Fügen Sie mindestens 3 Keywords hinzu, um Themecluster zu sehen.",
+      "allFresh": "Alle Keywords sind frisch",
+      "allFreshDesc": "Keine Keywords zeigen derzeit Verfallssignale. Weiter so!",
+      "report": {
+        "title": "SEO-Bericht",
+        "subtitle": "Organisationsweiter SEO-Gesundheitsüberblick: alle Domains, Keyword-Anzahl, Scores und Verfallssignale.",
+        "totalDomains": "Domains",
+        "avgScore": "Durchschn. SEO-Score",
+        "totalKeywords": "Gesamte Keywords",
+        "totalDecaying": "Verfallend"
+      }
     }
   }
 }

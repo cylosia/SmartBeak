@@ -319,3 +319,94 @@ The stub includes a premium card UI with a "Deploy Site" button and route scaffo
 ## License
 
 Proprietary — SmartBeak / Cylosia. All rights reserved.
+
+---
+
+## Phase 2A — SEO Intelligence & AI Content Module
+
+Phase 2A extends the SmartBeak MVP with a fully integrated, production-ready SEO Intelligence layer. All features are built on top of the existing v9 schema — no tables were added or modified.
+
+### New Features
+
+| Feature | Description |
+|---|---|
+| **Keyword Tracking Dashboard** | Full table with volume, difficulty, SERP position, and real-time decay signals. Supports manual entry, optimistic updates, and one-click keyword removal. |
+| **Keyword Clusters** | Automatic topic clustering based on shared root terms. Each cluster shows keyword count, average position, and total search volume. |
+| **Decay Signal Engine** | Every keyword carries a `decayFactor` (0–1) calculated from days since last update. Keywords below 0.5 trigger amber/red alerts. A background job procedure (`runDecayJob`) recalculates all stale keywords and returns critical/warning alert lists for email delivery. |
+| **AI Content Idea Generator** | One-click generation of structured content ideas using the Vercel AI SDK. Each idea includes: title, meta description, full outline, target keywords, estimated read time, SEO score (0–100), and difficulty rating. Supports niche filtering and content type selection (article, listicle, guide, case study, comparison). |
+| **Real-time Content Optimizer** | Live SEO scoring panel that updates as you type (600 ms debounce). Scores title, body, keywords, readability, and meta description independently. Shows keyword density per target keyword, a full suggestions list with severity levels (info/warning/error), and an overall score ring. |
+| **Google Search Console Integration** | `syncGsc` procedure fetches keyword impressions, clicks, and average positions from the GSC Search Analytics API and upserts them into `keyword_tracking`. Includes a dialog UI for token and date range configuration. |
+| **Ahrefs Integration** | `syncAhrefs` procedure follows the same adapter pattern, importing keyword volume and difficulty from the Ahrefs Keywords Explorer API. |
+| **Daily SEO Report** | `getSeoReport` returns a structured domain-level or org-level report: top 10 keywords, decaying keywords, high-volume keywords, and per-domain summaries. Schedule via Supabase Edge Functions cron for automated daily delivery. |
+| **Org-level SEO Report Page** | `/[org]/seo-report` — table of all domains with SEO score progress bars, keyword counts, average positions, and decay badge counts. |
+| **Domain-level SEO Intelligence Page** | `/[org]/domains/[domainId]/seo-intelligence` — the full keyword dashboard with all tabs and action panels. |
+| **Materialized View** | `seo_dashboard_summary` materialized view (defined in v9 schema) is queried by `getSeoDashboardSummary()` for fast dashboard loads without full table scans. |
+
+### New Files Added
+
+```
+packages/database/drizzle/
+├── queries/seo-intelligence.ts          ← enriched keyword queries + materialized view helpers
+└── zod-seo-intelligence.ts              ← Zod schemas for Phase 2A inputs/outputs
+
+packages/api/modules/smartbeak/seo-intelligence/
+├── procedures/
+│   ├── get-keyword-dashboard.ts         ← keyword list + clusters + summary
+│   ├── update-keyword-metrics.ts        ← manual position/volume/difficulty update
+│   ├── generate-ai-ideas.ts             ← Vercel AI SDK structured idea generation
+│   ├── optimize-content.ts              ← real-time SEO scoring engine
+│   ├── sync-gsc.ts                      ← Google Search Console adapter
+│   ├── sync-ahrefs.ts                   ← Ahrefs adapter
+│   ├── run-decay-job.ts                 ← background decay recalculation job
+│   └── get-seo-report.ts                ← daily report procedure
+└── router.ts                            ← seoIntelligenceRouter
+
+apps/web/modules/smartbeak/seo-intelligence/
+├── components/
+│   ├── SeoIntelligenceDashboard.tsx     ← premium keyword dashboard (3 tabs)
+│   ├── AiIdeaPanel.tsx                  ← AI idea generator slide-over panel
+│   ├── ContentOptimizerPanel.tsx        ← real-time optimizer slide-over panel
+│   ├── GscSyncDialog.tsx                ← GSC sync dialog
+│   └── SeoReportView.tsx                ← org-level SEO report table
+
+apps/web/app/(saas)/app/(organizations)/[organizationSlug]/
+├── seo-report/page.tsx                  ← org-level SEO report page
+└── domains/[domainId]/seo-intelligence/page.tsx  ← domain SEO intelligence page
+```
+
+### Environment Variables (Phase 2A additions)
+
+```env
+# Google Search Console (optional — required for GSC sync)
+# No server-side env var needed; user provides OAuth2 token at sync time.
+
+# Ahrefs (optional — required for Ahrefs sync)
+AHREFS_API_KEY=your_ahrefs_api_key
+
+# Decay job cron (Supabase Edge Function or external cron)
+# POST /api/smartbeak/seo-intelligence/jobs/decay
+# Secure with your CRON_SECRET header
+CRON_SECRET=your_cron_secret
+```
+
+### Running the Decay Job
+
+The decay job is exposed as an authenticated API procedure. To run it on a schedule, create a Supabase Edge Function or use an external cron service:
+
+```bash
+# Dry run (no writes)
+curl -X POST https://your-domain.com/api/smartbeak/seo-intelligence/jobs/decay \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"olderThanHours": 24, "dryRun": true}'
+
+# Production run
+curl -X POST https://your-domain.com/api/smartbeak/seo-intelligence/jobs/decay \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"olderThanHours": 24, "dryRun": false}'
+```
+
+### Schema Compliance
+
+Phase 2A uses **only existing v9 schema tables**: `keyword_tracking`, `seo_metadata`, and the `seo_dashboard_summary` materialized view. No tables were added, renamed, or modified. The locked `smartbeak.ts` schema file remains untouched.
