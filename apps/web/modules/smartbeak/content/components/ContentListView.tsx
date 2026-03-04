@@ -145,7 +145,7 @@ export function ContentListView({
               {STATUS_FILTERS.map((s) => (
                 <Button
                   key={s}
-                  variant={statusFilter === s ? "default" : "outline"}
+                  variant={statusFilter === s ? "primary" : "outline"}
                   size="sm"
                   onClick={() => setStatusFilter(s)}
                   className="capitalize"
