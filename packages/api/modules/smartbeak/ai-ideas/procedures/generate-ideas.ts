@@ -37,7 +37,7 @@ Format each idea as a numbered list. Be specific, actionable, and commercially v
     const response = await generateText({
       model: textModel,
       messages: [{ role: "user", content: prompt }],
-      maxTokens: 1500,
+      maxOutputTokens: 1500,
     });
     return { ideas: response.text };
   });
