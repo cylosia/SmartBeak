@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
+import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
 import {
   Select,
@@ -18,12 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { Badge } from "@repo/ui/components/badge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { ShieldIcon, SearchIcon } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 
 const ENTITY_TYPES = [
   "all",
@@ -67,7 +67,7 @@ export function AuditLogView({
     }),
   );
 
-  const events = (auditQuery.data?.events ?? []).filter((e) =>
+  const events = (auditQuery.data?.items ?? []).filter((e) =>
     search
       ? e.action?.toLowerCase().includes(search.toLowerCase()) ||
         e.entityType?.toLowerCase().includes(search.toLowerCase())
@@ -86,6 +86,7 @@ export function AuditLogView({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 max-w-xs"
+              aria-label="Search audit actions"
             />
           </div>
           <Select value={entityType} onValueChange={setEntityType}>
@@ -106,7 +107,14 @@ export function AuditLogView({
         </div>
 
         {/* Table */}
-        {auditQuery.isLoading ? (
+        {auditQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load audit events.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => auditQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : auditQuery.isLoading ? (
           <TableSkeleton rows={8} />
         ) : events.length === 0 ? (
           <EmptyState

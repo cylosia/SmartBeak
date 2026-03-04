@@ -1,14 +1,11 @@
 import { ORPCError } from "@orpc/server";
-import {
-  createMediaAsset,
-  getDomainById,
-  getOrganizationBySlug,
-} from "@repo/database";
+import { createMediaAsset, getDomainById } from "@repo/database";
 import { getSignedUploadUrl } from "@repo/storage";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const createMediaUploadUrl = protectedProcedure
   .route({
@@ -19,7 +16,7 @@ export const createMediaUploadUrl = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       fileName: z.string().min(1).max(500),
       type: z.string().min(1).max(100),
@@ -27,14 +24,14 @@ export const createMediaUploadUrl = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgEditor(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgEditor(org.supastarterOrgId, user.id);
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
     }
-    const path = `${org.id}/${input.domainId}/${Date.now()}-${input.fileName}`;
+    const safeFileName = input.fileName.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+    const path = `${org.id}/${input.domainId}/${Date.now()}-${safeFileName}`;
     const signedUploadUrl = await getSignedUploadUrl(path, {
       bucket: "avatars", // reuse existing bucket; production would use a dedicated media bucket
     });
@@ -50,7 +47,7 @@ export const createMediaUploadUrl = protectedProcedure
     await audit({
       orgId: org.id,
       actorId: user.id,
-      action: "media.uploaded",
+      action: "media.created",
       entityType: "media_asset",
       entityId: asset?.id,
       details: { fileName: input.fileName, type: input.type },

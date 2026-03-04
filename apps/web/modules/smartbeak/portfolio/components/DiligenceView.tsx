@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { orpc } from "@shared/lib/orpc-query-utils";
+import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import {
   Table,
@@ -24,6 +25,43 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+interface DiligenceCheck {
+  id: string;
+  type: string;
+  result: unknown;
+  status: string | null;
+  completedAt: string | null;
+}
+
+interface DecaySignal {
+  id: string;
+  signalType: string;
+  decayFactor: string;
+  recordedAt: string;
+}
+
+interface BuyerSession {
+  id: string;
+  sessionId: string;
+  buyerEmail: string | null;
+  intent: string | null;
+  createdAt: string;
+}
+
+interface TimelineEvent {
+  id: string;
+  eventType: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+interface DiligenceData {
+  diligenceChecks?: DiligenceCheck[];
+  decaySignals?: DecaySignal[];
+  buyerSessions?: BuyerSession[];
+  timeline?: TimelineEvent[];
+}
+
 function DiligenceIcon({ status }: { status: string }) {
   if (status === "pass")
     return <CheckCircleIcon className="h-4 w-4 text-emerald-500" />;
@@ -45,8 +83,12 @@ export function DiligenceView({
     }),
   );
 
-  const { diligenceChecks = [], decaySignals = [], buyerSessions = [] } =
-    diligenceQuery.data ?? {};
+  const {
+    diligenceChecks = [],
+    decaySignals = [],
+    buyerSessions = [],
+    timeline = [],
+  } = (diligenceQuery.data as DiligenceData | undefined) ?? {};
 
   const passCount = diligenceChecks.filter((c) => c.status === "pass").length;
   const warnCount = diligenceChecks.filter((c) => c.status === "warn").length;
@@ -56,14 +98,21 @@ export function DiligenceView({
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Summary Cards */}
-        {diligenceQuery.isLoading ? (
+        {diligenceQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load diligence data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => diligenceQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : diligenceQuery.isLoading ? (
           <CardGridSkeleton count={3} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <MetricCard
               title="Checks Passing"
               value={passCount}
-              subtitle={`of ${diligenceChecks.length} total checks`}
+              subtitle={`${warnCount} warnings, ${failCount} failures`}
               icon={CheckCircleIcon}
             />
             <MetricCard
@@ -101,9 +150,8 @@ export function DiligenceView({
                   <TableRow>
                     <TableHead>Check</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead>Last Run</TableHead>
+                    <TableHead>Result</TableHead>
+                    <TableHead>Completed</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -112,21 +160,22 @@ export function DiligenceView({
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <DiligenceIcon status={check.status ?? "fail"} />
-                          {check.checkName}
+                          {check.type}
                         </div>
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={check.status ?? "fail"} />
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {check.score ?? "—"}
-                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                        {check.notes ?? "—"}
+                        {check.result
+                          ? typeof check.result === "object"
+                            ? JSON.stringify(check.result)
+                            : String(check.result)
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {check.checkedAt
-                          ? formatDistanceToNow(new Date(check.checkedAt), {
+                        {check.completedAt
+                          ? formatDistanceToNow(new Date(check.completedAt), {
                               addSuffix: true,
                             })
                           : "—"}
@@ -160,8 +209,8 @@ export function DiligenceView({
                   <TableRow>
                     <TableHead>Signal</TableHead>
                     <TableHead>Severity</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Detected</TableHead>
+                    <TableHead>Decay Factor</TableHead>
+                    <TableHead>Recorded</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -171,14 +220,22 @@ export function DiligenceView({
                         {signal.signalType}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={signal.severity ?? "warn"} />
+                        <StatusBadge
+                          status={
+                            Number(signal.decayFactor) >= 0.7
+                              ? "fail"
+                              : Number(signal.decayFactor) >= 0.4
+                                ? "warn"
+                                : "pass"
+                          }
+                        />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {signal.value ?? "—"}
+                        {signal.decayFactor ?? "—"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {signal.detectedAt
-                          ? formatDistanceToNow(new Date(signal.detectedAt), {
+                        {signal.recordedAt
+                          ? formatDistanceToNow(new Date(signal.recordedAt), {
                               addSuffix: true,
                             })
                           : "—"}
@@ -211,28 +268,26 @@ export function DiligenceView({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Session ID</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>Started</TableHead>
+                    <TableHead>Buyer</TableHead>
+                    <TableHead>Intent</TableHead>
+                    <TableHead>Created</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {buyerSessions.map((session) => (
                     <TableRow key={session.id}>
                       <TableCell className="font-mono text-xs">
-                        {session.id.slice(0, 8)}…
+                        {session.sessionId?.slice(0, 8) ?? session.id.slice(0, 8)}…
                       </TableCell>
                       <TableCell className="text-sm">
-                        {session.source ?? "Direct"}
+                        {session.buyerEmail ?? "Anonymous"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {session.durationSeconds
-                          ? `${session.durationSeconds}s`
-                          : "—"}
+                        {session.intent ?? "—"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {session.startedAt
-                          ? formatDistanceToNow(new Date(session.startedAt), {
+                        {session.createdAt
+                          ? formatDistanceToNow(new Date(session.createdAt), {
                               addSuffix: true,
                             })
                           : "—"}
@@ -241,6 +296,60 @@ export function DiligenceView({
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Timeline */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <ClockIcon className="h-4 w-4" />
+              Domain Timeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {diligenceQuery.isLoading ? (
+              <TableSkeleton rows={3} />
+            ) : timeline.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No timeline events recorded.
+              </p>
+            ) : (
+              <div className="relative space-y-0">
+                {timeline.map((event, idx) => (
+                  <div key={event.id} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 ring-2 ring-background">
+                        <ClockIcon className="h-3 w-3 text-primary" />
+                      </div>
+                      {idx < timeline.length - 1 && (
+                        <div className="w-px flex-1 bg-border" />
+                      )}
+                    </div>
+                    <div className="pb-6">
+                      <p className="text-sm font-medium capitalize">
+                        {(event.eventType ?? "event").replace(/_/g, " ")}
+                      </p>
+                      {event.details && typeof event.details === "object" && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {Object.entries(event.details as Record<string, unknown>)
+                            .slice(0, 3)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(" · ")}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {event.createdAt
+                          ? formatDistanceToNow(new Date(event.createdAt), {
+                              addSuffix: true,
+                            })
+                          : "—"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

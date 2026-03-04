@@ -1,8 +1,9 @@
 import { ORPCError } from "@orpc/server";
-import { deleteDomain, getDomainById, getOrganizationBySlug } from "@repo/database";
+import { deleteDomain, getDomainById } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { requireOrgAdmin } from "../../lib/membership";
 
 export const deleteDomainProcedure = protectedProcedure
@@ -14,14 +15,13 @@ export const deleteDomainProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       id: z.string().uuid(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgAdmin(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
     const existing = await getDomainById(input.id);
     if (!existing || existing.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });

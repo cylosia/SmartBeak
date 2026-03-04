@@ -1,12 +1,11 @@
-import { ORPCError } from "@orpc/server";
 import {
   getOnboardingProgressForOrg,
-  getOrganizationBySlug,
   upsertOnboardingStep,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getOnboardingProgress = protectedProcedure
   .route({
@@ -15,11 +14,10 @@ export const getOnboardingProgress = protectedProcedure
     tags: ["SmartBeak - Onboarding"],
     summary: "Get onboarding progress for an organization",
   })
-  .input(z.object({ organizationSlug: z.string() }))
+  .input(z.object({ organizationSlug: z.string().min(1) }))
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const progress = await getOnboardingProgressForOrg(org.id);
     return { progress };
   });
@@ -33,14 +31,13 @@ export const completeOnboardingStep = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       step: z.string().min(1).max(100),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const [record] = await upsertOnboardingStep({
       orgId: org.id,
       step: input.step,

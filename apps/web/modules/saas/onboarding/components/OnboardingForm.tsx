@@ -31,7 +31,7 @@ export function OnboardingForm() {
 	const onCompleted = async () => {
 		await authClient.updateUser({
 			onboardingComplete: true,
-		});
+		} as Record<string, unknown>);
 
 		await clearCache();
 		router.replace(redirectTo ?? "/app");

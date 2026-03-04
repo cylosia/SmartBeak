@@ -1,12 +1,8 @@
-import { ORPCError } from "@orpc/server";
-import {
-  countDomainsForOrg,
-  getDomainsForOrg,
-  getOrganizationBySlug,
-} from "@repo/database";
+import { countDomainsForOrg, getDomainsForOrg } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const listDomains = protectedProcedure
   .route({
@@ -17,23 +13,22 @@ export const listDomains = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
-      query: z.string().optional(),
+      organizationSlug: z.string().min(1),
+      query: z.string().max(255).optional(),
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const [items, total] = await Promise.all([
       getDomainsForOrg(org.id, {
         query: input.query,
         limit: input.limit,
         offset: input.offset,
       }),
-      countDomainsForOrg(org.id),
+      countDomainsForOrg(org.id, { query: input.query }),
     ]);
     return { items, total };
   });

@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -36,6 +36,7 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   TrashIcon,
+  Loader2Icon,
 } from "lucide-react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -99,7 +100,7 @@ export function ContentListView({
         setOpen(false);
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -113,7 +114,7 @@ export function ContentListView({
         toast({ title: "Content deleted" });
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -138,12 +139,13 @@ export function ContentListView({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs"
+              aria-label="Search content"
             />
             <div className="flex gap-1">
               {STATUS_FILTERS.map((s) => (
                 <Button
                   key={s}
-                  variant={statusFilter === s ? "default" : "outline"}
+                  variant={statusFilter === s ? "primary" : "outline"}
                   size="sm"
                   onClick={() => setStatusFilter(s)}
                   className="capitalize"
@@ -160,9 +162,16 @@ export function ContentListView({
         </div>
 
         {/* Table */}
-        {contentQuery.isLoading ? (
+        {contentQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load content.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => contentQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : contentQuery.isLoading ? (
           <TableSkeleton rows={5} />
-        ) : contentQuery.data?.items.length === 0 ? (
+        ) : (contentQuery.data?.items ?? []).length === 0 ? (
           <EmptyState
             icon={FileTextIcon}
             title="No content yet"
@@ -187,7 +196,7 @@ export function ContentListView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contentQuery.data?.items.map((item) => (
+                {(contentQuery.data?.items ?? []).map((item) => (
                   <TableRow key={item.id} className="group">
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -206,7 +215,7 @@ export function ContentListView({
                       <StatusBadge status={item.status ?? "draft"} />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      v{item.version}
+                      v{item.version ?? 1}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {item.updatedAt
@@ -218,7 +227,7 @@ export function ContentListView({
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label="Content actions">
                             <MoreHorizontalIcon className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -261,8 +270,9 @@ export function ContentListView({
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Title</label>
+                <label htmlFor="content-title" className="text-sm font-medium">Title</label>
                 <Input
+                  id="content-title"
                   {...register("title")}
                   placeholder="My Article Title"
                   className="mt-1"
@@ -282,6 +292,7 @@ export function ContentListView({
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
                   {createMutation.isPending ? "Creating..." : "Create"}
                 </Button>
               </DialogFooter>

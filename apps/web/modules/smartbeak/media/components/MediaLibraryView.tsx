@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
@@ -19,6 +19,7 @@ import {
   MoreHorizontalIcon,
   TrashIcon,
   CopyIcon,
+  Loader2Icon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -52,7 +53,7 @@ export function MediaLibraryView({
         toast({ title: "Media deleted" });
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -79,16 +80,20 @@ export function MediaLibraryView({
       });
       toast({ title: "Upload complete", description: file.name });
     } catch {
-      toast({ title: "Upload failed", variant: "error" });
+      toastError("Upload failed");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const copyUrl = (url: string) => {
-    navigator.clipboard.writeText(url);
-    toast({ title: "URL copied to clipboard" });
+  const copyUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "URL copied to clipboard" });
+    } catch {
+      toastError("Copy failed", "Could not copy URL to clipboard.");
+    }
   };
 
   return (
@@ -97,7 +102,7 @@ export function MediaLibraryView({
         {/* Toolbar */}
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            {mediaQuery.data?.items.length ?? 0} assets
+            {(mediaQuery.data?.items ?? []).length} assets
           </p>
           <div>
             <input
@@ -111,16 +116,27 @@ export function MediaLibraryView({
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
             >
-              <UploadIcon className="mr-2 h-4 w-4" />
+              {uploading ? (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <UploadIcon className="mr-2 h-4 w-4" />
+              )}
               {uploading ? "Uploading..." : "Upload"}
             </Button>
           </div>
         </div>
 
         {/* Grid */}
-        {mediaQuery.isLoading ? (
+        {mediaQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load media.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => mediaQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : mediaQuery.isLoading ? (
           <CardGridSkeleton count={8} cols={5} />
-        ) : mediaQuery.data?.items.length === 0 ? (
+        ) : (mediaQuery.data?.items ?? []).length === 0 ? (
           <EmptyState
             icon={ImageIcon}
             title="No media yet"
@@ -134,7 +150,7 @@ export function MediaLibraryView({
           />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {mediaQuery.data?.items.map((asset) => (
+            {(mediaQuery.data?.items ?? []).map((asset) => (
               <div
                 key={asset.id}
                 className="group relative rounded-xl border border-border overflow-hidden bg-muted/30 hover:border-primary/50 transition-colors"
@@ -164,7 +180,7 @@ export function MediaLibraryView({
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="secondary" size="icon" className="h-7 w-7">
+                      <Button variant="secondary" size="icon" className="h-7 w-7" aria-label="Media actions">
                         <MoreHorizontalIcon className="h-3.5 w-3.5" />
                       </Button>
                     </DropdownMenuTrigger>

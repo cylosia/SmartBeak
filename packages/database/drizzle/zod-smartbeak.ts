@@ -162,9 +162,9 @@ export const UpdateDomainInputSchema = z.object({
   status: z.enum(["active", "pending", "suspended", "deployed"]).optional(),
   themeId: z.string().optional(),
   deployedUrl: z.string().url().nullable().optional(),
-  registryData: z.record(z.unknown()).nullable().optional(),
-  health: z.record(z.unknown()).nullable().optional(),
-  lifecycle: z.record(z.unknown()).nullable().optional(),
+  registryData: z.record(z.string(), z.unknown()).nullable().optional(),
+  health: z.record(z.string(), z.unknown()).nullable().optional(),
+  lifecycle: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export const CreateContentItemInputSchema = z.object({
@@ -220,7 +220,7 @@ export const UpsertFeatureFlagInputSchema = z.object({
   orgId: z.string().uuid(),
   key: z.string().min(1).max(100),
   enabled: z.boolean().optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const UpsertGuardrailInputSchema = z.object({

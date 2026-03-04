@@ -13,6 +13,12 @@ const STATUS_COLORS: Record<string, string> = {
   success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
   failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   processing: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  pass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  warn: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  fail: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  building: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  deploying: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  error: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
 export function StatusBadge({

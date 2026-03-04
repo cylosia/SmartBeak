@@ -1,10 +1,11 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
+import { orpcClient } from "@shared/lib/orpc-client";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
-import { Textarea } from "@repo/ui/components/textarea";
+import { TiptapEditor } from "./TiptapEditor";
 import {
   Select,
   SelectContent,
@@ -26,17 +27,19 @@ import {
   TabsTrigger,
 } from "@repo/ui/components/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { PageSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
+  ArrowLeftIcon,
   SaveIcon,
   SparklesIcon,
   HistoryIcon,
   SendIcon,
   Loader2Icon,
 } from "lucide-react";
+import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
 export function ContentEditorView({
@@ -62,30 +65,65 @@ export function ContentEditorView({
   const [aiIdeas, setAiIdeas] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [ideaInput, setIdeaInput] = useState("");
+  const initializedRef = useRef<string | null>(null);
 
-  // Sync state when data loads
   const item = contentQuery.data?.item;
-  if (item && !title && !body) {
-    setTitle(item.title);
-    setBody(item.body ?? "");
-    setStatus(item.status ?? "draft");
-  }
+
+  useEffect(() => {
+    if (item && initializedRef.current !== item.id) {
+      initializedRef.current = item.id;
+      setTitle(item.title);
+      setBody(item.body ?? "");
+      setStatus(item.status ?? "draft");
+    }
+  }, [item]);
 
   const updateMutation = useMutation(
     orpc.smartbeak.content.update.mutationOptions({
+      onMutate: async (variables) => {
+        await queryClient.cancelQueries({
+          queryKey: orpc.smartbeak.content.get.key(),
+        });
+        const previous = queryClient.getQueryData(
+          orpc.smartbeak.content.get.key({ input: { organizationSlug, id: contentId } }),
+        );
+        queryClient.setQueryData(
+          orpc.smartbeak.content.get.key({ input: { organizationSlug, id: contentId } }),
+          (old: unknown) => {
+            if (!old || typeof old !== "object") return old;
+            const data = old as Record<string, unknown>;
+            return {
+              ...data,
+              item: {
+                ...(data.item as Record<string, unknown>),
+                title: variables.title ?? (data.item as Record<string, unknown>).title,
+                body: variables.body ?? (data.item as Record<string, unknown>).body,
+                status: variables.status ?? (data.item as Record<string, unknown>).status,
+              },
+            };
+          },
+        );
+        return { previous };
+      },
       onSuccess: () => {
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.content.get.key(),
         });
         toast({ title: "Saved", description: "Content updated successfully." });
       },
-      onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+      onError: (err, _vars, context) => {
+        if (context?.previous) {
+          queryClient.setQueryData(
+            orpc.smartbeak.content.get.key({ input: { organizationSlug, id: contentId } }),
+            context.previous,
+          );
+        }
+        toastError("Error", err.message);
       },
     }),
   );
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     updateMutation.mutate({
       organizationSlug,
       id: contentId,
@@ -93,44 +131,62 @@ export function ContentEditorView({
       body,
       status: status as "draft" | "published" | "scheduled" | "archived",
     });
-  };
+  }, [updateMutation, organizationSlug, contentId, title, body, status]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (!item) return;
+        handleSave();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleSave, item]);
 
   const handleGenerateIdeas = async () => {
     if (!ideaInput.trim()) return;
     setAiLoading(true);
     setAiIdeas("");
     try {
-      // Use the existing AI stream endpoint pattern from Supastarter
-      const response = await fetch("/api/orpc/smartbeak.aiIdeas.generateIdeas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domainName: ideaInput,
-          count: 5,
-        }),
+      const result = await orpcClient.smartbeak.aiIdeas.generateIdeas({
+        organizationSlug,
+        domainName: ideaInput,
+        count: 5,
       });
-      if (!response.ok) throw new Error("Failed to generate ideas");
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) return;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        setAiIdeas((prev) => prev + decoder.decode(value));
-      }
-    } catch (err) {
-      toast({ title: "AI Error", description: "Failed to generate ideas.", variant: "error" });
+      setAiIdeas(result.ideas);
+    } catch {
+      toastError("AI Error", "Failed to generate ideas.");
     } finally {
       setAiLoading(false);
     }
   };
 
   if (contentQuery.isLoading) return <PageSkeleton />;
+  if (contentQuery.isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load content.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => contentQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   if (!item) return <div className="text-muted-foreground py-8 text-center">Content not found.</div>;
 
   return (
     <ErrorBoundary>
       <div className="space-y-4">
+        <Link
+          href={`/app/${organizationSlug}/domains/${domainId}/content`}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back to content
+        </Link>
+
         {/* Editor Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -194,7 +250,7 @@ export function ContentEditorView({
                           size="sm"
                           onClick={() => {
                             setBody(rev.body ?? "");
-                            toast({ title: "Revision restored" });
+                            toast({ title: "Revision loaded", description: "Save to apply changes." });
                           }}
                         >
                           Restore
@@ -232,6 +288,7 @@ export function ContentEditorView({
                       size="icon"
                       onClick={handleGenerateIdeas}
                       disabled={aiLoading}
+                      aria-label="Generate AI ideas"
                     >
                       {aiLoading ? (
                         <Loader2Icon className="h-4 w-4 animate-spin" />
@@ -275,19 +332,7 @@ export function ContentEditorView({
               placeholder="Article title..."
               className="text-xl font-semibold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
             />
-            <Textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Start writing your content here...
-
-This editor supports rich text. In production, this textarea is replaced with a full Tiptap ProseMirror editor with:
-• Bold, italic, headings, lists, blockquotes
-• Image embedding from the media library
-• Code blocks with syntax highlighting
-• Link management
-• AI-powered writing suggestions"
-              className="min-h-[500px] resize-none border-0 rounded-none px-0 focus-visible:ring-0 font-mono text-sm leading-relaxed"
-            />
+            <TiptapEditor content={body} onChange={setBody} />
           </TabsContent>
           <TabsContent value="preview">
             <Card>
@@ -297,12 +342,7 @@ This editor supports rich text. In production, this textarea is replaced with a 
               <CardContent>
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   {body ? (
-                    body.split("\n").map((line, i) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: preview lines
-                      <p key={i} className="mb-2">
-                        {line || <br />}
-                      </p>
-                    ))
+                    <div dangerouslySetInnerHTML={{ __html: body }} />
                   ) : (
                     <p className="text-muted-foreground">No content yet.</p>
                   )}

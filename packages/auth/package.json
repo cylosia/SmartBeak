@@ -1,19 +1,20 @@
 {
 	"dependencies": {
-		"@better-auth/passkey": "^1.4.7",
+		"@better-auth/passkey": "1.5.3",
+		"@better-auth/prisma-adapter": "^1.5.3",
 		"@repo/database": "workspace:*",
 		"@repo/i18n": "workspace:*",
 		"@repo/logs": "workspace:*",
 		"@repo/mail": "workspace:*",
 		"@repo/payments": "workspace:*",
 		"@repo/utils": "workspace:*",
-		"better-auth": "1.4.7",
+		"better-auth": "1.5.3",
 		"cookie": "^1.0.2"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.3.13",
+		"@biomejs/biome": "2.4.5",
 		"@repo/tsconfig": "workspace:*",
-		"@types/node": "^24.10.1"
+		"@types/node": "^25.3.3"
 	},
 	"main": "./index.ts",
 	"name": "@repo/auth",

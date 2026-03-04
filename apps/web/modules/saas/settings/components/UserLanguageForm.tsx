@@ -36,7 +36,7 @@ export function UserLanguageForm() {
 
 			await authClient.updateUser({
 				locale,
-			});
+			} as Record<string, unknown>);
 			await updateLocale(locale);
 			router.refresh();
 		},

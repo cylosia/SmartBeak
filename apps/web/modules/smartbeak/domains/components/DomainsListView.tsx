@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -35,8 +35,10 @@ import {
   PlusIcon,
   MoreHorizontalIcon,
   ExternalLinkIcon,
+  EyeIcon,
   TrashIcon,
   SettingsIcon,
+  Loader2Icon,
 } from "lucide-react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -89,7 +91,7 @@ export function DomainsListView({
         setOpen(false);
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -103,7 +105,7 @@ export function DomainsListView({
         toast({ title: "Domain deleted" });
       },
       onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+        toastError("Error", err.message);
       },
     }),
   );
@@ -122,6 +124,7 @@ export function DomainsListView({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"
+            aria-label="Search domains"
           />
           <Button onClick={() => setOpen(true)}>
             <PlusIcon className="mr-2 h-4 w-4" />
@@ -130,9 +133,16 @@ export function DomainsListView({
         </div>
 
         {/* Table */}
-        {domainsQuery.isLoading ? (
+        {domainsQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load domains.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => domainsQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : domainsQuery.isLoading ? (
           <TableSkeleton rows={5} />
-        ) : domainsQuery.data?.items.length === 0 ? (
+        ) : (domainsQuery.data?.items ?? []).length === 0 ? (
           <EmptyState
             icon={GlobeIcon}
             title="No domains yet"
@@ -157,15 +167,18 @@ export function DomainsListView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {domainsQuery.data?.items.map((domain) => (
+                {(domainsQuery.data?.items ?? []).map((domain) => (
                   <TableRow key={domain.id} className="group">
                     <TableCell>
-                      <div className="flex items-center gap-3">
+                      <Link
+                        href={`/app/${organizationSlug}/domains/${domain.id}`}
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                      >
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
                           <GlobeIcon className="h-4 w-4 text-primary" />
                         </div>
                         <span className="font-medium">{domain.name}</span>
-                      </div>
+                      </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-sm">
                       {domain.slug}
@@ -191,17 +204,25 @@ export function DomainsListView({
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label="Domain actions">
                             <MoreHorizontalIcon className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
                             <Link
+                              href={`/app/${organizationSlug}/domains/${domain.id}`}
+                            >
+                              <EyeIcon className="mr-2 h-4 w-4" />
+                              View Details
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link
                               href={`/app/${organizationSlug}/domains/${domain.id}/content`}
                             >
                               <SettingsIcon className="mr-2 h-4 w-4" />
-                              Manage
+                              Manage Content
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -234,8 +255,9 @@ export function DomainsListView({
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Domain Name</label>
+                <label htmlFor="domain-name" className="text-sm font-medium">Domain Name</label>
                 <Input
+                  id="domain-name"
                   {...register("name")}
                   placeholder="My Awesome Blog"
                   className="mt-1"
@@ -247,8 +269,9 @@ export function DomainsListView({
                 )}
               </div>
               <div>
-                <label className="text-sm font-medium">Slug</label>
+                <label htmlFor="domain-slug" className="text-sm font-medium">Slug</label>
                 <Input
+                  id="domain-slug"
                   {...register("slug")}
                   placeholder="my-awesome-blog"
                   className="mt-1 font-mono"
@@ -268,6 +291,7 @@ export function DomainsListView({
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
                   {createMutation.isPending ? "Creating..." : "Create Domain"}
                 </Button>
               </DialogFooter>

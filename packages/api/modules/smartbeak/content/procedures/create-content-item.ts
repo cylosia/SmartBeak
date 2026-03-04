@@ -1,12 +1,9 @@
 import { ORPCError } from "@orpc/server";
-import {
-  createContentItem,
-  getDomainById,
-  getOrganizationBySlug,
-} from "@repo/database";
+import { createContentItem, getDomainById } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { requireOrgEditor } from "../../lib/membership";
 
 export const createContentItemProcedure = protectedProcedure
@@ -18,18 +15,17 @@ export const createContentItemProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       title: z.string().min(1).max(500),
-      body: z.string().optional(),
+      body: z.string().max(500000).optional(),
       status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
       scheduledFor: z.string().datetime().nullable().optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgEditor(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgEditor(org.supastarterOrgId, user.id);
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
@@ -39,6 +35,7 @@ export const createContentItemProcedure = protectedProcedure
       title: input.title,
       body: input.body,
       status: input.status ?? "draft",
+      scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : undefined,
       createdBy: user.id,
     });
     await audit({

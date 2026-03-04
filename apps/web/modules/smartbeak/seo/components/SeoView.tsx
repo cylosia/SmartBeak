@@ -14,11 +14,11 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
-import { toast } from "@repo/ui/components/toast";
+import { toast, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
-import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { SearchIcon, PlusIcon, TrashIcon, TrendingUpIcon } from "lucide-react";
+import { SearchIcon, PlusIcon, TrashIcon, TrendingUpIcon, Loader2Icon } from "lucide-react";
 
 export function SeoView({
   organizationSlug,
@@ -36,28 +36,73 @@ export function SeoView({
     }),
   );
 
+  const seoQueryKey = orpc.smartbeak.seo.get.key({
+    input: { organizationSlug, domainId },
+  });
+
   const addKeywordMutation = useMutation(
     orpc.smartbeak.seo.addKeyword.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: orpc.smartbeak.seo.get.key(),
+      onMutate: async (variables) => {
+        await queryClient.cancelQueries({ queryKey: seoQueryKey });
+        const previous = queryClient.getQueryData(seoQueryKey);
+        queryClient.setQueryData(seoQueryKey, (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const data = old as { keywords?: unknown[]; seoDoc: unknown };
+          return {
+            ...data,
+            keywords: [
+              ...(data.keywords ?? []),
+              {
+                id: `temp-${Date.now()}`,
+                keyword: variables.keyword,
+                volume: variables.volume ?? null,
+                difficulty: variables.difficulty ?? null,
+                position: variables.position ?? null,
+                domainId,
+              },
+            ],
+          };
         });
-        toast({ title: "Keyword added" });
         setNewKeyword("");
+        return { previous };
       },
-      onError: (err) => {
-        toast({ title: "Error", description: err.message, variant: "error" });
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: seoQueryKey });
+        toast({ title: "Keyword added" });
+      },
+      onError: (err, _vars, context) => {
+        if (context?.previous) {
+          queryClient.setQueryData(seoQueryKey, context.previous);
+        }
+        toastError("Error", err.message);
       },
     }),
   );
 
   const removeKeywordMutation = useMutation(
     orpc.smartbeak.seo.removeKeyword.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: orpc.smartbeak.seo.get.key(),
+      onMutate: async (variables) => {
+        await queryClient.cancelQueries({ queryKey: seoQueryKey });
+        const previous = queryClient.getQueryData(seoQueryKey);
+        queryClient.setQueryData(seoQueryKey, (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const data = old as { keywords?: Array<{ id: string }>; seoDoc: unknown };
+          return {
+            ...data,
+            keywords: (data.keywords ?? []).filter((k) => k.id !== variables.id),
+          };
         });
+        return { previous };
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: seoQueryKey });
         toast({ title: "Keyword removed" });
+      },
+      onError: (_err, _vars, context) => {
+        if (context?.previous) {
+          queryClient.setQueryData(seoQueryKey, context.previous);
+        }
+        toastError("Error", "Failed to remove keyword.");
       },
     }),
   );
@@ -69,6 +114,16 @@ export function SeoView({
     <ErrorBoundary>
       <div className="space-y-6">
         {/* SEO Score Card */}
+        {seoQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load SEO data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => seoQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : seoQuery.isLoading ? (
+          <CardGridSkeleton count={3} />
+        ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
@@ -123,6 +178,7 @@ export function SeoView({
             </CardContent>
           </Card>
         </div>
+        )}
 
         {/* Add Keyword */}
         <div className="flex items-center gap-2">
@@ -130,6 +186,7 @@ export function SeoView({
             placeholder="Add keyword to track..."
             value={newKeyword}
             onChange={(e) => setNewKeyword(e.target.value)}
+            aria-label="Add keyword to track"
             onKeyDown={(e) => {
               if (e.key === "Enter" && newKeyword.trim()) {
                 addKeywordMutation.mutate({
@@ -153,7 +210,11 @@ export function SeoView({
             }}
             disabled={addKeywordMutation.isPending}
           >
-            <PlusIcon className="mr-2 h-4 w-4" />
+            {addKeywordMutation.isPending ? (
+              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PlusIcon className="mr-2 h-4 w-4" />
+            )}
             Add
           </Button>
         </div>
@@ -217,6 +278,7 @@ export function SeoView({
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`Remove keyword ${kw.keyword}`}
                         onClick={() =>
                           removeKeywordMutation.mutate({
                             organizationSlug,

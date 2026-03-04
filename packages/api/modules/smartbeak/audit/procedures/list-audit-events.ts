@@ -1,11 +1,8 @@
-import { ORPCError } from "@orpc/server";
-import {
-  getAuditEventsForOrg,
-  getOrganizationBySlug,
-} from "@repo/database";
+import { countAuditEventsForOrg, getAuditEventsForOrg } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const listAuditEvents = protectedProcedure
   .route({
@@ -16,20 +13,22 @@ export const listAuditEvents = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
-      entityType: z.string().optional(),
+      organizationSlug: z.string().min(1),
+      entityType: z.string().max(100).optional(),
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgAdmin(org.id, user.id);
-    const events = await getAuditEventsForOrg(org.id, {
-      entityType: input.entityType,
-      limit: input.limit,
-      offset: input.offset,
-    });
-    return { events };
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
+    const [items, total] = await Promise.all([
+      getAuditEventsForOrg(org.id, {
+        entityType: input.entityType,
+        limit: input.limit,
+        offset: input.offset,
+      }),
+      countAuditEventsForOrg(org.id, { entityType: input.entityType }),
+    ]);
+    return { items, total };
   });

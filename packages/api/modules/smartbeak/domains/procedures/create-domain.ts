@@ -1,8 +1,8 @@
-import { ORPCError } from "@orpc/server";
-import { createDomain, getOrganizationBySlug } from "@repo/database";
+import { createDomain } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { requireOrgAdmin } from "../../lib/membership";
 
 export const createDomainProcedure = protectedProcedure
@@ -14,16 +14,15 @@ export const createDomainProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       name: z.string().min(1).max(255),
       slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
       themeId: z.string().optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgAdmin(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgAdmin(org.supastarterOrgId, user.id);
     const [domain] = await createDomain({
       orgId: org.id,
       name: input.name,

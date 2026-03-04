@@ -24,13 +24,21 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
-const USAGE_QUOTAS = [
-  { label: "Domains", used: 3, limit: 10 },
-  { label: "Content Items", used: 47, limit: 500 },
-  { label: "Media Storage (GB)", used: 1.2, limit: 10 },
-  { label: "AI Ideas / month", used: 23, limit: 100 },
-  { label: "Publishing Jobs", used: 15, limit: 200 },
-];
+const DEFAULT_LIMITS: Record<string, number> = {
+  domains: 10,
+  content_items: 500,
+  media_storage_gb: 10,
+  ai_ideas: 100,
+  publishing_jobs: 200,
+};
+
+const METRIC_LABELS: Record<string, string> = {
+  domains: "Domains",
+  content_items: "Content Items",
+  media_storage_gb: "Media Storage (GB)",
+  ai_ideas: "AI Ideas / month",
+  publishing_jobs: "Publishing Jobs",
+};
 
 export function BillingView({
   organizationSlug,
@@ -45,12 +53,29 @@ export function BillingView({
 
   const subscription = billingQuery.data?.subscription;
   const invoices = billingQuery.data?.invoices ?? [];
+  const usageRecords = billingQuery.data?.usageRecords ?? [];
+
+  const usageQuotas = Object.entries(DEFAULT_LIMITS).map(([metric, limit]) => {
+    const record = usageRecords.find((r) => r.metric === metric);
+    return {
+      label: METRIC_LABELS[metric] ?? metric,
+      used: record ? Number(record.value) : 0,
+      limit,
+    };
+  });
 
   return (
     <ErrorBoundary>
       <div className="space-y-8">
         {/* Plan Cards */}
-        {billingQuery.isLoading ? (
+        {billingQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load billing data.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => billingQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : billingQuery.isLoading ? (
           <CardGridSkeleton count={3} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -61,23 +86,23 @@ export function BillingView({
               icon={ZapIcon}
             />
             <MetricCard
-              title="Billing Cycle"
-              value={subscription?.interval ?? "—"}
+              title="Billing Period"
+              value={
+                subscription?.currentPeriodEnd
+                  ? format(new Date(subscription.currentPeriodEnd), "MMM d, yyyy")
+                  : "—"
+              }
               subtitle={
                 subscription?.currentPeriodEnd
-                  ? `Renews ${format(new Date(subscription.currentPeriodEnd), "MMM d, yyyy")}`
+                  ? `Renews ${formatDistanceToNow(new Date(subscription.currentPeriodEnd), { addSuffix: true })}`
                   : "No active subscription"
               }
               icon={CalendarIcon}
             />
             <MetricCard
-              title="Next Invoice"
-              value={
-                subscription?.nextInvoiceAmount
-                  ? `$${(Number(subscription.nextInvoiceAmount) / 100).toFixed(2)}`
-                  : "—"
-              }
-              subtitle="Estimated amount"
+              title="Invoices"
+              value={invoices.length}
+              subtitle={invoices.length > 0 ? `Latest: ${invoices[0]?.status ?? "—"}` : "No invoices yet"}
               icon={CreditCardIcon}
             />
           </div>
@@ -92,7 +117,9 @@ export function BillingView({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {USAGE_QUOTAS.map((quota) => (
+            {usageQuotas.map((quota) => {
+              const ratio = quota.limit > 0 ? quota.used / quota.limit : 0;
+              return (
               <div key={quota.label}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium">{quota.label}</span>
@@ -101,17 +128,18 @@ export function BillingView({
                   </span>
                 </div>
                 <Progress
-                  value={(quota.used / quota.limit) * 100}
+                  value={ratio * 100}
                   className={`h-2 ${
-                    quota.used / quota.limit > 0.8
-                      ? "[&>div]:bg-amber-500"
-                      : quota.used / quota.limit > 0.95
-                        ? "[&>div]:bg-red-500"
+                    ratio > 0.95
+                      ? "[&>div]:bg-red-500 dark:[&>div]:bg-red-400"
+                      : ratio > 0.8
+                        ? "[&>div]:bg-amber-500 dark:[&>div]:bg-amber-400"
                         : ""
                   }`}
                 />
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -121,9 +149,11 @@ export function BillingView({
             <CardTitle className="text-sm font-medium">
               Recent Invoices
             </CardTitle>
-            <Button variant="outline" size="sm">
-              <CreditCardIcon className="mr-2 h-4 w-4" />
-              Manage Billing
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/app/${organizationSlug}/settings/billing`}>
+                <CreditCardIcon className="mr-2 h-4 w-4" />
+                Manage Billing
+              </a>
             </Button>
           </CardHeader>
           <CardContent>
@@ -150,7 +180,7 @@ export function BillingView({
                         {inv.stripeInvoiceId ?? inv.id.slice(0, 8)}
                       </TableCell>
                       <TableCell>
-                        ${(Number(inv.amount) / 100).toFixed(2)}
+                        ${(Number(inv.amountCents) / 100).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={inv.status ?? "pending"} />
