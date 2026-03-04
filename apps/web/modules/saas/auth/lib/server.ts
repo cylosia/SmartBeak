@@ -82,7 +82,6 @@ export const getOrganizationList = cache(
 export const getUserAccounts = cache(
 	async (): Promise<{ providerId: string; accountId: string }[]> => {
 		try {
-			// @ts-expect-error better-auth plugin method
 			const userAccounts = await auth.api.listUserAccounts({
 				headers: await headers(),
 			});
