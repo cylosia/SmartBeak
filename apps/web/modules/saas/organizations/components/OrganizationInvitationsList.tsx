@@ -111,7 +111,7 @@ export function OrganizationInvitationsList({
 					accepted: CheckIcon,
 					rejected: XIcon,
 					canceled: XIcon,
-				}[row.original.status];
+				}[row.original.status as string];
 				return (
 					<div className="leading-normal">
 						<strong
