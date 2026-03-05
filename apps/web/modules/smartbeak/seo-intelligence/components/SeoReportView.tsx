@@ -16,6 +16,7 @@ import {
   CheckCircle2Icon,
   ExternalLinkIcon,
   GlobeIcon,
+  RefreshCwIcon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -36,6 +37,27 @@ export function SeoReportView({ organizationSlug }: Props) {
   return (
     <ErrorBoundary>
       <div className="space-y-6">
+        {/* Error state */}
+        {reportQuery.isError && (
+          <Card className="border-destructive/50">
+            <CardContent className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangleIcon className="h-5 w-5 text-destructive shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Failed to load SEO report</p>
+                  <p className="text-xs text-muted-foreground">
+                    {reportQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => reportQuery.refetch()}>
+                <RefreshCwIcon className="mr-1.5 h-3.5 w-3.5" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Summary cards */}
         {data?.type === "org" && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -57,7 +79,7 @@ export function SeoReportView({ organizationSlug }: Props) {
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div
-                  className={`text-2xl font-bold ${data.avgSeoScore >= 70 ? "text-emerald-600" : data.avgSeoScore >= 40 ? "text-amber-600" : "text-red-600"}`}
+                  className={`text-2xl font-bold ${data.avgSeoScore >= 70 ? "text-emerald-600 dark:text-emerald-400" : data.avgSeoScore >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}
                 >
                   {data.avgSeoScore}
                 </div>
@@ -130,7 +152,7 @@ export function SeoReportView({ organizationSlug }: Props) {
                           className="h-1.5 w-16"
                         />
                         <span
-                          className={`text-sm font-medium ${(d.seoScore ?? 0) >= 70 ? "text-emerald-600" : (d.seoScore ?? 0) >= 40 ? "text-amber-600" : "text-red-600"}`}
+                          className={`text-sm font-medium ${(d.seoScore ?? 0) >= 70 ? "text-emerald-600 dark:text-emerald-400" : (d.seoScore ?? 0) >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}
                         >
                           {d.seoScore ?? 0}
                         </span>
@@ -151,12 +173,12 @@ export function SeoReportView({ organizationSlug }: Props) {
                     </TableCell>
                     <TableCell>
                       {(d.decayingCount ?? 0) > 0 ? (
-                        <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+                        <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 text-xs">
                           <AlertTriangleIcon className="mr-1 h-3 w-3" />
                           {d.decayingCount}
                         </Badge>
                       ) : (
-                        <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 text-xs">
+                        <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs">
                           <CheckCircle2Icon className="mr-1 h-3 w-3" />
                           Clean
                         </Badge>

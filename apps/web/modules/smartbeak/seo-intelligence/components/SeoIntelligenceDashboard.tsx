@@ -17,7 +17,6 @@ import { toast } from "@repo/ui/components/toast";
 import {
   AlertTriangleIcon,
   BarChart3Icon,
-  BrainCircuitIcon,
   CheckCircle2Icon,
   ExternalLinkIcon,
   LayersIcon,
@@ -44,20 +43,20 @@ function DecayBadge({ factor }: { factor: string | null }) {
   const val = parseFloat(factor ?? "1");
   if (val >= 0.7)
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 text-xs">
+      <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs">
         <CheckCircle2Icon className="mr-1 h-3 w-3" />
         Fresh
       </Badge>
     );
   if (val >= 0.5)
     return (
-      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+      <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs">
         <AlertTriangleIcon className="mr-1 h-3 w-3" />
         Aging
       </Badge>
     );
   return (
-    <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+    <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 text-xs">
       <TrendingDownIcon className="mr-1 h-3 w-3" />
       Decaying
     </Badge>
@@ -223,6 +222,27 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
           </div>
         </div>
 
+        {/* Error state */}
+        {dashboardQuery.isError && (
+          <Card className="border-destructive/50">
+            <CardContent className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangleIcon className="h-5 w-5 text-destructive shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Failed to load dashboard</p>
+                  <p className="text-xs text-muted-foreground">
+                    {dashboardQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => dashboardQuery.refetch()}>
+                <RefreshCwIcon className="mr-1.5 h-3.5 w-3.5" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {/* SEO Score ring */}
@@ -274,7 +294,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <div className="text-2xl font-bold text-emerald-600">
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                 {dashboardQuery.isLoading ? "—" : (summary?.topPositionKeywords ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground">Keywords</p>
@@ -443,7 +463,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
                                 <BarChart3Icon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                               <span
-                                className={`text-sm font-medium ${kw.position <= 10 ? "text-emerald-600" : ""}`}
+                                className={`text-sm font-medium ${kw.position <= 10 ? "text-emerald-600 dark:text-emerald-400" : ""}`}
                               >
                                 #{kw.position}
                               </span>

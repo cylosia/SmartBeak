@@ -21,6 +21,7 @@ import {
   SheetTitle,
 } from "@repo/ui/components/sheet";
 import { Textarea } from "@repo/ui/components/textarea";
+import { toastError } from "@repo/ui/components/toast";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -114,6 +115,9 @@ export function ContentOptimizerPanel({
     orpc.smartbeak.seoIntelligence.optimizeContent.mutationOptions({
       onSuccess: (data) => {
         setResult(data as OptimizerResult);
+      },
+      onError: (err: Error) => {
+        toastError("Optimization failed", err.message ?? "Could not analyze content.");
       },
     }),
   );
@@ -305,7 +309,7 @@ export function ContentOptimizerPanel({
                           {kw}
                         </span>
                         <Badge
-                          className={`border border-border text-xs ${d >= 0.5 && d <= 2.5 ? "border-emerald-500/30 text-emerald-600" : "border-amber-500/30 text-amber-600"}`}
+                          className={`border border-border text-xs ${d >= 0.5 && d <= 2.5 ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400" : "border-amber-500/30 text-amber-600 dark:text-amber-400"}`}
                         >
                           {d}%
                         </Badge>

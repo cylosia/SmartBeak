@@ -36,7 +36,6 @@ import {
   ClockIcon,
   SparklesIcon,
   TagIcon,
-  XIcon,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -59,9 +58,9 @@ type Idea = {
 
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const map: Record<string, string> = {
-    easy: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
-    medium: "bg-amber-500/15 text-amber-600 border-amber-500/30",
-    hard: "bg-red-500/15 text-red-600 border-red-500/30",
+    easy: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+    medium: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+    hard: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
   };
   return (
     <Badge className={`text-xs capitalize ${map[difficulty] ?? ""}`}>
@@ -73,10 +72,10 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
 function ScoreBadge({ score }: { score: number }) {
   const color =
     score >= 70
-      ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
       : score >= 40
-        ? "bg-amber-500/15 text-amber-600 border-amber-500/30"
-        : "bg-red-500/15 text-red-600 border-red-500/30";
+        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
+        : "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30";
   return (
     <Badge className={`text-xs ${color}`}>
       SEO {score}/100
@@ -92,6 +91,8 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      toastError("Copy failed", "Could not copy to clipboard.");
     });
   };
 
