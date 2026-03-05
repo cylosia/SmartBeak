@@ -176,7 +176,7 @@ export function PlatformTargetsManager({
               <div className="mt-3 flex gap-2">
                 <Button
                   size="sm"
-                  variant={configured ? "outline" : "default"}
+                  variant={configured ? "outline" : "primary"}
                   className="h-7 flex-1 gap-1 text-xs"
                   onClick={() => {
                     setConfigValues({});
