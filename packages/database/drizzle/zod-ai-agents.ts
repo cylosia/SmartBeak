@@ -111,7 +111,7 @@ export const AgentTokenUsageSchema = z.object({
 export const SessionOutputDataSchema = z.object({
   result: z.string(),
   /** Per-agent output text keyed by agentId. */
-  agentOutputs: z.record(z.string()).default({}),
+  agentOutputs: z.record(z.string(), z.string()).default({}),
   citations: z.array(z.string()).optional(),
 });
 
