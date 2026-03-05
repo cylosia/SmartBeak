@@ -15,6 +15,7 @@ import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { Textarea } from "@repo/ui/components/textarea";
 import { Badge } from "@repo/ui/components/badge";
+import { cn } from "@repo/ui/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -79,9 +80,9 @@ const oidcSchema = z.object({
 });
 
 const statusColors: Record<string, string> = {
-  active: "bg-green-100 text-green-700 border-green-200",
-  inactive: "bg-gray-100 text-gray-600 border-gray-200",
-  testing: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  active: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800",
+  inactive: "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700",
+  testing: "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-400 dark:border-yellow-800",
 };
 
 interface SsoConfigPageProps {
@@ -121,9 +122,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
         setSsoDialogOpen(false);
         samlForm.reset();
         oidcForm.reset();
-        toast.success("SSO provider saved successfully.");
+        toastSuccess("SSO provider saved successfully.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -135,9 +136,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
             input: { organizationSlug },
           }),
         });
-        toast.success("Provider status updated.");
+        toastSuccess("Provider status updated.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -149,9 +150,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
             input: { organizationSlug },
           }),
         });
-        toast.success("SSO provider deleted.");
+        toastSuccess("SSO provider deleted.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -165,9 +166,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
         });
         setNewScimToken(data.token.rawToken);
         setScimTokenDesc("");
-        toast.success("SCIM token created. Copy it now — it won't be shown again.");
+        toastSuccess("SCIM token created. Copy it now — it won't be shown again.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -179,9 +180,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
             input: { organizationSlug },
           }),
         });
-        toast.success("SCIM token revoked.");
+        toastSuccess("SCIM token revoked.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -282,7 +283,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                         {provider.providerName ?? "Unnamed Provider"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="uppercase text-xs">
+                        <Badge className="uppercase text-xs border bg-transparent">
                           {provider.type}
                         </Badge>
                       </TableCell>
@@ -291,8 +292,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant="outline"
-                          className={statusColors[provider.status] ?? ""}
+                          className={cn("border bg-transparent", statusColors[provider.status] ?? "")}
                         >
                           {provider.status === "active" && (
                             <CheckCircle2Icon className="size-3 mr-1" />
@@ -393,7 +393,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                       className="size-8 shrink-0"
                       onClick={() => {
                         navigator.clipboard.writeText(newScimToken);
-                        toast.success("Copied to clipboard.");
+                        toastSuccess("Copied to clipboard.");
                       }}
                     >
                       <CopyIcon className="size-3.5" />

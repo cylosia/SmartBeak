@@ -40,7 +40,7 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { format } from "date-fns";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 
 const FEATURE_LABELS: Record<string, string> = {
   sso: "Single Sign-On (SSO)",
@@ -98,9 +98,9 @@ export function EnterpriseBillingDashboard({
           }),
         });
         setChangePlanOpen(false);
-        toast.success("Billing plan updated.");
+        toastSuccess("Billing plan updated.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -113,9 +113,9 @@ export function EnterpriseBillingDashboard({
           }),
         });
         setUpdateSeatsOpen(false);
-        toast.success("Seat count updated.");
+        toastSuccess("Seat count updated.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -370,7 +370,7 @@ export function EnterpriseBillingDashboard({
                             {item.limit.toLocaleString()}
                             {item.isOverage && (
                               <Badge
-                                variant="destructive"
+                                status="error"
                                 className="ml-2 text-xs"
                               >
                                 Over limit
@@ -435,7 +435,7 @@ export function EnterpriseBillingDashboard({
                       <div className="flex items-center justify-between mb-2">
                         <p className="font-bold">{tier.displayName}</p>
                         {isCurrent && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge status="success" className="text-xs">
                             Current
                           </Badge>
                         )}

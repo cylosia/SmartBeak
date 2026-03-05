@@ -20,11 +20,8 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { audit } from "../../lib/audit";
-import { encryptConfig } from "../lib/crypto";
-import { requireEnterpriseFeature } from "../lib/feature-gate";
-
-// Re-export crypto from the correct path for this module
-import { encryptConfig as _enc } from "../../lib/crypto";
+import { encryptConfig } from "../../lib/crypto";
+import { requireEnterpriseFeature } from "../../lib/feature-gate";
 
 export const listSsoProviders = protectedProcedure
   .route({
@@ -97,7 +94,7 @@ export const upsertSsoProviderProcedure = protectedProcedure
     await requireEnterpriseFeature(org.id, "sso");
 
     // Encrypt the full config before storing.
-    const encryptedConfig = _enc(input.config as Record<string, unknown>);
+    const encryptedConfig = encryptConfig(input.config as Record<string, unknown>);
 
     // Build non-sensitive display metadata.
     const metadata: Record<string, unknown> =

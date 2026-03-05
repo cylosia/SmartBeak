@@ -35,7 +35,7 @@ export const EnterpriseTeamSchema = z.object({
   name: z.string().min(1).max(100),
   slug: z.string().min(1).max(100),
   description: z.string().max(500).nullable(),
-  settings: z.record(z.unknown()).nullable(),
+  settings: z.record(z.string(), z.unknown()).nullable(),
   createdBy: z.string(),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -54,7 +54,7 @@ export const UpdateTeamInputSchema = z.object({
   teamId: z.string().uuid(),
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
-  settings: z.record(z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
 });
 export type UpdateTeamInput = z.infer<typeof UpdateTeamInputSchema>;
 
@@ -114,7 +114,7 @@ export const EnterpriseTeamActivitySchema = z.object({
   action: z.string(),
   entityType: z.string().nullable(),
   entityId: z.string().nullable(),
-  details: z.record(z.unknown()).nullable(),
+  details: z.record(z.string(), z.unknown()).nullable(),
   createdAt: z.date(),
 });
 export type EnterpriseTeamActivity = z.infer<
@@ -156,7 +156,7 @@ export const EnterpriseSsoProviderSchema = z.object({
   domain: z.string().min(1),
   providerName: z.string().nullable(),
   /** Non-sensitive display metadata only — never includes secrets. */
-  metadata: z.record(z.unknown()).nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
   createdBy: z.string(),
   createdAt: z.date(),
   updatedAt: z.date(),

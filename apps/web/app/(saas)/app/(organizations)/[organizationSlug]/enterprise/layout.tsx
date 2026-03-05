@@ -5,7 +5,6 @@ import { PageHeader } from "@saas/shared/components/PageHeader";
 import {
   ActivityIcon,
   CreditCardIcon,
-  KeyIcon,
   ShieldCheckIcon,
   UsersIcon,
 } from "lucide-react";
@@ -36,6 +35,7 @@ export default async function EnterpriseLayout({
   const menuItems = [
     {
       title: "Enterprise",
+      avatar: <ShieldCheckIcon className="size-5" />,
       items: [
         {
           title: "Team Workspaces",

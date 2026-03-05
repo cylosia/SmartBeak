@@ -14,8 +14,6 @@
  *   await cache.invalidatePrefix("org:slug:"); // Invalidate all keys with prefix
  */
 
-import { createHash } from "crypto";
-
 // ─── In-memory fallback store ─────────────────────────────────────────────────
 
 interface MemoryEntry {

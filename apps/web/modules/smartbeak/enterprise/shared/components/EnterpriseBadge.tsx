@@ -1,5 +1,3 @@
-"use client";
-
 import { Badge } from "@repo/ui/components/badge";
 import { LockIcon, ShieldCheckIcon, ZapIcon } from "lucide-react";
 import { cn } from "@repo/ui/lib/utils";
@@ -20,9 +18,8 @@ export function EnterpriseBadge({
   if (variant === "locked") {
     return (
       <Badge
-        variant="outline"
         className={cn(
-          "gap-1 text-muted-foreground border-muted-foreground/30",
+          "gap-1 text-muted-foreground border border-muted-foreground/30 bg-transparent",
           className,
         )}
       >
@@ -35,9 +32,8 @@ export function EnterpriseBadge({
   if (variant === "pro") {
     return (
       <Badge
-        variant="outline"
         className={cn(
-          "gap-1 text-violet-600 border-violet-300 bg-violet-50 dark:bg-violet-950/30",
+          "gap-1 text-violet-600 border border-violet-300 bg-violet-50 dark:bg-violet-950/30",
           className,
         )}
       >
@@ -49,9 +45,8 @@ export function EnterpriseBadge({
 
   return (
     <Badge
-      variant="outline"
       className={cn(
-        "gap-1 text-blue-700 border-blue-300 bg-blue-50 dark:bg-blue-950/30",
+        "gap-1 text-blue-700 border border-blue-300 bg-blue-50 dark:bg-blue-950/30",
         className,
       )}
     >

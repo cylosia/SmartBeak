@@ -139,9 +139,15 @@ export function NavBar() {
 			icon: BotMessageSquareIcon,
 			isActive: pathname.includes("/chatbot"),
 		},
-		// ── Settings ─────────────────────────────────────────────────────
+		// ── Enterprise & Settings ────────────────────────────────────────
 		...(activeOrganization && isOrganizationAdmin
 			? [
+					{
+						label: "Enterprise",
+						href: `${basePath}/enterprise`,
+						icon: ShieldIcon,
+						isActive: pathname.startsWith(`${basePath}/enterprise`),
+					},
 					{
 						label: t("app.menu.organizationSettings"),
 						href: `${basePath}/settings`,

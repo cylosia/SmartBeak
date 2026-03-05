@@ -40,22 +40,21 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   DownloadIcon,
-  FilterIcon,
   LockIcon,
   RefreshCwIcon,
   SearchIcon,
   SettingsIcon,
   ShieldIcon,
 } from "lucide-react";
-import { formatDistanceToNow, format, subDays } from "date-fns";
-import { toast } from "sonner";
+import { formatDistanceToNow, format } from "date-fns";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 
 const ACTION_COLORS: Record<string, string> = {
-  created: "bg-green-100 text-green-700",
-  updated: "bg-blue-100 text-blue-700",
-  deleted: "bg-red-100 text-red-700",
-  exported: "bg-purple-100 text-purple-700",
-  default: "bg-gray-100 text-gray-600",
+  created: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400",
+  updated: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+  deleted: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+  exported: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
+  default: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
 };
 
 function getActionColor(action: string): string {
@@ -125,9 +124,9 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
             input: { organizationSlug },
           }),
         });
-        toast.success("Retention policy updated.");
+        toastSuccess("Retention policy updated.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -143,9 +142,9 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
         a.download = data.filename;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success(`Exported ${data.count} audit events.`);
+        toastSuccess(`Exported ${data.count} audit events.`);
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 

@@ -61,7 +61,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -127,9 +127,9 @@ export function TeamManagementDashboard({
         });
         setCreateDialogOpen(false);
         form.reset();
-        toast.success("Team created successfully.");
+        toastSuccess("Team created successfully.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -140,9 +140,9 @@ export function TeamManagementDashboard({
           queryKey: orpc.enterprise.teams.list.key({ input: { organizationSlug } }),
         });
         setSelectedTeamId(null);
-        toast.success("Team deleted.");
+        toastSuccess("Team deleted.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -156,9 +156,9 @@ export function TeamManagementDashboard({
         });
         setAddMemberDialogOpen(false);
         setAddMemberUserId("");
-        toast.success("Member added to team.");
+        toastSuccess("Member added to team.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -170,9 +170,9 @@ export function TeamManagementDashboard({
             input: { organizationSlug, teamId: effectiveTeamId ?? "" },
           }),
         });
-        toast.success("Member removed from team.");
+        toastSuccess("Member removed from team.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -184,9 +184,9 @@ export function TeamManagementDashboard({
             input: { organizationSlug, teamId: effectiveTeamId ?? "" },
           }),
         });
-        toast.success("Role updated.");
+        toastSuccess("Role updated.");
       },
-      onError: (err) => toast.error(err.message),
+      onError: (err) => toastError("Error", err.message),
     }),
   );
 
@@ -291,7 +291,7 @@ export function TeamManagementDashboard({
                     >
                       <div className="flex items-center justify-between">
                         <span className="truncate">{team.name}</span>
-                        <Badge variant="secondary" className="ml-2 text-xs">
+                        <Badge status="info" className="ml-2 text-xs">
                           {team.members?.length ?? 0}
                         </Badge>
                       </div>
@@ -474,9 +474,7 @@ export function TeamManagementDashboard({
                             </TableCell>
                             <TableCell>
                               <Badge
-                                variant={
-                                  member.role === "admin" ? "default" : "secondary"
-                                }
+                                status={member.role === "admin" ? "warning" : "info"}
                                 className="gap-1"
                               >
                                 {member.role === "admin" && (
