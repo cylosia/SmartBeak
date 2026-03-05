@@ -27,7 +27,7 @@ import {
   TabsTrigger,
 } from "@repo/ui/components/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { PageSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
@@ -121,7 +121,7 @@ export function ContentEditorView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.content.get.key(),
         });
-        toast({ title: "Saved", description: "Content updated successfully." });
+        toastSuccess("Saved", "Content updated successfully.");
       },
       onError: (err, _vars, context) => {
         if (context?.previous) {
@@ -280,7 +280,7 @@ export function ContentEditorView({
                           size="sm"
                           onClick={() => {
                             setBody(rev.body ?? "");
-                            toast({ title: "Revision loaded", description: "Save to apply changes." });
+                            toastSuccess("Revision loaded", "Save to apply changes.");
                           }}
                         >
                           Restore
@@ -358,7 +358,7 @@ export function ContentEditorView({
                           idea={idea}
                           onUseTitle={(t) => {
                             setTitle(t);
-                            toast({ title: "Title set", description: t });
+                            toastSuccess("Title set", t);
                           }}
                         />
                       ))}

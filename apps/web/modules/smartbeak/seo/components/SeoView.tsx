@@ -6,7 +6,7 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
@@ -65,7 +65,7 @@ export function SeoView({
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: seoQueryKey });
-        toast({ title: "Keyword added" });
+        toastSuccess("Keyword added");
       },
       onError: (err, _vars, context) => {
         if (context?.previous) {
@@ -93,7 +93,7 @@ export function SeoView({
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: seoQueryKey });
-        toast({ title: "Keyword removed" });
+        toastSuccess("Keyword removed");
       },
       onError: (_err, _vars, context) => {
         if (context?.previous) {

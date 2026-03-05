@@ -54,16 +54,17 @@ interface KeywordRow {
   lastUpdated: string | Date;
 }
 
-function MiniSparkline({ data }: { data: number[] }) {
+function MiniSparkline({ data, id }: { data: number[]; id: string }) {
   const chartData = data.map((v, i) => ({ i, v }));
   const isImproving = data.length > 1 && data[data.length - 1] < data[0];
+  const gradientId = `spark-${id}`;
 
   return (
     <div className="h-5 w-12">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <defs>
-            <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop
                 offset="0%"
                 stopColor={isImproving ? "hsl(var(--chart-2))" : "hsl(var(--chart-5))"}
@@ -81,7 +82,7 @@ function MiniSparkline({ data }: { data: number[] }) {
             dataKey="v"
             stroke={isImproving ? "hsl(var(--chart-2))" : "hsl(var(--chart-5))"}
             strokeWidth={1.5}
-            fill="url(#sparkGrad)"
+            fill={`url(#${gradientId})`}
             dot={false}
             isAnimationActive={false}
           />
@@ -209,7 +210,7 @@ const columns: ColumnDef<KeywordRow>[] = [
     header: "Trend",
     cell: ({ row }) => {
       const sparkData = generateMockSparkline(row.original.position);
-      return <MiniSparkline data={sparkData} />;
+      return <MiniSparkline data={sparkData} id={row.original.id} />;
     },
     enableSorting: false,
   },

@@ -164,7 +164,7 @@ export function BuyerAttributionView({
                         cx="50%"
                         cy="50%"
                         outerRadius={80}
-                        label={({ intent, percent }) => `${intent} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         labelLine={false}
                       >
                         {data.intentBreakdown.map((_, i) => (

@@ -16,7 +16,16 @@ function ScoreRing({ score }: { score: number }) {
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
-  const color = score >= 70 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444";
+  const strokeClass = score >= 70
+    ? "stroke-emerald-500"
+    : score >= 40
+      ? "stroke-amber-500"
+      : "stroke-red-500";
+  const textClass = score >= 70
+    ? "text-emerald-600 dark:text-emerald-400"
+    : score >= 40
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-red-600 dark:text-red-400";
 
   return (
     <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
@@ -27,7 +36,7 @@ function ScoreRing({ score }: { score: number }) {
           cy="48"
           r={radius}
           fill="none"
-          stroke={color}
+          className={strokeClass}
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -36,7 +45,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute text-center">
-        <span className="text-2xl font-bold tabular-nums">{score}</span>
+        <span className={`text-2xl font-bold tabular-nums ${textClass}`}>{score}</span>
         <p className="text-[10px] text-muted-foreground">SEO</p>
       </div>
     </div>
