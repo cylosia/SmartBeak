@@ -5,6 +5,7 @@ import { billingRouter } from "./billing/router";
 import { contentRouter } from "./content/router";
 import { deployRouter } from "./deploy/router";
 import { domainsRouter } from "./domains/router";
+import { growthRouter } from "./growth/router";
 import { mediaRouter } from "./media/router";
 import { onboardingRouter } from "./onboarding/router";
 import { portfolioRouter } from "./portfolio/router";
@@ -30,4 +31,5 @@ export const smartbeakRouter = {
   deploy: deployRouter,
   publishingSuite: publishingSuiteRouter,
   analyticsRoi: analyticsRoiRouter,
+  growth: growthRouter,
 };

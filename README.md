@@ -516,3 +516,73 @@ No v9 schema tables were modified. All Phase 2B features use existing tables:
 ### Schema Compliance
 
 Only existing v9 tables used: `portfolio_summaries`, `diligence_checks`, `buyer_sessions`, `monetization_decay_signals`, `timeline_events`, `site_shards`. The locked `smartbeak.ts` was not modified.
+
+
+---
+
+## Phase 2D — Growth & Marketing Layer
+
+### Overview
+Phase 2D adds the complete growth and marketing infrastructure: a premium public marketing site, waitlist system with referral tracking, referral program with rewards, polished onboarding email sequences, and full launch assets.
+
+### New Database Tables
+
+| Table | Description |
+|---|---|
+| `waitlist_entries` | Email waitlist with referral codes, status, and join timestamp |
+| `referrals` | Referral tracking linking referrer → referred user with reward state |
+
+> These are new Drizzle tables in `packages/database/drizzle/schema/growth.ts`. The locked v9 `smartbeak.ts` is untouched.
+
+### New Files
+
+**Database**
+- `packages/database/drizzle/schema/growth.ts` — waitlist_entries + referrals tables
+- `packages/database/drizzle/queries/growth.ts` — all CRUD and analytics queries
+- `packages/database/drizzle/zod-growth.ts` — Zod validation schemas
+
+**API (`packages/api/modules/smartbeak/growth/`)**
+- `procedures/waitlist.ts` — join, getStatus, adminList, approve, getStats
+- `procedures/referrals.ts` — getMyReferrals, trackReferral, grantReward, getLeaderboard
+- `procedures/onboarding-emails.ts` — sendWelcomeSequence (3-step Resend drip)
+- `router.ts` — growth router
+
+**Marketing Site**
+- `apps/web/modules/marketing/home/components/SmartBeakHero.tsx` — premium hero with animated stats
+- `apps/web/modules/marketing/home/components/SmartBeakFeatures.tsx` — 9-feature grid
+- `apps/web/modules/marketing/home/components/Testimonials.tsx` — social proof section
+- `apps/web/modules/marketing/home/components/SmartBeakPricing.tsx` — 3-tier pricing cards
+- `apps/web/modules/marketing/waitlist/components/WaitlistSection.tsx` — waitlist form with referral tracking
+
+**Pages**
+- `apps/web/app/(marketing)/[locale]/page.tsx` — updated homepage
+- `apps/web/app/(marketing)/[locale]/waitlist/page.tsx` — dedicated waitlist page
+- `apps/web/app/(marketing)/[locale]/launch/page.tsx` — launch assets (Loom script, social templates, email template, checklist)
+- `apps/web/app/(saas)/app/(organizations)/[organizationSlug]/referrals/page.tsx` — referral dashboard
+
+**Components**
+- `apps/web/modules/smartbeak/growth/components/ReferralDashboard.tsx` — referral stats, link sharing, history table
+
+### New Environment Variables
+
+```bash
+# Waitlist & Referrals (no new vars needed — uses existing Resend + DB)
+NEXT_PUBLIC_APP_URL=https://your-domain.com   # Used to generate referral links
+```
+
+### Launch Instructions
+
+1. Deploy to Vercel and set all environment variables
+2. Run `pnpm drizzle:push` to create the `waitlist_entries` and `referrals` tables
+3. Visit `/launch` for the complete launch checklist, Loom script, and social templates
+4. Share `/waitlist` to start collecting early access signups
+5. Approve waitlist entries via the admin API (`growth.approveWaitlistEntry`)
+6. Onboarding emails are sent automatically via Resend when a user activates their account
+
+### Referral Program
+
+- Each user gets a unique referral code stored in `waitlist_entries.referralCode`
+- Referral links are `{APP_URL}/waitlist?ref={code}`
+- When a referred user signs up, a `referrals` record is created
+- Rewards are granted manually or automatically via `growth.grantReward`
+- Leaderboard available via `growth.getReferralLeaderboard`

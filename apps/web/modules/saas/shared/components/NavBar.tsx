@@ -16,6 +16,7 @@ import {
 	BotMessageSquareIcon,
 	ChevronRightIcon,
 	FileTextIcon,
+	GiftIcon,
 	GlobeIcon,
 	HomeIcon,
 	PanelLeftCloseIcon,
@@ -115,12 +116,18 @@ export function NavBar() {
 							icon: TrendingUpIcon,
 							isActive: pathname.startsWith(`${basePath}/analytics`),
 						},
-						{
-							label: "Get Started",
-							href: `${basePath}/onboarding-wizard`,
-							icon: FileTextIcon,
-							isActive: pathname.startsWith(`${basePath}/onboarding-wizard`),
-						},
+					{
+						label: "Get Started",
+						href: `${basePath}/onboarding-wizard`,
+						icon: FileTextIcon,
+						isActive: pathname.startsWith(`${basePath}/onboarding-wizard`),
+					},
+					{
+						label: "Referral Program",
+						href: `${basePath}/referrals`,
+						icon: GiftIcon,
+						isActive: pathname.startsWith(`${basePath}/referrals`),
+					},
 				]
 			: []),
 		// ── AI Chatbot ───────────────────────────────────────────────────

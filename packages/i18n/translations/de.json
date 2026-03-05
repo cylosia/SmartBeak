@@ -980,6 +980,34 @@
       "lowRisk": "Niedriges Risiko",
       "mediumRisk": "Mittleres Risiko",
       "highRisk": "Hohes Risiko"
+    },
+    "growth": {
+      "waitlist": {
+        "title": "Join the Waitlist",
+        "description": "Get early access to SmartBeak",
+        "joinButton": "Request Early Access",
+        "successTitle": "You're on the list!",
+        "successDescription": "We'll notify you when your early access is ready.",
+        "referralLink": "Your referral link",
+        "shareX": "Share on X",
+        "shareLinkedIn": "Share on LinkedIn"
+      },
+      "referrals": {
+        "title": "Referral Program",
+        "description": "Invite friends and earn rewards",
+        "totalReferrals": "Total referrals",
+        "converted": "Converted",
+        "rewardsEarned": "Rewards earned",
+        "referralLink": "Your referral link",
+        "history": "Referral history",
+        "noReferrals": "No referrals yet. Share your link to get started!"
+      },
+      "onboarding": {
+        "welcomeSubject": "Welcome to SmartBeak",
+        "step1": "Add your first domain",
+        "step2": "Run the Diligence Engine",
+        "step3": "Generate your first AI content idea"
+      }
     }
   }
 }

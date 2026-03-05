@@ -5,3 +5,6 @@ export * from "./postgres";
 // Do NOT modify any table, column, type, relationship, index, trigger,
 // materialized view, or RLS policy defined in this file.
 export * from "./smartbeak";
+
+// Phase 2D — Growth & Marketing additive schema extension
+export * from "./growth";

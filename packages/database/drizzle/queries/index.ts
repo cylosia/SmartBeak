@@ -18,3 +18,4 @@ export {
 	REFRESH_PORTFOLIO_ROI_VIEW_SQL,
 	getPortfolioRoiMaterializedView,
 } from "./analytics-roi";
+export * from "./growth";
