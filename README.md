@@ -476,3 +476,43 @@ No v9 schema tables were modified. All Phase 2B features use existing tables:
 - `publish_attempts` -- retry history per job
 - `webhook_events` -- DLQ source for failed webhook events
 - `integrations` -- GSC/Ahrefs/platform integration metadata
+
+
+---
+
+## Phase 2C — Advanced Analytics & ROI
+
+### New Features
+
+| Feature | Description |
+|---|---|
+| **Portfolio ROI Dashboard** | Risk-adjusted scoring, total value estimate, performance trends, and Recharts visualisations |
+| **Diligence Engine** | Automated ownership, legal, financial, traffic, content, technical, brand, and monetisation checks with manual override |
+| **Sell-Ready Score** | Composite 0–100 score with breakdown by dimension and prioritised improvement recommendations |
+| **Buyer Attribution** | Session tracking, conversion rate, intent breakdown pie chart, daily trend area chart, per-session table |
+| **Advanced Analytics Overview** | Portfolio health radar, monetisation decay bar chart, decay signals table with risk badges |
+| **Materialized View Helpers** | `refreshPortfolioSummaries()` and `refreshBuyerAttributionView()` for fast dashboard queries |
+
+### New Files
+
+| Path | Description |
+|---|---|
+| `packages/database/drizzle/queries/analytics-roi.ts` | All Phase 2C DB query functions |
+| `packages/database/drizzle/zod-analytics-roi.ts` | Zod schemas for all Phase 2C inputs/outputs |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/get-portfolio-roi.ts` | Portfolio ROI + timeline procedure |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/diligence-engine.ts` | Run diligence, get report, update check |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/sell-ready-score.ts` | Sell-ready score + recommendations |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/buyer-attribution.ts` | Domain + org-level buyer attribution |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/analytics-views.ts` | Overview, monetisation decay, materialized view refresh |
+| `packages/api/modules/smartbeak/analytics-roi/router.ts` | Analytics ROI router |
+| `apps/web/modules/smartbeak/analytics-roi/components/PortfolioRoiDashboard.tsx` | Portfolio ROI dashboard |
+| `apps/web/modules/smartbeak/analytics-roi/components/DiligenceEngineView.tsx` | Diligence engine with manual override |
+| `apps/web/modules/smartbeak/analytics-roi/components/SellReadyPanel.tsx` | Sell-ready score ring + recommendations |
+| `apps/web/modules/smartbeak/analytics-roi/components/BuyerAttributionView.tsx` | Buyer attribution charts + session table |
+| `apps/web/modules/smartbeak/analytics-roi/components/AdvancedAnalyticsOverview.tsx` | Radar + decay bar + decay table |
+| `apps/web/app/.../analytics/page.tsx` | Org-level analytics page (3 tabs) |
+| `apps/web/app/.../domains/[domainId]/analytics/page.tsx` | Domain-level analytics page (3 tabs) |
+
+### Schema Compliance
+
+Only existing v9 tables used: `portfolio_summaries`, `diligence_checks`, `buyer_sessions`, `monetization_decay_signals`, `timeline_events`, `site_shards`. The locked `smartbeak.ts` was not modified.

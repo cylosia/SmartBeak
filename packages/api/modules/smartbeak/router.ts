@@ -1,4 +1,5 @@
 import { aiIdeasRouter } from "./ai-ideas/router";
+import { analyticsRoiRouter } from "./analytics-roi/router";
 import { auditRouter } from "./audit/router";
 import { billingRouter } from "./billing/router";
 import { contentRouter } from "./content/router";
@@ -28,4 +29,5 @@ export const smartbeakRouter = {
   settings: settingsRouter,
   deploy: deployRouter,
   publishingSuite: publishingSuiteRouter,
+  analyticsRoi: analyticsRoiRouter,
 };

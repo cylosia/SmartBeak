@@ -947,6 +947,38 @@
       "platformRemoved": "Platform removed",
       "seriesCreated": "Email series created",
       "bulkScheduled": "Bulk schedule created"
+    },
+    "analytics": {
+      "title": "Advanced Analytics",
+      "overview": "Overview",
+      "portfolioRoi": "Portfolio ROI",
+      "buyerAttribution": "Buyer Attribution",
+      "diligenceEngine": "Diligence Engine",
+      "sellReadyScore": "Sell-Ready Score",
+      "portfolioHealthIndex": "Portfolio Health Index",
+      "totalPortfolioValue": "Total Portfolio Value",
+      "avgDecay": "Avg Monetization Decay",
+      "buyerSessions": "Buyer Sessions",
+      "runAllChecks": "Run All Checks",
+      "markAs": "Mark as",
+      "recommendations": "Improvement Recommendations",
+      "sellReady": "Sell-Ready",
+      "nearlyReady": "Nearly Ready",
+      "needsWork": "Needs Work",
+      "notReady": "Not Ready",
+      "conversionRate": "Conversion Rate",
+      "totalSessions": "Total Sessions",
+      "converted": "Converted",
+      "intentBreakdown": "Intent Breakdown",
+      "dailyTrend": "Daily Buyer Sessions",
+      "recentSessions": "Recent Buyer Sessions",
+      "monetizationDecay": "Monetization Decay Signals",
+      "radarChart": "Portfolio Health Radar",
+      "decayByDomain": "Monetization Decay by Domain",
+      "riskLevel": "Risk Level",
+      "lowRisk": "Low Risk",
+      "mediumRisk": "Medium Risk",
+      "highRisk": "High Risk"
     }
   }
 }

@@ -27,6 +27,7 @@ import {
 	SendIcon,
 	SettingsIcon,
 	ShieldIcon,
+	TrendingUpIcon,
 	UserCog2Icon,
 	UserCogIcon,
 	ZapIcon,
@@ -108,6 +109,12 @@ export function NavBar() {
 							href: `${basePath}/publishing-suite`,
 							icon: SendIcon,
 							isActive: pathname.startsWith(`${basePath}/publishing-suite`) || pathname.includes("/publishing-suite"),
+						},
+						{
+							label: "Analytics",
+							href: `${basePath}/analytics`,
+							icon: TrendingUpIcon,
+							isActive: pathname.startsWith(`${basePath}/analytics`),
 						},
 						{
 							label: "Get Started",
