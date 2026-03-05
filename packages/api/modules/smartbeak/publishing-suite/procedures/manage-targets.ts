@@ -57,7 +57,7 @@ export const upsertPlatformTargetProcedure = protectedProcedure
       organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       target: z.enum(PUBLISH_TARGETS),
-      config: z.record(z.unknown()),
+      config: z.record(z.string(), z.unknown()),
       enabled: z.boolean().default(true),
     }),
   )
