@@ -65,7 +65,7 @@ export const WorkflowNodeSchema = z.object({
   agentId: z.string().uuid().optional(),
   label: z.string(),
   /** Node-specific configuration (overrides agent defaults). */
-  config: z.record(z.unknown()).default({}),
+  config: z.record(z.string(), z.unknown()).default({}),
   position: z.object({
     x: z.number(),
     y: z.number(),
@@ -95,7 +95,7 @@ export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>;
 export const SessionInputDataSchema = z.object({
   prompt: z.string().min(1),
   context: z.string().optional(),
-  options: z.record(z.unknown()).optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const AgentTokenUsageSchema = z.object({

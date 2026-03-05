@@ -25,7 +25,6 @@ import {
   ClockIcon,
   DollarSignIcon,
   TrendingUpIcon,
-  XCircleIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import {
@@ -38,7 +37,7 @@ import {
 } from "@repo/ui/components/table";
 import { Badge } from "@repo/ui/components/badge";
 import { Skeleton } from "@repo/ui/components/skeleton";
-import { useOrpcQuery } from "@/modules/shared/lib/orpc-query-utils";
+import { orpc } from "@shared/lib/orpc-query-utils";
 
 interface AgentAnalyticsDashboardProps {
   organizationSlug: string;
@@ -78,7 +77,7 @@ function MetricCard({
 export function AgentAnalyticsDashboard({
   organizationSlug,
 }: AgentAnalyticsDashboardProps) {
-  const { orpc } = useOrpcQuery();
+  
 
   const analyticsQuery = useQuery(
     orpc.aiAgents.getAnalytics.queryOptions({
@@ -269,7 +268,7 @@ export function AgentAnalyticsDashboard({
                         <BotIcon className="h-4 w-4 text-muted-foreground" />
                         {w.workflowName}
                         {!w.workflowId && (
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge status="info" className="text-xs">
                             Ad-hoc
                           </Badge>
                         )}

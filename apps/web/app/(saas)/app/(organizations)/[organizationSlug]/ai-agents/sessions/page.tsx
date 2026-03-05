@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2Icon,
@@ -24,10 +25,10 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { useOrpcQuery } from "@/modules/shared/lib/orpc-query-utils";
+import { orpc } from "@shared/lib/orpc-query-utils";
 
 interface SessionsPageProps {
-  params: { organizationSlug: string };
+  params: Promise<{ organizationSlug: string }>;
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -38,15 +39,14 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30",
-  running: "bg-blue-500/10 text-blue-700 border-blue-500/30",
-  completed: "bg-green-500/10 text-green-700 border-green-500/30",
+  pending: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
+  running: "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
+  completed: "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
   failed: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
 export default function SessionsPage({ params }: SessionsPageProps) {
-  const { organizationSlug } = params;
-  const { orpc } = useOrpcQuery();
+  const { organizationSlug } = use(params);
 
   const sessionsQuery = useQuery(
     orpc.aiAgents.listSessions.queryOptions({
@@ -114,8 +114,7 @@ export default function SessionsPage({ params }: SessionsPageProps) {
                       <div className="flex items-center gap-2">
                         {STATUS_ICONS[session.status] ?? STATUS_ICONS.pending}
                         <Badge
-                          variant="outline"
-                          className={`text-xs capitalize ${STATUS_BADGE[session.status] ?? ""}`}
+                          className={`text-xs capitalize border ${STATUS_BADGE[session.status] ?? ""}`}
                         >
                           {session.status}
                         </Badge>

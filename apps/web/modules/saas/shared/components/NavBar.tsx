@@ -27,6 +27,7 @@ import {
 	SendIcon,
 	SettingsIcon,
 	ShieldIcon,
+	SparklesIcon,
 	TrendingUpIcon,
 	UserCog2Icon,
 	UserCogIcon,
@@ -138,6 +139,15 @@ export function NavBar() {
 				: "/app/chatbot",
 			icon: BotMessageSquareIcon,
 			isActive: pathname.includes("/chatbot"),
+		},
+		// ── AI Agents ────────────────────────────────────────────────────
+		{
+			label: "AI Agents",
+			href: activeOrganization
+				? `/app/${activeOrganization.slug}/ai-agents`
+				: "/app/ai-agents",
+			icon: SparklesIcon,
+			isActive: pathname.includes("/ai-agents"),
 		},
 		// ── Enterprise & Settings ────────────────────────────────────────
 		...(activeOrganization && isOrganizationAdmin

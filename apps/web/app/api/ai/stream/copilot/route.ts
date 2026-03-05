@@ -18,8 +18,7 @@
  */
 
 import { auth } from "@repo/auth";
-import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { createOpenAI, streamText } from "@repo/ai";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 
@@ -131,6 +130,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Stream AI response ──────────────────────────────────────────────────────
+  const openai = createOpenAI({});
   const model = openai("gpt-4o-mini");
   const prompt = buildPrompt(
     action,

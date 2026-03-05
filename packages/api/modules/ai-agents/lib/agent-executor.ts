@@ -13,9 +13,7 @@
  * - Streaming progress via async generators
  */
 
-import { generateText, streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
-import { createAnthropic } from "@ai-sdk/anthropic";
+import { generateText, streamText, openai, createAnthropic } from "@repo/ai";
 import {
   getAgentById,
   updateAgentMemory,

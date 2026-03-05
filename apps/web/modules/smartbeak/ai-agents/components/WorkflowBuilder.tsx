@@ -14,7 +14,7 @@
  * - The graph is serialized and saved via the updateWorkflow orpc procedure.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BotIcon,
@@ -30,7 +30,7 @@ import {
   XCircleIcon,
   ZapIcon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
@@ -44,7 +44,7 @@ import {
   SelectValue,
 } from "@repo/ui/components/select";
 import { Textarea } from "@repo/ui/components/textarea";
-import { useOrpcQuery } from "@/modules/shared/lib/orpc-query-utils";
+import { orpc } from "@shared/lib/orpc-query-utils";
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from "@repo/database";
 import { useAgentStream } from "../hooks/useAgentStream";
 
@@ -72,7 +72,7 @@ export function WorkflowBuilder({
   workflowId,
 }: WorkflowBuilderProps) {
   const queryClient = useQueryClient();
-  const { orpc } = useOrpcQuery();
+  
 
   const [graph, setGraph] = useState<WorkflowGraph>({
     nodes: [],
@@ -101,16 +101,18 @@ export function WorkflowBuilder({
 
   // ── Queries ─────────────────────────────────────────────────────────────────
 
-  const workflowQuery = useQuery({
-    ...orpc.aiAgents.getWorkflow.queryOptions({
+  const workflowQuery = useQuery(
+    orpc.aiAgents.getWorkflow.queryOptions({
       input: { organizationSlug, workflowId },
     }),
-    onSuccess: (data: { workflow: { stepsJson: WorkflowGraph } }) => {
-      if (data?.workflow?.stepsJson) {
-        setGraph(data.workflow.stepsJson as WorkflowGraph);
-      }
-    },
-  });
+  );
+
+  useEffect(() => {
+    const data = workflowQuery.data as { workflow: { stepsJson: WorkflowGraph } } | undefined;
+    if (data?.workflow?.stepsJson) {
+      setGraph(data.workflow.stepsJson as WorkflowGraph);
+    }
+  }, [workflowQuery.data]);
 
   const agentsQuery = useQuery(
     orpc.aiAgents.listAgents.queryOptions({
@@ -123,10 +125,10 @@ export function WorkflowBuilder({
   const saveMutation = useMutation({
     ...orpc.aiAgents.updateWorkflow.mutationOptions(),
     onSuccess: () => {
-      toast.success("Workflow saved");
+      toastSuccess("Workflow saved");
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
     },
-    onError: () => toast.error("Failed to save workflow"),
+    onError: () => toastError("Error", "Failed to save workflow"),
   });
 
   const runMutation = useMutation({
@@ -135,7 +137,7 @@ export function WorkflowBuilder({
       resetStream();
       startStream(data.sessionId);
     },
-    onError: () => toast.error("Failed to start workflow run"),
+    onError: () => toastError("Error", "Failed to start workflow run"),
   });
 
   // ── Graph Manipulation ───────────────────────────────────────────────────────
@@ -241,7 +243,7 @@ export function WorkflowBuilder({
 
   const handleRun = () => {
     if (!runPrompt.trim()) {
-      toast.error("Please enter a prompt to run the workflow.");
+      toastError("Error", "Please enter a prompt to run the workflow.");
       return;
     }
     runMutation.mutate({
@@ -380,14 +382,14 @@ export function WorkflowBuilder({
                       {agent.name}
                     </span>
                   </div>
-                  <Badge variant="secondary" className="mt-1 text-xs capitalize">
+                  <Badge status="info" className="mt-1 text-xs capitalize">
                     {agent.agentType}
                   </Badge>
                 </button>
               ))
           )}
           <Button
-            variant="dashed"
+            variant="outline"
             size="sm"
             className="w-full border-dashed"
             onClick={() =>

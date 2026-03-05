@@ -6,7 +6,7 @@
  * `tools` parameter. Tools are registered by name and enabled per-agent via config.
  */
 
-import { tool } from "ai";
+import { tool } from "@repo/ai";
 import { z } from "zod";
 
 // ─── Web Search Tool ──────────────────────────────────────────────────────────

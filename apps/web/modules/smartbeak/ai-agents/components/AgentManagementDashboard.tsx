@@ -19,7 +19,7 @@ import {
   Trash2Icon,
   ZapIcon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -56,7 +56,7 @@ import {
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { Switch } from "@repo/ui/components/switch";
 import { Textarea } from "@repo/ui/components/textarea";
-import { useOrpcQuery } from "@/modules/shared/lib/orpc-query-utils";
+import { orpc } from "@shared/lib/orpc-query-utils";
 
 interface AgentManagementDashboardProps {
   organizationSlug: string;
@@ -70,25 +70,25 @@ const AGENT_TYPE_META: Record<
     label: "Research",
     icon: <ZapIcon className="h-4 w-4" />,
     description: "Searches the web and synthesizes information into research briefs.",
-    color: "bg-blue-500/10 border-blue-500/30",
+    color: "bg-blue-500/10 border-blue-500/30 dark:bg-blue-950/40 dark:border-blue-800",
   },
   writer: {
     label: "Writer",
     icon: <SparklesIcon className="h-4 w-4" />,
     description: "Transforms research into compelling, SEO-optimized content.",
-    color: "bg-purple-500/10 border-purple-500/30",
+    color: "bg-purple-500/10 border-purple-500/30 dark:bg-purple-950/40 dark:border-purple-800",
   },
   editor: {
     label: "Editor",
     icon: <CheckCircle2Icon className="h-4 w-4" />,
     description: "Reviews and improves content for clarity, accuracy, and flow.",
-    color: "bg-green-500/10 border-green-500/30",
+    color: "bg-green-500/10 border-green-500/30 dark:bg-green-950/40 dark:border-green-800",
   },
   custom: {
     label: "Custom",
     icon: <BotIcon className="h-4 w-4" />,
     description: "A fully customizable agent for any task.",
-    color: "bg-orange-500/10 border-orange-500/30",
+    color: "bg-orange-500/10 border-orange-500/30 dark:bg-orange-950/40 dark:border-orange-800",
   },
 };
 
@@ -103,7 +103,7 @@ export function AgentManagementDashboard({
   organizationSlug,
 }: AgentManagementDashboardProps) {
   const queryClient = useQueryClient();
-  const { orpc } = useOrpcQuery();
+  
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -125,19 +125,19 @@ export function AgentManagementDashboard({
     ...orpc.aiAgents.seedDefaultAgents.mutationOptions(),
     onSuccess: (data: { seeded: boolean }) => {
       if (data.seeded) {
-        toast.success("Default agents created: Research, Writer, and Editor.");
+        toastSuccess("Default agents created: Research, Writer, and Editor.");
       } else {
-        toast.info("Agents already exist for this organization.");
+        toastSuccess("Agents already exist", "Agents already exist for this organization.");
       }
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
     },
-    onError: () => toast.error("Failed to seed default agents."),
+    onError: () => toastError("Error", "Failed to seed default agents."),
   });
 
   const createMutation = useMutation({
     ...orpc.aiAgents.createAgent.mutationOptions(),
     onSuccess: () => {
-      toast.success("Agent created successfully.");
+      toastSuccess("Agent created successfully.");
       setShowCreateDialog(false);
       setForm({
         name: "",
@@ -150,7 +150,7 @@ export function AgentManagementDashboard({
       });
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
     },
-    onError: () => toast.error("Failed to create agent."),
+    onError: () => toastError("Error", "Failed to create agent."),
   });
 
   const toggleMutation = useMutation({
@@ -158,16 +158,16 @@ export function AgentManagementDashboard({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
     },
-    onError: () => toast.error("Failed to update agent."),
+    onError: () => toastError("Error", "Failed to update agent."),
   });
 
   const deleteMutation = useMutation({
     ...orpc.aiAgents.deleteAgent.mutationOptions(),
     onSuccess: () => {
-      toast.success("Agent deleted.");
+      toastSuccess("Agent deleted.");
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
     },
-    onError: () => toast.error("Failed to delete agent."),
+    onError: () => toastError("Error", "Failed to delete agent."),
   });
 
   const agents = (agentsQuery.data as { agents: Array<{
@@ -279,7 +279,7 @@ export function AgentManagementDashboard({
                       </div>
                       <div>
                         <CardTitle className="text-sm">{agent.name}</CardTitle>
-                        <Badge variant="secondary" className="text-xs mt-0.5 capitalize">
+                        <Badge status="info" className="text-xs mt-0.5 capitalize">
                           {meta.label}
                         </Badge>
                       </div>

@@ -1,11 +1,10 @@
 import { AgentAnalyticsDashboard } from "@/modules/smartbeak/ai-agents/components/AgentAnalyticsDashboard";
 
 interface AnalyticsPageProps {
-  params: { organizationSlug: string };
+  params: Promise<{ organizationSlug: string }>;
 }
 
-export default function AnalyticsPage({ params }: AnalyticsPageProps) {
-  return (
-    <AgentAnalyticsDashboard organizationSlug={params.organizationSlug} />
-  );
+export default async function AnalyticsPage({ params }: AnalyticsPageProps) {
+  const { organizationSlug } = await params;
+  return <AgentAnalyticsDashboard organizationSlug={organizationSlug} />;
 }

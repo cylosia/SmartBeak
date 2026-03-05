@@ -54,6 +54,7 @@ export function TiptapEditorWithCopilot({
   }, []);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         history: { depth: 100 },

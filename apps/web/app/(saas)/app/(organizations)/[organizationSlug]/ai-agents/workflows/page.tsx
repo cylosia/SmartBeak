@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LayoutIcon,
@@ -10,7 +10,7 @@ import {
   PlayIcon,
   Trash2Icon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { useRouter } from "next/navigation";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
@@ -40,23 +40,22 @@ import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { Textarea } from "@repo/ui/components/textarea";
-import { useOrpcQuery } from "@/modules/shared/lib/orpc-query-utils";
+import { orpc } from "@shared/lib/orpc-query-utils";
 
 interface WorkflowsPageProps {
-  params: { organizationSlug: string };
+  params: Promise<{ organizationSlug: string }>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30",
-  active: "bg-green-500/10 text-green-700 border-green-500/30",
+  draft: "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
+  active: "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
   archived: "bg-muted text-muted-foreground",
 };
 
 export default function WorkflowsPage({ params }: WorkflowsPageProps) {
-  const { organizationSlug } = params;
+  const { organizationSlug } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { orpc } = useOrpcQuery();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: "", description: "" });
 
@@ -69,22 +68,22 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
   const createMutation = useMutation({
     ...orpc.aiAgents.createWorkflow.mutationOptions(),
     onSuccess: (data: { workflow: { id: string } }) => {
-      toast.success("Workflow created.");
+      toastSuccess("Workflow created.");
       setShowCreate(false);
       setForm({ name: "", description: "" });
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
       router.push(`/app/${organizationSlug}/ai-agents/workflows/${data.workflow.id}`);
     },
-    onError: () => toast.error("Failed to create workflow."),
+    onError: () => toastError("Error", "Failed to create workflow."),
   });
 
   const deleteMutation = useMutation({
     ...orpc.aiAgents.deleteWorkflow.mutationOptions(),
     onSuccess: () => {
-      toast.success("Workflow deleted.");
+      toastSuccess("Workflow deleted.");
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
     },
-    onError: () => toast.error("Failed to delete workflow."),
+    onError: () => toastError("Error", "Failed to delete workflow."),
   });
 
   const workflows = (workflowsQuery.data as { workflows: Array<{
@@ -152,8 +151,7 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
                     <div>
                       <CardTitle className="text-sm">{wf.name}</CardTitle>
                       <Badge
-                        variant="outline"
-                        className={`text-xs mt-0.5 capitalize ${STATUS_COLORS[wf.status] ?? ""}`}
+                        className={`text-xs mt-0.5 capitalize border ${STATUS_COLORS[wf.status] ?? ""}`}
                       >
                         {wf.status}
                       </Badge>

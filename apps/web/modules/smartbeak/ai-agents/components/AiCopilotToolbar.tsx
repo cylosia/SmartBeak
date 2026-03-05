@@ -30,7 +30,7 @@ import {
   TrendingUpIcon,
   ZoomInIcon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toastError } from "@repo/ui/components/toast";
 import { Button } from "@repo/ui/components/button";
 import {
   DropdownMenu,
@@ -190,7 +190,7 @@ export function AiCopilotToolbar({
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          toast.error("AI co-pilot request failed. Please try again.");
+          toastError("Error", "AI co-pilot request failed. Please try again.");
         }
       } finally {
         setIsLoading(false);

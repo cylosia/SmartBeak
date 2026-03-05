@@ -6,8 +6,7 @@
  * key facts and context learned over time.
  */
 
-import { generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { generateText, openai } from "@repo/ai";
 import { updateAgentMemory } from "@repo/database";
 import type { AiMemoryContext } from "@repo/database";
 
