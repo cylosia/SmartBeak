@@ -34,7 +34,7 @@ export function ReferralDashboard() {
 
   if (error) {
     return (
-      <Alert variant="destructive">
+      <Alert variant="error">
         <AlertDescription>Failed to load referral data. Please try again.</AlertDescription>
       </Alert>
     );
