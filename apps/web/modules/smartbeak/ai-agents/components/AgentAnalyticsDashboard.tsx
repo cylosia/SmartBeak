@@ -220,8 +220,8 @@ export function AgentAnalyticsDashboard({
                   tickFormatter={(v: number) => `$${v.toFixed(2)}`}
                 />
                 <Tooltip
-                  formatter={(value: number) => [
-                    `$${value.toFixed(4)}`,
+                  formatter={(value) => [
+                    `$${Number(value ?? 0).toFixed(4)}`,
                     "Cost",
                   ]}
                   labelFormatter={(label: string) =>
