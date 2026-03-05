@@ -224,8 +224,8 @@ export function AgentAnalyticsDashboard({
                     `$${Number(value ?? 0).toFixed(4)}`,
                     "Cost",
                   ]}
-                  labelFormatter={(label: string) =>
-                    new Date(label).toLocaleDateString()
+                  labelFormatter={(label) =>
+                    new Date(String(label)).toLocaleDateString()
                   }
                 />
                 <Area
