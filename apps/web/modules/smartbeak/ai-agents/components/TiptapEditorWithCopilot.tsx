@@ -56,9 +56,7 @@ export function TiptapEditorWithCopilot({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({
-        history: { depth: 100 },
-      }),
+      StarterKit,
       Placeholder.configure({
         placeholder,
         emptyEditorClass: "is-editor-empty",
