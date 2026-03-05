@@ -230,8 +230,8 @@ export async function* executeWorkflow(
         }
 
         const usage = await result.usage;
-        inputTokens = usage?.promptTokens ?? 0;
-        outputTokens = usage?.completionTokens ?? 0;
+        inputTokens = usage?.inputTokens ?? 0;
+        outputTokens = usage?.outputTokens ?? 0;
       } catch (streamErr) {
         // Fall back to non-streaming if streaming fails
         const result = await generateText({
@@ -242,8 +242,8 @@ export async function* executeWorkflow(
           temperature: config.temperature ?? 0.7,
         });
         fullOutput = result.text;
-        inputTokens = result.usage?.promptTokens ?? 0;
-        outputTokens = result.usage?.completionTokens ?? 0;
+        inputTokens = result.usage?.inputTokens ?? 0;
+        outputTokens = result.usage?.outputTokens ?? 0;
         yield {
           type: "node_stream",
           nodeId: node.id,
