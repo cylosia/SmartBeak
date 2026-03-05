@@ -150,11 +150,11 @@ function ProviderCard({
 
 	const testMutation = useMutation(
 		orpc.smartbeak.settings.integrations.test.mutationOptions({
-			onSuccess: (data: { success: boolean; message: string }) => {
-				toastSuccess("Connection test passed", data.message);
+			onSuccess: (data) => {
+				toastSuccess("Connection test passed", (data as { message: string }).message);
 				setIsTesting(false);
 			},
-			onError: (err: Error) => {
+			onError: (err) => {
 				toastError("Connection test failed", err.message);
 				setIsTesting(false);
 			},

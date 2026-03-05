@@ -133,9 +133,9 @@ export function WorkflowBuilder({
 
   const runMutation = useMutation({
     ...orpc.aiAgents.initiateWorkflowRun.mutationOptions(),
-    onSuccess: (data: { sessionId: string }) => {
+    onSuccess: (data) => {
       resetStream();
-      startStream(data.sessionId);
+      startStream((data as { sessionId: string }).sessionId);
     },
     onError: () => toastError("Error", "Failed to start workflow run"),
   });

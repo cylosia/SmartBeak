@@ -123,8 +123,8 @@ export function AgentManagementDashboard({
 
   const seedMutation = useMutation({
     ...orpc.aiAgents.seedDefaultAgents.mutationOptions(),
-    onSuccess: (data: { seeded: boolean }) => {
-      if (data.seeded) {
+    onSuccess: (data) => {
+      if ((data as { seeded: boolean }).seeded) {
         toastSuccess("Default agents created: Research, Writer, and Editor.");
       } else {
         toastSuccess("Agents already exist", "Agents already exist for this organization.");
