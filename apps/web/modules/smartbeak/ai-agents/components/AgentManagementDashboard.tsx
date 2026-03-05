@@ -170,15 +170,15 @@ export function AgentManagementDashboard({
     onError: () => toastError("Error", "Failed to delete agent."),
   });
 
-  const agents = (agentsQuery.data as { agents: Array<{
+  const agents = (agentsQuery.data as unknown as { agents: Array<{
     id: string;
     name: string;
     description: string | null;
     agentType: string;
     isActive: boolean;
     config: { model?: string; temperature?: number; maxTokens?: number };
-    createdAt: string;
-  }> })?.agents ?? [];
+    createdAt: Date | string;
+  }> } | undefined)?.agents ?? [];
 
   const handleCreate = () => {
     createMutation.mutate({
