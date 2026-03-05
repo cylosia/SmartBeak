@@ -24,6 +24,7 @@ import {
 	ReceiptIcon,
 	RocketIcon,
 	SearchIcon,
+	SendIcon,
 	SettingsIcon,
 	ShieldIcon,
 	UserCog2Icon,
@@ -102,12 +103,18 @@ export function NavBar() {
 						icon: SearchIcon,
 						isActive: pathname.startsWith(`${basePath}/seo-report`) || pathname.includes("/seo-intelligence"),
 					},
-					{
-						label: "Get Started",
-						href: `${basePath}/onboarding-wizard`,
-						icon: FileTextIcon,
-						isActive: pathname.startsWith(`${basePath}/onboarding-wizard`),
-					},
+						{
+							label: "Publishing Suite",
+							href: `${basePath}/publishing-suite`,
+							icon: SendIcon,
+							isActive: pathname.startsWith(`${basePath}/publishing-suite`) || pathname.includes("/publishing-suite"),
+						},
+						{
+							label: "Get Started",
+							href: `${basePath}/onboarding-wizard`,
+							icon: FileTextIcon,
+							isActive: pathname.startsWith(`${basePath}/onboarding-wizard`),
+						},
 				]
 			: []),
 		// ── AI Chatbot ───────────────────────────────────────────────────

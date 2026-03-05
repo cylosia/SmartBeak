@@ -11,6 +11,7 @@ import { publishingRouter } from "./publishing/router";
 import { seoRouter } from "./seo/router";
 import { seoIntelligenceRouter } from "./seo-intelligence/router";
 import { settingsRouter } from "./settings/router";
+import { publishingSuiteRouter } from "./publishing-suite/router";
 
 export const smartbeakRouter = {
   domains: domainsRouter,
@@ -26,4 +27,5 @@ export const smartbeakRouter = {
   seoIntelligence: seoIntelligenceRouter,
   settings: settingsRouter,
   deploy: deployRouter,
+  publishingSuite: publishingSuiteRouter,
 };

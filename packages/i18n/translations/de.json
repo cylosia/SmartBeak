@@ -916,6 +916,32 @@
         "totalKeywords": "Gesamte Keywords",
         "totalDecaying": "Verfallend"
       }
+    },
+    "publishingSuite": {
+      "title": "Publishing Suite",
+      "dashboard": "Dashboard",
+      "calendar": "Calendar",
+      "analytics": "Analytics",
+      "platforms": "Platforms",
+      "emailSeries": "Email Series",
+      "bulkSchedule": "Bulk Schedule",
+      "dlq": "Dead-Letter Queue",
+      "noJobs": "No publishing jobs",
+      "noJobsDesc": "Schedule content to publish across your connected platforms.",
+      "noAnalytics": "No analytics yet",
+      "noAnalyticsDesc": "Analytics will appear once content has been published.",
+      "noDlqJobs": "No failed jobs",
+      "noDlqJobsDesc": "All publishing jobs are healthy.",
+      "noDlqWebhooks": "No failed webhooks",
+      "noDlqWebhooksDesc": "All webhook events have been processed.",
+      "executeJob": "Execute",
+      "retryJob": "Retry",
+      "bulkRetry": "Bulk Retry",
+      "replayWebhook": "Replay",
+      "platformConfigured": "Platform configured",
+      "platformRemoved": "Platform removed",
+      "seriesCreated": "Email series created",
+      "bulkScheduled": "Bulk schedule created"
     }
   }
 }

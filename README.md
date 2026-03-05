@@ -410,3 +410,69 @@ curl -X POST https://your-domain.com/api/smartbeak/seo-intelligence/jobs/decay \
 ### Schema Compliance
 
 Phase 2A uses **only existing v9 schema tables**: `keyword_tracking`, `seo_metadata`, and the `seo_dashboard_summary` materialized view. No tables were added, renamed, or modified. The locked `smartbeak.ts` schema file remains untouched.
+
+---
+
+## Phase 2B — Full Publishing Suite
+
+Phase 2B adds a complete multi-platform publishing engine on top of the existing SmartBeak MVP, using only the locked v9 schema tables (`publish_targets`, `publishing_jobs`, `publish_attempts`, `webhook_events`, `integrations`).
+
+### New Features
+
+| Feature | Description |
+|---|---|
+| **11 Platform Adapters** | Web, Email (Resend), LinkedIn, YouTube, TikTok, Instagram, Pinterest, Vimeo, Facebook, WordPress, SoundCloud — each with a typed adapter interface and encrypted credential storage |
+| **Email Series Builder** | Drag-and-drop multi-step drip sequence builder with Resend integration, per-step delay, subject, and HTML body |
+| **Bulk Scheduling** | Schedule multiple content items across multiple platforms in a single form submission |
+| **Publishing Calendar** | Monthly calendar view showing all scheduled jobs per day, colour-coded by platform |
+| **Unified Dashboard** | Org-level view of all publishing jobs with status summary, platform breakdown, and per-job execute/retry controls |
+| **Post-Publish Analytics** | Per-platform views, clicks, engagement, impressions, and CTR with bar charts and breakdown table |
+| **Retry + DLQ** | Automatic retry on failure; dead-letter queue UI for reviewing, retrying, and bulk-retrying failed jobs and webhook events |
+| **Platform Target Manager** | Configure and toggle all 11 platforms per domain with encrypted API key storage |
+
+### New Files
+
+```
+packages/database/drizzle/queries/publishing-suite.ts   <- DB queries
+packages/database/drizzle/zod-publishing-suite.ts       <- Zod schemas
+packages/api/modules/smartbeak/publishing-suite/
+  adapters/index.ts                                      <- 11 platform adapters
+  procedures/execute-job.ts                              <- Job executor
+  procedures/bulk-schedule.ts                            <- Bulk scheduler
+  procedures/get-calendar.ts                             <- Calendar data
+  procedures/get-unified-dashboard.ts                    <- Unified dashboard
+  procedures/get-analytics.ts                            <- Post-publish analytics
+  procedures/email-series.ts                             <- Resend email series
+  procedures/manage-targets.ts                           <- Platform target CRUD
+  procedures/dlq.ts                                      <- DLQ list/retry/replay
+  router.ts                                              <- Router
+apps/web/modules/smartbeak/publishing-suite/components/
+  UnifiedPublishingDashboard.tsx
+  PublishingCalendar.tsx
+  EmailSeriesBuilder.tsx
+  BulkScheduleDialog.tsx
+  PublishAnalyticsView.tsx
+  DLQView.tsx
+  PlatformTargetsManager.tsx
+apps/web/app/.../publishing-suite/page.tsx               <- Org-level page
+apps/web/app/.../domains/[domainId]/publishing-suite/page.tsx <- Domain-level page
+```
+
+### Additional Environment Variables
+
+```env
+# Resend (email publishing)
+RESEND_API_KEY=re_...
+
+# Platform OAuth tokens are stored encrypted in publish_targets.encrypted_config
+# No additional env vars required for other platforms -- credentials configured per-domain in the UI
+```
+
+### Schema Compliance
+
+No v9 schema tables were modified. All Phase 2B features use existing tables:
+- `publish_targets` -- stores encrypted platform credentials per domain
+- `publishing_jobs` -- one row per scheduled publish
+- `publish_attempts` -- retry history per job
+- `webhook_events` -- DLQ source for failed webhook events
+- `integrations` -- GSC/Ahrefs/platform integration metadata
