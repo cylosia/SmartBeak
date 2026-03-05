@@ -46,7 +46,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
         toast({ title: "Job re-queued", description: "Job moved back to pending." });
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
-      onError: (err: any) => toastError({ title: "Retry failed", description: err.message }),
+      onError: (err: unknown) => toastError("Retry failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -57,7 +57,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
         setSelectedJobIds(new Set());
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
-      onError: (err: any) => toastError({ title: "Bulk retry failed", description: err.message }),
+      onError: (err: unknown) => toastError("Bulk retry failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -67,7 +67,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
         toast({ title: "Webhook replayed" });
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
-      onError: (err: any) => toastError({ title: "Replay failed", description: err.message }),
+      onError: (err: unknown) => toastError("Replay failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -139,7 +139,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
               <TableSkeleton rows={5} />
             ) : !dlqJobsQuery.data?.jobs?.length ? (
               <EmptyState
-                icon={<RefreshCwIcon className="h-8 w-8 text-green-500" />}
+                icon={RefreshCwIcon}
                 title="No failed jobs"
                 description="All publishing jobs are healthy."
               />
@@ -179,7 +179,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                           />
                         </TableCell>
                         <TableCell className="font-medium capitalize">{job.target}</TableCell>
-                        <TableCell className="max-w-[300px] truncate text-xs text-red-500">
+                        <TableCell className="max-w-[300px] truncate text-xs text-red-500 dark:text-red-400">
                           {job.error ?? "Unknown error"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -213,7 +213,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
               <TableSkeleton rows={4} />
             ) : !dlqWebhooksQuery.data?.events?.length ? (
               <EmptyState
-                icon={<WebhookIcon className="h-8 w-8 text-green-500" />}
+                icon={WebhookIcon}
                 title="No failed webhooks"
                 description="All webhook events have been processed."
               />
@@ -235,7 +235,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                       <TableRow key={event.id}>
                         <TableCell className="font-medium capitalize">{event.provider}</TableCell>
                         <TableCell className="text-sm">{event.eventType}</TableCell>
-                        <TableCell className="max-w-[200px] truncate text-xs text-red-500">
+                        <TableCell className="max-w-[200px] truncate text-xs text-red-500 dark:text-red-400">
                           {event.error ?? "—"}
                         </TableCell>
                         <TableCell className="text-sm">{event.replayCount ?? 0}</TableCell>

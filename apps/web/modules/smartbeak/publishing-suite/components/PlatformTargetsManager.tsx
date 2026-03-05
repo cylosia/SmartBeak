@@ -13,6 +13,7 @@ import {
 } from "@repo/ui/components/dialog";
 import { toast, toastError } from "@repo/ui/components/toast";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   GlobeIcon,
   MailIcon,
@@ -65,7 +66,7 @@ export function PlatformTargetsManager({
         setConfigDialog(null);
         setConfigValues({});
       },
-      onError: (err: any) => toastError({ title: "Failed to save", description: err.message }),
+      onError: (err: unknown) => toastError("Failed to save", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -74,7 +75,7 @@ export function PlatformTargetsManager({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite", "targets"] });
       },
-      onError: (err: any) => toastError({ title: "Toggle failed", description: err.message }),
+      onError: (err: unknown) => toastError("Toggle failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -84,7 +85,7 @@ export function PlatformTargetsManager({
         toast({ title: "Platform removed" });
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite", "targets"] });
       },
-      onError: (err: any) => toastError({ title: "Delete failed", description: err.message }),
+      onError: (err: unknown) => toastError("Delete failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -102,6 +103,27 @@ export function PlatformTargetsManager({
       enabled: true,
     });
   };
+
+  if (targetsQuery.isError) {
+    return (
+      <ErrorBoundary>
+        <div className="flex flex-col items-center py-8 text-center">
+          <p className="text-sm text-destructive">Failed to load platform targets.</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => targetsQuery.refetch()}>
+            Retry
+          </Button>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  if (targetsQuery.isLoading) {
+    return (
+      <ErrorBoundary>
+        <CardGridSkeleton count={6} cols={3} />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
@@ -171,7 +193,7 @@ export function PlatformTargetsManager({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                     onClick={() =>
                       deleteMutation.mutate({ organizationSlug, targetId: configured.id })
                     }

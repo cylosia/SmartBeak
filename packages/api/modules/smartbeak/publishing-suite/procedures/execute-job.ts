@@ -3,8 +3,8 @@ import {
   countAttemptsForJob,
   getContentItemById,
   getDomainById,
-  getPublishTargetById,
   getPublishingJobById,
+  getPublishTargetsForDomain,
   recordPublishAttempt,
   updatePublishingJobStatus,
 } from "@repo/database";
@@ -53,10 +53,7 @@ export const executePublishingJobProcedure = protectedProcedure
       });
     }
 
-    // Get the publish target config
-    const targets = await import("@repo/database").then((m) =>
-      m.getPublishTargetsForDomain(job.domainId),
-    );
+    const targets = await getPublishTargetsForDomain(job.domainId);
     const targetConfig = targets.find((t) => t.target === job.target && t.enabled);
     if (!targetConfig) {
       await updatePublishingJobStatus(input.jobId, "failed", {
@@ -89,7 +86,7 @@ export const executePublishingJobProcedure = protectedProcedure
         payload = {
           title: content.title,
           body: typeof content.body === "string" ? content.body : JSON.stringify(content.body),
-          excerpt: content.excerpt ?? "",
+          excerpt: "",
           mediaUrls: [],
           tags: [],
         };

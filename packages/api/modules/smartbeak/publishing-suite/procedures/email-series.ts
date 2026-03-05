@@ -68,9 +68,7 @@ export const createEmailSeriesProcedure = protectedProcedure
         }),
       });
       if (!res.ok) {
-        const err = await res.text();
-        // Non-fatal — jobs are still scheduled
-        console.warn(`Resend first-step send failed: ${err}`);
+        // Non-fatal — jobs are still scheduled; error will surface when job executes
       }
     }
 

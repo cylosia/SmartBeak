@@ -57,7 +57,7 @@ export function BulkScheduleDialog({
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
         onClose();
       },
-      onError: (err: any) => toastError({ title: "Bulk schedule failed", description: err.message }),
+      onError: (err: unknown) => toastError("Bulk schedule failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -70,7 +70,7 @@ export function BulkScheduleDialog({
   const handleSubmit = () => {
     const valid = rows.filter((r) => r.contentId && r.target && r.scheduledFor);
     if (valid.length === 0) {
-      toastError({ title: "No valid rows", description: "Fill in content ID, platform, and date for each row." });
+      toastError("No valid rows", "Fill in content ID, platform, and date for each row.");
       return;
     }
     bulkMutation.mutate({
@@ -131,7 +131,7 @@ export function BulkScheduleDialog({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
+                className="h-8 w-8 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                 onClick={() => removeRow(i)}
                 disabled={rows.length === 1}
               >

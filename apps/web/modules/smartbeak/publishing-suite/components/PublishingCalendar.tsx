@@ -15,8 +15,9 @@ import {
 } from "date-fns";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
-import { ChevronLeftIcon, ChevronRightIcon, ActivityIcon, GlobeIcon, MailIcon, LinkedinIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { Skeleton } from "@repo/ui/components/skeleton";
 
 const PLATFORM_COLORS: Record<string, string> = {
   web: "bg-blue-500",
@@ -57,6 +58,35 @@ export function PublishingCalendar({
 
   const byDate = calendarQuery.data?.byDate ?? {};
   const days = eachDayOfInterval({ start: from, end: to });
+
+  if (calendarQuery.isLoading) {
+    return (
+      <ErrorBoundary>
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <Skeleton className="h-8 w-48" />
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: 35 }).map((_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: skeleton cells
+              <Skeleton key={i} className="h-20 w-full rounded" />
+            ))}
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  if (calendarQuery.isError) {
+    return (
+      <ErrorBoundary>
+        <div className="flex flex-col items-center py-8 text-center">
+          <p className="text-sm text-destructive">Failed to load calendar.</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => calendarQuery.refetch()}>
+            Retry
+          </Button>
+        </div>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>

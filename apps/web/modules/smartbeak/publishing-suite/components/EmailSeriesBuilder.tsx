@@ -63,7 +63,7 @@ export function EmailSeriesBuilder({
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
         onClose();
       },
-      onError: (err: any) => toastError({ title: "Failed to create series", description: err.message }),
+      onError: (err: unknown) => toastError("Failed to create series", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -83,7 +83,7 @@ export function EmailSeriesBuilder({
 
   const handleSubmit = () => {
     if (!seriesName || !fromName || !fromEmail || steps.length === 0) {
-      toastError({ title: "Missing fields", description: "Fill in series name, sender, and at least one step." });
+      toastError("Missing fields", "Fill in series name, sender, and at least one step.");
       return;
     }
     createMutation.mutate({
@@ -186,7 +186,7 @@ export function EmailSeriesBuilder({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-red-500 hover:text-red-600"
+                      className="h-6 w-6 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                       onClick={(e) => { e.stopPropagation(); removeStep(i); }}
                       disabled={steps.length === 1}
                     >

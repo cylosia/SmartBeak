@@ -18,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { Badge } from "@repo/ui/components/badge";
 import { toast, toastError } from "@repo/ui/components/toast";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
@@ -74,7 +73,7 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
         toast({ title: "Job executed", description: "Publishing job dispatched successfully." });
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
-      onError: (err: any) => toastError({ title: "Execution failed", description: err.message }),
+      onError: (err: unknown) => toastError("Execution failed", err instanceof Error ? err.message : "Unknown error"),
     }),
   );
 
@@ -90,27 +89,27 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
           <MetricCard
             title="Total Jobs"
             value={totals.total}
-            icon={<ActivityIcon className="h-4 w-4" />}
+            icon={ActivityIcon}
           />
           <MetricCard
             title="Pending"
             value={totals.pending}
-            icon={<ClockIcon className="h-4 w-4 text-yellow-500" />}
+            icon={ClockIcon}
           />
           <MetricCard
             title="Running"
             value={totals.running}
-            icon={<RefreshCwIcon className="h-4 w-4 text-blue-500" />}
+            icon={RefreshCwIcon}
           />
           <MetricCard
             title="Published"
             value={totals.published}
-            icon={<CheckCircleIcon className="h-4 w-4 text-green-500" />}
+            icon={CheckCircleIcon}
           />
           <MetricCard
             title="Failed"
             value={totals.failed}
-            icon={<XCircleIcon className="h-4 w-4 text-red-500" />}
+            icon={XCircleIcon}
           />
         </div>
 
@@ -132,7 +131,7 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
                     <span className="font-medium capitalize">{platform}</span>
                     <span className="text-green-600 dark:text-green-400">{stats.published}✓</span>
                     {stats.failed > 0 && (
-                      <span className="text-red-500">{stats.failed}✗</span>
+                      <span className="text-red-500 dark:text-red-400">{stats.failed}✗</span>
                     )}
                   </div>
                 );
@@ -179,11 +178,18 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
             </Button>
           </div>
 
-          {dashboardQuery.isLoading ? (
+          {dashboardQuery.isError ? (
+            <div className="flex flex-col items-center py-8 text-center">
+              <p className="text-sm text-destructive">Failed to load publishing jobs.</p>
+              <Button variant="outline" size="sm" className="mt-2" onClick={() => dashboardQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
+          ) : dashboardQuery.isLoading ? (
             <div className="p-4"><TableSkeleton rows={6} /></div>
           ) : !data?.jobs?.length ? (
             <EmptyState
-              icon={<SendIcon className="h-8 w-8" />}
+              icon={SendIcon}
               title="No publishing jobs"
               description="Schedule content to publish across your connected platforms."
             />
@@ -225,7 +231,7 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
                           ? formatDistanceToNow(new Date(job.executedAt), { addSuffix: true })
                           : "—"}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-red-500">
+                      <TableCell className="max-w-[200px] truncate text-xs text-red-500 dark:text-red-400">
                         {job.error ?? "—"}
                       </TableCell>
                       <TableCell className="text-right">

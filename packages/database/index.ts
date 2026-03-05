@@ -22,3 +22,33 @@ export {
 	SEO_DASHBOARD_MATERIALIZED_VIEW_SQL,
 } from "./drizzle/queries/seo-intelligence";
 export * from "./drizzle/zod-seo-intelligence";
+
+// Publishing Suite queries and schemas (Phase 2B)
+export {
+	getPublishTargetById,
+	upsertPublishTarget,
+	togglePublishTarget,
+	deletePublishTarget,
+	getPublishingJobsForOrg,
+	bulkCreatePublishingJobs,
+	updatePublishingJobStatus,
+	cancelPublishingJob,
+	getScheduledJobsInRange,
+	getPublishAttemptsForJobFull,
+	countAttemptsForJob,
+	recordPublishAttempt,
+	getFailedJobsForDLQ,
+	retryPublishingJob,
+	bulkRetryJobs,
+	getFailedWebhookEvents,
+	markWebhookEventFailed,
+	incrementWebhookReplayCount,
+	createWebhookEvent,
+	getIntegrationsForDomain,
+	upsertIntegration,
+	toggleIntegration,
+	getPublishAnalyticsForDomain,
+	getPublishingJobStatusSummary,
+	getPublishingJobStatusSummaryForOrg,
+} from "./drizzle/queries/publishing-suite";
+export * from "./drizzle/zod-publishing-suite";

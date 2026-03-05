@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
+import { Button } from "@repo/ui/components/button";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -55,17 +56,24 @@ export function PublishAnalyticsView({
       <div className="space-y-6">
         {/* Summary */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <MetricCard title="Total Views" value={totals.views.toLocaleString()} icon={<EyeIcon className="h-4 w-4 text-blue-500" />} />
-          <MetricCard title="Clicks" value={totals.clicks.toLocaleString()} icon={<MousePointerClickIcon className="h-4 w-4 text-green-500" />} />
-          <MetricCard title="Engagement" value={totals.engagement.toLocaleString()} icon={<HeartIcon className="h-4 w-4 text-pink-500" />} />
-          <MetricCard title="Impressions" value={totals.impressions.toLocaleString()} icon={<TrendingUpIcon className="h-4 w-4 text-purple-500" />} />
+          <MetricCard title="Total Views" value={totals.views.toLocaleString()} icon={EyeIcon} loading={analyticsQuery.isLoading} />
+          <MetricCard title="Clicks" value={totals.clicks.toLocaleString()} icon={MousePointerClickIcon} loading={analyticsQuery.isLoading} />
+          <MetricCard title="Engagement" value={totals.engagement.toLocaleString()} icon={HeartIcon} loading={analyticsQuery.isLoading} />
+          <MetricCard title="Impressions" value={totals.impressions.toLocaleString()} icon={TrendingUpIcon} loading={analyticsQuery.isLoading} />
         </div>
 
-        {analyticsQuery.isLoading ? (
+        {analyticsQuery.isError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load analytics.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => analyticsQuery.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : analyticsQuery.isLoading ? (
           <TableSkeleton rows={5} />
         ) : chartData.length === 0 ? (
           <EmptyState
-            icon={<BarChart2Icon className="h-8 w-8" />}
+            icon={BarChart2Icon}
             title="No analytics yet"
             description="Analytics will appear once content has been published and performance data returned."
           />
@@ -91,8 +99,8 @@ export function PublishAnalyticsView({
                   />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Bar dataKey="views" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="clicks" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="engagement" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="clicks" fill="hsl(var(--chart-2, 142 71% 45%))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="engagement" fill="hsl(var(--chart-3, 330 81% 60%))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
