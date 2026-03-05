@@ -13,6 +13,16 @@ import {
   timelineEvents,
 } from "../schema";
 
+function extractHealthScore(health: unknown, fallback = 0): number {
+  if (typeof health === "number") return health;
+  if (health && typeof health === "object" && "score" in health) {
+    return typeof (health as Record<string, unknown>).score === "number"
+      ? ((health as Record<string, unknown>).score as number)
+      : fallback;
+  }
+  return fallback;
+}
+
 // ─── Portfolio ROI ──────────────────────────────────────────────────────────
 
 export async function getPortfolioRoiForOrg(orgId: string) {
@@ -25,7 +35,7 @@ export async function getPortfolioRoiForOrg(orgId: string) {
     columns: {
       id: true,
       name: true,
-      healthScore: true,
+      health: true,
       status: true,
       createdAt: true,
     },
@@ -47,12 +57,13 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 
   const domainsWithRoi = domainList.map((d) => {
     const decay = decayMap.get(d.id);
-    const healthScore = d.healthScore ?? 0;
+    const healthScore = extractHealthScore(d.health);
     const decayFactor = decay?.avgDecay ?? 1;
     // Risk-adjusted ROI: health score weighted by decay factor
     const riskAdjustedScore = Math.round(healthScore * decayFactor * 100) / 100;
     return {
       ...d,
+      healthScore,
       riskAdjustedScore,
       decayFactor,
       estimatedValue: riskAdjustedScore * 1000, // placeholder multiplier
@@ -162,8 +173,7 @@ export async function runDiligenceChecksForDomain(domainId: string) {
 
   const results = await Promise.all(
     DILIGENCE_TYPES.map(async (type) => {
-      // Deterministic scoring based on domain health and type
-      const healthScore = domain.healthScore ?? 50;
+      const healthScore = extractHealthScore(domain.health, 50);
       const typeWeights: Record<string, number> = {
         ownership: 1.0,
         legal: 0.95,
@@ -212,7 +222,7 @@ export async function getSellReadyScore(domainId: string) {
 
   if (!domain) throw new Error("Domain not found");
 
-  const healthScore = domain.healthScore ?? 0;
+  const healthScore = extractHealthScore(domain.health);
   const diligenceScore = diligence.score;
   const avgDecay =
     decay.length > 0
@@ -327,7 +337,7 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 export async function getMonetizationDecayForOrg(orgId: string) {
   const orgDomains = await db.query.domains.findMany({
     where: eq(domains.orgId, orgId),
-    columns: { id: true, name: true, healthScore: true },
+    columns: { id: true, name: true, health: true },
   });
 
   const results = await Promise.all(
@@ -394,7 +404,7 @@ SELECT
   ps.avg_roi,
   ps.last_updated,
   COUNT(DISTINCT d.id) AS active_domains,
-  AVG(d.health_score) AS avg_health_score,
+  AVG(CAST(d.health->>'score' AS NUMERIC)) AS avg_health_score,
   COUNT(DISTINCT bs.id) AS total_buyer_sessions,
   COUNT(DISTINCT dc.id) FILTER (WHERE dc.status = 'passed') AS diligence_passed,
   COUNT(DISTINCT dc.id) FILTER (WHERE dc.status = 'failed') AS diligence_failed

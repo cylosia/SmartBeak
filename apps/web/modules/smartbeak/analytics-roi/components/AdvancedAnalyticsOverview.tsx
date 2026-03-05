@@ -204,8 +204,8 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
                       <TableCell className="font-medium">{d.domain.name}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Progress value={d.domain.healthScore ?? 0} className="h-1.5 w-16" />
-                          <span className="text-xs text-muted-foreground">{d.domain.healthScore ?? 0}</span>
+                          <Progress value={Number((d.domain.health as Record<string, unknown> | null)?.score ?? 0)} className="h-1.5 w-16" />
+                          <span className="text-xs text-muted-foreground">{Number((d.domain.health as Record<string, unknown> | null)?.score ?? 0)}</span>
                         </div>
                       </TableCell>
                       <TableCell>
