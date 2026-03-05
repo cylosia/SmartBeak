@@ -451,6 +451,10 @@
       "title": "Organisation",
       "dangerZone": {
         "title": "Gefahrenzone"
+      },
+      "integrations": {
+        "title": "Integrationen",
+        "subtitle": "Drittanbieter-Dienste durch Eingabe Ihrer API-Schlüssel verbinden. Schlüssel werden verschlüsselt gespeichert."
       }
     },
     "start": {
@@ -698,6 +702,7 @@
       "organization": {
         "billing": "Abrechnung",
         "general": "Allgemein",
+        "integrations": "Integrationen",
         "members": "Mitglieder",
         "title": "Organisation",
         "dangerZone": "Gefahrenzone"

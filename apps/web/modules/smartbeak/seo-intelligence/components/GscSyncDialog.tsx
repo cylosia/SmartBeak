@@ -2,18 +2,18 @@
 
 import { orpc } from "@/modules/smartbeak/shared/lib/api";
 import { useMutation } from "@tanstack/react-query";
+import { Button } from "@repo/ui/components/button";
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
-} from "@ui/components";
-import { toast } from "@ui/components/toast";
+} from "@repo/ui/components/dialog";
+import { Input } from "@repo/ui/components/input";
+import { Label } from "@repo/ui/components/label";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -43,24 +43,23 @@ export function GscSyncDialog({
   const syncMutation = useMutation(
     orpc.smartbeak.seoIntelligence.syncGsc.mutationOptions({
       onSuccess: (data) => {
-        toast({
-          title: "GSC sync complete",
-          description: `Imported ${data.keywordsImported} keywords. SEO score updated to ${data.newScore}.`,
-        });
+        toastSuccess(
+          "GSC sync complete",
+          `Imported ${data.keywordsImported} keywords. SEO score updated to ${data.newScore}.`,
+        );
         onSuccess();
       },
       onError: (err) => {
-        toast({
-          title: "GSC sync failed",
-          description: err.message ?? "Check your access token and site URL.",
-          variant: "destructive",
-        });
+        toastError(
+          "GSC sync failed",
+          err.message ?? "Check your access token and site URL.",
+        );
       },
     }),
   );
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open: boolean) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -80,7 +79,7 @@ export function GscSyncDialog({
             <Input
               placeholder="https://yourdomain.com"
               value={siteUrl}
-              onChange={(e) => setSiteUrl(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSiteUrl(e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
@@ -89,7 +88,7 @@ export function GscSyncDialog({
               type="password"
               placeholder="ya29...."
               value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAccessToken(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
               Generate via{" "}
@@ -114,7 +113,7 @@ export function GscSyncDialog({
               <Input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
@@ -122,7 +121,7 @@ export function GscSyncDialog({
               <Input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndDate(e.target.value)}
               />
             </div>
           </div>

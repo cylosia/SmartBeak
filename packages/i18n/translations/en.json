@@ -459,6 +459,10 @@
       "title": "Organization",
       "dangerZone": {
         "title": "Danger zone"
+      },
+      "integrations": {
+        "title": "Integrations",
+        "subtitle": "Connect third-party services by providing your API keys. Keys are encrypted at rest."
       }
     },
     "start": {
@@ -706,6 +710,7 @@
       "organization": {
         "billing": "Billing",
         "general": "General",
+        "integrations": "Integrations",
         "members": "Members",
         "title": "Organization",
         "dangerZone": "Danger zone"

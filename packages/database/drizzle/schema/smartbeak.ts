@@ -38,7 +38,7 @@ export const organizations = pgTable('organizations', {
 export const organizationMembers = pgTable('organization_members', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
-  userId: uuid('user_id').notNull(),
+  userId: text('user_id').notNull(),
   role: memberRole('role').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -73,8 +73,8 @@ export const contentItems = pgTable('content_items', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   version: integer('version').default(1).notNull(),
-  createdBy: uuid('created_by'),
-  updatedBy: uuid('updated_by'),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
 });
 
 export const contentRevisions = pgTable('content_revisions', {
@@ -82,7 +82,7 @@ export const contentRevisions = pgTable('content_revisions', {
   contentId: uuid('content_id').references(() => contentItems.id, { onDelete: 'cascade' }).notNull(),
   version: integer('version').notNull(),
   body: text('body'),
-  changedBy: uuid('changed_by'),
+  changedBy: text('changed_by'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -222,7 +222,7 @@ export const portfolioSummaries = pgTable('portfolio_summaries', {
 export const auditEvents = pgTable('audit_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id').references(() => organizations.id).notNull(),
-  actorId: uuid('actor_id'),
+  actorId: text('actor_id'),
   action: text('action').notNull(),
   entityType: text('entity_type').notNull(),
   entityId: uuid('entity_id'),

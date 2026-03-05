@@ -2,23 +2,26 @@
 
 import { orpc } from "@/modules/smartbeak/shared/lib/api";
 import { useMutation } from "@tanstack/react-query";
+import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
 import {
-  Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  Input,
-  Label,
-  Progress,
+} from "@repo/ui/components/card";
+import { Input } from "@repo/ui/components/input";
+import { Label } from "@repo/ui/components/label";
+import { Progress } from "@repo/ui/components/progress";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  Textarea,
-} from "@ui/components";
+} from "@repo/ui/components/sheet";
+import { Textarea } from "@repo/ui/components/textarea";
+import { toastError } from "@repo/ui/components/toast";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -113,6 +116,9 @@ export function ContentOptimizerPanel({
       onSuccess: (data) => {
         setResult(data as OptimizerResult);
       },
+      onError: (err: Error) => {
+        toastError("Optimization failed", err.message ?? "Could not analyze content.");
+      },
     }),
   );
 
@@ -159,7 +165,7 @@ export function ContentOptimizerPanel({
         : "text-red-500";
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Sheet open onOpenChange={(open: boolean) => !open && onClose()}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-3xl overflow-y-auto"
@@ -183,7 +189,7 @@ export function ContentOptimizerPanel({
               <Input
                 placeholder="Your article title..."
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
               />
               {title && (
                 <p
@@ -199,7 +205,7 @@ export function ContentOptimizerPanel({
               <Input
                 placeholder="Brief description for search engines..."
                 value={metaDescription}
-                onChange={(e) => setMetaDescription(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMetaDescription(e.target.value)}
               />
               {metaDescription && (
                 <p
@@ -218,7 +224,7 @@ export function ContentOptimizerPanel({
               <Input
                 placeholder="e.g. crm software, best crm, sales tools"
                 value={keywordsInput}
-                onChange={(e) => setKeywordsInput(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKeywordsInput(e.target.value)}
               />
             </div>
 
@@ -227,7 +233,7 @@ export function ContentOptimizerPanel({
               <Textarea
                 placeholder="Paste or type your article content here..."
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
                 rows={14}
                 className="resize-none font-mono text-xs"
               />
@@ -303,8 +309,7 @@ export function ContentOptimizerPanel({
                           {kw}
                         </span>
                         <Badge
-                          variant="outline"
-                          className={`text-xs ${d >= 0.5 && d <= 2.5 ? "border-emerald-500/30 text-emerald-600" : "border-amber-500/30 text-amber-600"}`}
+                          className={`border border-border text-xs ${d >= 0.5 && d <= 2.5 ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400" : "border-amber-500/30 text-amber-600 dark:text-amber-400"}`}
                         >
                           {d}%
                         </Badge>

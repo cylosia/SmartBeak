@@ -88,7 +88,7 @@ export const createCheckoutLink: CreateCheckoutLink = async (options) => {
 			: undefined,
 	});
 
-	return response.checkout_url;
+	return response.checkout_url ?? null;
 };
 
 export const createCustomerPortalLink: CreateCustomerPortalLink = async ({

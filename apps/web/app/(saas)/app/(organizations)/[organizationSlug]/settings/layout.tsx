@@ -7,6 +7,7 @@ import { SettingsMenu } from "@saas/settings/components/SettingsMenu";
 import { PageHeader } from "@saas/shared/components/PageHeader";
 import {
 	CreditCardIcon,
+	PlugIcon,
 	Settings2Icon,
 	TriangleAlertIcon,
 	Users2Icon,
@@ -70,19 +71,28 @@ export default async function SettingsLayout({
 							},
 						]
 					: []),
-				...(userIsOrganizationAdmin
-					? [
-							{
-								title: t(
-									"settings.menu.organization.dangerZone",
-								),
-								href: `${organizationSettingsBasePath}/danger-zone`,
-								icon: (
-									<TriangleAlertIcon className="size-4 opacity-50" />
-								),
-							},
-						]
-					: []),
+			...(userIsOrganizationAdmin
+				? [
+						{
+							title: t(
+								"settings.menu.organization.integrations",
+							),
+							href: `${organizationSettingsBasePath}/integrations`,
+							icon: (
+								<PlugIcon className="size-4 opacity-50" />
+							),
+						},
+						{
+							title: t(
+								"settings.menu.organization.dangerZone",
+							),
+							href: `${organizationSettingsBasePath}/danger-zone`,
+							icon: (
+								<TriangleAlertIcon className="size-4 opacity-50" />
+							),
+						},
+					]
+				: []),
 			],
 		},
 	];

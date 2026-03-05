@@ -5,36 +5,18 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  Input,
-  Progress,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@ui/components";
-import { toast } from "@ui/components/toast";
+import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/components/card";
+import { Input } from "@repo/ui/components/input";
+import { Progress } from "@repo/ui/components/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/components/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@repo/ui/components/tooltip";
+import { toast } from "@repo/ui/components/toast";
 import {
   AlertTriangleIcon,
   BarChart3Icon,
-  BrainCircuitIcon,
   CheckCircle2Icon,
   ExternalLinkIcon,
   LayersIcon,
@@ -47,7 +29,7 @@ import {
   XCircleIcon,
   ZapIcon,
 } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 import { AiIdeaPanel } from "./AiIdeaPanel";
 import { ContentOptimizerPanel } from "./ContentOptimizerPanel";
 import { GscSyncDialog } from "./GscSyncDialog";
@@ -61,20 +43,20 @@ function DecayBadge({ factor }: { factor: string | null }) {
   const val = parseFloat(factor ?? "1");
   if (val >= 0.7)
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 text-xs">
+      <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs">
         <CheckCircle2Icon className="mr-1 h-3 w-3" />
         Fresh
       </Badge>
     );
   if (val >= 0.5)
     return (
-      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+      <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs">
         <AlertTriangleIcon className="mr-1 h-3 w-3" />
         Aging
       </Badge>
     );
   return (
-    <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+    <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 text-xs">
       <TrendingDownIcon className="mr-1 h-3 w-3" />
       Decaying
     </Badge>
@@ -148,10 +130,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             input: { organizationSlug, domainId },
           }),
         );
-        toast({ title: "Keyword added", description: "Tracking started." });
+        toast({ title: "Keyword added", description: "Tracking started.", type: "success" });
       },
       onError: () => {
-        toast({ title: "Failed to add keyword", variant: "destructive" });
+        toast({ title: "Failed to add keyword", type: "error" });
       },
     }),
   );
@@ -164,10 +146,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             input: { organizationSlug, domainId },
           }),
         );
-        toast({ title: "Keyword removed" });
+        toast({ title: "Keyword removed", type: "success" });
       },
       onError: () => {
-        toast({ title: "Failed to remove keyword", variant: "destructive" });
+        toast({ title: "Failed to remove keyword", type: "error" });
       },
     }),
   );
@@ -212,6 +194,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
                 toast({
                   title: "Ahrefs sync",
                   description: "Configure your Ahrefs API key in settings to enable this.",
+                  type: "info",
                 })
               }
             >
@@ -238,6 +221,27 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             </Button>
           </div>
         </div>
+
+        {/* Error state */}
+        {dashboardQuery.isError && (
+          <Card className="border-destructive/50">
+            <CardContent className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangleIcon className="h-5 w-5 text-destructive shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Failed to load dashboard</p>
+                  <p className="text-xs text-muted-foreground">
+                    {dashboardQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => dashboardQuery.refetch()}>
+                <RefreshCwIcon className="mr-1.5 h-3.5 w-3.5" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -290,7 +294,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <div className="text-2xl font-bold text-emerald-600">
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                 {dashboardQuery.isLoading ? "—" : (summary?.topPositionKeywords ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground">Keywords</p>
@@ -369,8 +373,8 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               <Input
                 placeholder="Add keyword to track (e.g. 'best crm software')..."
                 value={newKeyword}
-                onChange={(e) => setNewKeyword(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewKeyword(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter" && newKeyword.trim()) {
                     addKeywordMutation.mutate({
                       organizationSlug,
@@ -459,7 +463,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
                                 <BarChart3Icon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                               <span
-                                className={`text-sm font-medium ${kw.position <= 10 ? "text-emerald-600" : ""}`}
+                                className={`text-sm font-medium ${kw.position <= 10 ? "text-emerald-600 dark:text-emerald-400" : ""}`}
                               >
                                 #{kw.position}
                               </span>

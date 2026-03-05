@@ -16,6 +16,7 @@ import {
   ImageIcon,
   SendIcon,
   SearchIcon,
+  BrainCircuitIcon,
   TrendingUpIcon,
   ZapIcon,
   BarChart2Icon,
@@ -103,6 +104,12 @@ export function DomainDetailView({
       icon: SearchIcon,
       href: `/app/${organizationSlug}/domains/${domainId}/seo`,
       description: "Keyword tracking and scores",
+    },
+    {
+      label: "SEO Intelligence",
+      icon: BrainCircuitIcon,
+      href: `/app/${organizationSlug}/domains/${domainId}/seo-intelligence`,
+      description: "AI ideas, decay signals, and content optimizer",
     },
     {
       label: "Diligence",

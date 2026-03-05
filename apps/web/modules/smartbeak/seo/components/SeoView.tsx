@@ -1,24 +1,19 @@
 "use client";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
-import { Progress } from "@repo/ui/components/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@repo/ui/components/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { toast, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { SearchIcon, PlusIcon, TrashIcon, TrendingUpIcon, Loader2Icon } from "lucide-react";
+import { SearchIcon, PlusIcon, Loader2Icon, BarChart3Icon, LinkIcon } from "lucide-react";
+import { KeywordDataTable } from "./KeywordDataTable";
+import { SeoDashboard } from "./SeoDashboard";
+import { IntegrationsPanel } from "./IntegrationsPanel";
 
 export function SeoView({
   organizationSlug,
@@ -58,6 +53,8 @@ export function SeoView({
                 volume: variables.volume ?? null,
                 difficulty: variables.difficulty ?? null,
                 position: variables.position ?? null,
+                decayFactor: null,
+                lastUpdated: new Date().toISOString(),
                 domainId,
               },
             ],
@@ -107,195 +104,131 @@ export function SeoView({
     }),
   );
 
-  const seoDoc = seoQuery.data?.seoDoc;
-  const keywords = seoQuery.data?.keywords ?? [];
+  const seoDoc = seoQuery.data?.seoDoc as {
+    score: number | null;
+    updatedAt: string | Date;
+    gscData?: Record<string, unknown> | null;
+    ahrefsData?: Record<string, unknown> | null;
+  } | null | undefined;
+
+  const keywords = (seoQuery.data?.keywords ?? []) as Array<{
+    id: string;
+    keyword: string;
+    volume: number | null;
+    difficulty: number | null;
+    position: number | null;
+    decayFactor: string | null;
+    lastUpdated: string | Date;
+  }>;
+
+  function handleBulkDelete(ids: string[]) {
+    for (const id of ids) {
+      removeKeywordMutation.mutate({ organizationSlug, id });
+    }
+  }
+
+  if (seoQuery.isError) {
+    return (
+      <ErrorBoundary>
+        <div className="flex flex-col items-center py-12 text-center">
+          <p className="text-sm text-destructive">Failed to load SEO data.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => seoQuery.refetch()}>
+            Retry
+          </Button>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  if (seoQuery.isLoading) {
+    return (
+      <div className="space-y-6">
+        <CardGridSkeleton count={4} />
+        <TableSkeleton rows={5} />
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary>
-      <div className="space-y-6">
-        {/* SEO Score Card */}
-        {seoQuery.isError ? (
-          <div className="flex flex-col items-center py-8 text-center">
-            <p className="text-sm text-destructive">Failed to load SEO data.</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => seoQuery.refetch()}>
-              Retry
+      <Tabs defaultValue="dashboard" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="dashboard" className="gap-1.5">
+            <BarChart3Icon className="h-3.5 w-3.5" />
+            Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="keywords" className="gap-1.5">
+            <SearchIcon className="h-3.5 w-3.5" />
+            Keywords
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="gap-1.5">
+            <LinkIcon className="h-3.5 w-3.5" />
+            Integrations
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard" className="space-y-6">
+          <SeoDashboard seoDoc={seoDoc} keywords={keywords} />
+        </TabsContent>
+
+        <TabsContent value="keywords" className="space-y-6">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Add keyword to track..."
+              value={newKeyword}
+              onChange={(e) => setNewKeyword(e.target.value)}
+              aria-label="Add keyword to track"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newKeyword.trim()) {
+                  addKeywordMutation.mutate({
+                    organizationSlug,
+                    domainId,
+                    keyword: newKeyword.trim(),
+                  });
+                }
+              }}
+              className="max-w-sm"
+            />
+            <Button
+              onClick={() => {
+                if (newKeyword.trim()) {
+                  addKeywordMutation.mutate({
+                    organizationSlug,
+                    domainId,
+                    keyword: newKeyword.trim(),
+                  });
+                }
+              }}
+              disabled={addKeywordMutation.isPending}
+            >
+              {addKeywordMutation.isPending ? (
+                <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <PlusIcon className="mr-1.5 h-4 w-4" />
+              )}
+              Add
             </Button>
           </div>
-        ) : seoQuery.isLoading ? (
-          <CardGridSkeleton count={3} />
-        ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                SEO Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                {seoDoc?.score ?? 0}
-                <span className="text-base font-normal text-muted-foreground">
-                  /100
-                </span>
-              </div>
-              <Progress
-                value={seoDoc?.score ?? 0}
-                className="mt-2 h-2"
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Keywords Tracked
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{keywords.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Active keyword targets
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Avg. Position
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                {keywords.length > 0
-                  ? Math.round(
-                      keywords.reduce((sum, k) => sum + (k.position ?? 0), 0) /
-                        keywords.length,
-                    )
-                  : "—"}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Average SERP position
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-        )}
 
-        {/* Add Keyword */}
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Add keyword to track..."
-            value={newKeyword}
-            onChange={(e) => setNewKeyword(e.target.value)}
-            aria-label="Add keyword to track"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newKeyword.trim()) {
-                addKeywordMutation.mutate({
-                  organizationSlug,
-                  domainId,
-                  keyword: newKeyword.trim(),
-                });
-              }
-            }}
-            className="max-w-sm"
-          />
-          <Button
-            onClick={() => {
-              if (newKeyword.trim()) {
-                addKeywordMutation.mutate({
-                  organizationSlug,
-                  domainId,
-                  keyword: newKeyword.trim(),
-                });
-              }
-            }}
-            disabled={addKeywordMutation.isPending}
-          >
-            {addKeywordMutation.isPending ? (
-              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <PlusIcon className="mr-2 h-4 w-4" />
-            )}
-            Add
-          </Button>
-        </div>
+          {keywords.length === 0 ? (
+            <EmptyState
+              icon={SearchIcon}
+              title="No keywords tracked"
+              description="Add keywords above to monitor your search engine rankings."
+            />
+          ) : (
+            <KeywordDataTable
+              data={keywords}
+              onDelete={handleBulkDelete}
+              isDeleting={removeKeywordMutation.isPending}
+            />
+          )}
+        </TabsContent>
 
-        {/* Keywords Table */}
-        {seoQuery.isLoading ? (
-          <TableSkeleton rows={5} />
-        ) : keywords.length === 0 ? (
-          <EmptyState
-            icon={SearchIcon}
-            title="No keywords tracked"
-            description="Add keywords to monitor your search engine rankings."
-          />
-        ) : (
-          <div className="rounded-xl border border-border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Keyword</TableHead>
-                  <TableHead>Volume</TableHead>
-                  <TableHead>Difficulty</TableHead>
-                  <TableHead>Position</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {keywords.map((kw) => (
-                  <TableRow key={kw.id}>
-                    <TableCell className="font-medium">{kw.keyword}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {kw.volume?.toLocaleString() ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      {kw.difficulty !== null && kw.difficulty !== undefined ? (
-                        <div className="flex items-center gap-2">
-                          <Progress
-                            value={kw.difficulty}
-                            className="h-1.5 w-16"
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            {kw.difficulty}
-                          </span>
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {kw.position ? (
-                        <div className="flex items-center gap-1">
-                          <TrendingUpIcon className="h-3.5 w-3.5 text-emerald-500" />
-                          <span className="text-sm font-medium">
-                            #{kw.position}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove keyword ${kw.keyword}`}
-                        onClick={() =>
-                          removeKeywordMutation.mutate({
-                            organizationSlug,
-                            id: kw.id,
-                          })
-                        }
-                      >
-                        <TrashIcon className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
+        <TabsContent value="integrations" className="space-y-6">
+          <IntegrationsPanel seoDoc={seoDoc} />
+        </TabsContent>
+      </Tabs>
     </ErrorBoundary>
   );
 }
