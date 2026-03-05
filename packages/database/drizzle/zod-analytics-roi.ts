@@ -39,7 +39,7 @@ export const DiligenceCheckSchema = z.object({
   id: z.string().uuid(),
   domainId: z.string().uuid(),
   type: z.string(),
-  result: z.record(z.unknown()).nullable(),
+  result: z.record(z.string(), z.unknown()).nullable(),
   status: z.string().nullable(),
   completedAt: z.date().nullable(),
 });
@@ -51,7 +51,7 @@ export const DiligenceReportSchema = z.object({
   failed: z.number(),
   pending: z.number(),
   score: z.number().min(0).max(100),
-  byType: z.record(z.array(DiligenceCheckSchema)),
+  byType: z.record(z.string(), z.array(DiligenceCheckSchema)),
 });
 
 export const RunDiligenceInputSchema = z.object({

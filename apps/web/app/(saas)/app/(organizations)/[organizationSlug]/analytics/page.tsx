@@ -3,11 +3,13 @@ import { PortfolioRoiDashboard } from "@/modules/smartbeak/analytics-roi/compone
 import { BuyerAttributionView } from "@/modules/smartbeak/analytics-roi/components/BuyerAttributionView";
 import { AdvancedAnalyticsOverview } from "@/modules/smartbeak/analytics-roi/components/AdvancedAnalyticsOverview";
 
-export default function AnalyticsPage({
+export default async function AnalyticsPage({
   params,
 }: {
-  params: { organizationSlug: string };
+  params: Promise<{ organizationSlug: string }>;
 }) {
+  const { organizationSlug } = await params;
+
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -25,15 +27,15 @@ export default function AnalyticsPage({
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
-          <AdvancedAnalyticsOverview organizationSlug={params.organizationSlug} />
+          <AdvancedAnalyticsOverview organizationSlug={organizationSlug} />
         </TabsContent>
 
         <TabsContent value="portfolio" className="mt-6">
-          <PortfolioRoiDashboard organizationSlug={params.organizationSlug} />
+          <PortfolioRoiDashboard organizationSlug={organizationSlug} />
         </TabsContent>
 
         <TabsContent value="attribution" className="mt-6">
-          <BuyerAttributionView organizationSlug={params.organizationSlug} />
+          <BuyerAttributionView organizationSlug={organizationSlug} />
         </TabsContent>
       </Tabs>
     </div>

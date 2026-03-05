@@ -82,7 +82,7 @@ export const updateDiligenceCheck = protectedProcedure
       domainId: z.string().uuid(),
       type: z.string().min(1),
       status: z.enum(["pending", "passed", "failed", "skipped"]),
-      result: z.record(z.unknown()).optional(),
+      result: z.record(z.string(), z.unknown()).optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {

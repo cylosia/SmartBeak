@@ -19,7 +19,6 @@ import {
   BrainCircuitIcon,
   TrendingUpIcon,
   ZapIcon,
-  BarChart2Icon,
   RocketIcon,
   ExternalLinkIcon,
   Loader2Icon,
@@ -112,10 +111,10 @@ export function DomainDetailView({
       description: "AI ideas, decay signals, and content optimizer",
     },
     {
-      label: "Diligence",
-      icon: BarChart2Icon,
-      href: `/app/${organizationSlug}/domains/${domainId}/diligence`,
-      description: "Decay signals and buyer data",
+      label: "Analytics",
+      icon: TrendingUpIcon,
+      href: `/app/${organizationSlug}/domains/${domainId}/analytics`,
+      description: "Diligence, sell-ready score, and attribution",
     },
     {
       label: "SmartDeploy",

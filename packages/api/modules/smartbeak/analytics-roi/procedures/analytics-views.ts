@@ -23,9 +23,9 @@ export const getMonetizationDecayView = protectedProcedure
 export const getPortfolioTrendView = protectedProcedure
   .route({
     method: "GET",
-    path: "/smartbeak/analytics/portfolio-trend",
+    path: "/smartbeak/analytics/portfolio-trend-view",
     tags: ["SmartBeak - Analytics"],
-    summary: "Get portfolio performance trend over time",
+    summary: "Get portfolio performance trend over time (view)",
   })
   .input(
     z.object({

@@ -82,6 +82,7 @@
       "billing": "Billing",
       "smartDeploy": "SmartDeploy",
       "auditLog": "Audit Log",
+      "analytics": "Analytics",
       "getStarted": "Get Started"
     },
     "userMenu": {

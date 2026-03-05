@@ -12,7 +12,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
@@ -79,26 +78,26 @@ export function BuyerAttributionView({
             <MetricCard
               title="Total Sessions"
               value={String(data.total)}
-              icon={<UsersIcon className="h-4 w-4" />}
-              description="Unique buyer sessions"
+              icon={UsersIcon}
+              subtitle="Unique buyer sessions"
             />
             <MetricCard
               title="Converted"
               value={String(data.converted)}
-              icon={<MousePointerClickIcon className="h-4 w-4" />}
-              description="Sessions with buyer email"
+              icon={MousePointerClickIcon}
+              subtitle="Sessions with buyer email"
             />
             <MetricCard
               title="Conversion Rate"
               value={`${data.conversionRate}%`}
-              icon={<TrendingUpIcon className="h-4 w-4" />}
-              description="Sessions → identified buyers"
+              icon={TrendingUpIcon}
+              subtitle="Sessions → identified buyers"
             />
             <MetricCard
               title="Intent Types"
               value={String(data.intentBreakdown.length)}
-              icon={<TargetIcon className="h-4 w-4" />}
-              description="Distinct buyer intents"
+              icon={TargetIcon}
+              subtitle="Distinct buyer intents"
             />
           </div>
 
@@ -193,7 +192,7 @@ export function BuyerAttributionView({
                       <TableCell className="text-sm">{s.buyerEmail ?? <span className="text-muted-foreground">Anonymous</span>}</TableCell>
                       <TableCell>
                         {s.intent ? (
-                          <Badge variant="outline" className="text-xs">{s.intent}</Badge>
+                          <Badge status="info" className="text-xs">{s.intent}</Badge>
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
@@ -205,7 +204,7 @@ export function BuyerAttributionView({
                         {s.buyerEmail ? (
                           <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20 border text-xs">Converted</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-xs">Anonymous</Badge>
+                          <Badge className="bg-muted/50 text-muted-foreground text-xs">Anonymous</Badge>
                         )}
                       </TableCell>
                     </TableRow>
@@ -237,20 +236,20 @@ export function BuyerAttributionView({
           <MetricCard
             title="Total Sessions"
             value={String(orgData.totalSessions)}
-            icon={<UsersIcon className="h-4 w-4" />}
-            description="Across all domains"
+            icon={UsersIcon}
+            subtitle="Across all domains"
           />
           <MetricCard
             title="Total Converted"
             value={String(orgData.totalConverted)}
-            icon={<MousePointerClickIcon className="h-4 w-4" />}
-            description="Identified buyer emails"
+            icon={MousePointerClickIcon}
+            subtitle="Identified buyer emails"
           />
           <MetricCard
             title="Overall Conversion"
             value={`${orgData.overallConversionRate}%`}
-            icon={<TrendingUpIcon className="h-4 w-4" />}
-            description="Portfolio-wide conversion rate"
+            icon={TrendingUpIcon}
+            subtitle="Portfolio-wide conversion rate"
           />
         </div>
 
@@ -284,7 +283,7 @@ export function BuyerAttributionView({
                       </TableCell>
                       <TableCell>
                         {topIntent ? (
-                          <Badge variant="outline" className="text-xs">{topIntent.intent}</Badge>
+                          <Badge status="info" className="text-xs">{topIntent.intent}</Badge>
                         ) : "—"}
                       </TableCell>
                     </TableRow>

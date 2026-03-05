@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import {
   ShieldCheckIcon,
   PlayIcon,
@@ -67,9 +67,9 @@ export function DiligenceEngineView({
     orpc.smartbeak.analyticsRoi.runDiligence.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "analyticsRoi", "getDiligenceReport"] });
-        toast.success("Diligence checks completed");
+        toastSuccess("Diligence checks completed");
       },
-      onError: (e: Error) => toast.error(e.message),
+      onError: (e: Error) => toastError("Diligence failed", e.message),
     }),
   );
 
@@ -78,9 +78,9 @@ export function DiligenceEngineView({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "analyticsRoi", "getDiligenceReport"] });
         setEditingType(null);
-        toast.success("Check updated");
+        toastSuccess("Check updated");
       },
-      onError: (e: Error) => toast.error(e.message),
+      onError: (e: Error) => toastError("Update failed", e.message),
     }),
   );
 

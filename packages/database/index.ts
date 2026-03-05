@@ -72,3 +72,34 @@ export {
 	unifiedJobSchema,
 } from "./drizzle/zod-publishing-suite";
 export type { PublishTarget as PublishingSuiteTarget } from "./drizzle/zod-publishing-suite";
+
+// Analytics & ROI queries and schemas (Phase 2C)
+export {
+	getPortfolioRoiForOrg,
+	getDiligenceReport,
+	upsertDiligenceCheck,
+	runDiligenceChecksForDomain,
+	getSellReadyScore,
+	getBuyerAttributionForDomain,
+	getBuyerAttributionForOrg,
+	getMonetizationDecayForOrg,
+	getPortfolioTrend,
+	PORTFOLIO_ROI_MATERIALIZED_VIEW_SQL,
+	REFRESH_PORTFOLIO_ROI_VIEW_SQL,
+	getPortfolioRoiMaterializedView,
+} from "./drizzle/queries/analytics-roi";
+export {
+	DomainRoiSchema,
+	PortfolioRoiResponseSchema,
+	DiligenceReportSchema,
+	RunDiligenceInputSchema,
+	SellReadyRecommendationSchema,
+	SellReadyScoreResponseSchema,
+	BuyerAttributionResponseSchema,
+	CreateBuyerSessionInputSchema,
+	DomainDecayAnalyticsSchema,
+	PortfolioTrendPointSchema,
+	OrgSlugInputSchema,
+	DomainAnalyticsInputSchema,
+	PortfolioTrendInputSchema,
+} from "./drizzle/zod-analytics-roi";

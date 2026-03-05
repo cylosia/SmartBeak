@@ -3,11 +3,13 @@ import { DiligenceEngineView } from "@/modules/smartbeak/analytics-roi/component
 import { SellReadyPanel } from "@/modules/smartbeak/analytics-roi/components/SellReadyPanel";
 import { BuyerAttributionView } from "@/modules/smartbeak/analytics-roi/components/BuyerAttributionView";
 
-export default function DomainAnalyticsPage({
+export default async function DomainAnalyticsPage({
   params,
 }: {
-  params: { organizationSlug: string; domainId: string };
+  params: Promise<{ organizationSlug: string; domainId: string }>;
 }) {
+  const { organizationSlug, domainId } = await params;
+
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -26,22 +28,22 @@ export default function DomainAnalyticsPage({
 
         <TabsContent value="diligence" className="mt-6">
           <DiligenceEngineView
-            organizationSlug={params.organizationSlug}
-            domainId={params.domainId}
+            organizationSlug={organizationSlug}
+            domainId={domainId}
           />
         </TabsContent>
 
         <TabsContent value="sell-ready" className="mt-6">
           <SellReadyPanel
-            organizationSlug={params.organizationSlug}
-            domainId={params.domainId}
+            organizationSlug={organizationSlug}
+            domainId={domainId}
           />
         </TabsContent>
 
         <TabsContent value="attribution" className="mt-6">
           <BuyerAttributionView
-            organizationSlug={params.organizationSlug}
-            domainId={params.domainId}
+            organizationSlug={organizationSlug}
+            domainId={domainId}
           />
         </TabsContent>
       </Tabs>

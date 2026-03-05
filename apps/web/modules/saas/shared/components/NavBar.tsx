@@ -18,7 +18,6 @@ import {
 	FileTextIcon,
 	GlobeIcon,
 	HomeIcon,
-	LineChartIcon,
 	PanelLeftCloseIcon,
 	PanelLeftOpenIcon,
 	ReceiptIcon,

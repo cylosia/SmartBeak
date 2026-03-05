@@ -4,4 +4,17 @@ export * from "./users";
 export * from "./smartbeak";
 export * from "./seo-intelligence";
 export * from "./publishing-suite";
-export * from "./analytics-roi";
+export {
+	getPortfolioRoiForOrg,
+	getDiligenceReport,
+	upsertDiligenceCheck,
+	runDiligenceChecksForDomain,
+	getSellReadyScore,
+	getBuyerAttributionForDomain,
+	getBuyerAttributionForOrg,
+	getMonetizationDecayForOrg,
+	getPortfolioTrend,
+	PORTFOLIO_ROI_MATERIALIZED_VIEW_SQL,
+	REFRESH_PORTFOLIO_ROI_VIEW_SQL,
+	getPortfolioRoiMaterializedView,
+} from "./analytics-roi";

@@ -39,8 +39,10 @@ function ScoreRing({ score }: { score: number }) {
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (score / 100) * circumference;
-  const color =
-    score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : score >= 40 ? "#f97316" : "#ef4444";
+  const strokeColor =
+    score >= 80 ? "hsl(var(--chart-1))" : score >= 60 ? "hsl(var(--chart-3))" : score >= 40 ? "hsl(var(--chart-3))" : "hsl(var(--chart-5))";
+  const textClass =
+    score >= 80 ? "text-green-600 dark:text-green-400" : score >= 60 ? "text-amber-600 dark:text-amber-400" : score >= 40 ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400";
 
   return (
     <div className="relative flex h-36 w-36 items-center justify-center">
@@ -51,7 +53,7 @@ function ScoreRing({ score }: { score: number }) {
           cy="72"
           r={radius}
           fill="none"
-          stroke={color}
+          stroke={strokeColor}
           strokeWidth="10"
           strokeDasharray={circumference}
           strokeDashoffset={dashOffset}
@@ -60,7 +62,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="text-center">
-        <div className="text-3xl font-bold" style={{ color }}>{score}</div>
+        <div className={`text-3xl font-bold ${textClass}`}>{score}</div>
         <div className="text-xs text-muted-foreground">/ 100</div>
       </div>
     </div>
@@ -167,7 +169,7 @@ export function SellReadyPanel({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-semibold ${cfg.color}`}>{rec.area}</span>
-                        <Badge variant="outline" className={`text-[10px] ${cfg.bg} ${cfg.color} border-current`}>
+                        <Badge className={`text-[10px] ${cfg.bg} ${cfg.color} border-current`}>
                           {cfg.label}
                         </Badge>
                       </div>

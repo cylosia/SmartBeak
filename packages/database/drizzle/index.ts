@@ -5,4 +5,18 @@ export * from "./zod";
 export * from "./zod-smartbeak";
 export * from "./zod-seo-intelligence";
 export * from "./zod-publishing-suite";
-export * from "./zod-analytics-roi";
+export {
+	DomainRoiSchema,
+	PortfolioRoiResponseSchema,
+	DiligenceReportSchema,
+	RunDiligenceInputSchema,
+	SellReadyRecommendationSchema,
+	SellReadyScoreResponseSchema,
+	BuyerAttributionResponseSchema,
+	CreateBuyerSessionInputSchema,
+	DomainDecayAnalyticsSchema,
+	PortfolioTrendPointSchema,
+	OrgSlugInputSchema,
+	DomainAnalyticsInputSchema,
+	PortfolioTrendInputSchema,
+} from "./zod-analytics-roi";

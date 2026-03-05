@@ -80,26 +80,26 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
           <MetricCard
             title="Total Portfolio Value"
             value={`$${(data.totalValue / 1000).toFixed(1)}K`}
-            icon={<DollarSignIcon className="h-4 w-4" />}
-            description="Risk-adjusted estimated value"
+            icon={DollarSignIcon}
+            subtitle="Risk-adjusted estimated value"
           />
           <MetricCard
             title="Average ROI Score"
             value={`${data.avgRoi.toFixed(1)}`}
-            icon={<TrendingUpIcon className="h-4 w-4" />}
-            description="Weighted health × decay factor"
+            icon={TrendingUpIcon}
+            subtitle="Weighted health × decay factor"
           />
           <MetricCard
             title="Total Domains"
             value={String(data.totalDomains)}
-            icon={<GlobeIcon className="h-4 w-4" />}
-            description="Active domains in portfolio"
+            icon={GlobeIcon}
+            subtitle="Active domains in portfolio"
           />
           <MetricCard
             title="Portfolio Health Index"
             value={`${Math.round(data.avgRoi)}%`}
-            icon={<ActivityIcon className="h-4 w-4" />}
-            description="Overall portfolio health"
+            icon={ActivityIcon}
+            subtitle="Overall portfolio health"
           />
         </div>
 

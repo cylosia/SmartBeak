@@ -80,26 +80,26 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
           <MetricCard
             title="Portfolio Health Index"
             value={`${overview.portfolioHealthIndex}%`}
-            icon={<ShieldIcon className="h-4 w-4" />}
-            description="Composite health score"
+            icon={ShieldIcon}
+            subtitle="Composite health score"
           />
           <MetricCard
             title="Total Portfolio Value"
             value={`$${(overview.roi.totalValue / 1000).toFixed(1)}K`}
-            icon={<TrendingUpIcon className="h-4 w-4" />}
-            description="Risk-adjusted estimate"
+            icon={TrendingUpIcon}
+            subtitle="Risk-adjusted estimate"
           />
           <MetricCard
             title="Avg Monetization Decay"
             value={`${Math.round(decayDomains.reduce((s, d) => s + d.avgDecay, 0) / Math.max(decayDomains.length, 1) * 100)}%`}
-            icon={<TrendingDownIcon className="h-4 w-4" />}
-            description="Lower = more decay risk"
+            icon={TrendingDownIcon}
+            subtitle="Lower = more decay risk"
           />
           <MetricCard
             title="Buyer Sessions"
             value={String(overview.attribution.totalSessions)}
-            icon={<ActivityIcon className="h-4 w-4" />}
-            description={`${overview.attribution.overallConversionRate}% conversion rate`}
+            icon={ActivityIcon}
+            subtitle={`${overview.attribution.overallConversionRate}% conversion rate`}
           />
         </div>
 
