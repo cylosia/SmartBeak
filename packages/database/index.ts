@@ -51,4 +51,24 @@ export {
 	getPublishingJobStatusSummary,
 	getPublishingJobStatusSummaryForOrg,
 } from "./drizzle/queries/publishing-suite";
-export * from "./drizzle/zod-publishing-suite";
+export {
+	PUBLISH_TARGETS,
+	publishTargetSchema,
+	linkedinConfigSchema,
+	youtubeConfigSchema,
+	tiktokConfigSchema,
+	instagramConfigSchema,
+	pinterestConfigSchema,
+	vimeoConfigSchema,
+	emailConfigSchema,
+	webConfigSchema,
+	platformConfigSchema,
+	bulkScheduleItemSchema,
+	bulkScheduleInputSchema,
+	emailSeriesStepSchema,
+	emailSeriesInputSchema,
+	publishAnalyticsRowSchema,
+	dlqJobSchema,
+	unifiedJobSchema,
+} from "./drizzle/zod-publishing-suite";
+export type { PublishTarget as PublishingSuiteTarget } from "./drizzle/zod-publishing-suite";
