@@ -160,3 +160,26 @@ export {
 } from "./drizzle/queries/enterprise";
 export * from "./drizzle/zod-enterprise";
 export * from "./drizzle/schema/enterprise";
+
+// Advanced AI Agents queries, schemas, and Zod (Phase 3B)
+export {
+	getAgentsForOrg,
+	getActiveAgentsForOrg,
+	getAgentById,
+	createAgent,
+	updateAgent,
+	updateAgentMemory,
+	deleteAgent,
+	getWorkflowsForOrg,
+	getWorkflowById,
+	createWorkflow,
+	updateWorkflow,
+	deleteWorkflow,
+	createSession,
+	updateSession,
+	getSessionsForOrg,
+	getSessionById,
+	getAgentAnalytics,
+} from "./drizzle/queries/ai-agents";
+export * from "./drizzle/zod-ai-agents";
+export * from "./drizzle/schema/ai-agents";

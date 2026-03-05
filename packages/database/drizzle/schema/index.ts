@@ -11,3 +11,6 @@ export * from "./growth";
 
 // Phase 3A — Enterprise Readiness & Scaling additive schema extension
 export * from "./enterprise";
+
+// Phase 3B — Advanced AI Agents additive schema extension
+export * from "./ai-agents";
