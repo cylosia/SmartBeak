@@ -67,12 +67,12 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
 
   const createMutation = useMutation({
     ...orpc.aiAgents.createWorkflow.mutationOptions(),
-    onSuccess: (data: { workflow: { id: string } }) => {
+    onSuccess: (data) => {
       toastSuccess("Workflow created.");
       setShowCreate(false);
       setForm({ name: "", description: "" });
       queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
-      router.push(`/app/${organizationSlug}/ai-agents/workflows/${data.workflow.id}`);
+      router.push(`/app/${organizationSlug}/ai-agents/workflows/${(data as { workflow: { id: string } }).workflow.id}`);
     },
     onError: () => toastError("Error", "Failed to create workflow."),
   });
@@ -86,14 +86,14 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
     onError: () => toastError("Error", "Failed to delete workflow."),
   });
 
-  const workflows = (workflowsQuery.data as { workflows: Array<{
+  const workflows = (workflowsQuery.data as unknown as { workflows: Array<{
     id: string;
     name: string;
     description: string | null;
     status: string;
-    createdAt: string;
+    createdAt: Date | string;
     stepsJson: { nodes: unknown[] };
-  }> })?.workflows ?? [];
+  }> } | undefined)?.workflows ?? [];
 
   return (
     <div className="space-y-6">
