@@ -1,7 +1,8 @@
-import { generateText, textModel } from "@repo/ai";
+import { generateText } from "@repo/ai";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveTextModel } from "../../lib/resolve-ai";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const generateContentIdeas = protectedProcedure
@@ -35,8 +36,10 @@ Return ONLY a JSON array (no markdown fences) where each object has:
 
 Be specific, actionable, and commercially valuable.`;
 
+    const model = await resolveTextModel(org.id);
+
     const response = await generateText({
-      model: textModel,
+      model,
       messages: [{ role: "user", content: prompt }],
       maxOutputTokens: 2000,
     });

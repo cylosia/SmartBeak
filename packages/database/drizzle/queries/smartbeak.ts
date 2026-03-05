@@ -847,6 +847,16 @@ export async function updateIntegration(
     .returning();
 }
 
+export async function getIntegrationByProvider(orgId: string, provider: string) {
+  return db.query.integrations.findFirst({
+    where: (i, { eq, and }) => and(eq(i.orgId, orgId), eq(i.provider, provider)),
+  });
+}
+
+export async function deleteIntegration(id: string) {
+  return db.delete(integrations).where(eq(integrations.id, id)).returning();
+}
+
 // ─── Buyer Sessions ───────────────────────────────────────────────────────────
 
 export async function getBuyerSessionsForDomain(domainId: string) {
