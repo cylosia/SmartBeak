@@ -8,10 +8,10 @@ import {
 } from "@repo/database/drizzle/queries/growth";
 import { GrantRewardInputSchema } from "@repo/database/drizzle/zod-growth";
 import { z } from "zod";
-import { authProcedure, publicProcedure } from "../../../../orpc/procedures";
+import { protectedProcedure, publicProcedure, adminProcedure } from "../../../../orpc/procedures";
 
 // ── get-my-referrals (auth) ───────────────────────────────────────────────────
-export const getMyReferralsProcedure = authProcedure
+export const getMyReferralsProcedure = protectedProcedure
   .input(z.object({ email: z.string().email() }))
   .handler(async ({ input }) => {
     const entry = await getWaitlistEntryByEmail(input.email);
@@ -23,20 +23,18 @@ export const getMyReferralsProcedure = authProcedure
   });
 
 // ── complete-referral (internal / webhook) ────────────────────────────────────
-export const completeReferralProcedure = authProcedure
+export const completeReferralProcedure = adminProcedure
   .input(z.object({ referralCode: z.string(), referredUserId: z.string() }))
-  .handler(async ({ input, context }) => {
-    if (context.session.user.role !== "admin") throw new Error("Unauthorized");
+  .handler(async ({ input }) => {
     const referral = await getReferralByCode(input.referralCode);
     if (!referral) throw new Error("Referral not found");
     return completeReferral(referral.id, input.referredUserId);
   });
 
 // ── grant-reward (admin) ──────────────────────────────────────────────────────
-export const grantRewardProcedure = authProcedure
+export const grantRewardProcedure = adminProcedure
   .input(GrantRewardInputSchema)
-  .handler(async ({ input, context }) => {
-    if (context.session.user.role !== "admin") throw new Error("Unauthorized");
+  .handler(async ({ input }) => {
     return grantReferralReward(input.referralId, input.rewardType, input.rewardValue);
   });
 
@@ -44,8 +42,6 @@ export const grantRewardProcedure = authProcedure
 export const getReferralStatsByCodeProcedure = publicProcedure
   .input(z.object({ referralCode: z.string() }))
   .handler(async ({ input }) => {
-    const entry = await getWaitlistEntryByEmail("").catch(() => null);
-    // Look up by referral code
     const { getWaitlistEntryByReferralCode } = await import("@repo/database/drizzle/queries/growth");
     const referrer = await getWaitlistEntryByReferralCode(input.referralCode);
     if (!referrer) return null;

@@ -1,6 +1,6 @@
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
-import { authProcedure } from "../../../../orpc/procedures";
+import { protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
 const ONBOARDING_SEQUENCE = [
   {
@@ -73,7 +73,7 @@ const ONBOARDING_SEQUENCE = [
 ];
 
 // ── trigger-onboarding-sequence (called on new user signup) ───────────────────
-export const triggerOnboardingSequenceProcedure = authProcedure
+export const triggerOnboardingSequenceProcedure = protectedProcedure
   .input(
     z.object({
       email: z.string().email(),
@@ -111,7 +111,7 @@ export const triggerOnboardingSequenceProcedure = authProcedure
   });
 
 // ── send-onboarding-step (admin / cron trigger) ───────────────────────────────
-export const sendOnboardingStepProcedure = authProcedure
+export const sendOnboardingStepProcedure = adminProcedure
   .input(
     z.object({
       email: z.string().email(),
@@ -119,8 +119,7 @@ export const sendOnboardingStepProcedure = authProcedure
       step: z.number().int().min(1).max(3),
     }),
   )
-  .handler(async ({ input, context }) => {
-    if (context.session.user.role !== "admin") throw new Error("Unauthorized");
+  .handler(async ({ input }) => {
     const { email, firstName = "", step } = input;
     const seq = ONBOARDING_SEQUENCE.find((s) => s.step === step);
     if (!seq) throw new Error(`Onboarding step ${step} not found`);

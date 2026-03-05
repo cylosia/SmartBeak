@@ -31,7 +31,7 @@ export function SmartBeakHero() {
       <div className="container max-w-6xl">
         {/* Eyebrow */}
         <div className="flex justify-center mb-6">
-          <Badge variant="outline" className="gap-1.5 px-3 py-1 text-xs font-medium border-primary/30 text-primary">
+          <Badge status="info" className="gap-1.5 border border-primary/30">
             <SparklesIcon className="size-3" />
             AI-Powered Content Publishing Platform
           </Badge>

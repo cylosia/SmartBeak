@@ -70,7 +70,7 @@ export function ReferralDashboard() {
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-foreground">
-                      {data?.stats?.totalReferrals ?? 0}
+                      {data?.stats?.total ?? 0}
                     </div>
                     <div className="text-sm text-foreground/60">Total referrals</div>
                   </div>
@@ -85,7 +85,7 @@ export function ReferralDashboard() {
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-foreground">
-                      {data?.stats?.completedReferrals ?? 0}
+                      {data?.stats?.completed ?? 0}
                     </div>
                     <div className="text-sm text-foreground/60">Converted</div>
                   </div>
@@ -100,7 +100,7 @@ export function ReferralDashboard() {
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-foreground">
-                      {data?.stats?.rewardsGranted ?? 0}
+                      {data?.stats?.rewarded ?? 0}
                     </div>
                     <div className="text-sm text-foreground/60">Rewards earned</div>
                   </div>
@@ -208,7 +208,7 @@ export function ReferralDashboard() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={ref.status === "completed" ? "default" : "secondary"}
+                        status={ref.status === "completed" ? "success" : "info"}
                         className="text-xs"
                       >
                         {ref.status}

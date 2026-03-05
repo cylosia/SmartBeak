@@ -12,8 +12,7 @@ import {
 import { JoinWaitlistInputSchema, WaitlistStatusUpdateInputSchema } from "@repo/database/drizzle/zod-growth";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
-import { publicProcedure } from "../../../../orpc/procedures";
-import { authProcedure } from "../../../../orpc/procedures";
+import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
 // ── Helper: generate a unique referral code ───────────────────────────────────
 function generateReferralCode(email: string): string {
@@ -127,7 +126,7 @@ export const getWaitlistStatusProcedure = publicProcedure
   });
 
 // ── admin: list-waitlist ──────────────────────────────────────────────────────
-export const listWaitlistProcedure = authProcedure
+export const listWaitlistProcedure = adminProcedure
   .input(
     z.object({
       status: z.enum(["pending", "approved", "rejected", "converted"]).optional(),
@@ -135,10 +134,7 @@ export const listWaitlistProcedure = authProcedure
       offset: z.number().int().min(0).default(0),
     }),
   )
-  .handler(async ({ input, context }) => {
-    if (context.session.user.role !== "admin") {
-      throw new Error("Unauthorized");
-    }
+  .handler(async ({ input }) => {
     const entries = await listWaitlistEntries({
       status: input.status,
       limit: input.limit,
@@ -149,12 +145,9 @@ export const listWaitlistProcedure = authProcedure
   });
 
 // ── admin: update-waitlist-status ─────────────────────────────────────────────
-export const updateWaitlistStatusProcedure = authProcedure
+export const updateWaitlistStatusProcedure = adminProcedure
   .input(WaitlistStatusUpdateInputSchema)
-  .handler(async ({ input, context }) => {
-    if (context.session.user.role !== "admin") {
-      throw new Error("Unauthorized");
-    }
+  .handler(async ({ input }) => {
     const entry = await updateWaitlistEntryStatus(input.id, input.status);
     if (!entry) throw new Error("Waitlist entry not found");
 
@@ -188,12 +181,9 @@ export const updateWaitlistStatusProcedure = authProcedure
   });
 
 // ── get-waitlist-stats (admin) ────────────────────────────────────────────────
-export const getWaitlistStatsProcedure = authProcedure
+export const getWaitlistStatsProcedure = adminProcedure
   .input(z.object({}))
-  .handler(async ({ context }) => {
-    if (context.session.user.role !== "admin") {
-      throw new Error("Unauthorized");
-    }
+  .handler(async () => {
     const stats = await getWaitlistStats();
     const leaderboard = await getReferralLeaderboard(10);
     return { stats, leaderboard };
