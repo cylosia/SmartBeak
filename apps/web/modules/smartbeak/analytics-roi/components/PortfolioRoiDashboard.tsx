@@ -134,7 +134,7 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                     {barData.map((entry, index) => (
                       <Cell
-                        key={index}
+                        key={`bar-${entry.name}-${index}`}
                         fill={entry.value >= 75 ? "hsl(var(--chart-1))" : entry.value >= 50 ? "hsl(var(--chart-3))" : "hsl(var(--chart-5))"}
                       />
                     ))}
@@ -203,7 +203,7 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.domains.map((domain) => (
+                {(data.domains ?? []).map((domain) => (
                   <TableRow key={domain.id}>
                     <TableCell className="font-medium">{domain.name}</TableCell>
                     <TableCell>

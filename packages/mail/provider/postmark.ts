@@ -11,6 +11,9 @@ export const send: SendEmailHandler = async ({
 	replyTo,
 	html,
 }) => {
+	if (!process.env.POSTMARK_SERVER_TOKEN) {
+		throw new Error("Missing POSTMARK_SERVER_TOKEN environment variable");
+	}
 	const response = await fetch("https://api.postmarkapp.com/email", {
 		method: "POST",
 		headers: {

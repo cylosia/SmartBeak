@@ -9,6 +9,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { notFound } from "next/navigation";
 
 export default async function OrganizationFormPage({
 	params,
@@ -23,7 +24,7 @@ export default async function OrganizationFormPage({
 	const t = await getTranslations();
 	const queryClient = getServerQueryClient();
 
-	await queryClient.prefetchQuery({
+	const organization = await queryClient.fetchQuery({
 		queryKey: fullOrganizationQueryKey(id),
 		queryFn: async () =>
 			await auth.api.getFullOrganization({
@@ -33,6 +34,8 @@ export default async function OrganizationFormPage({
 				headers: await headers(),
 			}),
 	});
+
+	if (!organization) notFound();
 
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>

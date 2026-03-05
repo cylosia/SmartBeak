@@ -10,6 +10,9 @@ export const send: SendEmailHandler = async ({
 	html,
 	text,
 }) => {
+	if (!process.env.PLUNK_API_KEY) {
+		throw new Error("Missing PLUNK_API_KEY environment variable");
+	}
 	const response = await fetch("https://api.useplunk.com/v1/send", {
 		method: "POST",
 		headers: {

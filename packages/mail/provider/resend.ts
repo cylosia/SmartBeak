@@ -14,7 +14,10 @@ export const send: SendEmailHandler = async ({
 	html,
 	text,
 }) => {
-	await resend.emails.send({
+	if (!process.env.RESEND_API_KEY) {
+		throw new Error("Missing RESEND_API_KEY environment variable");
+	}
+	const { error } = await resend.emails.send({
 		from: from ?? config.mailFrom,
 		to: [to],
 		cc,
@@ -24,4 +27,7 @@ export const send: SendEmailHandler = async ({
 		html,
 		text,
 	});
+	if (error) {
+		throw new Error(error.message ?? "Could not send email via Resend");
+	}
 };

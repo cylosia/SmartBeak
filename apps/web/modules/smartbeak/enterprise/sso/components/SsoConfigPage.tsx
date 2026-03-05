@@ -262,7 +262,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                   Try Again
                 </Button>
               </div>
-            ) : providersQuery.data?.providers.length === 0 ? (
+            ) : (providersQuery.data?.providers ?? []).length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 text-center">
                 <ShieldCheckIcon className="size-10 text-muted-foreground" />
                 <div>
@@ -442,7 +442,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                   Try Again
                 </Button>
               </div>
-            ) : scimTokensQuery.data?.tokens.length === 0 ? (
+            ) : (scimTokensQuery.data?.tokens ?? []).length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <KeyIcon className="size-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">

@@ -200,6 +200,7 @@ export function DiligenceEngineView({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
+                          aria-label="Edit check"
                           onClick={() => setEditingType(editingType === check.type ? null : check.type)}
                         >
                           <PencilIcon className="h-3.5 w-3.5" />

@@ -172,7 +172,7 @@ export function ContentOptimizerPanel({
       >
         <SheetHeader className="mb-6">
           <SheetTitle className="flex items-center gap-2">
-            <ZapIcon className="h-5 w-5 text-amber-500" />
+            <ZapIcon className="h-5 w-5 text-amber-500 dark:text-amber-400" />
             Real-time Content Optimizer
           </SheetTitle>
           <SheetDescription>

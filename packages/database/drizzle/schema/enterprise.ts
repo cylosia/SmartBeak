@@ -317,7 +317,7 @@ export const enterpriseOrgTier = pgTable(
       .unique(),
     tierId: uuid("tier_id")
       .notNull()
-      .references(() => enterpriseBillingTiers.id),
+      .references(() => enterpriseBillingTiers.id, { onDelete: "cascade" }),
     /** Number of licensed seats for this organization. */
     seats: integer("seats").notNull().default(1),
     /** Whether to allow usage beyond the tier limits (with overage charges). */

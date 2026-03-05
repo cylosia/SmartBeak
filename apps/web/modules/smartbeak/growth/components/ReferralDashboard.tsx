@@ -99,7 +99,7 @@ export function ReferralDashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
-                    <GiftIcon className="size-5 text-violet-500" />
+                    <GiftIcon className="size-5 text-violet-500 dark:text-violet-400" />
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-foreground">

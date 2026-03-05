@@ -479,6 +479,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
                             variant="ghost"
                             size="icon"
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Remove keyword"
                             onClick={() =>
                               removeKeywordMutation.mutate({
                                 organizationSlug,

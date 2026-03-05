@@ -13,6 +13,7 @@
  * - Streaming progress via async generators
  */
 
+import { ORPCError } from "@orpc/server";
 import { generateText, streamText, openai, createAnthropic } from "@repo/ai";
 import {
   getAgentById,
@@ -159,7 +160,7 @@ export async function* executeWorkflow(
     const agentNodes = sortedNodes.filter((n) => n.type === "agent" && n.agentId);
 
     if (agentNodes.length === 0) {
-      throw new Error("Workflow has no agent nodes to execute.");
+      throw new ORPCError("BAD_REQUEST", { message: "Workflow has no agent nodes to execute." });
     }
 
     // Build context string from prior agent outputs

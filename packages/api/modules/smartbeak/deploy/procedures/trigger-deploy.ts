@@ -213,6 +213,7 @@ export const triggerDeploy = protectedProcedure
           details: { url: deployedUrl, version: nextVersion },
         });
       } catch (err: unknown) {
+        if (process.env.NODE_ENV !== "production") console.warn("[trigger-deploy] deployment error:", err);
         const message =
           err instanceof Error ? err.message : "Unknown deployment error";
         await updateSiteShard(shard.id, { status: "error" });

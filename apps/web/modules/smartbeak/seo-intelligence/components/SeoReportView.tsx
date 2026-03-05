@@ -32,7 +32,7 @@ export function SeoReportView({ organizationSlug }: Props) {
   );
 
   const data = reportQuery.data;
-  const domains = data?.type === "org" ? data.domains : [];
+  const domains = data?.type === "org" ? (data.domains ?? []) : [];
 
   return (
     <ErrorBoundary>

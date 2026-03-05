@@ -150,7 +150,7 @@ export function BuyerAttributionView({
                 <CardDescription>Buyer intent distribution</CardDescription>
               </CardHeader>
               <CardContent>
-                {data.intentBreakdown.length === 0 ? (
+                {(data.intentBreakdown ?? []).length === 0 ? (
                   <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
                     No intent data yet
                   </div>
@@ -158,7 +158,7 @@ export function BuyerAttributionView({
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
-                        data={data.intentBreakdown}
+                        data={data.intentBreakdown ?? []}
                         dataKey="count"
                         nameKey="intent"
                         cx="50%"
@@ -167,8 +167,8 @@ export function BuyerAttributionView({
                         label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         labelLine={false}
                       >
-                        {data.intentBreakdown.map((_, i) => (
-                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        {(data.intentBreakdown ?? []).map((_, i) => (
+                          <Cell key={`pie-${i}`} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
@@ -196,7 +196,7 @@ export function BuyerAttributionView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.sessions.slice(0, 20).map((s) => (
+                  {(data.sessions ?? []).slice(0, 20).map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-mono text-xs">{s.sessionId.slice(0, 12)}…</TableCell>
                       <TableCell className="text-sm">{s.buyerEmail ?? <span className="text-muted-foreground">Anonymous</span>}</TableCell>
@@ -279,7 +279,7 @@ export function BuyerAttributionView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orgData.domains.map((d) => {
+                {(orgData.domains ?? []).map((d) => {
                   const topIntent = d.intentBreakdown.sort((a, b) => b.count - a.count)[0];
                   return (
                     <TableRow key={d.domain.id}>

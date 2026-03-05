@@ -110,7 +110,7 @@ export const setSubscriptionSeats: SetSubscriptionSeats = async ({
 
 	const { items } = (await response.json()) as { items: { id: string }[] };
 
-	await creemFetch(`/subscriptions/${id}`, {
+	const updateResponse = await creemFetch(`/subscriptions/${id}`, {
 		method: "POST",
 		body: JSON.stringify({
 			items: [
@@ -121,12 +121,24 @@ export const setSubscriptionSeats: SetSubscriptionSeats = async ({
 			],
 		}),
 	});
+
+	if (!updateResponse.ok) {
+		const errorBody = await updateResponse.text();
+		logger.error("Failed to update subscription seats", errorBody);
+		throw new Error("Failed to update subscription seats");
+	}
 };
 
 export const cancelSubscription: CancelSubscription = async (id) => {
-	await creemFetch(`/subscriptions/${id}/cancel`, {
+	const response = await creemFetch(`/subscriptions/${id}/cancel`, {
 		method: "POST",
 	});
+
+	if (!response.ok) {
+		const errorBody = await response.text();
+		logger.error("Failed to cancel subscription", errorBody);
+		throw new Error("Failed to cancel subscription");
+	}
 };
 
 export const webhookHandler: WebhookHandler = async (req) => {

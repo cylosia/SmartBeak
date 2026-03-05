@@ -100,7 +100,7 @@ export function AiIdeaCard({
           </div>
 
           <div className="flex flex-wrap gap-1">
-            {idea.keywords.slice(0, 3).map((kw) => (
+            {(idea.keywords ?? []).slice(0, 3).map((kw) => (
               <span
                 key={kw}
                 className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"

@@ -250,6 +250,14 @@ export function EnterpriseBillingDashboard({
           <CardContent>
             {orgTierQuery.isLoading ? (
               <LoadingSkeleton rows={3} />
+            ) : orgTierQuery.isError ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                <p className="text-sm text-destructive">Failed to load plan details</p>
+                <Button variant="outline" size="sm" onClick={() => orgTierQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : !currentTier ? (
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <CreditCardIcon className="size-10 text-muted-foreground" />
@@ -352,6 +360,14 @@ export function EnterpriseBillingDashboard({
           <CardContent>
             {usageQuery.isLoading ? (
               <LoadingSkeleton rows={6} />
+            ) : usageQuery.isError ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                <p className="text-sm text-destructive">Failed to load usage</p>
+                <Button variant="outline" size="sm" onClick={() => usageQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : (
               <div className="space-y-4">
                 {(usageQuery.data?.usageWithLimits ?? []).map((item) => (
@@ -387,7 +403,7 @@ export function EnterpriseBillingDashboard({
                           item.isOverage
                             ? "[&>div]:bg-destructive"
                             : item.isNearLimit
-                              ? "[&>div]:bg-yellow-500"
+                              ? "[&>div]:bg-yellow-500 dark:[&>div]:bg-yellow-400"
                               : ""
                         }`}
                       />

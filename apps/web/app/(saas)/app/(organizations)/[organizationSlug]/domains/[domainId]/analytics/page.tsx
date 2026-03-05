@@ -1,7 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
+import { getActiveOrganization } from "@saas/auth/lib/server";
 import { DiligenceEngineView } from "@/modules/smartbeak/analytics-roi/components/DiligenceEngineView";
 import { SellReadyPanel } from "@/modules/smartbeak/analytics-roi/components/SellReadyPanel";
 import { BuyerAttributionView } from "@/modules/smartbeak/analytics-roi/components/BuyerAttributionView";
+import { notFound } from "next/navigation";
 
 export default async function DomainAnalyticsPage({
   params,
@@ -9,6 +11,8 @@ export default async function DomainAnalyticsPage({
   params: Promise<{ organizationSlug: string; domainId: string }>;
 }) {
   const { organizationSlug, domainId } = await params;
+  const org = await getActiveOrganization(organizationSlug);
+  if (!org) return notFound();
 
   return (
     <div className="space-y-6 p-6">

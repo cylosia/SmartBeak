@@ -6,6 +6,7 @@
  * - Secure random token generation for SCIM provisioning.
  */
 
+import { ORPCError } from "@orpc/server";
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
@@ -22,7 +23,7 @@ function getEncryptionKey(): Buffer {
   }
   const buf = Buffer.from(key, "hex");
   if (buf.length !== 32) {
-    throw new Error("ENTERPRISE_ENCRYPTION_KEY must be a 32-byte hex string (64 hex chars).");
+    throw new ORPCError("PRECONDITION_FAILED", { message: "ENTERPRISE_ENCRYPTION_KEY must be a 32-byte hex string (64 hex chars)." });
   }
   return buf;
 }
