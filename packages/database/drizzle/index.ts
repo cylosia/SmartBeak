@@ -21,3 +21,4 @@ export {
 	PortfolioTrendInputSchema,
 } from "./zod-analytics-roi";
 export * from "./zod-growth";
+export * from "./zod-enterprise";

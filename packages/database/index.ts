@@ -103,3 +103,61 @@ export {
 	DomainAnalyticsInputSchema,
 	PortfolioTrendInputSchema,
 } from "./drizzle/zod-analytics-roi";
+
+// Growth & Marketing queries and schemas (Phase 2D)
+export {
+	getWaitlistEntryByEmail,
+	getWaitlistEntryByReferralCode,
+	getWaitlistEntryById,
+	createWaitlistEntry,
+	updateWaitlistEntryStatus,
+	getWaitlistStats,
+	getWaitlistLeaderboard,
+	getReferralByCode,
+	createReferral,
+	completeReferral,
+	getReferralsByReferrer,
+} from "./drizzle/queries/growth";
+export * from "./drizzle/zod-growth";
+export * from "./drizzle/schema/growth";
+
+// Enterprise Readiness & Scaling queries, schemas, and Zod (Phase 3A)
+export {
+	getTeamsForOrg,
+	getTeamById,
+	getTeamBySlug,
+	createTeam,
+	updateTeam,
+	deleteTeam,
+	getTeamMembers,
+	getTeamMember,
+	addTeamMember,
+	removeTeamMember,
+	updateTeamMemberRole,
+	getTeamActivity,
+	createTeamActivity,
+	getSsoProvidersForOrg,
+	getSsoProviderById,
+	getSsoProviderByDomain,
+	upsertSsoProvider,
+	updateSsoProviderStatus,
+	deleteSsoProvider,
+	getScimTokensForOrg,
+	createScimToken,
+	deleteScimToken,
+	touchScimToken,
+	getAuditRetentionForOrg,
+	upsertAuditRetention,
+	searchAuditEvents,
+	getAuditEventsForExport,
+	getActiveBillingTiers,
+	getBillingTierById,
+	getOrgTier,
+	upsertOrgTier,
+	updateOrgSeats,
+	getOverageAlertsForOrg,
+	createOverageAlert,
+	seedDefaultBillingTiers,
+} from "./drizzle/queries/enterprise";
+export * from "./drizzle/zod-enterprise";
+export * from "./drizzle/schema/enterprise";

@@ -19,3 +19,4 @@ export {
 	getPortfolioRoiMaterializedView,
 } from "./analytics-roi";
 export * from "./growth";
+export * from "./enterprise";

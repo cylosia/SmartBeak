@@ -8,3 +8,6 @@ export * from "./smartbeak";
 
 // Phase 2D — Growth & Marketing additive schema extension
 export * from "./growth";
+
+// Phase 3A — Enterprise Readiness & Scaling additive schema extension
+export * from "./enterprise";
