@@ -213,7 +213,7 @@ export async function* executeWorkflow(
           model,
           system: systemPrompt,
           prompt: userMessage,
-          maxTokens: config.maxTokens ?? 4096,
+          maxOutputTokens: config.maxTokens ?? 4096,
           temperature: config.temperature ?? 0.7,
           tools: Object.keys(tools).length > 0 ? tools : undefined,
           maxSteps: 5, // Allow up to 5 tool-use steps
@@ -239,7 +239,7 @@ export async function* executeWorkflow(
           model,
           system: systemPrompt,
           prompt: userMessage,
-          maxTokens: config.maxTokens ?? 4096,
+          maxOutputTokens: config.maxTokens ?? 4096,
           temperature: config.temperature ?? 0.7,
         });
         fullOutput = result.text;

@@ -56,7 +56,7 @@ Respond ONLY with valid JSON, no markdown.`;
     const { text } = await generateText({
       model: memoryModel,
       prompt,
-      maxTokens: 1024,
+      maxOutputTokens: 1024,
       temperature: 0.2,
     });
 

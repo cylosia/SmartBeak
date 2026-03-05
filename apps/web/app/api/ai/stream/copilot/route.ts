@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     model,
     system: SYSTEM_PROMPT,
     prompt,
-    maxTokens: 2048,
+    maxOutputTokens: 2048,
     temperature: action === "fact_check" ? 0.2 : 0.7,
   });
 
