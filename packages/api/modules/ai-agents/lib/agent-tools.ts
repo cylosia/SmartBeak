@@ -18,7 +18,7 @@ import { z } from "zod";
 export const webSearchTool = tool({
   description:
     "Search the web for up-to-date information on a topic. Returns titles, URLs, and snippets.",
-  parameters: z.object({
+  inputSchema: z.object({
     query: z.string().describe("The search query to execute."),
     maxResults: z
       .number()
@@ -54,7 +54,7 @@ export const webSearchTool = tool({
 export const readUrlTool = tool({
   description:
     "Fetch and extract the main text content from a URL. Use this to read articles, documentation, or web pages.",
-  parameters: z.object({
+  inputSchema: z.object({
     url: z.string().url().describe("The URL to fetch and read."),
   }),
   execute: async ({ url }) => {
@@ -100,7 +100,7 @@ export const readUrlTool = tool({
 export const factCheckTool = tool({
   description:
     "Evaluate whether a specific claim or statement is factually accurate. Returns a confidence score and supporting evidence.",
-  parameters: z.object({
+  inputSchema: z.object({
     claim: z.string().describe("The claim or statement to fact-check."),
   }),
   execute: async ({ claim }) => {
