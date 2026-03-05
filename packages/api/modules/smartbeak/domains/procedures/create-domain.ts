@@ -17,7 +17,7 @@ export const createDomainProcedure = protectedProcedure
       organizationSlug: z.string().min(1),
       name: z.string().min(1).max(255),
       slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
-      themeId: z.string().optional(),
+      themeId: z.string().min(1).optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {

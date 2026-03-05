@@ -12,12 +12,15 @@ export const send: SendEmailHandler = async ({
 	text,
 	html,
 }) => {
+	if (!process.env.MAIL_HOST || !process.env.MAIL_PORT || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+		throw new Error("Missing required MAIL_* environment variables for nodemailer");
+	}
 	const transporter = nodemailer.createTransport({
-		host: process.env.MAIL_HOST as string,
-		port: Number.parseInt(process.env.MAIL_PORT as string, 10),
+		host: process.env.MAIL_HOST,
+		port: Number.parseInt(process.env.MAIL_PORT, 10),
 		auth: {
-			user: process.env.MAIL_USER as string,
-			pass: process.env.MAIL_PASS as string,
+			user: process.env.MAIL_USER,
+			pass: process.env.MAIL_PASS,
 		},
 	});
 

@@ -137,6 +137,14 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 
             {dlqJobsQuery.isLoading ? (
               <TableSkeleton rows={5} />
+            ) : dlqJobsQuery.isError ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                <p className="text-sm text-destructive">Failed to load data</p>
+                <Button variant="outline" size="sm" onClick={() => dlqJobsQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : !dlqJobsQuery.data?.jobs?.length ? (
               <EmptyState
                 icon={RefreshCwIcon}
@@ -211,6 +219,14 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
           <TabsContent value="webhooks" className="mt-4">
             {dlqWebhooksQuery.isLoading ? (
               <TableSkeleton rows={4} />
+            ) : dlqWebhooksQuery.isError ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                <p className="text-sm text-destructive">Failed to load data</p>
+                <Button variant="outline" size="sm" onClick={() => dlqWebhooksQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : !dlqWebhooksQuery.data?.events?.length ? (
               <EmptyState
                 icon={WebhookIcon}

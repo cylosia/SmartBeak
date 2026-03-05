@@ -132,6 +132,7 @@ export function BulkScheduleDialog({
                 className="h-8 w-8 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                 onClick={() => removeRow(i)}
                 disabled={rows.length === 1}
+                aria-label="Remove row"
               >
                 <Trash2Icon className="h-3.5 w-3.5" />
               </Button>

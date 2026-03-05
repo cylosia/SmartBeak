@@ -278,7 +278,7 @@ export function TeamManagementDashboard({
                   Try Again
                 </Button>
               </div>
-            ) : teamsQuery.data?.teams.length === 0 ? (
+            ) : (teamsQuery.data?.teams ?? []).length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center px-4">
                 <UsersIcon className="size-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">No teams yet.</p>
@@ -293,7 +293,7 @@ export function TeamManagementDashboard({
             ) : (
               <ScrollArea className="h-72">
                 <div className="space-y-1 p-2">
-                  {teamsQuery.data?.teams.map((team) => (
+                  {(teamsQuery.data?.teams ?? []).map((team) => (
                     <button
                       key={team.id}
                       onClick={() => setSelectedTeamId(team.id)}
@@ -385,8 +385,8 @@ export function TeamManagementDashboard({
                 <TabsContent value="members" className="p-0">
                   <div className="flex items-center justify-between px-6 py-3">
                     <p className="text-sm text-muted-foreground">
-                      {membersQuery.data?.members.length ?? 0} member
-                      {(membersQuery.data?.members.length ?? 0) !== 1 ? "s" : ""}
+                      {(membersQuery.data?.members ?? []).length} member
+                      {(membersQuery.data?.members ?? []).length !== 1 ? "s" : ""}
                     </p>
                     <Dialog
                       open={addMemberDialogOpen}
@@ -476,7 +476,7 @@ export function TeamManagementDashboard({
                         Try Again
                       </Button>
                     </div>
-                  ) : membersQuery.data?.members.length === 0 ? (
+                  ) : (membersQuery.data?.members ?? []).length === 0 ? (
                     <div className="flex flex-col items-center gap-2 py-10 text-center">
                       <UserIcon className="size-8 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
@@ -494,7 +494,7 @@ export function TeamManagementDashboard({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {membersQuery.data?.members.map((member) => (
+                        {(membersQuery.data?.members ?? []).map((member) => (
                           <TableRow key={member.id}>
                             <TableCell className="font-mono text-xs">
                               {member.userId.slice(0, 16)}…
@@ -581,7 +581,7 @@ export function TeamManagementDashboard({
                         Try Again
                       </Button>
                     </div>
-                  ) : activityQuery.data?.activity.length === 0 ? (
+                  ) : (activityQuery.data?.activity ?? []).length === 0 ? (
                     <div className="flex flex-col items-center gap-2 py-10 text-center">
                       <ActivityIcon className="size-8 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
@@ -591,7 +591,7 @@ export function TeamManagementDashboard({
                   ) : (
                     <ScrollArea className="h-72">
                       <div className="divide-y">
-                        {activityQuery.data?.activity.map((event) => (
+                        {(activityQuery.data?.activity ?? []).map((event) => (
                           <div
                             key={event.id}
                             className="flex items-start gap-3 px-6 py-3"

@@ -358,7 +358,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               <TrendingDownIcon className="mr-2 h-4 w-4" />
               Decay Signals
               {decayingCount > 0 && (
-                <Badge className="ml-2 bg-red-500 text-white text-xs px-1.5 py-0">
+                <Badge className="ml-2 bg-red-500 dark:bg-red-600 text-white text-xs px-1.5 py-0">
                   {decayingCount}
                 </Badge>
               )}

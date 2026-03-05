@@ -8,7 +8,7 @@ import {
   ShieldCheckIcon,
   UsersIcon,
 } from "lucide-react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { PropsWithChildren } from "react";
 
 export default async function EnterpriseLayout({
@@ -22,7 +22,7 @@ export default async function EnterpriseLayout({
   const organization = await getActiveOrganization(organizationSlug);
 
   if (!organization) {
-    redirect("/app");
+    notFound();
   }
 
   const userIsAdmin = isOrganizationAdmin(organization, session?.user);

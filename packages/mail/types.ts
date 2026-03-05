@@ -19,5 +19,5 @@ export interface MailProvider {
 
 export type BaseMailProps = {
 	locale: Locale;
-	translations: any;
+	translations: Record<string, unknown>;
 };

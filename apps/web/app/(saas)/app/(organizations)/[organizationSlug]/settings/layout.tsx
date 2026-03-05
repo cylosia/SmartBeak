@@ -12,7 +12,7 @@ import {
 	TriangleAlertIcon,
 	Users2Icon,
 } from "lucide-react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import type { PropsWithChildren } from "react";
 
@@ -28,7 +28,7 @@ export default async function SettingsLayout({
 	const organization = await getActiveOrganization(organizationSlug);
 
 	if (!organization) {
-		redirect("/app");
+		notFound();
 	}
 
 	const userIsOrganizationAdmin = isOrganizationAdmin(

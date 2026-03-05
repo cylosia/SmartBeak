@@ -39,6 +39,7 @@ import { Switch } from "@repo/ui/components/switch";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
+  AlertTriangleIcon,
   DownloadIcon,
   LockIcon,
   RefreshCwIcon,
@@ -322,7 +323,7 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
               </CardTitle>
               {searchQuery.data && (
                 <p className="text-xs text-muted-foreground">
-                  {searchQuery.data.total.toLocaleString()} total events
+                  {(searchQuery.data?.total ?? 0).toLocaleString()} total events
                 </p>
               )}
             </div>
@@ -464,6 +465,14 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
           <CardContent className="space-y-4">
             {retentionQuery.isLoading ? (
               <LoadingSkeleton rows={2} />
+            ) : retentionQuery.isError ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                <p className="text-sm text-destructive">Failed to load data</p>
+                <Button variant="outline" size="sm" onClick={() => retentionQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

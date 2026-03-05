@@ -245,7 +245,7 @@ export const webhookEvents = pgTable('webhook_events', {
 export const integrations = pgTable('integrations', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
-  domainId: uuid('domain_id').references(() => domains.id),
+  domainId: uuid('domain_id').references(() => domains.id, { onDelete: 'set null' }),
   provider: text('provider').notNull(),
   encryptedConfig: bytea('encrypted_config').notNull(),
   enabled: boolean('enabled').default(true),
@@ -255,7 +255,7 @@ export const integrations = pgTable('integrations', {
 // 11. Remaining Tables
 export const buyerSessions = pgTable('buyer_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  domainId: uuid('domain_id').references(() => domains.id).notNull(),
+  domainId: uuid('domain_id').references(() => domains.id, { onDelete: 'cascade' }).notNull(),
   sessionId: text('session_id').notNull(),
   buyerEmail: text('buyer_email'),
   intent: text('intent'),
@@ -264,7 +264,7 @@ export const buyerSessions = pgTable('buyer_sessions', {
 
 export const timelineEvents = pgTable('timeline_events', {
   id: uuid('id').primaryKey().defaultRandom(),
-  domainId: uuid('domain_id').references(() => domains.id).notNull(),
+  domainId: uuid('domain_id').references(() => domains.id, { onDelete: 'cascade' }).notNull(),
   eventType: text('event_type').notNull(),
   details: jsonb('details'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -272,7 +272,7 @@ export const timelineEvents = pgTable('timeline_events', {
 
 export const guardrails = pgTable('guardrails', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').references(() => organizations.id).notNull(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   rule: text('rule').notNull(),
   value: integer('value').notNull(),
   enabled: boolean('enabled').default(true),
@@ -280,7 +280,7 @@ export const guardrails = pgTable('guardrails', {
 
 export const featureFlags = pgTable('feature_flags', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').references(() => organizations.id).notNull(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   key: text('key').notNull(),
   enabled: boolean('enabled').default(false),
   config: jsonb('config'),
@@ -288,7 +288,7 @@ export const featureFlags = pgTable('feature_flags', {
 
 export const onboardingProgress = pgTable('onboarding_progress', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').references(() => organizations.id).notNull(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   step: text('step').notNull(),
   completed: boolean('completed').default(false),
   completedAt: timestamp('completed_at', { withTimezone: true }),

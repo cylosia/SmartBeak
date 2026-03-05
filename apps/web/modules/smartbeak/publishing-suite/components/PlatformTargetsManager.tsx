@@ -198,6 +198,7 @@ export function PlatformTargetsManager({
                     onClick={() =>
                       deleteMutation.mutate({ organizationSlug, targetId: configured.id })
                     }
+                    aria-label="Delete target"
                   >
                     <Trash2Icon className="h-3.5 w-3.5" />
                   </Button>

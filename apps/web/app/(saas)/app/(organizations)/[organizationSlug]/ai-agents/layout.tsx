@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@repo/auth";
-import { headers } from "next/headers";
+import { getSession } from "@saas/auth/lib/server";
 import { SparklesIcon } from "lucide-react";
 import { AiAgentsNav } from "@/modules/smartbeak/ai-agents/components/AiAgentsNav";
 
@@ -13,7 +12,7 @@ export default async function AiAgentsLayout({
   children,
   params,
 }: AiAgentsLayoutProps) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getSession();
   if (!session) redirect("/auth/login");
 
   const { organizationSlug } = await params;

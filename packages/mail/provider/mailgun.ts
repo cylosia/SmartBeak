@@ -2,9 +2,6 @@ import { logger } from "@repo/logs";
 import { config } from "../config";
 import type { SendEmailHandler } from "../types";
 
-const mailgunDomain = process.env.MAILGUN_DOMAIN as string;
-const mailgunApiKey = process.env.MAILGUN_API_KEY as string;
-
 export const send: SendEmailHandler = async ({
 	to,
 	from,
@@ -15,9 +12,11 @@ export const send: SendEmailHandler = async ({
 	html,
 	text,
 }) => {
-	if (!mailgunDomain || !mailgunApiKey) {
-		throw new Error("MAILGUN_DOMAIN and MAILGUN_API_KEY must be set");
+	if (!process.env.MAILGUN_DOMAIN || !process.env.MAILGUN_API_KEY) {
+		throw new Error("Missing required MAILGUN_* environment variables");
 	}
+	const mailgunDomain = process.env.MAILGUN_DOMAIN;
+	const mailgunApiKey = process.env.MAILGUN_API_KEY;
 
 	const body = new FormData();
 	body.append("from", from ?? config.mailFrom);

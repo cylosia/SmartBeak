@@ -38,7 +38,7 @@ export const listWorkflows = protectedProcedure
     tags: ["AI Agents"],
     summary: "List all workflows for an organization",
   })
-  .input(z.object({ organizationSlug: z.string() }))
+  .input(z.object({ organizationSlug: z.string().min(1) }))
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
@@ -57,7 +57,7 @@ export const getWorkflow = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       workflowId: z.string().uuid(),
     }),
   )
@@ -155,7 +155,7 @@ export const deleteWorkflowProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       workflowId: z.string().uuid(),
     }),
   )
@@ -233,7 +233,7 @@ export const listSessions = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       workflowId: z.string().uuid().optional(),
       limit: z.number().int().min(1).max(100).default(20),
       offset: z.number().int().min(0).default(0),
@@ -263,7 +263,7 @@ export const getSession = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       sessionId: z.string().uuid(),
     }),
   )

@@ -28,8 +28,8 @@ export const send: SendEmailHandler = async ({
 	});
 
 	if (!response.ok) {
-		logger.error(await response.json());
-
+		const errorBody = await response.text();
+		logger.error(errorBody);
 		throw new Error("Could not send email");
 	}
 };

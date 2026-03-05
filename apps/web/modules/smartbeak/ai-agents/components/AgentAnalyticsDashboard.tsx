@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import {
   ActivityIcon,
+  AlertTriangleIcon,
   BotIcon,
   CheckCircle2Icon,
   ClockIcon,
@@ -36,6 +37,7 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
 import { Skeleton } from "@repo/ui/components/skeleton";
 import { orpc } from "@shared/lib/orpc-query-utils";
 
@@ -120,6 +122,18 @@ export function AgentAnalyticsDashboard({
         </div>
         <Skeleton className="h-64 rounded-xl" />
         <Skeleton className="h-48 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (analyticsQuery.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 gap-3">
+        <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+        <p className="text-sm text-destructive">Failed to load data</p>
+        <Button variant="outline" size="sm" onClick={() => analyticsQuery.refetch()}>
+          Try Again
+        </Button>
       </div>
     );
   }

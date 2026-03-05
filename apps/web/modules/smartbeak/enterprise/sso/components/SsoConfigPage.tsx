@@ -228,7 +228,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex size-9 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/50">
-                  <ShieldCheckIcon className="size-5 text-blue-600" />
+                  <ShieldCheckIcon className="size-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <CardTitle>Single Sign-On</CardTitle>
@@ -291,7 +291,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {providersQuery.data?.providers.map((provider) => (
+                  {(providersQuery.data?.providers ?? []).map((provider) => (
                     <TableRow key={provider.id}>
                       <TableCell className="font-medium">
                         {provider.providerName ?? "Unnamed Provider"}
@@ -365,7 +365,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex size-9 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950/50">
-                  <ZapIcon className="size-5 text-violet-600" />
+                  <ZapIcon className="size-5 text-violet-600 dark:text-violet-400" />
                 </div>
                 <div>
                   <CardTitle>SCIM Provisioning</CardTitle>
@@ -461,7 +461,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {scimTokensQuery.data?.tokens.map((token) => (
+                  {(scimTokensQuery.data?.tokens ?? []).map((token) => (
                     <TableRow key={token.id}>
                       <TableCell className="text-sm">
                         {token.description ?? (

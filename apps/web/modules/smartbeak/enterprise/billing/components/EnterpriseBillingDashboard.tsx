@@ -133,7 +133,7 @@ export function EnterpriseBillingDashboard({
         {/* Overage Alerts */}
         {overageItems.length > 0 && (
           <Alert className="border-red-200 bg-red-50 dark:bg-red-950/20">
-            <AlertTriangleIcon className="size-4 text-red-600" />
+            <AlertTriangleIcon className="size-4 text-red-600 dark:text-red-400" />
             <AlertDescription>
               <p className="font-semibold text-sm text-red-800 dark:text-red-200">
                 Usage limit exceeded
@@ -164,7 +164,7 @@ export function EnterpriseBillingDashboard({
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex size-9 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/50">
-                  <CreditCardIcon className="size-5 text-blue-600" />
+                  <CreditCardIcon className="size-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <CardTitle>Current Plan</CardTitle>
@@ -354,7 +354,7 @@ export function EnterpriseBillingDashboard({
               <LoadingSkeleton rows={6} />
             ) : (
               <div className="space-y-4">
-                {usageQuery.data?.usageWithLimits.map((item) => (
+                {(usageQuery.data?.usageWithLimits ?? []).map((item) => (
                   <div key={item.metric} className="space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium">{item.label}</span>
@@ -426,7 +426,7 @@ export function EnterpriseBillingDashboard({
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {tiersQuery.data?.tiers.map((tier) => {
+                {(tiersQuery.data?.tiers ?? []).map((tier) => {
                   const tierFeatures = tier.features as Record<string, boolean>;
                   const tierLimits = tier.limits as Record<string, number>;
                   const isSelected = selectedTierId === tier.id;

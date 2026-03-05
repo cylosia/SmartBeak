@@ -1,10 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import {
-  bulkRetryJobs,
+  bulkRetryJobsForOrg,
   getFailedJobsForDLQ,
   getFailedWebhookEvents,
   incrementWebhookReplayCount,
-  retryPublishingJob,
+  retryPublishingJobForOrg,
 } from "@repo/database";
 import z from "zod";
 import { adminProcedure, protectedProcedure } from "../../../../orpc/procedures";
@@ -49,7 +49,8 @@ export const retryDlqJobProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgEditor(org.supastarterOrgId, user.id);
-    const [job] = await retryPublishingJob(input.jobId);
+    const [job] = await retryPublishingJobForOrg(input.jobId, org.id);
+    if (!job) throw new ORPCError("NOT_FOUND", { message: "Job not found or does not belong to this organization." });
     await audit({
       orgId: org.id,
       actorId: user.id,
@@ -77,7 +78,7 @@ export const bulkRetryDlqProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgEditor(org.supastarterOrgId, user.id);
-    const jobs = await bulkRetryJobs(input.jobIds);
+    const jobs = await bulkRetryJobsForOrg(input.jobIds, org.id);
     await audit({
       orgId: org.id,
       actorId: user.id,

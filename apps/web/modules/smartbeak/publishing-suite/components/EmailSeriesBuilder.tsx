@@ -168,6 +168,7 @@ export function EmailSeriesBuilder({
                       className="h-6 w-6 p-0"
                       onClick={(e) => { e.stopPropagation(); moveStep(i, -1); }}
                       disabled={i === 0}
+                      aria-label="Move step up"
                     >
                       <ChevronUpIcon className="h-3 w-3" />
                     </Button>
@@ -177,6 +178,7 @@ export function EmailSeriesBuilder({
                       className="h-6 w-6 p-0"
                       onClick={(e) => { e.stopPropagation(); moveStep(i, 1); }}
                       disabled={i === steps.length - 1}
+                      aria-label="Move step down"
                     >
                       <ChevronDownIcon className="h-3 w-3" />
                     </Button>
@@ -186,6 +188,7 @@ export function EmailSeriesBuilder({
                       className="h-6 w-6 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                       onClick={(e) => { e.stopPropagation(); removeStep(i); }}
                       disabled={steps.length === 1}
+                      aria-label="Remove step"
                     >
                       <Trash2Icon className="h-3 w-3" />
                     </Button>

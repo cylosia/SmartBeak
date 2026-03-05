@@ -213,8 +213,8 @@ export const optimizeContent = protectedProcedure
   })
   .input(
     z.object({
-      title: z.string().max(255),
-      body: z.string().max(100_000),
+      title: z.string().min(1).max(255),
+      body: z.string().min(1).max(100_000),
       targetKeywords: z.array(z.string().max(100)).max(20).optional(),
       metaDescription: z.string().max(500).optional(),
     }),

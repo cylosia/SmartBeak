@@ -87,7 +87,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = () => {
-    const text = `# ${idea.title}\n\n${idea.metaDescription}\n\n## Outline\n${idea.outline.map((h) => `- ${h}`).join("\n")}\n\nKeywords: ${idea.targetKeywords.join(", ")}`;
+    const text = `# ${idea.title}\n\n${idea.metaDescription}\n\n## Outline\n${(idea.outline ?? []).map((h) => `- ${h}`).join("\n")}\n\nKeywords: ${(idea.targetKeywords ?? []).join(", ")}`;
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -116,6 +116,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
             size="icon"
             className="shrink-0 h-7 w-7"
             onClick={copyToClipboard}
+            aria-label="Copy idea to clipboard"
           >
             {copied ? (
               <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
@@ -136,7 +137,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
             Outline
           </p>
           <ul className="space-y-1">
-            {idea.outline.map((h, i) => (
+            {(idea.outline ?? []).map((h, i) => (
               <li key={i} className="text-xs text-foreground flex items-start gap-1.5">
                 <span className="text-muted-foreground mt-0.5">—</span>
                 {h}
@@ -152,7 +153,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
             Target Keywords
           </p>
           <div className="flex flex-wrap gap-1">
-            {idea.targetKeywords.map((kw) => (
+            {(idea.targetKeywords ?? []).map((kw) => (
               <Badge key={kw} className="bg-muted text-muted-foreground text-xs">
                 {kw}
               </Badge>
@@ -266,7 +267,7 @@ export function AiIdeaPanel({ organizationSlug, domainId, onClose }: Props) {
                 domainId,
                 niche: niche || undefined,
                 contentType,
-                count: parseInt(count),
+                count: Number(count) || 5,
               })
             }
             disabled={generateMutation.isPending}
@@ -292,7 +293,7 @@ export function AiIdeaPanel({ organizationSlug, domainId, onClose }: Props) {
               {ideas.length} ideas generated
             </p>
             {ideas.map((idea, i) => (
-              <IdeaCard key={i} idea={idea} index={i} />
+              <IdeaCard key={`idea-${idea.title.slice(0, 20)}-${i}`} idea={idea} index={i} />
             ))}
           </div>
         )}

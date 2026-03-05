@@ -165,7 +165,7 @@ export function ContentEditorView({
       const result = await orpcClient.smartbeak.aiIdeas.generateIdeas({
         organizationSlug,
         domainName: ideaInput,
-        count: Number.parseInt(ideaCount, 10),
+        count: Number(ideaCount) || 5,
       });
       const structured = (result as { structured?: Array<{
         title: string;
@@ -250,12 +250,12 @@ export function ContentEditorView({
                   <SheetTitle>Revision History</SheetTitle>
                 </SheetHeader>
                 <div className="mt-4 space-y-3">
-                  {contentQuery.data?.revisions?.length === 0 ? (
+                  {(contentQuery.data?.revisions ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No revisions yet. Save changes to create a revision.
                     </p>
                   ) : (
-                    contentQuery.data?.revisions?.map((rev) => (
+                    (contentQuery.data?.revisions ?? []).map((rev) => (
                       <div
                         key={rev.id}
                         className="rounded-lg border border-border p-3 space-y-1"

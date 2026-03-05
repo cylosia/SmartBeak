@@ -38,7 +38,7 @@ export async function upsertPublishTarget(data: {
   const existing = await db.query.publishTargets.findFirst({
     where: and(
       eq(publishTargets.domainId, data.domainId),
-      eq(publishTargets.target, data.target as any),
+      eq(publishTargets.target, data.target as (typeof publishTargets.$inferSelect)["target"]),
     ),
   });
   if (existing) {
@@ -48,7 +48,7 @@ export async function upsertPublishTarget(data: {
       .where(eq(publishTargets.id, existing.id))
       .returning();
   }
-  return db.insert(publishTargets).values(data as any).returning();
+  return db.insert(publishTargets).values(data as typeof publishTargets.$inferInsert).returning();
 }
 
 export async function togglePublishTarget(id: string, enabled: boolean) {
@@ -83,7 +83,7 @@ export async function getPublishingJobsForOrg(
     )`,
   ];
   if (opts.status) conditions.push(eq(publishingJobs.status, opts.status));
-  if (opts.target) conditions.push(eq(publishingJobs.target, opts.target as any));
+  if (opts.target) conditions.push(eq(publishingJobs.target, opts.target as (typeof publishingJobs.$inferSelect)["target"]));
   if (opts.from) conditions.push(gte(publishingJobs.scheduledFor, opts.from));
   if (opts.to) conditions.push(lte(publishingJobs.scheduledFor, opts.to));
 
@@ -104,7 +104,7 @@ export async function bulkCreatePublishingJobs(
   }>,
 ) {
   if (jobs.length === 0) return [];
-  return db.insert(publishingJobs).values(jobs as any).returning();
+  return db.insert(publishingJobs).values(jobs as (typeof publishingJobs.$inferInsert)[]).returning();
 }
 
 export async function updatePublishingJobStatus(
@@ -160,7 +160,7 @@ export async function recordPublishAttempt(data: {
   status: string;
   response?: Record<string, unknown>;
 }) {
-  return db.insert(publishAttempts).values(data as any).returning();
+  return db.insert(publishAttempts).values(data as typeof publishAttempts.$inferInsert).returning();
 }
 
 export async function getFailedJobsForDLQ(
@@ -188,12 +188,39 @@ export async function retryPublishingJob(id: string) {
     .returning();
 }
 
+export async function retryPublishingJobForOrg(id: string, orgId: string) {
+  return db
+    .update(publishingJobs)
+    .set({ status: "pending", error: null, executedAt: null })
+    .where(
+      and(
+        eq(publishingJobs.id, id),
+        sql`${publishingJobs.domainId} IN (SELECT id FROM domains WHERE org_id = ${orgId})`,
+      ),
+    )
+    .returning();
+}
+
 export async function bulkRetryJobs(ids: string[]) {
   if (ids.length === 0) return [];
   return db
     .update(publishingJobs)
     .set({ status: "pending", error: null, executedAt: null })
     .where(inArray(publishingJobs.id, ids))
+    .returning();
+}
+
+export async function bulkRetryJobsForOrg(ids: string[], orgId: string) {
+  if (ids.length === 0) return [];
+  return db
+    .update(publishingJobs)
+    .set({ status: "pending", error: null, executedAt: null })
+    .where(
+      and(
+        inArray(publishingJobs.id, ids),
+        sql`${publishingJobs.domainId} IN (SELECT id FROM domains WHERE org_id = ${orgId})`,
+      ),
+    )
     .returning();
 }
 
@@ -284,7 +311,7 @@ export async function upsertIntegration(data: {
       .where(eq(integrations.id, existing.id))
       .returning();
   }
-  return db.insert(integrations).values(data as any).returning();
+  return db.insert(integrations).values(data as typeof integrations.$inferInsert).returning();
 }
 
 export async function toggleIntegration(id: string, enabled: boolean) {

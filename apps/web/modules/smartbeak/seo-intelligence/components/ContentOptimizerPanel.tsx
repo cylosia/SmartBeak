@@ -77,10 +77,10 @@ function ScoreBar({
   const pct = Math.round((score / max) * 100);
   const color =
     pct >= 70
-      ? "bg-emerald-500"
+      ? "bg-emerald-500 dark:bg-emerald-400"
       : pct >= 40
-        ? "bg-amber-500"
-        : "bg-red-500";
+        ? "bg-amber-500 dark:bg-amber-400"
+        : "bg-red-500 dark:bg-red-400";
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
