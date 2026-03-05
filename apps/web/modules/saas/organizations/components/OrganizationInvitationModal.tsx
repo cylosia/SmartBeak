@@ -1,6 +1,7 @@
 "use client";
 
 import { authClient } from "@repo/auth/client";
+import { toastError } from "@repo/ui/components/toast";
 import { Button } from "@repo/ui/components/button";
 import { OrganizationLogo } from "@saas/organizations/components/OrganizationLogo";
 import { organizationListQueryKey } from "@saas/organizations/lib/api";
@@ -58,9 +59,9 @@ export function OrganizationInvitationModal({
 
 				router.replace("/app");
 			}
-		} catch {
-			// TODO: handle error
-		} finally {
+	} catch (error) {
+		toastError("Invitation failed", error instanceof Error ? error.message : "An unexpected error occurred.");
+	} finally {
 			setSubmitting(false);
 		}
 	};

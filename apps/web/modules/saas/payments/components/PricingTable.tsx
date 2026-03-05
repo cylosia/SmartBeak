@@ -3,6 +3,7 @@ import { LocaleLink } from "@i18n/routing";
 import { config as paymentsConfig } from "@repo/payments/config";
 import { cn } from "@repo/ui";
 import { Button } from "@repo/ui/components/button";
+import { toastError } from "@repo/ui/components/toast";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { usePlanData } from "@saas/payments/hooks/plan-data";
 import type { PlanId } from "@saas/payments/types";
@@ -76,7 +77,7 @@ export function PricingTable({
 
 			window.location.href = checkoutLink;
 		} catch (error) {
-			console.error(error);
+			toastError("Checkout failed", error instanceof Error ? error.message : "Could not create checkout link. Please try again.");
 		} finally {
 			setLoading(false);
 		}

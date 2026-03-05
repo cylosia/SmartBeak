@@ -287,7 +287,9 @@ export async function* executeWorkflow(
 
       // Asynchronously update agent memory (fire-and-forget, non-blocking)
       compressAndUpdateMemory(agent.id, memory, fullOutput, userPrompt).catch(
-        () => {},
+        (err) => {
+          console.warn(`[agent-executor] Failed to compress memory for agent ${agent.id}:`, err);
+        },
       );
     }
 

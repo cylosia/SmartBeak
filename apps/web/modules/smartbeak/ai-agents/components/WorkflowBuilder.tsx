@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangleIcon,
   BotIcon,
   CheckCircle2Icon,
   CircleDotIcon,
@@ -305,6 +306,23 @@ export function WorkflowBuilder({
   const agents = (agentsQuery.data as { agents: Array<{ id: string; name: string; agentType: string; isActive: boolean }> })?.agents ?? [];
   const workflow = (workflowQuery.data as { workflow: { name: string } })?.workflow;
 
+  if (workflowQuery.isError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 py-20">
+        <AlertTriangleIcon className="h-12 w-12 text-destructive opacity-60" />
+        <div className="text-center">
+          <p className="font-medium text-destructive">Failed to load workflow</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {workflowQuery.error?.message ?? "An unexpected error occurred."}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => workflowQuery.refetch()}>
+          Try Again
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col gap-4">
       {/* Header */}
@@ -355,6 +373,19 @@ export function WorkflowBuilder({
                   className="h-16 rounded-lg bg-muted animate-pulse"
                 />
               ))}
+            </div>
+          ) : agentsQuery.isError ? (
+            <div className="rounded-lg border border-destructive/40 p-3 text-center space-y-2">
+              <AlertTriangleIcon className="h-5 w-5 text-destructive mx-auto" />
+              <p className="text-xs text-destructive">Failed to load agents</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => agentsQuery.refetch()}
+              >
+                Retry
+              </Button>
             </div>
           ) : agents.length === 0 ? (
             <p className="text-sm text-muted-foreground">

@@ -140,13 +140,20 @@ export async function POST(request: NextRequest) {
     targetTone,
   );
 
-  const result = streamText({
-    model,
-    system: SYSTEM_PROMPT,
-    prompt,
-    maxOutputTokens: 2048,
-    temperature: action === "fact_check" ? 0.2 : 0.7,
-  });
+  try {
+    const result = streamText({
+      model,
+      system: SYSTEM_PROMPT,
+      prompt,
+      maxOutputTokens: 2048,
+      temperature: action === "fact_check" ? 0.2 : 0.7,
+    });
 
-  return result.toTextStreamResponse();
+    return result.toTextStreamResponse();
+  } catch (error) {
+    return Response.json(
+      { error: "Failed to generate AI response. Please try again." },
+      { status: 500 },
+    );
+  }
 }
