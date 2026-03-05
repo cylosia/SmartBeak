@@ -17,6 +17,7 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { Button } from "@repo/ui/components/button";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/components/card";
 import {
@@ -55,7 +56,16 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
   );
 
   if (roiQuery.isLoading) return <CardGridSkeleton count={4} />;
-  if (roiQuery.isError) return <ErrorBoundary error={roiQuery.error} />;
+  if (roiQuery.isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load portfolio ROI data.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => roiQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const data = roiQuery.data;
   if (!data) return null;

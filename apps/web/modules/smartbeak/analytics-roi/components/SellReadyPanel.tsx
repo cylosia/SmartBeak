@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { Button } from "@repo/ui/components/button";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/components/card";
 import { Progress } from "@repo/ui/components/progress";
@@ -85,7 +86,16 @@ export function SellReadyPanel({
   );
 
   if (query.isLoading) return <CardGridSkeleton count={3} />;
-  if (query.isError) return <ErrorBoundary error={query.error} />;
+  if (query.isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load sell-ready score.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => query.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const data = query.data;
   if (!data) return null;

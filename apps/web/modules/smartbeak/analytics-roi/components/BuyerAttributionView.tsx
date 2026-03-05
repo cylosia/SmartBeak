@@ -17,6 +17,7 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { Button } from "@repo/ui/components/button";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/components/card";
 import {
@@ -65,7 +66,16 @@ export function BuyerAttributionView({
   const error = isDomainLevel ? domainQuery.error : orgQuery.error;
 
   if (isLoading) return <CardGridSkeleton count={4} />;
-  if (isError) return <ErrorBoundary error={error} />;
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load buyer attribution data.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => isDomainLevel ? domainQuery.refetch() : orgQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   if (isDomainLevel) {
     const data = domainQuery.data;

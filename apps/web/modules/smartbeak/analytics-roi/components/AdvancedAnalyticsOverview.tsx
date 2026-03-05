@@ -19,6 +19,7 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { Button } from "@repo/ui/components/button";
 import { Badge } from "@repo/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/components/card";
 import { Progress } from "@repo/ui/components/progress";
@@ -46,7 +47,16 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
   );
 
   if (overviewQuery.isLoading) return <CardGridSkeleton count={4} />;
-  if (overviewQuery.isError) return <ErrorBoundary error={overviewQuery.error} />;
+  if (overviewQuery.isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load analytics overview.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => overviewQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const overview = overviewQuery.data;
   if (!overview) return null;

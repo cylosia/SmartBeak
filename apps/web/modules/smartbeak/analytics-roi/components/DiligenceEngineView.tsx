@@ -85,7 +85,16 @@ export function DiligenceEngineView({
   );
 
   if (reportQuery.isLoading) return <TableSkeleton rows={8} />;
-  if (reportQuery.isError) return <ErrorBoundary error={reportQuery.error} />;
+  if (reportQuery.isError) {
+    return (
+      <div className="flex flex-col items-center py-8 text-center">
+        <p className="text-sm text-destructive">Failed to load diligence report.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => reportQuery.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const report = reportQuery.data?.report;
   if (!report) return null;
