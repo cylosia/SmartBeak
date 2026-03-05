@@ -8,6 +8,7 @@
 		"@orpc/client": "1.13.6",
 		"@orpc/tanstack-query": "1.13.6",
 		"@prisma/nextjs-monorepo-workaround-plugin": "^7.4.2",
+		"@repo/ai": "workspace:*",
 		"@repo/api": "workspace:*",
 		"@repo/auth": "workspace:*",
 		"@repo/database": "workspace:*",

@@ -148,6 +148,9 @@ importers:
       '@prisma/nextjs-monorepo-workaround-plugin':
         specifier: ^7.4.2
         version: 7.4.2
+      '@repo/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@repo/api':
         specifier: workspace:*
         version: link:../../packages/api
