@@ -54,18 +54,18 @@ export default function SessionsPage({ params }: SessionsPageProps) {
     }),
   );
 
-  const sessions = (sessionsQuery.data as { sessions: Array<{
+  const sessions = (sessionsQuery.data as unknown as { sessions: Array<{
     id: string;
     status: string;
     costCents: number | null;
     durationMs: number | null;
     totalInputTokens: number | null;
     totalOutputTokens: number | null;
-    createdAt: string;
-    completedAt: string | null;
+    createdAt: Date | string;
+    completedAt: Date | string | null;
     errorMessage: string | null;
     workflow: { name: string } | null;
-  }> })?.sessions ?? [];
+  }> } | undefined)?.sessions ?? [];
 
   return (
     <div className="space-y-6">
