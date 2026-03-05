@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/client";
+import { ORPCError } from "@orpc/server";
 import { getOrganizationBySlug } from "@repo/database";
 import slugify from "@sindresorhus/slugify";
 import { nanoid } from "nanoid";
@@ -15,7 +15,7 @@ export const generateOrganizationSlug = publicProcedure
 	})
 	.input(
 		z.object({
-			name: z.string(),
+			name: z.string().min(1),
 		}),
 	)
 	.handler(async ({ input: { name } }) => {

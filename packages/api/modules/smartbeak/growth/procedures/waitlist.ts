@@ -3,13 +3,13 @@ import {
   createWaitlistEntry,
   getWaitlistEntryByEmail,
   getWaitlistEntryByReferralCode,
-  getWaitlistEntryById,
   getReferralLeaderboard,
   getWaitlistStats,
   listWaitlistEntries,
   updateWaitlistEntryStatus,
-} from "@repo/database/drizzle/queries/growth";
-import { JoinWaitlistInputSchema, WaitlistStatusUpdateInputSchema } from "@repo/database/drizzle/zod-growth";
+} from "@repo/database";
+import { JoinWaitlistInputSchema, WaitlistStatusUpdateInputSchema } from "@repo/database";
+import { ORPCError } from "@orpc/server";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
@@ -149,7 +149,7 @@ export const updateWaitlistStatusProcedure = adminProcedure
   .input(WaitlistStatusUpdateInputSchema)
   .handler(async ({ input }) => {
     const entry = await updateWaitlistEntryStatus(input.id, input.status);
-    if (!entry) throw new Error("Waitlist entry not found");
+    if (!entry) throw new ORPCError("NOT_FOUND", { message: "Waitlist entry not found." });
 
     // Send approval email
     if (input.status === "approved") {

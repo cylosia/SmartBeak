@@ -145,6 +145,8 @@ export function GscSyncDialog({
             disabled={
               syncMutation.isPending ||
               !siteUrl ||
+              !siteUrl.startsWith("https://") ||
+              siteUrl.length < 10 ||
               !accessToken ||
               !startDate ||
               !endDate

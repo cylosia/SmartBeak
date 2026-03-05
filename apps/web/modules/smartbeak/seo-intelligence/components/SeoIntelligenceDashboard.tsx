@@ -66,10 +66,10 @@ function DecayBadge({ factor }: { factor: string | null }) {
 function ScoreRing({ score }: { score: number }) {
   const color =
     score >= 70
-      ? "text-emerald-500"
+      ? "text-emerald-500 dark:text-emerald-400"
       : score >= 40
-        ? "text-amber-500"
-        : "text-red-500";
+        ? "text-amber-500 dark:text-amber-400"
+        : "text-red-500 dark:text-red-400";
   return (
     <div className="relative flex items-center justify-center w-20 h-20">
       <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
@@ -207,7 +207,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               size="sm"
               onClick={() => setShowOptimizerPanel(true)}
             >
-              <ZapIcon className="mr-2 h-4 w-4 text-amber-500" />
+              <ZapIcon className="mr-2 h-4 w-4 text-amber-500 dark:text-amber-400" />
               Content Optimizer
             </Button>
             <Button
@@ -308,7 +308,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <div
-                className={`text-2xl font-bold ${decayingCount > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                className={`text-2xl font-bold ${decayingCount > 0 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}`}
               >
                 {dashboardQuery.isLoading ? "—" : decayingCount}
               </div>
@@ -325,7 +325,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             <CardContent className="px-4 pb-4 space-y-1">
               <div className="flex items-center gap-1.5">
                 {summary?.gscConnected ? (
-                  <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500" />
+                  <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
                 ) : (
                   <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
@@ -333,7 +333,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               </div>
               <div className="flex items-center gap-1.5">
                 {summary?.ahrefsConnected ? (
-                  <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500" />
+                  <CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
                 ) : (
                   <XCircleIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
@@ -457,7 +457,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
                           {kw.position ? (
                             <div className="flex items-center gap-1">
                               {kw.position <= 10 ? (
-                                <TrendingUpIcon className="h-3.5 w-3.5 text-emerald-500" />
+                                <TrendingUpIcon className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
                               ) : (
                                 <BarChart3Icon className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
@@ -560,7 +560,7 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <AlertTriangleIcon className="h-4 w-4 text-amber-500 shrink-0" />
+                  <AlertTriangleIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 shrink-0" />
                   <p className="text-sm text-amber-700 dark:text-amber-400">
                     {decayingCount} keyword{decayingCount !== 1 ? "s are" : " is"} showing
                     decay signals. Update content or refresh rankings to restore scores.

@@ -68,7 +68,7 @@ export function SeoReportView({ organizationSlug }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                <div className="text-2xl font-bold">{data.totalDomains}</div>
+                <div className="text-2xl font-bold">{data.totalDomains ?? 0}</div>
               </CardContent>
             </Card>
             <Card>
@@ -79,9 +79,9 @@ export function SeoReportView({ organizationSlug }: Props) {
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div
-                  className={`text-2xl font-bold ${data.avgSeoScore >= 70 ? "text-emerald-600 dark:text-emerald-400" : data.avgSeoScore >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}
+                  className={`text-2xl font-bold ${(data.avgSeoScore ?? 0) >= 70 ? "text-emerald-600 dark:text-emerald-400" : (data.avgSeoScore ?? 0) >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}
                 >
-                  {data.avgSeoScore}
+                  {data.avgSeoScore ?? 0}
                 </div>
               </CardContent>
             </Card>
@@ -93,7 +93,7 @@ export function SeoReportView({ organizationSlug }: Props) {
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div className="text-2xl font-bold">
-                  {data.totalKeywords.toLocaleString()}
+                  {(data.totalKeywords ?? 0).toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -105,9 +105,9 @@ export function SeoReportView({ organizationSlug }: Props) {
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div
-                  className={`text-2xl font-bold ${data.totalDecaying > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                  className={`text-2xl font-bold ${(data.totalDecaying ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
                 >
-                  {data.totalDecaying}
+                  {data.totalDecaying ?? 0}
                 </div>
               </CardContent>
             </Card>

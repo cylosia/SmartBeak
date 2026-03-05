@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/client";
+import { ORPCError } from "@orpc/server";
 import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";

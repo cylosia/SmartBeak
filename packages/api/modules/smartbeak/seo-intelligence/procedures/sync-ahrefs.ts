@@ -2,12 +2,12 @@ import { ORPCError } from "@orpc/server";
 import {
   bulkUpsertKeywords,
   getDomainById,
-  getOrganizationBySlug,
   updateSeoAhrefsData,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgEditor } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 /**
  * Ahrefs Keywords Explorer adapter.
@@ -91,9 +91,8 @@ export const syncAhrefs = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgEditor(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgEditor(org.supastarterOrgId, user.id);
 
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {

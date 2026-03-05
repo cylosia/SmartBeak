@@ -126,13 +126,13 @@ export function ReferralDashboard() {
                 value={data?.referralLink ?? "Loading..."}
                 className="font-mono text-sm"
               />
-              <Button variant="outline" size="icon" onClick={copyLink}>
+              <Button variant="outline" size="icon" onClick={copyLink} aria-label="Copy to clipboard">
                 <CopyIcon className="size-4" />
               </Button>
             </div>
           )}
           {copied && (
-            <p className="text-xs text-green-600 font-medium">Copied to clipboard!</p>
+            <p className="text-xs text-green-600 dark:text-green-400 font-medium">Copied to clipboard!</p>
           )}
           <p className="text-xs text-foreground/50">
             Share this link with friends. When they sign up and activate their account, you both earn rewards.
@@ -216,7 +216,7 @@ export function ReferralDashboard() {
                     </TableCell>
                     <TableCell>
                       {ref.rewardGranted ? (
-                        <span className="text-xs text-green-600 font-medium">
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">
                           {ref.rewardType}: {ref.rewardValue}
                         </span>
                       ) : (

@@ -1,4 +1,6 @@
+import { ORPCError } from "@orpc/server";
 import {
+	getOrganizationMembership,
 	getPurchasesByOrganizationId,
 	getPurchasesByUserId,
 } from "@repo/database";
@@ -21,6 +23,11 @@ export const listPurchases = protectedProcedure
 	)
 	.handler(async ({ input: { organizationId }, context: { user } }) => {
 		if (organizationId) {
+			const membership = await getOrganizationMembership(organizationId, user.id);
+			if (!membership) {
+				throw new ORPCError("FORBIDDEN", { message: "You are not a member of this organization." });
+			}
+
 			const purchases =
 				await getPurchasesByOrganizationId(organizationId);
 

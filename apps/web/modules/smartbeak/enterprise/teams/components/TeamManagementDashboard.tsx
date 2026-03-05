@@ -53,6 +53,7 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   ActivityIcon,
+  AlertTriangleIcon,
   MoreHorizontalIcon,
   PlusIcon,
   ShieldIcon,
@@ -200,7 +201,7 @@ export function TeamManagementDashboard({
               <CardTitle className="text-sm font-semibold">Teams</CardTitle>
               <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="icon" className="size-7">
+                  <Button variant="ghost" size="icon" className="size-7" aria-label="Add">
                     <PlusIcon className="size-4" />
                   </Button>
                 </DialogTrigger>
@@ -264,6 +265,19 @@ export function TeamManagementDashboard({
               <div className="p-4">
                 <LoadingSkeleton rows={4} />
               </div>
+            ) : teamsQuery.isError ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-16 gap-3 mx-4">
+                <AlertTriangleIcon className="h-10 w-10 text-destructive opacity-60" />
+                <div className="text-center">
+                  <p className="font-medium text-destructive text-sm">Failed to load teams</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {teamsQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => teamsQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : teamsQuery.data?.teams.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center px-4">
                 <UsersIcon className="size-8 text-muted-foreground" />
@@ -326,7 +340,7 @@ export function TeamManagementDashboard({
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" aria-label="More options">
                         <MoreHorizontalIcon className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -449,6 +463,19 @@ export function TeamManagementDashboard({
                     <div className="px-6 pb-6">
                       <LoadingSkeleton rows={3} />
                     </div>
+                  ) : membersQuery.isError ? (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-16 gap-3 mx-6">
+                      <AlertTriangleIcon className="h-10 w-10 text-destructive opacity-60" />
+                      <div className="text-center">
+                        <p className="font-medium text-destructive text-sm">Failed to load members</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {membersQuery.error?.message ?? "An unexpected error occurred."}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => membersQuery.refetch()}>
+                        Try Again
+                      </Button>
+                    </div>
                   ) : membersQuery.data?.members.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 py-10 text-center">
                       <UserIcon className="size-8 text-muted-foreground" />
@@ -491,7 +518,7 @@ export function TeamManagementDashboard({
                             <TableCell>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="size-7">
+                                  <Button variant="ghost" size="icon" className="size-7" aria-label="More options">
                                     <MoreHorizontalIcon className="size-3.5" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -540,6 +567,19 @@ export function TeamManagementDashboard({
                   {activityQuery.isLoading ? (
                     <div className="px-6 py-4">
                       <LoadingSkeleton rows={5} />
+                    </div>
+                  ) : activityQuery.isError ? (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-16 gap-3 mx-6">
+                      <AlertTriangleIcon className="h-10 w-10 text-destructive opacity-60" />
+                      <div className="text-center">
+                        <p className="font-medium text-destructive text-sm">Failed to load activity</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {activityQuery.error?.message ?? "An unexpected error occurred."}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => activityQuery.refetch()}>
+                        Try Again
+                      </Button>
                     </div>
                   ) : activityQuery.data?.activity.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 py-10 text-center">

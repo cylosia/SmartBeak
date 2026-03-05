@@ -3,12 +3,12 @@ import {
   getDomainById,
   getKeywordsByDomain,
   getOrgSeoOverview,
-  getOrganizationBySlug,
   getSeoDashboardSummary,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 /**
  * Daily SEO report.
@@ -33,9 +33,8 @@ export const getSeoReport = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     if (input.domainId) {
       // Domain-level report

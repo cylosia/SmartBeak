@@ -245,6 +245,7 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
                 <Input
                   placeholder="Search actions…"
                   className="pl-9"
+                  aria-label="Search"
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -344,7 +345,7 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
                   Retry
                 </Button>
               </div>
-            ) : searchQuery.data?.items.length === 0 ? (
+            ) : (searchQuery.data?.items ?? []).length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-center">
                 <ShieldIcon className="size-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
@@ -364,7 +365,7 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {searchQuery.data?.items.map((event) => (
+                    {(searchQuery.data?.items ?? []).map((event) => (
                       <TableRow key={event.id}>
                         <TableCell>
                           <span

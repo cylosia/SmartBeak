@@ -110,6 +110,7 @@ export {
 	getWaitlistEntryByReferralCode,
 	getWaitlistEntryById,
 	createWaitlistEntry,
+	listWaitlistEntries,
 	updateWaitlistEntryStatus,
 	getWaitlistStats,
 	getReferralByCode,

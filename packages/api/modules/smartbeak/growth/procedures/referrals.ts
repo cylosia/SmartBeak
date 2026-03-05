@@ -4,9 +4,11 @@ import {
   getReferralsByReferrer,
   getReferralStats,
   getWaitlistEntryByEmail,
+  getWaitlistEntryByReferralCode,
   grantReferralReward,
-} from "@repo/database/drizzle/queries/growth";
-import { GrantRewardInputSchema } from "@repo/database/drizzle/zod-growth";
+} from "@repo/database";
+import { GrantRewardInputSchema } from "@repo/database";
+import { ORPCError } from "@orpc/server";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure } from "../../../../orpc/procedures";
 
@@ -27,7 +29,7 @@ export const completeReferralProcedure = adminProcedure
   .input(z.object({ referralCode: z.string(), referredUserId: z.string() }))
   .handler(async ({ input }) => {
     const referral = await getReferralByCode(input.referralCode);
-    if (!referral) throw new Error("Referral not found");
+    if (!referral) throw new ORPCError("NOT_FOUND", { message: "Referral not found." });
     return completeReferral(referral.id, input.referredUserId);
   });
 
@@ -42,7 +44,6 @@ export const grantRewardProcedure = adminProcedure
 export const getReferralStatsByCodeProcedure = publicProcedure
   .input(z.object({ referralCode: z.string() }))
   .handler(async ({ input }) => {
-    const { getWaitlistEntryByReferralCode } = await import("@repo/database/drizzle/queries/growth");
     const referrer = await getWaitlistEntryByReferralCode(input.referralCode);
     if (!referrer) return null;
     const stats = await getReferralStats(referrer.id);

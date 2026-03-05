@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/client";
+import { ORPCError } from "@orpc/server";
 import { getOrganizationMembership, getPurchaseById } from "@repo/database";
 import { logger } from "@repo/logs";
 import { createCustomerPortalLink as createCustomerPortalLinkFn } from "@repo/payments";
@@ -18,7 +18,7 @@ export const createCustomerPortalLink = protectedProcedure
 	})
 	.input(
 		z.object({
-			purchaseId: z.string(),
+			purchaseId: z.string().min(1),
 			redirectUrl: z.string().optional(),
 		}),
 	)
@@ -27,7 +27,7 @@ export const createCustomerPortalLink = protectedProcedure
 			const purchase = await getPurchaseById(purchaseId);
 
 			if (!purchase) {
-				throw new ORPCError("FORBIDDEN");
+				throw new ORPCError("NOT_FOUND", { message: "Purchase not found." });
 			}
 
 			if (purchase.organizationId) {

@@ -168,7 +168,7 @@ export function SellReadyPanel({
             </CardHeader>
             <CardContent className="space-y-3">
               {data.recommendations.map((rec, i) => {
-                const cfg = PRIORITY_CONFIG[rec.priority];
+                const cfg = PRIORITY_CONFIG[rec.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low;
                 const Icon = cfg.icon;
                 return (
                   <div

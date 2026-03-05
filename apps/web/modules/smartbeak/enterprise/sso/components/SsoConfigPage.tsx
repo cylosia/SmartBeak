@@ -46,6 +46,7 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   AlertCircleIcon,
+  AlertTriangleIcon,
   CheckCircle2Icon,
   CopyIcon,
   KeyIcon,
@@ -248,6 +249,19 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
           <CardContent>
             {providersQuery.isLoading ? (
               <LoadingSkeleton rows={2} />
+            ) : providersQuery.isError ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-16 gap-3">
+                <AlertTriangleIcon className="h-10 w-10 text-destructive opacity-60" />
+                <div className="text-center">
+                  <p className="font-medium text-destructive text-sm">Failed to load SSO providers</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {providersQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => providersQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : providersQuery.data?.providers.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 text-center">
                 <ShieldCheckIcon className="size-10 text-muted-foreground" />
@@ -331,6 +345,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                                 providerId: provider.id,
                               })
                             }
+                            aria-label="Delete"
                           >
                             <Trash2Icon className="size-3.5" />
                           </Button>
@@ -378,7 +393,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
           <CardContent className="space-y-4">
             {newScimToken && (
               <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
-                <CheckCircle2Icon className="size-4 text-green-600" />
+                <CheckCircle2Icon className="size-4 text-green-600 dark:text-green-400" />
                 <AlertDescription className="space-y-2">
                   <p className="font-medium text-sm text-green-800 dark:text-green-200">
                     Token created — copy it now. It will not be shown again.
@@ -395,6 +410,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                         navigator.clipboard.writeText(newScimToken);
                         toastSuccess("Copied to clipboard.");
                       }}
+                      aria-label="Copy to clipboard"
                     >
                       <CopyIcon className="size-3.5" />
                     </Button>
@@ -413,6 +429,19 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 
             {scimTokensQuery.isLoading ? (
               <LoadingSkeleton rows={2} />
+            ) : scimTokensQuery.isError ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-16 gap-3">
+                <AlertTriangleIcon className="h-10 w-10 text-destructive opacity-60" />
+                <div className="text-center">
+                  <p className="font-medium text-destructive text-sm">Failed to load SCIM tokens</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {scimTokensQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => scimTokensQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : scimTokensQuery.data?.tokens.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <KeyIcon className="size-8 text-muted-foreground" />
@@ -467,6 +496,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
                               tokenId: token.id,
                             })
                           }
+                          aria-label="Delete"
                         >
                           <Trash2Icon className="size-3.5" />
                         </Button>

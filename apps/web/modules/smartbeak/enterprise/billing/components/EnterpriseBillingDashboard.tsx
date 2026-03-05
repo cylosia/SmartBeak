@@ -200,7 +200,7 @@ export function EnterpriseBillingDashboard({
                           type="number"
                           min={1}
                           value={newSeats}
-                          onChange={(e) => setNewSeats(Number(e.target.value))}
+                          onChange={(e) => setNewSeats(Math.max(1, Number(e.target.value) || 1))}
                         />
                         {currentTier && (
                           <p className="text-xs text-muted-foreground">
@@ -317,7 +317,7 @@ export function EnterpriseBillingDashboard({
                   {Object.entries(FEATURE_LABELS).map(([key, label]) => (
                     <div key={key} className="flex items-center gap-2">
                       {features[key] ? (
-                        <CheckCircle2Icon className="size-4 text-green-500 shrink-0" />
+                        <CheckCircle2Icon className="size-4 text-green-500 dark:text-green-400 shrink-0" />
                       ) : (
                         <div className="size-4 rounded-full border-2 border-muted-foreground/30 shrink-0" />
                       )}
@@ -339,7 +339,7 @@ export function EnterpriseBillingDashboard({
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="flex size-9 items-center justify-center rounded-lg bg-green-100 dark:bg-green-950/50">
-                <ZapIcon className="size-5 text-green-600" />
+                <ZapIcon className="size-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <CardTitle>Usage</CardTitle>
@@ -476,7 +476,7 @@ export function EnterpriseBillingDashboard({
                           .map(([key, label]) => (
                             <li key={key} className="flex items-center gap-2">
                               {tierFeatures[key] ? (
-                                <CheckCircle2Icon className="size-3.5 text-green-500 shrink-0" />
+                                <CheckCircle2Icon className="size-3.5 text-green-500 dark:text-green-400 shrink-0" />
                               ) : (
                                 <div className="size-3.5 rounded-full border border-muted-foreground/30 shrink-0" />
                               )}
@@ -502,7 +502,7 @@ export function EnterpriseBillingDashboard({
                     type="number"
                     min={1}
                     value={seats}
-                    onChange={(e) => setSeats(Number(e.target.value))}
+                    onChange={(e) => setSeats(Math.max(1, Number(e.target.value) || 1))}
                   />
                 </div>
                 <div className="flex items-center gap-3">

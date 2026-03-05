@@ -33,7 +33,12 @@ export const getPortfolioRoi = protectedProcedure
         totalDomains: live.totalDomains,
         totalValue: live.totalValue.toFixed(2),
         avgRoi: live.avgRoi.toFixed(2),
-      }).catch(() => null); // non-blocking
+      }).catch((err) => {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[portfolio-roi] Failed to upsert summary:", err);
+      }
+      return null;
+    }); // non-blocking
     }
 
     return { ...live, cached };

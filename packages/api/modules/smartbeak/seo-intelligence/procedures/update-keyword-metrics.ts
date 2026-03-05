@@ -2,13 +2,13 @@ import { ORPCError } from "@orpc/server";
 import {
   getKeywordById,
   getDomainById,
-  getOrganizationBySlug,
   updateKeywordMetrics,
   recalculateDecayFactor,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgEditor } from "../../lib/membership";
+import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const updateKeyword = protectedProcedure
   .route({
@@ -27,9 +27,8 @@ export const updateKeyword = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgEditor(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgEditor(org.supastarterOrgId, user.id);
 
     const kw = await getKeywordById(input.id);
     if (!kw) throw new ORPCError("NOT_FOUND", { message: "Keyword not found." });

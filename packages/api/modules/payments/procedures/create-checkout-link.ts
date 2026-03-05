@@ -1,5 +1,5 @@
-import { ORPCError } from "@orpc/client";
-import { getOrganizationById } from "@repo/database";
+import { ORPCError } from "@orpc/server";
+import { getOrganizationById, getOrganizationMembership } from "@repo/database";
 import { logger } from "@repo/logs";
 import {
 	createCheckoutLink as createCheckoutLinkFn,
@@ -33,6 +33,13 @@ export const createCheckoutLink = protectedProcedure
 			input: { productId, redirectUrl, type, organizationId },
 			context: { user },
 		}) => {
+			if (organizationId) {
+				const membership = await getOrganizationMembership(organizationId, user.id);
+				if (!membership) {
+					throw new ORPCError("FORBIDDEN", { message: "You are not a member of this organization." });
+				}
+			}
+
 			const customerId = await getCustomerIdFromEntity(
 				organizationId
 					? {
