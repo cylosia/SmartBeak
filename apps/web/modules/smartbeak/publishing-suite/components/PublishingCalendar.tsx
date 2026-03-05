@@ -100,6 +100,7 @@ export function PublishingCalendar({
               size="sm"
               className="h-8 w-8 p-0"
               onClick={() => setCurrentMonth((m) => subMonths(m, 1))}
+              aria-label="Previous month"
             >
               <ChevronLeftIcon className="h-4 w-4" />
             </Button>
@@ -116,6 +117,7 @@ export function PublishingCalendar({
               size="sm"
               className="h-8 w-8 p-0"
               onClick={() => setCurrentMonth((m) => addMonths(m, 1))}
+              aria-label="Next month"
             >
               <ChevronRightIcon className="h-4 w-4" />
             </Button>

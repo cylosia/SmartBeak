@@ -22,7 +22,7 @@ export default async function MarketingLayout({
 
 	setRequestLocale(locale);
 
-	if (!locales.includes(locale as any)) {
+	if (!(locales as readonly string[]).includes(locale)) {
 		notFound();
 	}
 

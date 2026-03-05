@@ -7,7 +7,7 @@ import {
   retryPublishingJob,
 } from "@repo/database";
 import z from "zod";
-import { protectedProcedure } from "../../../../orpc/procedures";
+import { adminProcedure, protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
@@ -89,46 +89,40 @@ export const bulkRetryDlqProcedure = protectedProcedure
     return { jobs, count: jobs.length };
   });
 
-export const listFailedWebhooksProcedure = protectedProcedure
+export const listFailedWebhooksProcedure = adminProcedure
   .route({
     method: "GET",
     path: "/smartbeak/publishing-suite/dlq/webhooks",
     tags: ["SmartBeak - Publishing Suite"],
-    summary: "List failed webhook events in the DLQ",
+    summary: "List failed webhook events in the DLQ (admin only — webhook_events has no org scope)",
   })
   .input(
     z.object({
-      organizationSlug: z.string().min(1),
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
     }),
   )
-  .handler(async ({ context: { user }, input }) => {
-    const org = await resolveSmartBeakOrg(input.organizationSlug);
-    await requireOrgEditor(org.supastarterOrgId, user.id);
+  .handler(async ({ input }) => {
     const events = await getFailedWebhookEvents({ limit: input.limit, offset: input.offset });
     return { events, count: events.length };
   });
 
-export const replayWebhookProcedure = protectedProcedure
+export const replayWebhookProcedure = adminProcedure
   .route({
     method: "POST",
     path: "/smartbeak/publishing-suite/dlq/webhooks/:eventId/replay",
     tags: ["SmartBeak - Publishing Suite"],
-    summary: "Replay a failed webhook event",
+    summary: "Replay a failed webhook event (admin only — webhook_events has no org scope)",
   })
   .input(
     z.object({
-      organizationSlug: z.string().min(1),
       eventId: z.string().uuid(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await resolveSmartBeakOrg(input.organizationSlug);
-    await requireOrgEditor(org.supastarterOrgId, user.id);
     await incrementWebhookReplayCount(input.eventId);
     await audit({
-      orgId: org.id,
+      orgId: "system",
       actorId: user.id,
       action: "publishing.webhook_replay",
       entityType: "webhook_event",

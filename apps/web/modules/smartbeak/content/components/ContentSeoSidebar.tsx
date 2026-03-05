@@ -56,9 +56,9 @@ function CheckRow({ check }: { check: SeoCheck }) {
   const Icon = check.status === "pass" ? CheckCircle2Icon
     : check.status === "warning" ? AlertTriangleIcon
       : XCircleIcon;
-  const color = check.status === "pass" ? "text-emerald-500"
-    : check.status === "warning" ? "text-amber-500"
-      : "text-red-500";
+  const color = check.status === "pass" ? "text-emerald-500 dark:text-emerald-400"
+    : check.status === "warning" ? "text-amber-500 dark:text-amber-400"
+      : "text-red-500 dark:text-red-400";
 
   return (
     <div className="flex items-start gap-2.5 py-2">
@@ -114,7 +114,7 @@ export function ContentSeoSidebar({
     <div className="w-72 shrink-0 border-l border-border bg-background overflow-y-auto">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3">
         <h3 className="text-sm font-semibold">SEO Analysis</h3>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Close sidebar">
           <XIcon className="h-4 w-4" />
         </Button>
       </div>

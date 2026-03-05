@@ -1,7 +1,7 @@
 import { AiChat } from "@saas/ai/components/AiChat";
 import { getActiveOrganization } from "@saas/auth/lib/server";
 import { PageHeader } from "@saas/shared/components/PageHeader";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 export default async function AiDemoPage({
 	params,
@@ -12,7 +12,7 @@ export default async function AiDemoPage({
 	const organization = await getActiveOrganization(organizationSlug);
 
 	if (!organization) {
-		redirect("/app");
+		notFound();
 	}
 
 	return (

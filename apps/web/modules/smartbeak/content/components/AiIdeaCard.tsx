@@ -24,15 +24,15 @@ function SeoScoreGauge({ score }: { score: number }) {
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
   const color = score >= 70
-    ? "text-emerald-500"
+    ? "text-emerald-500 dark:text-emerald-400"
     : score >= 40
-      ? "text-amber-500"
-      : "text-red-500";
+      ? "text-amber-500 dark:text-amber-400"
+      : "text-red-500 dark:text-red-400";
   const strokeColor = score >= 70
-    ? "stroke-emerald-500"
+    ? "stroke-emerald-500 dark:stroke-emerald-400"
     : score >= 40
-      ? "stroke-amber-500"
-      : "stroke-red-500";
+      ? "stroke-amber-500 dark:stroke-amber-400"
+      : "stroke-red-500 dark:stroke-red-400";
 
   return (
     <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">

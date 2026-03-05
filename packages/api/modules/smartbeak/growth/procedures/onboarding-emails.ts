@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
@@ -122,7 +123,10 @@ export const sendOnboardingStepProcedure = adminProcedure
   .handler(async ({ input }) => {
     const { email, firstName = "", step } = input;
     const seq = ONBOARDING_SEQUENCE.find((s) => s.step === step);
-    if (!seq) throw new Error(`Onboarding step ${step} not found`);
+    if (!seq)
+      throw new ORPCError("NOT_FOUND", {
+        message: `Onboarding step ${step} not found`,
+      });
     await sendEmail({
       to: email,
       subject: seq.subject,

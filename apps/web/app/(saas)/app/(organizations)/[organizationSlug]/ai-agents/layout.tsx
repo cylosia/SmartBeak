@@ -14,7 +14,7 @@ export default async function AiAgentsLayout({
   params,
 }: AiAgentsLayoutProps) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/auth/sign-in");
+  if (!session) redirect("/auth/login");
 
   const { organizationSlug } = await params;
   const basePath = `/app/${organizationSlug}/ai-agents`;

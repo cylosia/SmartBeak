@@ -49,7 +49,9 @@ async function fetchAhrefsKeywords(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Ahrefs API error ${res.status}: ${err}`);
+    throw new ORPCError("BAD_GATEWAY", {
+      message: `Ahrefs API error ${res.status}: ${err}`,
+    });
   }
 
   const data = (await res.json()) as {
@@ -82,7 +84,7 @@ export const syncAhrefs = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       apiKey: z.string().min(1),
       target: z.string().min(1),

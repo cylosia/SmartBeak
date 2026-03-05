@@ -96,8 +96,9 @@ export const joinWaitlistProcedure = publicProcedure
         `,
         text: `Welcome to SmartBeak! Your referral link: ${referralLink}`,
       });
-    } catch {
-      // Non-fatal: log but don't fail the request
+    } catch (err) {
+      if (process.env.NODE_ENV !== "production")
+        console.warn("[waitlist]", err);
     }
 
     return {
@@ -172,8 +173,9 @@ export const updateWaitlistStatusProcedure = adminProcedure
           `,
           text: `You've been approved! Sign up at: ${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/auth/signup`,
         });
-      } catch {
-        // Non-fatal
+      } catch (err) {
+        if (process.env.NODE_ENV !== "production")
+          console.warn("[waitlist]", err);
       }
     }
 

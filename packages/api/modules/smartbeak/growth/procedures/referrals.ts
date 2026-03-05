@@ -26,7 +26,7 @@ export const getMyReferralsProcedure = protectedProcedure
 
 // ── complete-referral (internal / webhook) ────────────────────────────────────
 export const completeReferralProcedure = adminProcedure
-  .input(z.object({ referralCode: z.string(), referredUserId: z.string() }))
+  .input(z.object({ referralCode: z.string().min(1), referredUserId: z.string().min(1) }))
   .handler(async ({ input }) => {
     const referral = await getReferralByCode(input.referralCode);
     if (!referral) throw new ORPCError("NOT_FOUND", { message: "Referral not found." });
@@ -42,7 +42,7 @@ export const grantRewardProcedure = adminProcedure
 
 // ── get-referral-stats (public, by referral code) ─────────────────────────────
 export const getReferralStatsByCodeProcedure = publicProcedure
-  .input(z.object({ referralCode: z.string() }))
+  .input(z.object({ referralCode: z.string().min(1) }))
   .handler(async ({ input }) => {
     const referrer = await getWaitlistEntryByReferralCode(input.referralCode);
     if (!referrer) return null;

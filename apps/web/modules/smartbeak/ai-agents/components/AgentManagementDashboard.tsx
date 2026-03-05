@@ -189,8 +189,8 @@ export function AgentManagementDashboard({
       agentType: form.agentType as "research" | "writer" | "editor" | "custom",
       config: {
         model: form.model,
-        temperature: parseFloat(form.temperature),
-        maxTokens: parseInt(form.maxTokens, 10),
+        temperature: Number(form.temperature) || 0.7,
+        maxTokens: Number(form.maxTokens) || 4096,
         systemPrompt: form.systemPrompt || undefined,
         tools: form.agentType === "research"
           ? ["web_search", "read_url", "fact_check"]
@@ -300,7 +300,7 @@ export function AgentManagementDashboard({
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Agent actions">
                           <MoreHorizontalIcon className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>

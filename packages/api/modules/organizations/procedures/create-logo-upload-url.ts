@@ -16,14 +16,14 @@ export const createLogoUploadUrl = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationId: z.string(),
+			organizationId: z.string().min(1),
 		}),
 	)
 	.handler(async ({ context: { user }, input: { organizationId } }) => {
 		const organization = await getOrganizationById(organizationId);
 
 		if (!organization) {
-			throw new ORPCError("BAD_REQUEST");
+			throw new ORPCError("BAD_REQUEST", { message: "File type not supported." });
 		}
 
 		const membership = await verifyOrganizationMembership(

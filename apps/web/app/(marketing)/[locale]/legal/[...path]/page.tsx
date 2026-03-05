@@ -8,7 +8,7 @@ import { allLegalPages } from "content-collections";
 import { getLocale } from "next-intl/server";
 
 type Params = {
-	path: string;
+	path: string[];
 	locale: string;
 };
 

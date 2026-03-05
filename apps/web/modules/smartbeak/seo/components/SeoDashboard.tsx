@@ -248,9 +248,9 @@ export function SeoDashboard({
                   ? "border-amber-200 dark:border-amber-900/50"
                   : "border-border";
               const iconColor = alert.type === "danger"
-                ? "text-red-500"
+                ? "text-red-500 dark:text-red-400"
                 : alert.type === "warning"
-                  ? "text-amber-500"
+                  ? "text-amber-500 dark:text-amber-400"
                   : "text-muted-foreground";
               return (
                 <div

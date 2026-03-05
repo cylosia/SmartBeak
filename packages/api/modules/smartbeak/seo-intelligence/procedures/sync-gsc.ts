@@ -54,7 +54,9 @@ async function fetchGscData(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`GSC API error ${res.status}: ${err}`);
+    throw new ORPCError("BAD_GATEWAY", {
+      message: `GSC API error ${res.status}: ${err}`,
+    });
   }
 
   const data = (await res.json()) as {
@@ -108,7 +110,7 @@ export const syncGsc = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       siteUrl: z.string().url(),
       accessToken: z.string().min(1),

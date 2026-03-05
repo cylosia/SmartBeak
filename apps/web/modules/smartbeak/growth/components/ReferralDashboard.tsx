@@ -17,7 +17,7 @@ export function ReferralDashboard() {
   const { user } = useSession();
   const [copied, setCopied] = useState(false);
 
-  const { data, isLoading, error } = useQuery(
+  const { data, isLoading, error, refetch } = useQuery(
     orpc.smartbeak.growth.getMyReferrals.queryOptions({
       input: { email: user?.email ?? "" },
       enabled: !!user?.email,
@@ -36,6 +36,9 @@ export function ReferralDashboard() {
     return (
       <Alert variant="error">
         <AlertDescription>Failed to load referral data. Please try again.</AlertDescription>
+        <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-2">
+          Try Again
+        </Button>
       </Alert>
     );
   }
@@ -66,7 +69,7 @@ export function ReferralDashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                    <UsersIcon className="size-5 text-blue-500" />
+                    <UsersIcon className="size-5 text-blue-500 dark:text-blue-400" />
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-foreground">
@@ -81,7 +84,7 @@ export function ReferralDashboard() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                    <TrendingUpIcon className="size-5 text-green-500" />
+                    <TrendingUpIcon className="size-5 text-green-500 dark:text-green-400" />
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-foreground">

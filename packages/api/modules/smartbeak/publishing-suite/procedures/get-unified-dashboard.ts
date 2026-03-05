@@ -47,10 +47,19 @@ export const getUnifiedDashboardProcedure = protectedProcedure
       failed: 0,
       cancelled: 0,
     };
+    const statusKeys = new Set<string>([
+      "pending",
+      "running",
+      "published",
+      "failed",
+      "cancelled",
+    ]);
     for (const row of statusSummary) {
-      const s = row.status as keyof typeof totals;
+      const s = row.status as string;
       totals.total += row.n;
-      if (s in totals) (totals as any)[s] += row.n;
+      if (statusKeys.has(s)) {
+        (totals as Record<string, number>)[s] += row.n;
+      }
     }
 
     // Per-platform breakdown

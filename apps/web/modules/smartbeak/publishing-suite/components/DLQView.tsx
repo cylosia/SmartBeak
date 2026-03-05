@@ -84,7 +84,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
     <ErrorBoundary>
       <div className="space-y-4">
         <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/40 dark:bg-red-950/20">
-          <AlertTriangleIcon className="h-4 w-4 text-red-500" />
+          <AlertTriangleIcon className="h-4 w-4 text-red-500 dark:text-red-400" />
           <p className="text-sm text-red-700 dark:text-red-400">
             Dead-Letter Queue — items here have exhausted all retry attempts. Review errors before re-queuing.
           </p>

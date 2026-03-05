@@ -111,7 +111,7 @@ export const publishTargets = pgTable('publish_targets', {
 
 export const publishingJobs = pgTable('publishing_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  contentId: uuid('content_id').references(() => contentItems.id),
+  contentId: uuid('content_id').references(() => contentItems.id, { onDelete: 'cascade' }),
   domainId: uuid('domain_id').references(() => domains.id, { onDelete: 'cascade' }).notNull(),
   target: publishTarget('target').notNull(),
   status: text('status').default('pending').notNull(),
@@ -202,7 +202,7 @@ export const siteShards = pgTable('site_shards', {
 // 9. Diligence & Portfolio
 export const diligenceChecks = pgTable('diligence_checks', {
   id: uuid('id').primaryKey().defaultRandom(),
-  domainId: uuid('domain_id').references(() => domains.id).notNull(),
+  domainId: uuid('domain_id').references(() => domains.id, { onDelete: 'cascade' }).notNull(),
   type: text('type').notNull(),
   result: jsonb('result'),
   status: text('status').default('pending'),
@@ -211,7 +211,7 @@ export const diligenceChecks = pgTable('diligence_checks', {
 
 export const portfolioSummaries = pgTable('portfolio_summaries', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').references(() => organizations.id).notNull(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   totalDomains: integer('total_domains').default(0),
   totalValue: numeric('total_value', { precision: 15, scale: 2 }),
   avgRoi: numeric('avg_roi', { precision: 5, scale: 2 }),
@@ -221,7 +221,7 @@ export const portfolioSummaries = pgTable('portfolio_summaries', {
 // 10. Audit, Webhooks, Integrations
 export const auditEvents = pgTable('audit_events', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').references(() => organizations.id).notNull(),
+  orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   actorId: text('actor_id'),
   action: text('action').notNull(),
   entityType: text('entity_type').notNull(),

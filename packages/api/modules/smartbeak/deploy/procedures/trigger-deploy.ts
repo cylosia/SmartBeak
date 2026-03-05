@@ -123,7 +123,9 @@ export const triggerDeploy = protectedProcedure
 
         if (!deployRes.ok) {
           const errText = await deployRes.text();
-          throw new Error(`Vercel API error: ${deployRes.status} - ${errText}`);
+          throw new ORPCError("BAD_GATEWAY", {
+            message: `Vercel API error: ${deployRes.status} - ${errText}`,
+          });
         }
 
         const deployData = (await deployRes.json()) as {
@@ -133,7 +135,9 @@ export const triggerDeploy = protectedProcedure
         };
 
         if (!deployData.url) {
-          throw new Error("Vercel response missing deployment URL");
+          throw new ORPCError("BAD_GATEWAY", {
+            message: "Vercel response missing deployment URL",
+          });
         }
 
         const deployedUrl = `https://${deployData.url}`;
@@ -162,9 +166,9 @@ export const triggerDeploy = protectedProcedure
             if (statusRes.status >= 400 && statusRes.status < 500) {
               consecutive4xx++;
               if (consecutive4xx >= 3) {
-                throw new Error(
-                  `Vercel API returned ${statusRes.status} on 3 consecutive status checks: ${errBody.slice(0, 200)}`,
-                );
+                throw new ORPCError("BAD_GATEWAY", {
+                  message: `Vercel API returned ${statusRes.status} on 3 consecutive status checks: ${errBody.slice(0, 200)}`,
+                });
               }
             }
             continue;
@@ -181,14 +185,16 @@ export const triggerDeploy = protectedProcedure
             statusData.readyState === "ERROR" ||
             statusData.readyState === "CANCELED"
           ) {
-            throw new Error(
-              `Deployment ${statusData.readyState.toLowerCase()}`,
-            );
+            throw new ORPCError("BAD_GATEWAY", {
+              message: `Deployment ${statusData.readyState.toLowerCase()}`,
+            });
           }
         }
 
         if (!ready) {
-          throw new Error("Deployment timed out after 2 minutes");
+          throw new ORPCError("REQUEST_TIMEOUT", {
+            message: "Deployment timed out after 2 minutes",
+          });
         }
 
         await updateSiteShard(shard.id, {

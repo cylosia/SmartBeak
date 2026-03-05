@@ -64,10 +64,10 @@ interface DiligenceData {
 
 function DiligenceIcon({ status }: { status: string }) {
   if (status === "pass")
-    return <CheckCircleIcon className="h-4 w-4 text-emerald-500" />;
+    return <CheckCircleIcon className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />;
   if (status === "warn")
-    return <AlertTriangleIcon className="h-4 w-4 text-amber-500" />;
-  return <XCircleIcon className="h-4 w-4 text-red-500" />;
+    return <AlertTriangleIcon className="h-4 w-4 text-amber-500 dark:text-amber-400" />;
+  return <XCircleIcon className="h-4 w-4 text-red-500 dark:text-red-400" />;
 }
 
 export function DiligenceView({

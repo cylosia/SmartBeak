@@ -19,7 +19,7 @@ export const createCustomerPortalLink = protectedProcedure
 	.input(
 		z.object({
 			purchaseId: z.string().min(1),
-			redirectUrl: z.string().optional(),
+			redirectUrl: z.string().url().optional(),
 		}),
 	)
 	.handler(

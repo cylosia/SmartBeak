@@ -34,7 +34,7 @@ export const openApiHandler = new OpenAPIHandler(router, {
 				);
 
 				return {
-					...(authSchema as any),
+					...(authSchema as Record<string, unknown>),
 					info: {
 						title: "supastarter API",
 						version: "1.0.0",

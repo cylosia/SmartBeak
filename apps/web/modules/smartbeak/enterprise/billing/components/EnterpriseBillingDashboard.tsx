@@ -123,9 +123,9 @@ export function EnterpriseBillingDashboard({
   const currentSeats = orgTierQuery.data?.orgTier?.seats ?? 1;
   const features = currentTier?.features as Record<string, boolean> | undefined;
   const overageItems =
-    usageQuery.data?.usageWithLimits.filter((u) => u.isOverage) ?? [];
+    (usageQuery.data?.usageWithLimits ?? []).filter((u) => u.isOverage);
   const nearLimitItems =
-    usageQuery.data?.usageWithLimits.filter((u) => u.isNearLimit) ?? [];
+    (usageQuery.data?.usageWithLimits ?? []).filter((u) => u.isNearLimit);
 
   return (
     <ErrorBoundary>
@@ -148,7 +148,7 @@ export function EnterpriseBillingDashboard({
 
         {nearLimitItems.length > 0 && overageItems.length === 0 && (
           <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20">
-            <AlertTriangleIcon className="size-4 text-yellow-600" />
+            <AlertTriangleIcon className="size-4 text-yellow-600 dark:text-yellow-400" />
             <AlertDescription>
               <p className="text-sm text-yellow-800 dark:text-yellow-200">
                 You are approaching your plan limits for:{" "}

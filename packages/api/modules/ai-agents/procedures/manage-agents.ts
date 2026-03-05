@@ -33,7 +33,7 @@ export const listAgents = protectedProcedure
     tags: ["AI Agents"],
     summary: "List all agents for an organization",
   })
-  .input(z.object({ organizationSlug: z.string() }))
+  .input(z.object({ organizationSlug: z.string().min(1) }))
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
@@ -125,7 +125,7 @@ export const deleteAgentProcedure = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       agentId: z.string().uuid(),
     }),
   )
@@ -151,7 +151,7 @@ export const seedDefaultAgents = protectedProcedure
     tags: ["AI Agents"],
     summary: "Seed the three default agents (Research, Writer, Editor) for an org",
   })
-  .input(z.object({ organizationSlug: z.string() }))
+  .input(z.object({ organizationSlug: z.string().min(1) }))
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);

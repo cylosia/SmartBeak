@@ -87,7 +87,7 @@ export function BulkScheduleDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-blue-500" />
+            <CalendarIcon className="h-5 w-5 text-blue-500 dark:text-blue-400" />
             Bulk Schedule
           </DialogTitle>
         </DialogHeader>
@@ -101,7 +101,7 @@ export function BulkScheduleDialog({
           </div>
 
           {rows.map((row, i) => (
-            <div key={i} className="grid grid-cols-[1fr_140px_180px_32px] items-center gap-2">
+            <div key={`row-${i}`} className="grid grid-cols-[1fr_140px_180px_32px] items-center gap-2">
               <Input
                 placeholder="UUID or slug"
                 value={row.contentId}

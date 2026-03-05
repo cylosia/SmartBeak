@@ -12,7 +12,7 @@ export const findOrganization = adminProcedure
 	})
 	.input(
 		z.object({
-			id: z.string(),
+			id: z.string().min(1),
 		}),
 	)
 	.handler(async ({ input: { id } }) => {

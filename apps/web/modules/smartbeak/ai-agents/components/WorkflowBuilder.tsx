@@ -517,7 +517,7 @@ export function WorkflowBuilder({
                       <div className="flex items-center gap-1.5 text-xs">
                         {nodeState.status === "running" && (
                           <>
-                            <Loader2Icon className="h-3 w-3 animate-spin text-blue-500" />
+                            <Loader2Icon className="h-3 w-3 animate-spin text-blue-500 dark:text-blue-400" />
                             <span className="text-muted-foreground">
                               Running...
                             </span>
@@ -525,7 +525,7 @@ export function WorkflowBuilder({
                         )}
                         {nodeState.status === "complete" && (
                           <>
-                            <CheckCircle2Icon className="h-3 w-3 text-green-500" />
+                            <CheckCircle2Icon className="h-3 w-3 text-green-500 dark:text-green-400" />
                             <span className="text-green-600 dark:text-green-400">
                               Done · ${(nodeState.costCents / 100).toFixed(4)}
                             </span>
@@ -615,10 +615,10 @@ export function WorkflowBuilder({
                     <div key={ns.nodeId} className="space-y-1">
                       <div className="flex items-center gap-1.5 text-xs font-medium">
                         {ns.status === "running" && (
-                          <Loader2Icon className="h-3 w-3 animate-spin text-blue-500" />
+                          <Loader2Icon className="h-3 w-3 animate-spin text-blue-500 dark:text-blue-400" />
                         )}
                         {ns.status === "complete" && (
-                          <CheckCircle2Icon className="h-3 w-3 text-green-500" />
+                          <CheckCircle2Icon className="h-3 w-3 text-green-500 dark:text-green-400" />
                         )}
                         {ns.status === "error" && (
                           <XCircleIcon className="h-3 w-3 text-destructive" />

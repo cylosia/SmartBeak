@@ -28,7 +28,7 @@ export const getSeoReport = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string(),
+      organizationSlug: z.string().min(1),
       domainId: z.string().uuid().optional(),
     }),
   )

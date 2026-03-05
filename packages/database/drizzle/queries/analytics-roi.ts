@@ -426,8 +426,8 @@ export async function getPortfolioRoiMaterializedView(orgId: string) {
       sql`SELECT * FROM portfolio_roi_summary WHERE org_id = ${orgId}`,
     );
     return result.rows[0] ?? null;
-  } catch {
-    // Materialized view may not exist yet — fall back to live query
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") console.warn("[analytics-roi] materialized view error:", err);
     return null;
   }
 }

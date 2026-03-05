@@ -7,7 +7,7 @@ import Image from "next/image";
 import { getLocale, getTranslations, setRequestLocale } from "next-intl/server";
 
 type Params = {
-	path: string;
+	path: string[];
 	locale: string;
 };
 

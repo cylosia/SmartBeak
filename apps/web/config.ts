@@ -1,6 +1,6 @@
 export const config = {
 	// the name of the app
-	appName: "supastarter for Next.js Demo",
+	appName: "SmartBeak",
 
 	// the link to the documentation app (if not defined, the documentation link will not be shown in the app)
 	docsLink: process.env.NEXT_PUBLIC_DOCS_URL as string | undefined,

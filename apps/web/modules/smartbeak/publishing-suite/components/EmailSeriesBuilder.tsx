@@ -213,7 +213,7 @@ export function EmailSeriesBuilder({
                           min={0}
                           max={365}
                           value={step.delayDays}
-                          onChange={(e) => updateStep(i, { delayDays: Number(e.target.value) })}
+                          onChange={(e) => updateStep(i, { delayDays: Math.max(0, Number(e.target.value) || 0) })}
                         />
                       </div>
                     </div>

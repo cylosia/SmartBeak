@@ -59,10 +59,10 @@ type OptimizerResult = {
 
 function SeverityIcon({ severity }: { severity: string }) {
   if (severity === "error")
-    return <AlertCircleIcon className="h-3.5 w-3.5 text-red-500 shrink-0" />;
+    return <AlertCircleIcon className="h-3.5 w-3.5 text-red-500 dark:text-red-400 shrink-0" />;
   if (severity === "warning")
-    return <AlertTriangleIcon className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
-  return <InfoIcon className="h-3.5 w-3.5 text-blue-500 shrink-0" />;
+    return <AlertTriangleIcon className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 shrink-0" />;
+  return <InfoIcon className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400 shrink-0" />;
 }
 
 function ScoreBar({
@@ -159,10 +159,10 @@ export function ContentOptimizerPanel({
   const score = result?.overallScore ?? 0;
   const scoreColor =
     score >= 70
-      ? "text-emerald-500"
+      ? "text-emerald-500 dark:text-emerald-400"
       : score >= 40
-        ? "text-amber-500"
-        : "text-red-500";
+        ? "text-amber-500 dark:text-amber-400"
+        : "text-red-500 dark:text-red-400";
 
   return (
     <Sheet open onOpenChange={(open: boolean) => !open && onClose()}>
@@ -193,7 +193,7 @@ export function ContentOptimizerPanel({
               />
               {title && (
                 <p
-                  className={`text-xs ${title.length > 70 ? "text-red-500" : "text-muted-foreground"}`}
+                  className={`text-xs ${title.length > 70 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}`}
                 >
                   {title.length}/70 characters
                 </p>
@@ -209,7 +209,7 @@ export function ContentOptimizerPanel({
               />
               {metaDescription && (
                 <p
-                  className={`text-xs ${metaDescription.length > 160 ? "text-red-500" : "text-muted-foreground"}`}
+                  className={`text-xs ${metaDescription.length > 160 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}`}
                 >
                   {metaDescription.length}/160 characters
                 </p>
@@ -329,7 +329,7 @@ export function ContentOptimizerPanel({
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {result.suggestions.map((s, i) => (
-                    <div key={i} className="flex items-start gap-2">
+                    <div key={`sug-${s.type ?? ""}-${i}`} className="flex items-start gap-2">
                       <SeverityIcon severity={s.severity} />
                       <p className="text-xs text-foreground leading-relaxed">
                         {s.message}

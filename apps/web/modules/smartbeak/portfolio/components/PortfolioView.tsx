@@ -217,9 +217,9 @@ export function PortfolioView({
                     className="flex items-center gap-2.5"
                   >
                     {check.pass ? (
-                      <CheckCircleIcon className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                      <CheckCircleIcon className="h-4 w-4 text-emerald-500 dark:text-emerald-400 flex-shrink-0" />
                     ) : (
-                      <AlertCircleIcon className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                      <AlertCircleIcon className="h-4 w-4 text-amber-500 dark:text-amber-400 flex-shrink-0" />
                     )}
                     <span
                       className={`text-sm ${

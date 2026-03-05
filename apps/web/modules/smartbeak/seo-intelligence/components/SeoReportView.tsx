@@ -105,7 +105,7 @@ export function SeoReportView({ organizationSlug }: Props) {
               </CardHeader>
               <CardContent className="px-4 pb-4">
                 <div
-                  className={`text-2xl font-bold ${(data.totalDecaying ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                  className={`text-2xl font-bold ${(data.totalDecaying ?? 0) > 0 ? "text-red-500 dark:text-red-400" : "text-muted-foreground"}`}
                 >
                   {data.totalDecaying ?? 0}
                 </div>

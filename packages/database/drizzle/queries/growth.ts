@@ -231,8 +231,9 @@ export async function getReferralStats(referrerId: string) {
   for (const row of rows) {
     const n = Number(row.total);
     stats.total += n;
-    if (row.status in stats) {
-      (stats as any)[row.status] = n;
+    const statusKey = row.status as keyof typeof stats;
+    if (statusKey in stats) {
+      stats[statusKey] = n;
     }
   }
   return stats;

@@ -173,6 +173,7 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
               size="sm"
               onClick={() => dashboardQuery.refetch()}
               className="h-8 w-8 p-0"
+              aria-label="Refresh dashboard"
             >
               <RefreshCwIcon className={`h-4 w-4 ${dashboardQuery.isFetching ? "animate-spin" : ""}`} />
             </Button>

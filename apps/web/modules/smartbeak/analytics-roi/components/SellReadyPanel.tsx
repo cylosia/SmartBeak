@@ -172,7 +172,7 @@ export function SellReadyPanel({
                 const Icon = cfg.icon;
                 return (
                   <div
-                    key={i}
+                    key={`rec-${rec.priority}-${i}`}
                     className={`flex items-start gap-3 rounded-lg border p-3 ${cfg.bg}`}
                   >
                     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${cfg.color}`} />
