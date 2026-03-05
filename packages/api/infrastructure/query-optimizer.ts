@@ -8,8 +8,7 @@
  * - Connection pool health check
  */
 
-import { db } from "@repo/database";
-import { sql } from "drizzle-orm";
+import { db, sql } from "@repo/database";
 
 // ─── Cursor-based pagination ───────────────────────────────────────────────────
 

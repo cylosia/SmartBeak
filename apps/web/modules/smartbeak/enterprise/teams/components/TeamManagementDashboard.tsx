@@ -50,7 +50,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/ta
 import { ScrollArea } from "@repo/ui/components/scroll-area";
 import { Separator } from "@repo/ui/components/separator";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   ActivityIcon,
   MoreHorizontalIcon,

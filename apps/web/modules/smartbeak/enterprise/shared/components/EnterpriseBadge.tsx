@@ -1,6 +1,6 @@
 import { Badge } from "@repo/ui/components/badge";
 import { LockIcon, ShieldCheckIcon, ZapIcon } from "lucide-react";
-import { cn } from "@repo/ui/lib/utils";
+import { cn } from "@repo/ui";
 
 interface EnterpriseBadgeProps {
   variant?: "enterprise" | "pro" | "locked";

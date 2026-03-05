@@ -28,7 +28,7 @@ import {
   DialogTrigger,
 } from "@repo/ui/components/dialog";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { EnterpriseBadge } from "@/modules/smartbeak/enterprise/shared/components/EnterpriseBadge";
 import {
   AlertTriangleIcon,

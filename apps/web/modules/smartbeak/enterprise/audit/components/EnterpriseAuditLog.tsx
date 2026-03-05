@@ -37,7 +37,7 @@ import {
 import { Separator } from "@repo/ui/components/separator";
 import { Switch } from "@repo/ui/components/switch";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   DownloadIcon,
   LockIcon,

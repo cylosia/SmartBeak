@@ -15,7 +15,7 @@ import { Input } from "@repo/ui/components/input";
 import { Label } from "@repo/ui/components/label";
 import { Textarea } from "@repo/ui/components/textarea";
 import { Badge } from "@repo/ui/components/badge";
-import { cn } from "@repo/ui/lib/utils";
+import { cn } from "@repo/ui";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +43,7 @@ import {
   TableRow,
 } from "@repo/ui/components/table";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
-import { LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
