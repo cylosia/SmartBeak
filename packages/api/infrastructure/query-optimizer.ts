@@ -8,7 +8,7 @@
  * - Connection pool health check
  */
 
-import { db, sql } from "@repo/database";
+import { db } from "@repo/database";
 
 // ─── Cursor-based pagination ───────────────────────────────────────────────────
 
@@ -130,7 +130,7 @@ export async function checkDatabaseHealth(): Promise<{
 }> {
   const start = performance.now();
   try {
-    await db.execute(sql`SELECT 1`);
+    await db.$queryRawUnsafe("SELECT 1");
     return { healthy: true, latencyMs: Math.round(performance.now() - start) };
   } catch (err) {
     return {

@@ -1,9 +1,6 @@
 // Prisma-based queries (Supastarter base)
 export * from "./prisma";
 
-// Re-export drizzle-orm's sql tag for packages that need raw queries
-export { sql } from "drizzle-orm";
-
 // Drizzle-based queries and schemas (SmartBeak v9)
 export * from "./drizzle/queries/smartbeak";
 export * from "./drizzle/zod-smartbeak";
