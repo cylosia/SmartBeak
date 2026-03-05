@@ -119,7 +119,7 @@ export function SmartBeakPricing() {
 
               <Button
                 asChild
-                variant={highlight ? "default" : "outline"}
+                variant={highlight ? "primary" : "outline"}
                 className="w-full"
               >
                 <Link href={href}>{cta}</Link>
