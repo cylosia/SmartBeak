@@ -86,6 +86,7 @@ async function getRedisClient(): Promise<RedisClient | null> {
 
   try {
     // Dynamic import to avoid hard dependency — Redis is optional.
+    // @ts-ignore — redis is an optional peer dependency; missing types are expected
     const { createClient } = await import("redis");
     const client = createClient({ url: redisUrl });
     client.on("error", (err: Error) => {
