@@ -1,4 +1,5 @@
 "use client";
+import type { PublishingSuiteTarget } from "@repo/database";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@repo/ui/components/select";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { PlusIcon, Trash2Icon, CalendarIcon } from "lucide-react";
 
 const PLATFORMS = [
@@ -50,10 +51,7 @@ export function BulkScheduleDialog({
   const bulkMutation = useMutation(
     orpc.smartbeak.publishingSuite.bulkSchedule.mutationOptions({
       onSuccess: (data) => {
-        toast({
-          title: "Bulk schedule created",
-          description: `${data.count} publishing jobs scheduled.`,
-        });
+        toastSuccess("Bulk schedule created", `${data.count} publishing jobs scheduled.`);
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
         onClose();
       },
@@ -78,7 +76,7 @@ export function BulkScheduleDialog({
       domainId,
       jobs: valid.map((r) => ({
         contentId: r.contentId,
-        target: r.target as any,
+        target: r.target as PublishingSuiteTarget,
         scheduledFor: new Date(r.scheduledFor).toISOString(),
       })),
     });

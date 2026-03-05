@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
@@ -74,10 +74,10 @@ export function SmartDeployView({
   const deployMutation = useMutation(
     orpc.smartbeak.deploy.trigger.mutationOptions({
       onSuccess: (data) => {
-        toast({
-          title: "Deployment started",
-          description: `Version ${data.shard.version} is being deployed.`,
-        });
+        toastSuccess(
+          "Deployment started",
+          `Version ${data.shard.version} is being deployed.`,
+        );
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.deploy.status.key(),
         });

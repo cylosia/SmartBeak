@@ -12,7 +12,6 @@ import {
   deleteWorkflow,
   getActiveAgentsForOrg,
   getAgentById,
-  getOrganizationBySlug,
   getSessionById,
   getSessionsForOrg,
   getWorkflowById,
@@ -28,6 +27,7 @@ import {
 import z from "zod";
 import { protectedProcedure } from "../../../orpc/procedures";
 import { requireOrgMembership } from "../../smartbeak/lib/membership";
+import { resolveSmartBeakOrg } from "../../smartbeak/lib/resolve-org";
 
 // ─── List Workflows ───────────────────────────────────────────────────────────
 
@@ -40,9 +40,8 @@ export const listWorkflows = protectedProcedure
   })
   .input(z.object({ organizationSlug: z.string() }))
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const workflows = await getWorkflowsForOrg(org.id);
     return { workflows };
   });
@@ -63,9 +62,8 @@ export const getWorkflow = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const workflow = await getWorkflowById(input.workflowId);
     if (!workflow || workflow.orgId !== org.id) {
@@ -103,9 +101,8 @@ export const createWorkflowProcedure = protectedProcedure
   })
   .input(CreateWorkflowInputSchema)
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const workflow = await createWorkflow({
       orgId: org.id,
@@ -129,9 +126,8 @@ export const updateWorkflowProcedure = protectedProcedure
   })
   .input(UpdateWorkflowInputSchema)
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const existing = await getWorkflowById(input.workflowId);
     if (!existing || existing.orgId !== org.id) {
@@ -164,9 +160,8 @@ export const deleteWorkflowProcedure = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const existing = await getWorkflowById(input.workflowId);
     if (!existing || existing.orgId !== org.id) {
@@ -192,9 +187,8 @@ export const initiateWorkflowRun = protectedProcedure
   })
   .input(RunWorkflowInputSchema)
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const workflow = await getWorkflowById(input.workflowId);
     if (!workflow || workflow.orgId !== org.id) {
@@ -246,9 +240,8 @@ export const listSessions = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const sessions = await getSessionsForOrg(org.id, {
       limit: input.limit,
@@ -275,9 +268,8 @@ export const getSession = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const session = await getSessionById(input.sessionId);
     if (!session || session.orgId !== org.id) {

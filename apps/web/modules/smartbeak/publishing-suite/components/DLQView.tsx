@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
@@ -43,7 +43,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
   const retryJobMutation = useMutation(
     orpc.smartbeak.publishingSuite.dlq.retryJob.mutationOptions({
       onSuccess: () => {
-        toast({ title: "Job re-queued", description: "Job moved back to pending." });
+        toastSuccess("Job re-queued", "Job moved back to pending.");
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
       onError: (err: unknown) => toastError("Retry failed", err instanceof Error ? err.message : "Unknown error"),
@@ -53,7 +53,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
   const bulkRetryMutation = useMutation(
     orpc.smartbeak.publishingSuite.dlq.bulkRetry.mutationOptions({
       onSuccess: (data) => {
-        toast({ title: "Bulk retry", description: `${data.count} jobs re-queued.` });
+        toastSuccess("Bulk retry", `${data.count} jobs re-queued.`);
         setSelectedJobIds(new Set());
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
@@ -64,7 +64,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
   const replayWebhookMutation = useMutation(
     orpc.smartbeak.publishingSuite.dlq.replayWebhook.mutationOptions({
       onSuccess: () => {
-        toast({ title: "Webhook replayed" });
+        toastSuccess("Webhook replayed");
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
       onError: (err: unknown) => toastError("Replay failed", err instanceof Error ? err.message : "Unknown error"),
@@ -154,7 +154,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                           className="rounded"
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedJobIds(new Set(dlqJobsQuery.data.jobs.map((j: any) => j.id)));
+                              setSelectedJobIds(new Set(dlqJobsQuery.data.jobs.map((j: { id: string }) => j.id)));
                             } else {
                               setSelectedJobIds(new Set());
                             }
@@ -168,7 +168,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dlqJobsQuery.data.jobs.map((job: any) => (
+                    {dlqJobsQuery.data.jobs.map((job: { id: string; target: string; error: string | null; createdAt: Date | string }) => (
                       <TableRow key={job.id}>
                         <TableCell>
                           <input
@@ -231,7 +231,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dlqWebhooksQuery.data.events.map((event: any) => (
+                    {dlqWebhooksQuery.data.events.map((event: { id: string; provider: string; eventType: string; error: string | null; replayCount: number | null; createdAt: Date | string }) => (
                       <TableRow key={event.id}>
                         <TableCell className="font-medium capitalize">{event.provider}</TableCell>
                         <TableCell className="text-sm">{event.eventType}</TableCell>

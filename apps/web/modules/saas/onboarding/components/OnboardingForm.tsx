@@ -22,8 +22,9 @@ export function OnboardingForm() {
 	// biome-ignore lint/correctness/noUnusedVariables: Will be used with more steps
 	const setStep = (step: number) => {
 		router.replace(
-			withQuery(window.location.search ?? "", {
+			withQuery(window.location.pathname, {
 				step,
+				...(redirectTo && { redirectTo }),
 			}),
 		);
 	};

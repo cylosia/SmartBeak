@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -85,7 +85,7 @@ export function PublishingView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.publishing.listJobs.key(),
         });
-        toast({ title: "Publishing job queued" });
+        toastSuccess("Publishing job queued");
         setOpen(false);
       },
       onError: (err) => {

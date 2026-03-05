@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@repo/ui/components/dialog";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
   MailIcon,
@@ -56,10 +56,7 @@ export function EmailSeriesBuilder({
   const createMutation = useMutation(
     orpc.smartbeak.publishingSuite.emailSeries.mutationOptions({
       onSuccess: (data) => {
-        toast({
-          title: "Email series created",
-          description: `${data.stepCount} emails scheduled for "${data.seriesName}".`,
-        });
+        toastSuccess("Email series created", `${data.stepCount} emails scheduled for "${data.seriesName}".`);
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
         onClose();
       },

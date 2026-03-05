@@ -13,7 +13,7 @@ import { Progress } from "@repo/ui/components/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@repo/ui/components/tooltip";
-import { toast } from "@repo/ui/components/toast";
+import { toastSuccess, toastError, toastInfo } from "@repo/ui/components/toast";
 import {
   AlertTriangleIcon,
   BarChart3Icon,
@@ -130,10 +130,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             input: { organizationSlug, domainId },
           }),
         );
-        toast({ title: "Keyword added", description: "Tracking started.", type: "success" });
+        toastSuccess("Keyword added", "Tracking started.");
       },
       onError: () => {
-        toast({ title: "Failed to add keyword", type: "error" });
+        toastError("Failed to add keyword");
       },
     }),
   );
@@ -146,10 +146,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
             input: { organizationSlug, domainId },
           }),
         );
-        toast({ title: "Keyword removed", type: "success" });
+        toastSuccess("Keyword removed");
       },
       onError: () => {
-        toast({ title: "Failed to remove keyword", type: "error" });
+        toastError("Failed to remove keyword");
       },
     }),
   );
@@ -191,11 +191,10 @@ export function SeoIntelligenceDashboard({ organizationSlug, domainId }: Props) 
               variant="outline"
               size="sm"
               onClick={() =>
-                toast({
-                  title: "Ahrefs sync",
-                  description: "Configure your Ahrefs API key in settings to enable this.",
-                  type: "info",
-                })
+                toastInfo(
+                  "Ahrefs sync",
+                  "Configure your Ahrefs API key in settings to enable this.",
+                )
               }
             >
               <RefreshCwIcon className="mr-2 h-4 w-4" />

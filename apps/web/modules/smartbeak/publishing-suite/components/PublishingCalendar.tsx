@@ -158,11 +158,11 @@ export function PublishingCalendar({
                   {format(day, "d")}
                 </div>
                 <div className="space-y-0.5">
-                  {jobs.slice(0, 3).map((job: any) => (
+                  {jobs.slice(0, 3).map((job: { id: string; target: string; status: string }) => (
                     <div
                       key={job.id}
                       className={`truncate rounded px-1 py-0.5 text-[10px] font-medium text-white ${
-                        PLATFORM_COLORS[job.target] ?? "bg-gray-500"
+                        PLATFORM_COLORS[job.target] ?? "bg-muted-foreground"
                       }`}
                       title={`${job.target} — ${job.status}`}
                     >

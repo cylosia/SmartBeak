@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -95,7 +95,7 @@ export function ContentListView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.content.list.key(),
         });
-        toast({ title: "Content created" });
+        toastSuccess("Content created");
         reset();
         setOpen(false);
       },
@@ -111,7 +111,7 @@ export function ContentListView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.content.list.key(),
         });
-        toast({ title: "Content deleted" });
+        toastSuccess("Content deleted");
       },
       onError: (err) => {
         toastError("Error", err.message);

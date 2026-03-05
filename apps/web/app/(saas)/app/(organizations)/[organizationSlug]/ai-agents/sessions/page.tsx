@@ -3,6 +3,7 @@
 import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangleIcon,
   CheckCircle2Icon,
   ClockIcon,
   Loader2Icon,
@@ -10,6 +11,7 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import { Badge } from "@repo/ui/components/badge";
+import { Button } from "@repo/ui/components/button";
 import {
   Card,
   CardContent,
@@ -89,6 +91,19 @@ export default function SessionsPage({ params }: SessionsPageProps) {
               {[1, 2, 3, 4, 5].map((i) => (
                 <Skeleton key={i} className="h-10 rounded" />
               ))}
+            </div>
+          ) : sessionsQuery.isError ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <AlertTriangleIcon className="h-10 w-10 text-destructive opacity-60" />
+              <div className="text-center">
+                <p className="font-medium text-destructive">Failed to load sessions</p>
+                <p className="text-sm mt-1">
+                  {sessionsQuery.error?.message ?? "An unexpected error occurred."}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => sessionsQuery.refetch()}>
+                Try Again
+              </Button>
             </div>
           ) : sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">

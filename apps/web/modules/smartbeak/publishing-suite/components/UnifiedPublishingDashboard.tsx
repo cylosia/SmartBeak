@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -70,7 +70,7 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
   const executeMutation = useMutation(
     orpc.smartbeak.publishingSuite.executeJob.mutationOptions({
       onSuccess: () => {
-        toast({ title: "Job executed", description: "Publishing job dispatched successfully." });
+        toastSuccess("Job executed", "Publishing job dispatched successfully.");
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite"] });
       },
       onError: (err: unknown) => toastError("Execution failed", err instanceof Error ? err.message : "Unknown error"),
@@ -206,7 +206,14 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.jobs.map((job: any) => {
+                {data.jobs.map((job: {
+                  id: string;
+                  target: string;
+                  status: string;
+                  scheduledFor: Date | string | null;
+                  executedAt: Date | string | null;
+                  error: string | null;
+                }) => {
                   const Icon = PLATFORM_ICONS[job.target] ?? ActivityIcon;
                   return (
                     <TableRow key={job.id}>

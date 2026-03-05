@@ -10,6 +10,7 @@ import {
 	FormField,
 	FormItem,
 	FormLabel,
+	FormMessage,
 } from "@repo/ui/components/form";
 import { Input } from "@repo/ui/components/input";
 import { useSession } from "@saas/auth/hooks/use-session";
@@ -21,7 +22,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 const formSchema = z.object({
-	name: z.string(),
+	name: z.string().min(1),
 });
 
 export function OnboardingStep1({ onCompleted }: { onCompleted: () => void }) {
@@ -38,7 +39,7 @@ export function OnboardingStep1({ onCompleted }: { onCompleted: () => void }) {
 		if (user) {
 			form.setValue("name", user.name ?? "");
 		}
-	}, [user]);
+	}, [user, form]);
 
 	const onSubmit = form.handleSubmit(async ({ name }) => {
 		form.clearErrors("root");
@@ -75,6 +76,7 @@ export function OnboardingStep1({ onCompleted }: { onCompleted: () => void }) {
 								<FormControl>
 									<Input {...field} />
 								</FormControl>
+								<FormMessage />
 							</FormItem>
 						)}
 					/>

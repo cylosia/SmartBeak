@@ -10,6 +10,8 @@ export const clearCache = async (path?: string) => {
 			revalidatePath("/", "layout");
 		}
 	} catch (error) {
-		console.error("Could not revalidate path", path, error);
+		if (process.env.NODE_ENV === "development") {
+			console.error("Could not revalidate path", path, error);
+		}
 	}
 };

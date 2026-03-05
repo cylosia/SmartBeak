@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Button } from "@repo/ui/components/button";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -59,10 +59,10 @@ export function DomainDetailView({
   const deployMutation = useMutation(
     orpc.smartbeak.deploy.trigger.mutationOptions({
       onSuccess: (data) => {
-        toast({
-          title: "Deployment started",
-          description: `Version ${data.shard.version} is being deployed.`,
-        });
+        toastSuccess(
+          "Deployment started",
+          `Version ${data.shard.version} is being deployed.`,
+        );
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.deploy.status.key(),
         });

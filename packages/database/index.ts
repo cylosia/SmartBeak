@@ -116,6 +116,9 @@ export {
 	createReferral,
 	completeReferral,
 	getReferralsByReferrer,
+	getReferralLeaderboard,
+	getReferralStats,
+	grantReferralReward,
 } from "./drizzle/queries/growth";
 export * from "./drizzle/zod-growth";
 export * from "./drizzle/schema/growth";

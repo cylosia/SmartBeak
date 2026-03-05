@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -86,7 +86,7 @@ export function DomainsListView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.domains.list.key(),
         });
-        toast({ title: "Domain created", description: "Your domain has been added." });
+        toastSuccess("Domain created", "Your domain has been added.");
         reset();
         setOpen(false);
       },
@@ -102,7 +102,7 @@ export function DomainsListView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.domains.list.key(),
         });
-        toast({ title: "Domain deleted" });
+        toastSuccess("Domain deleted");
       },
       onError: (err) => {
         toastError("Error", err.message);

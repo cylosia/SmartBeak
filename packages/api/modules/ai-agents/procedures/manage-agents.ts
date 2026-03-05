@@ -12,7 +12,6 @@ import {
   getActiveAgentsForOrg,
   getAgentById,
   getAgentsForOrg,
-  getOrganizationBySlug,
   updateAgent,
 } from "@repo/database";
 import {
@@ -23,6 +22,7 @@ import {
 import z from "zod";
 import { protectedProcedure } from "../../../orpc/procedures";
 import { requireOrgMembership } from "../../smartbeak/lib/membership";
+import { resolveSmartBeakOrg } from "../../smartbeak/lib/resolve-org";
 
 // ─── List Agents ──────────────────────────────────────────────────────────────
 
@@ -35,9 +35,8 @@ export const listAgents = protectedProcedure
   })
   .input(z.object({ organizationSlug: z.string() }))
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
     const agents = await getAgentsForOrg(org.id);
     return { agents };
   });
@@ -53,9 +52,8 @@ export const createAgentProcedure = protectedProcedure
   })
   .input(CreateAiAgentInputSchema)
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const defaultConfig = AiAgentConfigSchema.parse({});
     const config = input.config
@@ -96,9 +94,8 @@ export const updateAgentProcedure = protectedProcedure
   })
   .input(UpdateAiAgentInputSchema)
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const existing = await getAgentById(input.agentId);
     if (!existing || existing.orgId !== org.id) {
@@ -133,9 +130,8 @@ export const deleteAgentProcedure = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const existing = await getAgentById(input.agentId);
     if (!existing || existing.orgId !== org.id) {
@@ -157,9 +153,8 @@ export const seedDefaultAgents = protectedProcedure
   })
   .input(z.object({ organizationSlug: z.string() }))
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const existing = await getActiveAgentsForOrg(org.id);
     if (existing.length > 0) {

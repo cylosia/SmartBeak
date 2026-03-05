@@ -11,6 +11,7 @@ import {
 	FormField,
 	FormItem,
 	FormLabel,
+	FormMessage,
 } from "@repo/ui/components/form";
 import { Input } from "@repo/ui/components/input";
 import { useAuthErrorMessages } from "@saas/auth/hooks/errors-messages";
@@ -216,6 +217,7 @@ export function LoginForm() {
 												autoComplete="email"
 											/>
 										</FormControl>
+										<FormMessage />
 									</FormItem>
 								)}
 							/>
@@ -272,6 +274,7 @@ export function LoginForm() {
 														</button>
 													</div>
 												</FormControl>
+												<FormMessage />
 											</FormItem>
 										)}
 									/>

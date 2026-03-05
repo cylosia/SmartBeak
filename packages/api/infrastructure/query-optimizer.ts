@@ -112,7 +112,9 @@ export async function timedQuery<T>(
     return result;
   } catch (err) {
     const elapsed = performance.now() - start;
-    console.error(`[QueryError] "${label}" failed after ${elapsed.toFixed(1)}ms:`, err);
+    if (process.env.NODE_ENV !== "production") {
+      console.error(`[QueryError] "${label}" failed after ${elapsed.toFixed(1)}ms:`, err);
+    }
     throw err;
   }
 }

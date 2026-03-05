@@ -4,14 +4,13 @@
  * orpc procedures for fetching agent usage, performance, and cost analytics.
  */
 
-import { ORPCError } from "@orpc/server";
 import {
   getAgentAnalytics,
-  getOrganizationBySlug,
 } from "@repo/database";
 import { GetAnalyticsInputSchema } from "@repo/database";
 import { protectedProcedure } from "../../../orpc/procedures";
 import { requireOrgMembership } from "../../smartbeak/lib/membership";
+import { resolveSmartBeakOrg } from "../../smartbeak/lib/resolve-org";
 
 export const getAgentAnalyticsProcedure = protectedProcedure
   .route({
@@ -22,9 +21,8 @@ export const getAgentAnalyticsProcedure = protectedProcedure
   })
   .input(GetAnalyticsInputSchema)
   .handler(async ({ context: { user }, input }) => {
-    const org = await getOrganizationBySlug(input.organizationSlug);
-    if (!org) throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
-    await requireOrgMembership(org.id, user.id);
+    const org = await resolveSmartBeakOrg(input.organizationSlug);
+    await requireOrgMembership(org.supastarterOrgId, user.id);
 
     const startDate = input.startDate ? new Date(input.startDate) : undefined;
     const endDate = input.endDate ? new Date(input.endDate) : undefined;

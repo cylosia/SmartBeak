@@ -17,6 +17,7 @@ import {
 } from "@repo/ui/components/card";
 import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import {
+	AlertTriangleIcon,
 	BrainCircuitIcon,
 	SearchIcon,
 	LinkIcon,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { Skeleton } from "@repo/ui/components/skeleton";
 
 interface ProviderDefinition {
 	id: "openai" | "google_search_console" | "ahrefs";
@@ -334,22 +336,43 @@ export function IntegrationsSettingsForm() {
 			title="API Integrations"
 			description="Connect third-party services by adding your API keys. Keys are encrypted at rest using AES-256-GCM."
 		>
-			<div className="space-y-4">
-				{PROVIDERS.map((provider) => {
-					const integration = integrations.find(
-						(i) => i.provider === provider.id,
-					);
-					return (
-						<ProviderCard
-							key={provider.id}
-							provider={provider}
-							integration={integration as IntegrationState | undefined}
-							organizationSlug={organizationSlug}
-							onMutationSuccess={handleMutationSuccess}
-						/>
-					);
-				})}
-			</div>
+			{integrationsQuery.isLoading ? (
+				<div className="space-y-4">
+					{[1, 2, 3].map((i) => (
+						<Skeleton key={i} className="h-48 rounded-xl" />
+					))}
+				</div>
+			) : integrationsQuery.isError ? (
+				<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-12 gap-3">
+					<AlertTriangleIcon className="h-8 w-8 text-destructive opacity-60" />
+					<div className="text-center">
+						<p className="font-medium text-destructive text-sm">Failed to load integrations</p>
+						<p className="text-xs text-muted-foreground mt-1">
+							{integrationsQuery.error?.message ?? "An unexpected error occurred."}
+						</p>
+					</div>
+					<Button variant="outline" size="sm" onClick={() => integrationsQuery.refetch()}>
+						Try Again
+					</Button>
+				</div>
+			) : (
+				<div className="space-y-4">
+					{PROVIDERS.map((provider) => {
+						const integration = integrations.find(
+							(i) => i.provider === provider.id,
+						);
+						return (
+							<ProviderCard
+								key={provider.id}
+								provider={provider}
+								integration={integration as IntegrationState | undefined}
+								organizationSlug={organizationSlug}
+								onMutationSuccess={handleMutationSuccess}
+							/>
+						);
+					})}
+				</div>
+			)}
 		</SettingsItem>
 	);
 }

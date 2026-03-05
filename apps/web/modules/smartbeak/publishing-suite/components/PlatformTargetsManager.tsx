@@ -11,7 +11,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@repo/ui/components/dialog";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
+import type { PublishingSuiteTarget } from "@repo/database";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import {
@@ -61,7 +62,7 @@ export function PlatformTargetsManager({
   const upsertMutation = useMutation(
     orpc.smartbeak.publishingSuite.targets.upsert.mutationOptions({
       onSuccess: () => {
-        toast({ title: "Platform configured", description: "Target saved securely." });
+        toastSuccess("Platform configured", "Target saved securely.");
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite", "targets"] });
         setConfigDialog(null);
         setConfigValues({});
@@ -82,7 +83,7 @@ export function PlatformTargetsManager({
   const deleteMutation = useMutation(
     orpc.smartbeak.publishingSuite.targets.delete.mutationOptions({
       onSuccess: () => {
-        toast({ title: "Platform removed" });
+        toastSuccess("Platform removed");
         queryClient.invalidateQueries({ queryKey: ["smartbeak", "publishingSuite", "targets"] });
       },
       onError: (err: unknown) => toastError("Delete failed", err instanceof Error ? err.message : "Unknown error"),
@@ -90,7 +91,7 @@ export function PlatformTargetsManager({
   );
 
   const configuredTargets = new Map(
-    (targetsQuery.data?.targets ?? []).map((t: any) => [t.target, t]),
+    (targetsQuery.data?.targets ?? []).map((t: { id: string; target: string; enabled: boolean | null; createdAt: Date }) => [t.target, t] as const),
   );
 
   const handleSaveConfig = () => {
@@ -98,7 +99,7 @@ export function PlatformTargetsManager({
     upsertMutation.mutate({
       organizationSlug,
       domainId,
-      target: configDialog.platformId as any,
+      target: configDialog.platformId as PublishingSuiteTarget,
       config: configValues,
       enabled: true,
     });
@@ -180,7 +181,7 @@ export function PlatformTargetsManager({
                   className="h-7 flex-1 gap-1 text-xs"
                   onClick={() => {
                     setConfigValues({});
-                    setConfigDialog({ platformId: platform.id, fields: platform.fields as any });
+                    setConfigDialog({ platformId: platform.id, fields: [...platform.fields] });
                   }}
                 >
                   {configured ? (

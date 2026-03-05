@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangleIcon,
   LayoutIcon,
   Loader2Icon,
   MoreHorizontalIcon,
@@ -115,6 +116,19 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 rounded-xl" />
           ))}
+        </div>
+      ) : workflowsQuery.isError ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-20 text-muted-foreground gap-4">
+          <AlertTriangleIcon className="h-12 w-12 text-destructive opacity-60" />
+          <div className="text-center">
+            <p className="font-medium text-destructive">Failed to load workflows</p>
+            <p className="text-sm mt-1">
+              {workflowsQuery.error?.message ?? "An unexpected error occurred."}
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => workflowsQuery.refetch()}>
+            Try Again
+          </Button>
         </div>
       ) : workflows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-muted-foreground gap-4">

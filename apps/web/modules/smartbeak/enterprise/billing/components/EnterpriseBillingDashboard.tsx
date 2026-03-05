@@ -411,6 +411,19 @@ export function EnterpriseBillingDashboard({
 
             {tiersQuery.isLoading ? (
               <LoadingSkeleton rows={3} />
+            ) : tiersQuery.isError ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                <div className="text-center">
+                  <p className="font-medium text-destructive text-sm">Failed to load plans</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {tiersQuery.error?.message ?? "An unexpected error occurred."}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => tiersQuery.refetch()}>
+                  Try Again
+                </Button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {tiersQuery.data?.tiers.map((tier) => {

@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@repo/ui/components/dropdown-menu";
-import { toast, toastError } from "@repo/ui/components/toast";
+import { toastSuccess, toastError } from "@repo/ui/components/toast";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
@@ -50,7 +50,7 @@ export function MediaLibraryView({
         queryClient.invalidateQueries({
           queryKey: orpc.smartbeak.media.list.key(),
         });
-        toast({ title: "Media deleted" });
+        toastSuccess("Media deleted");
       },
       onError: (err) => {
         toastError("Error", err.message);
@@ -78,7 +78,7 @@ export function MediaLibraryView({
       queryClient.invalidateQueries({
         queryKey: orpc.smartbeak.media.list.key(),
       });
-      toast({ title: "Upload complete", description: file.name });
+      toastSuccess("Upload complete", file.name);
     } catch {
       toastError("Upload failed");
     } finally {
@@ -90,7 +90,7 @@ export function MediaLibraryView({
   const copyUrl = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      toast({ title: "URL copied to clipboard" });
+      toastSuccess("URL copied to clipboard");
     } catch {
       toastError("Copy failed", "Could not copy URL to clipboard.");
     }
