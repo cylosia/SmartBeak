@@ -1,7 +1,7 @@
 import {
 	createOpenAI,
 	textModel as globalTextModel,
-	type LanguageModelV1,
+	type LanguageModel,
 } from "@repo/ai";
 import { getIntegrationByProvider } from "@repo/database";
 import { decrypt } from "@repo/utils";
@@ -15,7 +15,7 @@ const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET ?? "";
  */
 export async function resolveTextModel(
 	orgId: string,
-): Promise<LanguageModelV1> {
+): Promise<LanguageModel> {
 	if (!ENCRYPTION_SECRET) {
 		return globalTextModel;
 	}
