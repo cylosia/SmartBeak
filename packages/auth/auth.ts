@@ -38,7 +38,6 @@ const getLocaleFromRequest = (request?: Request) => {
 
 const appUrl = getBaseUrl();
 
-// #region agent log
 const trustedOrigins = [appUrl];
 if (process.env.VERCEL_URL) {
 	trustedOrigins.push(`https://${process.env.VERCEL_URL}`);
@@ -50,8 +49,6 @@ if (process.env.VERCEL_BRANCH_URL) {
 	trustedOrigins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
 }
 const uniqueOrigins = [...new Set(trustedOrigins)];
-console.log('[SmartBeak-Debug] auth.ts module loaded — deployment canary', { appUrl, trustedOrigins: uniqueOrigins, enableSignup: config.enableSignup, timestamp: new Date().toISOString() });
-// #endregion
 
 export const auth = betterAuth({
 	baseURL: appUrl,
@@ -192,32 +189,16 @@ export const auth = betterAuth({
 			{ user: { email, name }, url },
 			request,
 		) => {
-			// #region agent log
-			console.log('[SmartBeak-Debug] sendVerificationEmail ENTERED', { email, hasName: !!name, hasUrl: !!url, hasRequest: !!request });
-			// #endregion
-			try {
-				const locale = getLocaleFromRequest(request);
-				// #region agent log
-				console.log('[SmartBeak-Debug] sendVerificationEmail locale resolved', { locale });
-				// #endregion
-				await sendEmail({
-					to: email,
-					templateId: "emailVerification",
-					context: {
-						url,
-						name,
-					},
-					locale,
-				});
-				// #region agent log
-				console.log('[SmartBeak-Debug] sendVerificationEmail completed OK');
-				// #endregion
-			} catch (verifyErr) {
-				// #region agent log
-				console.error('[SmartBeak-Debug] sendVerificationEmail THREW', { error: String(verifyErr), stack: (verifyErr as Error)?.stack?.slice(0, 500) });
-				// #endregion
-				throw verifyErr;
-			}
+			const locale = getLocaleFromRequest(request);
+			await sendEmail({
+				to: email,
+				templateId: "emailVerification",
+				context: {
+					url,
+					name,
+				},
+				locale,
+			});
 		},
 	},
 	socialProviders: {
@@ -285,9 +266,6 @@ export const auth = betterAuth({
 	],
 	onAPIError: {
 		onError(error, ctx) {
-			// #region agent log
-			console.error('[SmartBeak-Debug] onAPIError', { message: (error as Error)?.message, code: (error as any)?.code, status: (error as any)?.status, ctx: JSON.stringify(ctx)?.slice(0, 300) });
-			// #endregion
 			logger.error(error, { ctx });
 		},
 	},
