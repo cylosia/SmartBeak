@@ -3,8 +3,11 @@
  *
  * GET /api/health
  *
- * Returns the health status of all infrastructure components.
+ * Returns the health status of infrastructure components.
  * Used by load balancers, uptime monitors, and SOC2 compliance tooling.
+ *
+ * Internal details (latency, error messages) are omitted to prevent
+ * information disclosure to unauthenticated callers.
  */
 
 import { NextResponse } from "next/server";
@@ -23,16 +26,6 @@ export async function GET() {
     {
       status,
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version ?? "unknown",
-      services: {
-        database: {
-          healthy: dbHealth.healthy,
-          latencyMs: dbHealth.latencyMs,
-        },
-        cache: {
-          healthy: true,
-        },
-      },
     },
     { status: httpStatus },
   );

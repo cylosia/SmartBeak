@@ -4,7 +4,6 @@ interface AppSessionData {
 	id: string;
 	userId: string;
 	expiresAt: Date;
-	token: string;
 	createdAt: Date;
 	updatedAt: Date;
 	ipAddress?: string | null;

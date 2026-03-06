@@ -95,7 +95,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 	const polarWebhookSecret = process.env.POLAR_WEBHOOK_SECRET as string;
 
 	if (!polarWebhookSecret) {
-		return new Response("Missing env variable POLAR_WEBHOOK_SECRET", {
+		return new Response("Internal server error.", {
 			status: 500,
 		});
 	}

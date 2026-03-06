@@ -20,8 +20,8 @@ export const useSessionQuery = () => {
 
 			return data;
 		},
-		staleTime: Number.POSITIVE_INFINITY,
-		refetchOnWindowFocus: false,
+		staleTime: 5 * 60 * 1000,
+		refetchOnWindowFocus: true,
 		retry: false,
 		enabled: config.saas.enabled,
 	});

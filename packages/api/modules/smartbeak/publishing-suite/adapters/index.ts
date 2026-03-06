@@ -6,6 +6,32 @@
 
 import { fetchWithTimeout } from "@repo/utils";
 
+function validateExternalUrl(urlStr: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    throw new Error(`Invalid URL: ${urlStr}`);
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error(`URL must use HTTP(S) protocol: ${urlStr}`);
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  const blocked =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("172.") ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("169.254.") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".internal");
+  if (blocked) {
+    throw new Error("URL must not point to internal or private network addresses");
+  }
+}
+
 export interface PublishPayload {
   title: string;
   body: string;
@@ -344,6 +370,7 @@ export const wordpressAdapter: PublishAdapter = {
       username: string;
       appPassword: string;
     };
+    validateExternalUrl(siteUrl);
     const credentials = Buffer.from(`${username}:${appPassword}`).toString("base64");
     const res = await fetchWithTimeout(`${siteUrl}/wp-json/wp/v2/posts`, {
       method: "POST",

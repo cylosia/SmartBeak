@@ -128,6 +128,12 @@ function topologicalSort(graph: WorkflowGraph): WorkflowNode[] {
     }
   }
 
+  if (sorted.length !== nodes.length) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "Workflow graph contains a cycle. Please remove circular dependencies between agents.",
+    });
+  }
+
   return sorted;
 }
 
@@ -276,8 +282,7 @@ export async function* executeWorkflow(
 
       agentOutputs[agent.id] = fullOutput;
 
-      // Accumulate context for the next agent
-      accumulatedContext = `[${agent.name}]:\n${fullOutput}`;
+      accumulatedContext += `${accumulatedContext ? "\n\n" : ""}[${agent.name}]:\n${fullOutput}`;
 
       yield {
         type: "node_complete",
@@ -359,7 +364,7 @@ async function compressAndUpdateMemory(
   try {
     const { compressSessionIntoMemory } = await import("./agent-memory");
     await compressSessionIntoMemory(agentId, existingMemory, output, input);
-  } catch {
-    // Memory update is best-effort; never block the main execution
+  } catch (err) {
+    logger.warn(`[agent-executor] Memory compression failed for agent ${agentId}:`, err);
   }
 }

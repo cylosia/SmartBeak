@@ -1,27 +1,29 @@
 import type { SendEmailHandler } from "../types";
 import { send as consoleSend } from "./console";
 
-function getProvider(): SendEmailHandler {
+async function getProvider(): Promise<SendEmailHandler> {
   const provider = process.env.MAIL_PROVIDER ?? "console";
 
   switch (provider) {
     case "resend":
-      return require("./resend").send;
+      return (await import("./resend")).send;
     case "postmark":
-      return require("./postmark").send;
+      return (await import("./postmark")).send;
     case "nodemailer":
-      return require("./nodemailer").send;
+      return (await import("./nodemailer")).send;
     case "mailgun":
-      return require("./mailgun").send;
+      return (await import("./mailgun")).send;
     case "plunk":
-      return require("./plunk").send;
+      return (await import("./plunk")).send;
     case "console":
+      return consoleSend;
     default:
+      console.warn(`[mail] Unknown MAIL_PROVIDER "${provider}", falling back to console.`);
       return consoleSend;
   }
 }
 
 export const send: SendEmailHandler = async (params) => {
-  const provider = getProvider();
+  const provider = await getProvider();
   return provider(params);
 };

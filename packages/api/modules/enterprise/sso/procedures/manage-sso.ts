@@ -34,6 +34,7 @@ export const listSsoProviders = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "sso");
 
     const providers = await getSsoProvidersForOrg(org.id);
 
@@ -100,13 +101,13 @@ export const upsertSsoProviderProcedure = protectedProcedure
     const metadata: Record<string, unknown> =
       input.type === "saml"
         ? {
-            entityId: (input.config as { entityId: string }).entityId,
-            ssoUrl: (input.config as { ssoUrl: string }).ssoUrl,
+            entityId: input.config.entityId,
+            ssoUrl: input.config.ssoUrl,
           }
         : {
-            issuer: (input.config as { issuer: string }).issuer,
-            clientId: (input.config as { clientId: string }).clientId,
-            scopes: (input.config as { scopes: string[] }).scopes,
+            issuer: input.config.issuer,
+            clientId: input.config.clientId,
+            scopes: input.config.scopes,
           };
 
     const provider = await upsertSsoProvider({
@@ -149,6 +150,7 @@ export const updateSsoStatusProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "sso");
 
     const provider = await getSsoProviderById(input.providerId);
     if (!provider || provider.orgId !== org.id) {
@@ -158,6 +160,9 @@ export const updateSsoStatusProcedure = protectedProcedure
     }
 
     const updated = await updateSsoProviderStatus(input.providerId, input.status);
+    if (!updated) {
+      throw new ORPCError("NOT_FOUND", { message: "Failed to update SSO provider status." });
+    }
 
     await audit({
       orgId: org.id,
@@ -168,7 +173,6 @@ export const updateSsoStatusProcedure = protectedProcedure
       details: { status: input.status },
     });
 
-    if (!updated) return { success: true };
     const { encryptedConfig: _, ...safeProvider } = updated;
     return { provider: safeProvider };
   });
@@ -189,6 +193,7 @@ export const deleteSsoProviderProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "sso");
 
     const provider = await getSsoProviderById(input.providerId);
     if (!provider || provider.orgId !== org.id) {

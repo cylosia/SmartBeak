@@ -162,7 +162,8 @@ export async function getReferralsByReferrer(referrerId: string) {
     .select()
     .from(referrals)
     .where(eq(referrals.referrerId, referrerId))
-    .orderBy(desc(referrals.createdAt));
+    .orderBy(desc(referrals.createdAt))
+    .limit(200);
 }
 
 export async function getReferralByCode(code: string) {

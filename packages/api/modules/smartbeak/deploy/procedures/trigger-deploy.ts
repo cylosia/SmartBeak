@@ -58,6 +58,12 @@ export const triggerDeploy = protectedProcedure
       });
     }
 
+    if (domain.status === "pending" || domain.status === "building") {
+      throw new ORPCError("CONFLICT", {
+        message: "A deployment is already in progress for this domain.",
+      });
+    }
+
     const themeId = input.themeId ?? domain.themeId ?? "landing-leadgen";
     const existingShards = await getSiteShardsForDomain(domain.id);
     const nextVersion = existingShards.length > 0

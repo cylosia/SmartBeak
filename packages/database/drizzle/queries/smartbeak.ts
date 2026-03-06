@@ -255,11 +255,16 @@ export async function updateContentItem(
     version: number;
     updatedBy: string;
   }>,
+  expectedVersion?: number,
 ) {
+  const conditions = [eq(contentItems.id, id)];
+  if (expectedVersion !== undefined) {
+    conditions.push(eq(contentItems.version, expectedVersion));
+  }
   return db
     .update(contentItems)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(contentItems.id, id))
+    .where(and(...conditions))
     .returning();
 }
 

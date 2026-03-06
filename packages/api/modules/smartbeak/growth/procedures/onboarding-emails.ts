@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { sendEmail } from "@repo/mail";
-import { getBaseUrl } from "@repo/utils";
+import { escapeHtml, getBaseUrl } from "@repo/utils";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
@@ -11,7 +11,7 @@ const ONBOARDING_SEQUENCE = [
     delayDays: 0,
     body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Welcome${name ? `, ${name}` : ""}! 🎉</h1>
+        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Welcome${name ? `, ${escapeHtml(name)}` : ""}! 🎉</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           You've just unlocked the most powerful AI content publishing platform for domain portfolio owners.
           Here's your 3-step quick start:
@@ -34,7 +34,7 @@ const ONBOARDING_SEQUENCE = [
     delayDays: 2,
     body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Unlock your SEO potential${name ? `, ${name}` : ""}</h1>
+        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Unlock your SEO potential${name ? `, ${escapeHtml(name)}` : ""}</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           SmartBeak's SEO Intelligence module helps you find high-value keywords, track decay signals,
           and generate AI-powered content ideas that actually rank.
@@ -56,7 +56,7 @@ const ONBOARDING_SEQUENCE = [
     delayDays: 5,
     body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Your Sell-Ready Score${name ? `, ${name}` : ""}</h1>
+        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Your Sell-Ready Score${name ? `, ${escapeHtml(name)}` : ""}</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           SmartBeak's Diligence Engine automatically checks ownership, legal, financial, and content signals
           to give you a composite Sell-Ready Score for each domain.
@@ -100,7 +100,7 @@ export const triggerOnboardingSequenceProcedure = protectedProcedure
       });
       results.push({ step: 1, sent: true });
     } catch (err) {
-      results.push({ step: 1, sent: false, error: String(err) });
+      results.push({ step: 1, sent: false, error: "Failed to send email" });
     }
 
     return {

@@ -50,10 +50,8 @@ export async function hasEnterpriseFeature(
   orgId: string,
   feature: FeatureKey,
 ): Promise<boolean> {
-  try {
-    await requireEnterpriseFeature(orgId, feature);
-    return true;
-  } catch {
-    return false;
-  }
+  const orgTier = await cachedGetOrgTier(orgId, () => getOrgTier(orgId)) as Awaited<ReturnType<typeof getOrgTier>>;
+  if (!orgTier?.tier) return false;
+  const features = orgTier.tier.features as EnterpriseTierFeatures | null;
+  return !!features?.[feature];
 }

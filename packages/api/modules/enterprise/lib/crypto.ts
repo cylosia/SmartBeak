@@ -13,7 +13,10 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96-bit IV for GCM
 const TAG_LENGTH = 16;
 
+let cachedKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
+  if (cachedKey) return cachedKey;
   const key = process.env.ENTERPRISE_ENCRYPTION_KEY;
   if (!key) {
     throw new Error(
@@ -22,8 +25,9 @@ function getEncryptionKey(): Buffer {
   }
   const buf = Buffer.from(key, "hex");
   if (buf.length !== 32) {
-    throw new ORPCError("PRECONDITION_FAILED", { message: "ENTERPRISE_ENCRYPTION_KEY must be a 32-byte hex string (64 hex chars)." });
+    throw new ORPCError("PRECONDITION_FAILED", { message: "Encryption key misconfigured." });
   }
+  cachedKey = buf;
   return buf;
 }
 

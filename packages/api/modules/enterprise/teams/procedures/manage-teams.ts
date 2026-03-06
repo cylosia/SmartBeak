@@ -17,6 +17,7 @@ import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
+import { requireEnterpriseFeature } from "../../lib/feature-gate";
 import { audit } from "../../lib/audit";
 import { createTeamActivity } from "@repo/database";
 
@@ -31,6 +32,7 @@ export const listTeams = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
     const teams = await getTeamsForOrg(org.id);
     return { teams };
   });
@@ -52,8 +54,12 @@ export const createTeamProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const slug = slugify(input.name, { lowercase: true });
+    if (!slug) {
+      throw new ORPCError("BAD_REQUEST", { message: "Team name must produce a valid URL slug." });
+    }
     const existing = await getTeamBySlug(org.id, slug);
     if (existing) {
       throw new ORPCError("CONFLICT", {
@@ -99,16 +105,28 @@ export const updateTeamProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const team = await getTeamById(input.teamId);
     if (!team || team.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Team not found." });
     }
 
-    const updated = await updateTeam(input.teamId, {
-      name: input.name,
+    const updateData: { name?: string; slug?: string; description?: string | null } = {
       description: input.description,
-    });
+    };
+    if (input.name) {
+      updateData.name = input.name;
+      const newSlug = slugify(input.name, { lowercase: true });
+      if (newSlug && newSlug !== team.slug) {
+        const slugConflict = await getTeamBySlug(org.id, newSlug);
+        if (slugConflict && slugConflict.id !== input.teamId) {
+          throw new ORPCError("CONFLICT", { message: `A team with the slug "${newSlug}" already exists.` });
+        }
+        updateData.slug = newSlug;
+      }
+    }
+    const updated = await updateTeam(input.teamId, updateData);
 
     await audit({
       orgId: org.id,
@@ -138,6 +156,7 @@ export const deleteTeamProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const team = await getTeamById(input.teamId);
     if (!team || team.orgId !== org.id) {

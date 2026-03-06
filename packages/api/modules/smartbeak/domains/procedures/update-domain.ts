@@ -19,7 +19,7 @@ export const updateDomainProcedure = protectedProcedure
       id: z.string().uuid(),
       name: z.string().min(1).max(255).optional(),
       status: z.enum(["active", "pending", "suspended", "deployed"]).optional(),
-      themeId: z.string().optional(),
+      themeId: z.string().min(1).optional(),
       deployedUrl: z.string().url().refine(
         (v) => v.startsWith("https://") || v.startsWith("http://"),
         { message: "URL must use http or https" },

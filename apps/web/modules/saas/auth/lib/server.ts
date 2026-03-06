@@ -10,7 +10,6 @@ interface AppSession {
 		id: string;
 		userId: string;
 		expiresAt: Date;
-		token: string;
 		createdAt: Date;
 		updatedAt: Date;
 		ipAddress?: string | null;
@@ -45,7 +44,13 @@ export const getSession = cache(async (): Promise<AppSession | null> => {
 		},
 	});
 
-	return session as AppSession | null;
+	if (!session) return null;
+
+	const { token: _token, ...safeSession } = session.session as Record<string, unknown>;
+	return {
+		...session,
+		session: safeSession,
+	} as AppSession;
 });
 
 export const getActiveOrganization = cache(
@@ -59,7 +64,10 @@ export const getActiveOrganization = cache(
 			});
 
 			return activeOrganization as ActiveOrganization;
-		} catch {
+		} catch (err) {
+			if (process.env.NODE_ENV !== "production") {
+				console.warn("[auth] getActiveOrganization failed:", err);
+			}
 			return null;
 		}
 	},
@@ -73,7 +81,10 @@ export const getOrganizationList = cache(
 			});
 
 			return organizationList as Organization[];
-		} catch {
+		} catch (err) {
+			if (process.env.NODE_ENV !== "production") {
+				console.warn("[auth] getOrganizationList failed:", err);
+			}
 			return [];
 		}
 	},
@@ -87,7 +98,10 @@ export const getUserAccounts = cache(
 			});
 
 			return userAccounts as { providerId: string; accountId: string }[];
-		} catch {
+		} catch (err) {
+			if (process.env.NODE_ENV !== "production") {
+				console.warn("[auth] getUserAccounts failed:", err);
+			}
 			return [];
 		}
 	},
@@ -101,7 +115,10 @@ export const getUserPasskeys = cache(
 			});
 
 			return userPasskeys as { id: string; name?: string | null; createdAt: Date }[];
-		} catch {
+		} catch (err) {
+			if (process.env.NODE_ENV !== "production") {
+				console.warn("[auth] getUserPasskeys failed:", err);
+			}
 			return [];
 		}
 	},
@@ -110,7 +127,10 @@ export const getUserPasskeys = cache(
 export const getInvitation = cache(async (id: string) => {
 	try {
 		return await getInvitationById(id);
-	} catch {
+	} catch (err) {
+		if (process.env.NODE_ENV !== "production") {
+			console.warn("[auth] getInvitation failed:", err);
+		}
 		return null;
 	}
 });

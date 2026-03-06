@@ -20,9 +20,7 @@ const link = new RPCLink({
 				return;
 			}
 
-			if (process.env.NODE_ENV === "development") {
-				logger.error("[oRPC]", error);
-			}
+			logger.error("[oRPC]", error);
 		}),
 	],
 });

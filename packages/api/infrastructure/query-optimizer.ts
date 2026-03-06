@@ -105,7 +105,7 @@ export async function timedQuery<T>(
   try {
     const result = await fn();
     const elapsed = performance.now() - start;
-    if (elapsed > slowThresholdMs && process.env.NODE_ENV !== "production") {
+    if (elapsed > slowThresholdMs) {
       logger.warn(
         `[SlowQuery] "${label}" took ${elapsed.toFixed(1)}ms (threshold: ${slowThresholdMs}ms)`,
       );
@@ -113,9 +113,7 @@ export async function timedQuery<T>(
     return result;
   } catch (err) {
     const elapsed = performance.now() - start;
-    if (process.env.NODE_ENV !== "production") {
-      logger.error(`[QueryError] "${label}" failed after ${elapsed.toFixed(1)}ms:`, err);
-    }
+    logger.error(`[QueryError] "${label}" failed after ${elapsed.toFixed(1)}ms:`, err);
     throw err;
   }
 }

@@ -234,7 +234,7 @@ export async function updateSession(
       ...(data.errorMessage !== undefined && {
         errorMessage: data.errorMessage,
       }),
-      completedAt: data.completedAt ?? new Date(),
+      ...(data.completedAt !== undefined && { completedAt: data.completedAt }),
     })
     .where(eq(aiAgentSessions.id, sessionId))
     .returning();
@@ -328,7 +328,8 @@ export async function getAgentAnalytics(
     .from(aiAgentSessions)
     .where(and(...conditions))
     .groupBy(sql`DATE(${aiAgentSessions.createdAt})`)
-    .orderBy(sql`DATE(${aiAgentSessions.createdAt})`);
+    .orderBy(sql`DATE(${aiAgentSessions.createdAt})`)
+    .limit(90);
 
   return {
     totals: totals ?? {

@@ -61,9 +61,9 @@ export const updateContentItemProcedure = protectedProcedure
         updateData.status === "published" && existing.status !== "published"
           ? new Date()
           : undefined,
-    });
+    }, existing.version);
     if (!item) {
-      throw new ORPCError("CONFLICT", { message: "Content was modified or deleted." });
+      throw new ORPCError("CONFLICT", { message: "Content was modified concurrently. Please reload and try again." });
     }
     await audit({
       orgId: org.id,

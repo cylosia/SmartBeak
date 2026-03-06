@@ -290,12 +290,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				webhookId,
 			});
 
-			return new Response(
-				`Webhook error: ${error instanceof Error ? error.message : ""}`,
-				{
-					status: 400,
-				},
-			);
+			return new Response("Webhook processing error.", {
+				status: 400,
+			});
 		}
 	} catch (error) {
 		logger.error("Error processing webhook", {

@@ -10,7 +10,7 @@ if (!databaseUrl) {
 
 const pool = new Pool({
 	connectionString: databaseUrl,
-	max: 20,
+	max: Number.parseInt(process.env.DATABASE_POOL_MAX ?? "20", 10),
 	idleTimeoutMillis: 30_000,
 	connectionTimeoutMillis: 5_000,
 });

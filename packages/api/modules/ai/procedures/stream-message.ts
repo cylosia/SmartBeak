@@ -22,7 +22,7 @@ export const streamMessage = protectedProcedure
 			messages: z.array(
 				z.object({
 					id: z.string(),
-					role: z.enum(["user", "assistant", "system"]),
+					role: z.enum(["user", "assistant"]),
 					content: z.string().max(32_000),
 					parts: z.array(z.record(z.unknown()).refine(
 						(v) => JSON.stringify(v).length <= 10_000,

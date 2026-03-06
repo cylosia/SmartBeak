@@ -4,6 +4,7 @@ import {
   getDomainById,
 } from "@repo/database";
 import { emailSeriesInputSchema } from "@repo/database";
+import { logger } from "@repo/logs";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
@@ -68,7 +69,8 @@ export const createEmailSeriesProcedure = protectedProcedure
         }),
       });
       if (!res.ok) {
-        // Non-fatal — jobs are still scheduled; error will surface when job executes
+        const errBody = await res.text().catch(() => "");
+        logger.error(`[email-series] Failed to send first step via Resend (${res.status}):`, errBody);
       }
     }
 

@@ -199,7 +199,7 @@ export const getUsageWithLimitsProcedure = protectedProcedure
     const usageWithLimits = Object.entries(limitMap).map(([metric, limit]) => {
       const record = usageRecords.find((r) => r.metric === metric);
       const used = record ? Number(record.value) : 0;
-      const pct = limit === -1 ? 0 : Math.round((used / limit) * 100);
+      const pct = limit <= 0 ? 0 : Math.round((used / limit) * 100);
       return {
         metric,
         label: metricLabels[metric] ?? metric,

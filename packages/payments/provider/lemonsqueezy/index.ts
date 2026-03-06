@@ -113,7 +113,7 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 		const text = await req.text();
 		const webhookSecret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
 		if (!webhookSecret) {
-			return new Response("Missing webhook secret.", { status: 500 });
+			return new Response("Internal server error.", { status: 500 });
 		}
 		const hmac = createHmac("sha256", webhookSecret);
 		const digest = Buffer.from(hmac.update(text).digest("hex"), "hex");

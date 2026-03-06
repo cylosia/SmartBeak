@@ -222,10 +222,10 @@ export const cache = {
     fn: () => Promise<T>,
     ttlSeconds: number,
   ): Promise<T> {
-    const cached = await cache.get<T>(key);
-    if (cached !== null) return cached;
+    const wrapped = await cache.get<{ __v: T }>(key);
+    if (wrapped !== null && "__v" in wrapped) return wrapped.__v;
     const value = await fn();
-    await cache.set(key, value, ttlSeconds);
+    await cache.set(key, { __v: value }, ttlSeconds);
     return value;
   },
 };

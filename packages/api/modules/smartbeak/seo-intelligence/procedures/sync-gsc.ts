@@ -179,7 +179,7 @@ export const syncGsc = protectedProcedure
 
     return {
       keywordsImported: imported.length,
-      keywordsUpdated: keywordRows.length - imported.length,
+      keywordsUpdated: Math.max(0, keywordRows.length - imported.length),
       seoScoreUpdated: true,
       newScore: score,
     };

@@ -18,6 +18,7 @@ import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
+import { requireEnterpriseFeature } from "../../lib/feature-gate";
 import { audit } from "../../lib/audit";
 
 export const listTeamMembers = protectedProcedure
@@ -36,6 +37,7 @@ export const listTeamMembers = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const team = await getTeamById(input.teamId);
     if (!team || team.orgId !== org.id) {
@@ -64,9 +66,9 @@ export const addTeamMemberProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
-    // Verify the target user is an org member before adding to team.
-    const targetMembership = await requireOrgMembership(
+    await requireOrgMembership(
       org.supastarterOrgId,
       input.userId,
     );
@@ -121,6 +123,7 @@ export const removeTeamMemberProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const team = await getTeamById(input.teamId);
     if (!team || team.orgId !== org.id) {
@@ -174,6 +177,7 @@ export const updateTeamMemberRoleProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const team = await getTeamById(input.teamId);
     if (!team || team.orgId !== org.id) {
@@ -231,6 +235,7 @@ export const listTeamActivityProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "teams");
 
     const team = await getTeamById(input.teamId);
     if (!team || team.orgId !== org.id) {

@@ -18,7 +18,16 @@ import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
+import { requireEnterpriseFeature } from "../../lib/feature-gate";
 import { audit } from "../../lib/audit";
+
+function escapeCsvField(value: string): string {
+  const escaped = value.replace(/"/g, '""');
+  if (/^[=+\-@\t\r]/.test(escaped)) {
+    return `"'${escaped}"`;
+  }
+  return `"${escaped}"`;
+}
 
 export const searchAuditLogsProcedure = protectedProcedure
   .route({
@@ -43,6 +52,7 @@ export const searchAuditLogsProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "auditLog");
 
     const { items, total } = await searchAuditEvents(org.id, {
       query: input.query,
@@ -77,12 +87,13 @@ export const exportAuditLogsProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "auditLog");
 
     const events = await getAuditEventsForExport(org.id, {
       startDate: input.startDate ? new Date(input.startDate) : undefined,
       endDate: input.endDate ? new Date(input.endDate) : undefined,
       entityType: input.entityType,
-      limit: 10000,
+      limit: 5000,
     });
 
     await audit({
@@ -124,10 +135,10 @@ export const exportAuditLogsProcedure = protectedProcedure
         e.entityType,
         e.entityId ?? "",
         e.actorId ?? "",
-        e.details ? JSON.stringify(e.details).replace(/"/g, '""') : "",
+        e.details ? JSON.stringify(e.details) : "",
         e.createdAt.toISOString(),
       ]
-        .map((v) => `"${v}"`)
+        .map((v) => escapeCsvField(String(v)))
         .join(","),
     );
     const csv = [headers.join(","), ...rows].join("\n");
@@ -151,6 +162,7 @@ export const getAuditRetentionProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "auditLog");
 
     const retention = await getAuditRetentionForOrg(org.id);
 
@@ -192,12 +204,20 @@ export const setAuditRetentionProcedure = protectedProcedure
           "Must be a valid cron expression",
         )
         .optional(),
-      exportRecipients: z.string().max(1000).optional(),
+      exportRecipients: z.string().max(1000).optional().refine(
+        (val) => {
+          if (!val) return true;
+          const emails = val.split(",").map((e) => e.trim());
+          return emails.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+        },
+        { message: "exportRecipients must be a comma-separated list of valid email addresses" },
+      ),
     }),
   )
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "auditLog");
 
     const retention = await upsertAuditRetention({
       orgId: org.id,

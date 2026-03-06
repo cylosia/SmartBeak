@@ -27,6 +27,13 @@ export const getCalendarProcedure = protectedProcedure
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
 
+    const fromDate = new Date(input.from);
+    const toDate = new Date(input.to);
+    const maxRangeMs = 93 * 24 * 60 * 60 * 1000;
+    if (toDate.getTime() - fromDate.getTime() > maxRangeMs) {
+      throw new ORPCError("BAD_REQUEST", { message: "Date range must not exceed 93 days." });
+    }
+
     const domain = await getDomainById(input.domainId);
     if (!domain || domain.orgId !== org.id) {
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });

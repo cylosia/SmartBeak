@@ -36,7 +36,7 @@ export async function countAllOrganizations({ query }: { query?: string }) {
 	const result = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(organization)
-		.where(query ? or(ilike(organization.name, `%${query}%`)) : undefined);
+		.where(query ? or(ilike(organization.name, `%${escapeLikePattern(query)}%`)) : undefined);
 	return Number(result[0]?.count ?? 0);
 }
 

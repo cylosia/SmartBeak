@@ -15,7 +15,7 @@ import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 function getEncryptionSecret(): string {
   const secret = process.env.SMARTBEAK_ENCRYPTION_KEY;
   if (!secret) {
-    throw new ORPCError("PRECONDITION_FAILED", { message: "SMARTBEAK_ENCRYPTION_KEY is not configured." });
+    throw new ORPCError("PRECONDITION_FAILED", { message: "Encryption key not configured. Contact your administrator." });
   }
   return secret;
 }
@@ -167,15 +167,22 @@ export const testIntegration = protectedProcedure
     }
 
     if (input.provider === "openai") {
-      const res = await fetch("https://api.openai.com/v1/models", {
-        headers: { Authorization: `Bearer ${config.apiKey}` },
-      });
-      if (!res.ok) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: `OpenAI API key test failed (${res.status}). Please verify your API key.`,
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      try {
+        const res = await fetch("https://api.openai.com/v1/models", {
+          headers: { Authorization: `Bearer ${config.apiKey}` },
+          signal: controller.signal,
         });
+        if (!res.ok) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: `OpenAI API key test failed (${res.status}). Please verify your API key.`,
+          });
+        }
+        return { success: true, message: "OpenAI connection successful." };
+      } finally {
+        clearTimeout(timeout);
       }
-      return { success: true, message: "OpenAI connection successful." };
     }
 
     if (input.provider === "google_search_console") {

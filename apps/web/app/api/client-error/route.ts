@@ -18,19 +18,30 @@ function isRateLimited(ip: string): boolean {
   return bucket.count > RATE_LIMIT;
 }
 
+const globalRef = globalThis as typeof globalThis & { __clientErrorCleanupInterval?: ReturnType<typeof setInterval> };
+if (!globalRef.__clientErrorCleanupInterval) {
+  globalRef.__clientErrorCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, bucket] of ipBuckets) {
+      if (now >= bucket.resetAt) {
+        ipBuckets.delete(key);
+      }
+    }
+  }, 60_000);
+}
+
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   if (isRateLimited(ip)) {
     return new Response(null, { status: 429 });
   }
 
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_BODY_BYTES) {
-    return new Response(null, { status: 413 });
-  }
-
   try {
-    const body = await request.json();
+    const raw = await request.text();
+    if (raw.length > MAX_BODY_BYTES) {
+      return new Response(null, { status: 413 });
+    }
+    const body = JSON.parse(raw);
     const message = typeof body.message === "string" ? body.message.slice(0, 500) : "Unknown";
     const stack = typeof body.stack === "string" ? body.stack.slice(0, 2000) : undefined;
     const componentStack = typeof body.componentStack === "string" ? body.componentStack.slice(0, 2000) : undefined;

@@ -1,5 +1,14 @@
 import type { ThemeOption } from "@shared/schema";
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 interface ThemeConfig {
   name: string;
   description: string;
@@ -65,8 +74,8 @@ function generateAffiliateComparison(domainName: string): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${domainName} - Best Product Comparisons</title>
-<meta name="description" content="Compare top products side by side. Find the best deals and honest reviews at ${domainName}.">
+<title>${escapeHtml(domainName)} - Best Product Comparisons</title>
+<meta name="description" content="Compare top products side by side. Find the best deals and honest reviews at ${escapeHtml(domainName)}.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;color:#1e293b;background:#f8fafc}
@@ -107,7 +116,7 @@ function generateAffiliateComparison(domainName: string): string {
 </head>
 <body>
 <nav class="nav"><div class="container"><div class="nav-inner">
-<div class="logo">${domainName}</div>
+<div class="logo">${escapeHtml(domainName)}</div>
 <ul class="nav-links"><li><a href="#">Reviews</a></li><li><a href="#">Categories</a></li><li><a href="#">Deals</a></li><li><a href="#">About</a></li></ul>
 </div></div></nav>
 <section class="hero"><div class="container">
@@ -134,7 +143,7 @@ function generateAffiliateComparison(domainName: string): string {
 </tbody></table>
 </div></section>
 <footer class="footer"><div class="container">
-<p style="font-size:1.25rem;color:#fff;font-weight:700;margin-bottom:16px">${domainName}</p>
+<p style="font-size:1.25rem;color:#fff;font-weight:700;margin-bottom:16px">${escapeHtml(domainName)}</p>
 <p>Honest reviews and comparisons you can trust.</p>
 <p style="margin-top:24px;font-size:.875rem">Built with SmartBeak SmartDeploy</p>
 </div></footer>
@@ -146,8 +155,8 @@ function generateAuthoritySite(domainName: string): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${domainName} - Expert Knowledge Hub</title>
-<meta name="description" content="${domainName} is your authoritative source for in-depth articles, research, and expert insights.">
+<title>${escapeHtml(domainName)} - Expert Knowledge Hub</title>
+<meta name="description" content="${escapeHtml(domainName)} is your authoritative source for in-depth articles, research, and expert insights.">
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;color:#1e293b;background:#fff}
@@ -190,7 +199,7 @@ function generateAuthoritySite(domainName: string): string {
 </head>
 <body>
 <nav class="nav"><div class="container"><div class="nav-inner">
-<div class="logo">${domainName}</div>
+<div class="logo">${escapeHtml(domainName)}</div>
 <ul class="nav-links"><li><a href="#">Articles</a></li><li><a href="#">Research</a></li><li><a href="#">Guides</a></li><li><a href="#">About</a></li></ul>
 </div></div></nav>
 <section class="hero"><div class="container">
@@ -209,7 +218,7 @@ function generateAuthoritySite(domainName: string): string {
 <div class="widget"><h3>Popular Topics</h3><ul><li><a href="#">Strategy & Leadership</a></li><li><a href="#">Data & Analytics</a></li><li><a href="#">Innovation & Technology</a></li><li><a href="#">Organizational Design</a></li><li><a href="#">Market Research</a></li></ul></div>
 </div>
 </div></div></section>
-<footer class="footer"><div class="container"><p>${domainName} &bull; Expert Knowledge Hub &bull; Built with SmartBeak SmartDeploy</p></div></footer>
+<footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Expert Knowledge Hub &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
 }
 
@@ -218,8 +227,8 @@ function generateLandingLeadgen(domainName: string): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${domainName} - Transform Your Business Today</title>
-<meta name="description" content="Discover how ${domainName} helps businesses grow faster with proven strategies and tools.">
+<title>${escapeHtml(domainName)} - Transform Your Business Today</title>
+<meta name="description" content="Discover how ${escapeHtml(domainName)} helps businesses grow faster with proven strategies and tools.">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Plus Jakarta Sans',sans-serif;color:#1e293b}
@@ -267,7 +276,7 @@ function generateLandingLeadgen(domainName: string): string {
 </head>
 <body>
 <nav class="nav"><div class="container"><div class="nav-inner">
-<div class="logo">${domainName}</div>
+<div class="logo">${escapeHtml(domainName)}</div>
 <ul class="nav-links"><li><a href="#">Features</a></li><li><a href="#">Pricing</a></li><li><a href="#">Testimonials</a></li></ul>
 <a href="#" class="nav-cta">Get Started</a>
 </div></div></nav>
@@ -295,7 +304,7 @@ function generateLandingLeadgen(domainName: string): string {
 <p>Join 10,000+ companies already growing with us.</p>
 <a href="#" class="cta-btn">Start Your Free Trial →</a>
 </div></section>
-<footer class="footer"><div class="container"><p>${domainName} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
+<footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
 }
 
@@ -304,8 +313,8 @@ function generateLocalBusiness(domainName: string): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${domainName} - Your Local Business</title>
-<meta name="description" content="${domainName} - Quality service, trusted by your community. Contact us today.">
+<title>${escapeHtml(domainName)} - Your Local Business</title>
+<meta name="description" content="${escapeHtml(domainName)} - Quality service, trusted by your community. Contact us today.">
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Open Sans',sans-serif;color:#1e293b}
@@ -352,7 +361,7 @@ function generateLocalBusiness(domainName: string): string {
 </head>
 <body>
 <nav class="nav"><div class="container"><div class="nav-inner">
-<div class="logo">${domainName}</div>
+<div class="logo">${escapeHtml(domainName)}</div>
 <ul class="nav-links"><li><a href="#">Services</a></li><li><a href="#">About</a></li><li><a href="#">Reviews</a></li><li><a href="#">Contact</a></li></ul>
 <a href="tel:+15551234567" class="phone">Call (555) 123-4567</a>
 </div></div></nav>
@@ -387,7 +396,7 @@ function generateLocalBusiness(domainName: string): string {
 <p>Contact us today for a free consultation and quote.</p>
 <a href="#" class="contact-btn">Request a Free Quote</a>
 </div></section>
-<footer class="footer"><div class="container"><p>${domainName} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
+<footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
 }
 
@@ -396,8 +405,8 @@ function generateMediaNewsletter(domainName: string): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${domainName} - Stories That Matter</title>
-<meta name="description" content="${domainName} delivers the most important stories, analysis, and perspectives. Subscribe to our newsletter.">
+<title>${escapeHtml(domainName)} - Stories That Matter</title>
+<meta name="description" content="${escapeHtml(domainName)} delivers the most important stories, analysis, and perspectives. Subscribe to our newsletter.">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;color:#1e293b;background:#fff}
@@ -449,7 +458,7 @@ function generateMediaNewsletter(domainName: string): string {
 </head>
 <body>
 <nav class="nav"><div class="container"><div class="nav-inner">
-<div class="logo">${domainName}</div>
+<div class="logo">${escapeHtml(domainName)}</div>
 <ul class="nav-links"><li><a href="#">Stories</a></li><li><a href="#">Topics</a></li><li><a href="#">Archive</a></li></ul>
 <a href="#" class="sub-btn">Subscribe</a>
 </div></div></nav>
@@ -474,7 +483,7 @@ function generateMediaNewsletter(domainName: string): string {
 </div>
 <div class="cta-bar"><h2>Never Miss a Story</h2><p>Join 25,000+ readers getting the best stories delivered to their inbox.</p><a href="#">Subscribe Now — It's Free</a></div>
 </div></section>
-<footer class="footer"><div class="container"><p>${domainName} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
+<footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
 }
 

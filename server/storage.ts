@@ -52,7 +52,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDomains(): Promise<Domain[]> {
-    return db.select().from(domains).orderBy(desc(domains.createdAt));
+    return db.select().from(domains).orderBy(desc(domains.createdAt)).limit(500);
   }
 
   async getDomain(id: string): Promise<Domain | undefined> {
@@ -90,14 +90,16 @@ export class DatabaseStorage implements IStorage {
 
   async getLatestSiteShardsByDomainIds(domainIds: string[]): Promise<Map<string, SiteShard>> {
     if (domainIds.length === 0) return new Map();
-    const rows = await db.execute(
-      sql`SELECT DISTINCT ON (domain_id) * FROM site_shards
-          WHERE domain_id = ANY(${domainIds})
-          ORDER BY domain_id, version DESC`
-    );
+    const allShards = await db
+      .select()
+      .from(siteShards)
+      .where(inArray(siteShards.domainId, domainIds))
+      .orderBy(desc(siteShards.version));
     const map = new Map<string, SiteShard>();
-    for (const row of rows as unknown as SiteShard[]) {
-      map.set(row.domainId, row);
+    for (const shard of allShards) {
+      if (!map.has(shard.domainId)) {
+        map.set(shard.domainId, shard);
+      }
     }
     return map;
   }

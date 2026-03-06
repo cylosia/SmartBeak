@@ -31,8 +31,9 @@ export function getContentStructure({
 		subPath: string,
 		item: (typeof documents)[number],
 	) {
+		const escapedSubPath = subPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		const pathParts = item.path
-			.replace(new RegExp(`^${subPath}[/]*`), "")
+			.replace(new RegExp(`^${escapedSubPath}[/]*`), "")
 			.split("/");
 
 		const rootItemPath = subPath

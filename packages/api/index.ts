@@ -16,7 +16,7 @@ export const app = new Hono()
 		cors({
 			origin: getBaseUrl(),
 			allowHeaders: ["Content-Type", "Authorization"],
-			allowMethods: ["POST", "GET", "OPTIONS"],
+			allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 			exposeHeaders: ["Content-Length"],
 			maxAge: 600,
 			credentials: true,

@@ -79,8 +79,12 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 ) => {
 	const bucketName =
 		config.bucketNames[bucket as keyof typeof config.bucketNames];
+	if (!bucketName) {
+		throw new Error("Invalid storage bucket");
+	}
 
-	const contentType = inferContentType(path);
+	const sanitizedPath = path.replace(/\.\./g, "").replace(/\/+/g, "/");
+	const contentType = inferContentType(sanitizedPath);
 	if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
 		throw new Error(`File type not allowed: ${contentType}`);
 	}
@@ -91,7 +95,7 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 			s3Client,
 			new PutObjectCommand({
 				Bucket: bucketName,
-				Key: path,
+				Key: sanitizedPath,
 				ContentType: contentType,
 			}),
 			{

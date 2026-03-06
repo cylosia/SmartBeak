@@ -87,38 +87,39 @@ export const createCheckoutLink = protectedProcedure
 				? await getOrganizationById(organizationId)
 				: undefined;
 
-			if (organization === null) {
-				throw new ORPCError("NOT_FOUND");
-			}
+		if (organizationId && !organization) {
+			throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
+		}
 
 			const seats =
 				organization && price && "seatBased" in price && price.seatBased
 					? organization.members.length
 					: undefined;
 
-			try {
-				const checkoutLink = await createCheckoutLinkFn({
-					type,
-					productId,
-					email: user.email,
-					name: user.name ?? "",
-					redirectUrl,
-					...(organizationId
-						? { organizationId }
-						: { userId: user.id }),
-					trialPeriodDays,
-					seats,
-					customerId: customerId ?? undefined,
-				});
+		try {
+			const checkoutLink = await createCheckoutLinkFn({
+				type,
+				productId,
+				email: user.email,
+				name: user.name ?? "",
+				redirectUrl,
+				...(organizationId
+					? { organizationId }
+					: { userId: user.id }),
+				trialPeriodDays,
+				seats,
+				customerId: customerId ?? undefined,
+			});
 
-				if (!checkoutLink) {
-					throw new ORPCError("INTERNAL_SERVER_ERROR");
-				}
-
-				return { checkoutLink };
-			} catch (e) {
-				logger.error(e);
-				throw new ORPCError("INTERNAL_SERVER_ERROR");
+			if (!checkoutLink) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create checkout link." });
 			}
+
+			return { checkoutLink };
+		} catch (e) {
+			if (e instanceof ORPCError) throw e;
+			logger.error(e);
+			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create checkout link." });
+		}
 		},
 	);

@@ -76,7 +76,7 @@ export const executePublishingJobProcedure = protectedProcedure
     try {
       const { decrypt } = await import("@repo/utils");
       const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY;
-      if (!configSecret) throw new ORPCError("PRECONDITION_FAILED", { message: "SMARTBEAK_ENCRYPTION_KEY is not configured." });
+      if (!configSecret) throw new ORPCError("PRECONDITION_FAILED", { message: "Encryption key not configured. Contact your administrator." });
       const configJson = await decrypt(targetConfig.encryptedConfig, configSecret);
       config = JSON.parse(configJson);
     } catch (decryptErr) {

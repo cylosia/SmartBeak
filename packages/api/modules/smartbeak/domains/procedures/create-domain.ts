@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import { createDomain } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
@@ -23,12 +24,22 @@ export const createDomainProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
-    const [domain] = await createDomain({
-      orgId: org.id,
-      name: input.name,
-      slug: input.slug,
-      themeId: input.themeId,
-    });
+
+    let domain;
+    try {
+      [domain] = await createDomain({
+        orgId: org.id,
+        name: input.name,
+        slug: input.slug,
+        themeId: input.themeId,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes("unique")) {
+        throw new ORPCError("CONFLICT", { message: "A domain with this slug already exists." });
+      }
+      throw err;
+    }
+
     await audit({
       orgId: org.id,
       actorId: user.id,

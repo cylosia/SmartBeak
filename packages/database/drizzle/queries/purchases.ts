@@ -46,9 +46,13 @@ export async function createPurchase(
 export async function updatePurchase(
 	updatedPurchase: z.infer<typeof PurchaseUpdateSchema>,
 ) {
+	if (!updatedPurchase.id) {
+		throw new Error("updatePurchase requires an id");
+	}
 	const [updated] = await db
 		.update(purchase)
 		.set(updatedPurchase)
+		.where(eq(purchase.id, updatedPurchase.id))
 		.returning();
 
 	return updated;

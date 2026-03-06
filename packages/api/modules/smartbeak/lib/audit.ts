@@ -10,7 +10,7 @@ export async function audit(data: {
 }) {
   try {
     await createAuditEvent(data);
-  } catch {
-    // Audit failures must never block the main operation
+  } catch (err) {
+    console.error("[audit] Failed to create audit event:", err);
   }
 }

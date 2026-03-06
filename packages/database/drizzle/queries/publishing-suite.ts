@@ -36,20 +36,22 @@ export async function upsertPublishTarget(data: {
   encryptedConfig: Buffer;
   enabled?: boolean;
 }) {
-  const existing = await db.query.publishTargets.findFirst({
-    where: and(
-      eq(publishTargets.domainId, data.domainId),
-      eq(publishTargets.target, data.target as (typeof publishTargets.$inferSelect)["target"]),
-    ),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.publishTargets.findFirst({
+      where: and(
+        eq(publishTargets.domainId, data.domainId),
+        eq(publishTargets.target, data.target as (typeof publishTargets.$inferSelect)["target"]),
+      ),
+    });
+    if (existing) {
+      return tx
+        .update(publishTargets)
+        .set({ encryptedConfig: data.encryptedConfig, enabled: data.enabled ?? true })
+        .where(eq(publishTargets.id, existing.id))
+        .returning();
+    }
+    return tx.insert(publishTargets).values(data as typeof publishTargets.$inferInsert).returning();
   });
-  if (existing) {
-    return db
-      .update(publishTargets)
-      .set({ encryptedConfig: data.encryptedConfig, enabled: data.enabled ?? true })
-      .where(eq(publishTargets.id, existing.id))
-      .returning();
-  }
-  return db.insert(publishTargets).values(data as typeof publishTargets.$inferInsert).returning();
 }
 
 export async function togglePublishTarget(id: string, enabled: boolean) {
@@ -302,21 +304,23 @@ export async function upsertIntegration(data: {
   encryptedConfig: Buffer;
   enabled?: boolean;
 }) {
-  const existing = await db.query.integrations.findFirst({
-    where: and(
-      eq(integrations.orgId, data.orgId),
-      eq(integrations.provider, data.provider),
-      data.domainId ? eq(integrations.domainId, data.domainId) : isNull(integrations.domainId),
-    ),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.integrations.findFirst({
+      where: and(
+        eq(integrations.orgId, data.orgId),
+        eq(integrations.provider, data.provider),
+        data.domainId ? eq(integrations.domainId, data.domainId) : isNull(integrations.domainId),
+      ),
+    });
+    if (existing) {
+      return tx
+        .update(integrations)
+        .set({ encryptedConfig: data.encryptedConfig, enabled: data.enabled ?? true })
+        .where(eq(integrations.id, existing.id))
+        .returning();
+    }
+    return tx.insert(integrations).values(data as typeof integrations.$inferInsert).returning();
   });
-  if (existing) {
-    return db
-      .update(integrations)
-      .set({ encryptedConfig: data.encryptedConfig, enabled: data.enabled ?? true })
-      .where(eq(integrations.id, existing.id))
-      .returning();
-  }
-  return db.insert(integrations).values(data as typeof integrations.$inferInsert).returning();
 }
 
 export async function toggleIntegration(id: string, enabled: boolean) {

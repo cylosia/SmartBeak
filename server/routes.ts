@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -12,13 +13,18 @@ function log(message: string, source = "routes") {
 }
 
 function requireApiKey(req: Request, res: Response, next: NextFunction): void {
-  const apiKey = req.headers["x-api-key"] ?? req.query.apiKey;
+  const apiKey = req.headers["x-api-key"];
   const expected = process.env.SERVER_API_KEY;
   if (!expected) {
     res.status(503).json({ message: "Server API key not configured" });
     return;
   }
-  if (apiKey !== expected) {
+  if (typeof apiKey !== "string" || apiKey.length !== expected.length) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const isValid = timingSafeEqual(Buffer.from(apiKey), Buffer.from(expected));
+  if (!isValid) {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }

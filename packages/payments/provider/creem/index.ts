@@ -159,8 +159,8 @@ export const webhookHandler: WebhookHandler = async (req) => {
 	const secret = process.env.CREEM_WEBHOOK_SECRET as string;
 
 	if (!secret) {
-		return new Response("Missing webhook secret.", {
-			status: 400,
+		return new Response("Internal server error.", {
+			status: 500,
 		});
 	}
 

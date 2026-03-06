@@ -18,6 +18,15 @@ import { getBaseUrl } from "@repo/utils";
 import { publicRateLimitMiddleware } from "../../../../orpc/middleware/rate-limit-middleware";
 import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function generateReferralCode(email: string): string {
   const prefix = email.split("@")[0]!.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase();
   const suffix = randomBytes(4).toString("hex").slice(0, 5).toUpperCase();
@@ -97,7 +106,7 @@ export const joinWaitlistProcedure = publicProcedure
         subject: "You're on the SmartBeak waitlist! 🎉",
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-            <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">Welcome to SmartBeak${firstName ? `, ${firstName}` : ""}!</h1>
+            <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">Welcome to SmartBeak${firstName ? `, ${escapeHtml(firstName)}` : ""}!</h1>
             <p style="color: #475569; font-size: 16px; line-height: 1.6;">
               You're officially on the waitlist for SmartBeak — the AI-powered content publishing platform built for serious domain portfolio owners.
             </p>
@@ -185,7 +194,7 @@ export const updateWaitlistStatusProcedure = adminProcedure
           subject: "You've been approved for SmartBeak early access! 🚀",
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-              <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">You're in${entry.firstName ? `, ${entry.firstName}` : ""}!</h1>
+              <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">You're in${entry.firstName ? `, ${escapeHtml(entry.firstName)}` : ""}!</h1>
               <p style="color: #475569; font-size: 16px; line-height: 1.6;">
                 Great news — you've been approved for early access to SmartBeak. Your account is ready.
               </p>

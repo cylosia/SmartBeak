@@ -31,9 +31,9 @@ export const listScimTokens = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "scim");
 
     const tokens = await getScimTokensForOrg(org.id);
-    // Never return the token hash to the client.
     return {
       tokens: tokens.map(({ tokenHash: _, ...t }) => t),
     };
@@ -121,6 +121,7 @@ export const deleteScimTokenProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    await requireEnterpriseFeature(org.id, "scim");
 
     const tokens = await getScimTokensForOrg(org.id);
     const token = tokens.find((t) => t.id === input.tokenId);

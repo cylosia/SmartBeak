@@ -44,14 +44,21 @@ async function fetchAhrefsKeywords(
 
   const endpoint = `https://apiv2.ahrefs.com/?from=organic_keywords&${params.toString()}`;
 
-  const res = await fetch(endpoint, {
-    headers: { Accept: "application/json" },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
-    const err = await res.text();
     throw new ORPCError("BAD_GATEWAY", {
-      message: `Ahrefs API error ${res.status}: ${err}`,
+      message: `Ahrefs API returned status ${res.status}. Please check your API key and try again.`,
     });
   }
 

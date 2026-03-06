@@ -12,13 +12,17 @@ import { z } from "zod";
 // ─── SSRF Protection ─────────────────────────────────────────────────────────
 
 const BLOCKED_HOST_RE =
-  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1?\])$/i;
+  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1?\]|\[::ffff:[\d.]+\]|\[fd[0-9a-f]{2}:.*\]|\[fe80:.*\])$/i;
 
 function isSafeUrl(raw: string): boolean {
   try {
     const parsed = new URL(raw);
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
-    if (BLOCKED_HOST_RE.test(parsed.hostname)) return false;
+    const hostname = parsed.hostname.toLowerCase();
+    if (BLOCKED_HOST_RE.test(hostname)) return false;
+    if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return false;
+    if (/^\d+$/.test(hostname)) return false;
+    if (/^0[xo]/i.test(hostname)) return false;
     return true;
   } catch {
     return false;
@@ -83,8 +87,12 @@ export const readUrlTool = tool({
       const response = await fetch(url, {
         signal: controller.signal,
         headers: { "User-Agent": "SmartBeak-AI-Agent/1.0" },
+        redirect: "manual",
       });
 
+      if (response.status >= 300 && response.status < 400) {
+        return { url, error: "Redirects are not followed for security", content: null };
+      }
       if (!response.ok) {
         return { url, error: `HTTP ${response.status}`, content: null };
       }

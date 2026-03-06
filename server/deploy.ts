@@ -15,14 +15,21 @@ function getVercelToken(): string {
 
 async function vercelFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = getVercelToken();
-  return fetch(`${VERCEL_API}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    return await fetch(`${VERCEL_API}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function sanitizeProjectName(name: string): string {

@@ -198,8 +198,8 @@ export async function createTeamActivity(data: {
       entityId: data.entityId ?? null,
       details: data.details ?? null,
     });
-  } catch {
-    // Activity logging failures must never block the main operation.
+  } catch (err) {
+    console.error("[createTeamActivity] Failed to log activity:", err);
   }
 }
 
@@ -351,36 +351,40 @@ export async function upsertAuditRetention(data: {
   exportRecipients?: string;
   updatedBy: string;
 }) {
-  const existing = await getAuditRetentionForOrg(data.orgId);
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.enterpriseAuditRetention.findFirst({
+      where: eq(enterpriseAuditRetention.orgId, data.orgId),
+    });
 
-  if (existing) {
-    const rows = await db
-      .update(enterpriseAuditRetention)
-      .set({
+    if (existing) {
+      const rows = await tx
+        .update(enterpriseAuditRetention)
+        .set({
+          retentionDays: data.retentionDays,
+          exportEnabled: data.exportEnabled,
+          exportSchedule: data.exportSchedule ?? null,
+          exportRecipients: data.exportRecipients ?? null,
+          updatedBy: data.updatedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(enterpriseAuditRetention.id, existing.id))
+        .returning();
+      return rows[0]!;
+    }
+
+    const rows = await tx
+      .insert(enterpriseAuditRetention)
+      .values({
+        orgId: data.orgId,
         retentionDays: data.retentionDays,
         exportEnabled: data.exportEnabled,
         exportSchedule: data.exportSchedule ?? null,
         exportRecipients: data.exportRecipients ?? null,
         updatedBy: data.updatedBy,
-        updatedAt: new Date(),
       })
-      .where(eq(enterpriseAuditRetention.id, existing.id))
       .returning();
     return rows[0]!;
-  }
-
-  const rows = await db
-    .insert(enterpriseAuditRetention)
-    .values({
-      orgId: data.orgId,
-      retentionDays: data.retentionDays,
-      exportEnabled: data.exportEnabled,
-      exportSchedule: data.exportSchedule ?? null,
-      exportRecipients: data.exportRecipients ?? null,
-      updatedBy: data.updatedBy,
-    })
-    .returning();
-  return rows[0]!;
+  });
 }
 
 // ─── Enhanced Audit Log Search ────────────────────────────────────────────────
@@ -498,39 +502,41 @@ export async function upsertOrgTier(data: {
   externalSubscriptionId?: string;
   periodEnd?: Date;
 }) {
-  const existing = await db.query.enterpriseOrgTier.findFirst({
-    where: (ot, { eq }) => eq(ot.orgId, data.orgId),
-  });
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.enterpriseOrgTier.findFirst({
+      where: (ot, { eq }) => eq(ot.orgId, data.orgId),
+    });
 
-  if (existing) {
-    const rows = await db
-      .update(enterpriseOrgTier)
-      .set({
+    if (existing) {
+      const rows = await tx
+        .update(enterpriseOrgTier)
+        .set({
+          tierId: data.tierId,
+          seats: data.seats,
+          overageEnabled: data.overageEnabled ?? existing.overageEnabled,
+          externalSubscriptionId:
+            data.externalSubscriptionId ?? existing.externalSubscriptionId,
+          periodEnd: data.periodEnd ?? existing.periodEnd,
+          updatedAt: new Date(),
+        })
+        .where(eq(enterpriseOrgTier.id, existing.id))
+        .returning();
+      return rows[0]!;
+    }
+
+    const rows = await tx
+      .insert(enterpriseOrgTier)
+      .values({
+        orgId: data.orgId,
         tierId: data.tierId,
         seats: data.seats,
-        overageEnabled: data.overageEnabled ?? existing.overageEnabled,
-        externalSubscriptionId:
-          data.externalSubscriptionId ?? existing.externalSubscriptionId,
-        periodEnd: data.periodEnd ?? existing.periodEnd,
-        updatedAt: new Date(),
+        overageEnabled: data.overageEnabled ?? false,
+        externalSubscriptionId: data.externalSubscriptionId ?? null,
+        periodEnd: data.periodEnd ?? null,
       })
-      .where(eq(enterpriseOrgTier.id, existing.id))
       .returning();
     return rows[0]!;
-  }
-
-  const rows = await db
-    .insert(enterpriseOrgTier)
-    .values({
-      orgId: data.orgId,
-      tierId: data.tierId,
-      seats: data.seats,
-      overageEnabled: data.overageEnabled ?? false,
-      externalSubscriptionId: data.externalSubscriptionId ?? null,
-      periodEnd: data.periodEnd ?? null,
-    })
-    .returning();
-  return rows[0]!;
+  });
 }
 
 export async function updateOrgSeats(orgId: string, seats: number) {
