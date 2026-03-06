@@ -1,5 +1,4 @@
 import type { Locale } from "@repo/i18n";
-import type { AbstractIntlMessages } from "use-intl/core";
 
 export interface SendEmailParams {
 	to: string;
@@ -18,7 +17,9 @@ export interface MailProvider {
 	send: SendEmailHandler;
 }
 
+// use-intl's createTranslator requires Record<string, any> for message key inference to work;
+// using Record<string, unknown> or AbstractIntlMessages causes keys to resolve to `never`.
 export type BaseMailProps = {
 	locale: Locale;
-	translations: AbstractIntlMessages;
+	translations: Record<string, any>;
 };
