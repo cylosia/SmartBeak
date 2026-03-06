@@ -145,6 +145,7 @@ export function DiligenceView({
                 No diligence checks recorded yet.
               </p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -184,6 +185,7 @@ export function DiligenceView({
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -204,6 +206,7 @@ export function DiligenceView({
                 No decay signals detected. Domain health looks good.
               </p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -244,6 +247,7 @@ export function DiligenceView({
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -264,6 +268,7 @@ export function DiligenceView({
                 No buyer sessions recorded.
               </p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -296,6 +301,7 @@ export function DiligenceView({
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

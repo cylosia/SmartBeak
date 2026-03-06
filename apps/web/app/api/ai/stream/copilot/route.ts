@@ -19,6 +19,7 @@
 
 import { auth } from "@repo/auth";
 import { createOpenAI, streamText } from "@repo/ai";
+import { enforceRateLimit } from "@repo/api/infrastructure/rate-limit-redis";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 
@@ -97,6 +98,13 @@ export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) {
     return new Response("Unauthorized", { status: 401 });
+  }
+
+  // ── Rate limiting ──────────────────────────────────────────────────────────
+  try {
+    await enforceRateLimit(`copilot:${session.user.id}`, { limit: 20, windowSeconds: 60 });
+  } catch {
+    return new Response("Too many requests", { status: 429 });
   }
 
   // ── Parse and validate request ──────────────────────────────────────────────

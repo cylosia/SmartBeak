@@ -135,6 +135,7 @@ export const publishingJobs = pgTable('publishing_jobs', {
   index('publishing_jobs_domain_id_idx').on(t.domainId),
   index('publishing_jobs_content_id_idx').on(t.contentId),
   index('publishing_jobs_scheduled_idx').on(t.domainId, t.scheduledFor),
+  index('publishing_jobs_status_idx').on(t.status),
 ]);
 
 export const publishAttempts = pgTable('publish_attempts', {
@@ -173,6 +174,7 @@ export const keywordTracking = pgTable('keyword_tracking', {
 }, (t) => [
   index('keyword_tracking_domain_id_idx').on(t.domainId),
   index('keyword_tracking_domain_updated_idx').on(t.domainId, t.lastUpdated),
+  index('keyword_tracking_last_updated_idx').on(t.lastUpdated),
 ]);
 
 // 7. Billing & Usage

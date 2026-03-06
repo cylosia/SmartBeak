@@ -53,7 +53,6 @@ const ALLOWED_CONTENT_TYPES = new Set([
 	"image/png",
 	"image/webp",
 	"image/gif",
-	"image/svg+xml",
 	"application/pdf",
 	"video/mp4",
 	"video/webm",
@@ -71,6 +70,8 @@ function inferContentType(path: string): string {
 	};
 	return map[ext ?? ""] ?? "application/octet-stream";
 }
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
 
 export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 	path,
@@ -95,6 +96,7 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 			}),
 			{
 				expiresIn: 60,
+				conditions: [["content-length-range", 0, MAX_UPLOAD_BYTES]],
 			},
 		);
 	} catch (e) {

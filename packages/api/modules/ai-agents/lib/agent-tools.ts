@@ -77,28 +77,26 @@ export const readUrlTool = tool({
     if (!isSafeUrl(url)) {
       return { url, error: "URL not allowed (private/internal addresses are blocked)", content: null };
     }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
       const response = await fetch(url, {
         signal: controller.signal,
         headers: { "User-Agent": "SmartBeak-AI-Agent/1.0" },
       });
-      clearTimeout(timeout);
 
       if (!response.ok) {
         return { url, error: `HTTP ${response.status}`, content: null };
       }
 
       const html = await response.text();
-      // Strip HTML tags for a clean text representation
       const text = html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 8000); // Limit to 8k chars to stay within context
+        .slice(0, 8000);
 
       return { url, content: text, fetchedAt: new Date().toISOString() };
     } catch (err) {
@@ -107,6 +105,8 @@ export const readUrlTool = tool({
         error: err instanceof Error ? err.message : "Fetch failed",
         content: null,
       };
+    } finally {
+      clearTimeout(timeout);
     }
   },
 });

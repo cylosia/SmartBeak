@@ -12,9 +12,12 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
-const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY;
-if (!ENCRYPTION_SECRET) {
-  throw new Error("SMARTBEAK_ENCRYPTION_KEY is required for encryption");
+function getEncryptionSecret(): string {
+  const secret = process.env.SMARTBEAK_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new ORPCError("PRECONDITION_FAILED", { message: "SMARTBEAK_ENCRYPTION_KEY is not configured." });
+  }
+  return secret;
 }
 
 const SUPPORTED_PROVIDERS = ["openai", "google_search_console", "ahrefs"] as const;
@@ -67,7 +70,7 @@ export const upsertIntegration = protectedProcedure
     await requireOrgAdmin(org.supastarterOrgId, user.id);
 
     const configJson = JSON.stringify(input.config);
-    const encryptedConfig = await encrypt(configJson, ENCRYPTION_SECRET);
+    const encryptedConfig = await encrypt(configJson, getEncryptionSecret());
 
     const existing = await getIntegrationByProvider(org.id, input.provider);
 
@@ -157,7 +160,7 @@ export const testIntegration = protectedProcedure
 
     let config: { apiKey: string; siteUrl?: string };
     try {
-      const configJson = await decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
+      const configJson = await decrypt(integration.encryptedConfig, getEncryptionSecret());
       config = JSON.parse(configJson) as { apiKey: string; siteUrl?: string };
     } catch {
       throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to decrypt integration config." });

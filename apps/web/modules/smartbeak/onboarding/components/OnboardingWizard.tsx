@@ -117,7 +117,12 @@ export function OnboardingWizard({
   return (
     <ErrorBoundary>
       <div className="space-y-6">
-        {progressQuery.isError ? (
+        {progressQuery.isLoading ? (
+          <div className="flex flex-col items-center py-12 text-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="mt-3 text-sm text-muted-foreground">Loading onboarding progress…</p>
+          </div>
+        ) : progressQuery.isError ? (
           <div className="flex flex-col items-center py-8 text-center">
             <p className="text-sm text-destructive">Failed to load onboarding progress.</p>
             <Button variant="outline" size="sm" className="mt-2" onClick={() => progressQuery.refetch()}>

@@ -212,25 +212,26 @@ export const getUsageWithLimitsProcedure = protectedProcedure
       };
     });
 
-    // Check for new overage conditions and record alerts.
     const overageItems = usageWithLimits.filter((u) => u.isOverage);
-    for (const item of overageItems) {
+    if (overageItems.length > 0) {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const recentAlerts = await getOverageAlertsForOrg(
-        org.id,
-        item.metric,
-        100,
-        oneDayAgo,
+      const alertChecks = await Promise.all(
+        overageItems.map((item) =>
+          getOverageAlertsForOrg(org.id, item.metric, 1, oneDayAgo),
+        ),
       );
-      if (recentAlerts.length === 0) {
-        await createOverageAlert({
-          orgId: org.id,
-          metric: item.metric,
-          thresholdPercent: 100,
-          usageValue: item.used,
-          limitValue: item.limit,
-        });
-      }
+      const createPromises = overageItems
+        .filter((_, i) => alertChecks[i]!.length === 0)
+        .map((item) =>
+          createOverageAlert({
+            orgId: org.id,
+            metric: item.metric,
+            thresholdPercent: 100,
+            usageValue: item.used,
+            limitValue: item.limit,
+          }),
+        );
+      await Promise.all(createPromises);
     }
 
     return {

@@ -6,9 +6,12 @@ import {
 import { getIntegrationByProvider } from "@repo/database";
 import { decrypt } from "@repo/utils";
 
-const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY;
-if (!ENCRYPTION_SECRET) {
-  throw new Error("SMARTBEAK_ENCRYPTION_KEY is required for encryption");
+function getEncryptionSecret(): string {
+  const secret = process.env.SMARTBEAK_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new Error("SMARTBEAK_ENCRYPTION_KEY is not configured. Set it in your .env.local file.");
+  }
+  return secret;
 }
 
 /**
@@ -26,11 +29,11 @@ export async function resolveTextModel(
 
 	let config: { apiKey: string };
 	try {
-		const configJson = await decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
+		const configJson = await decrypt(integration.encryptedConfig, getEncryptionSecret());
 		config = JSON.parse(configJson) as { apiKey: string };
 	} catch (err) {
 		const { logger } = await import("@repo/logs");
-		logger.warn("[resolveTextModel] Failed to decrypt org integration config, using global model:", (err as Error).message);
+		logger.warn("[resolveTextModel] Failed to decrypt org integration config, using global model:", err instanceof Error ? err.message : String(err));
 		return globalTextModel;
 	}
 

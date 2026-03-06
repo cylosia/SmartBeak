@@ -152,7 +152,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                 description="All publishing jobs are healthy."
               />
             ) : (
-              <div className="rounded-xl border border-border bg-card">
+              <div className="overflow-x-auto rounded-xl border border-border bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -236,7 +236,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                 description="All webhook events have been processed."
               />
             ) : (
-              <div className="rounded-xl border border-border bg-card">
+              <div className="overflow-x-auto rounded-xl border border-border bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow>

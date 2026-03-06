@@ -51,22 +51,27 @@ export const runDecayJob = adminProcedure
     const warningAlerts: Array<{ id: string; keyword: string; decayFactor: string }> = [];
 
     if (!input.dryRun) {
-      for (const kw of staleKeywords) {
-        const [updated] = await recalculateDecayFactor(kw.id, kw.lastUpdated);
-        const decay = parseFloat(updated.decayFactor ?? "1");
-
-        if (decay < 0.3) {
-          criticalAlerts.push({
-            id: updated.id,
-            keyword: updated.keyword,
-            decayFactor: updated.decayFactor ?? "0",
-          });
-        } else if (decay < 0.5) {
-          warningAlerts.push({
-            id: updated.id,
-            keyword: updated.keyword,
-            decayFactor: updated.decayFactor ?? "0",
-          });
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < staleKeywords.length; i += BATCH_SIZE) {
+        const batch = staleKeywords.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map((kw) => recalculateDecayFactor(kw.id, kw.lastUpdated)),
+        );
+        for (const [updated] of results) {
+          const decay = parseFloat(updated.decayFactor ?? "1");
+          if (decay < 0.3) {
+            criticalAlerts.push({
+              id: updated.id,
+              keyword: updated.keyword,
+              decayFactor: updated.decayFactor ?? "0",
+            });
+          } else if (decay < 0.5) {
+            warningAlerts.push({
+              id: updated.id,
+              keyword: updated.keyword,
+              decayFactor: updated.decayFactor ?? "0",
+            });
+          }
         }
       }
     } else {

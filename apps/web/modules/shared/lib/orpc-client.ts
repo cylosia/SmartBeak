@@ -1,6 +1,7 @@
 import { createORPCClient, onError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ApiRouterClient } from "@repo/api/orpc/router";
+import { logger } from "@repo/logs";
 import { getBaseUrl } from "@repo/utils";
 
 const link = new RPCLink({
@@ -20,7 +21,7 @@ const link = new RPCLink({
 			}
 
 			if (process.env.NODE_ENV === "development") {
-				console.error(error);
+				logger.error("[oRPC]", error);
 			}
 		}),
 	],

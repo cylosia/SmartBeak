@@ -434,11 +434,10 @@ export function WorkflowBuilder({
         </div>
 
         {/* Canvas */}
-        <div className="flex-1 relative overflow-auto rounded-xl border border-border bg-muted/20 min-h-[400px]">
+        <div className="flex-1 relative overflow-auto rounded-xl border border-border bg-muted/20 min-h-[300px] md:min-h-[400px]">
           <div
             ref={canvasRef}
-            className="relative"
-            style={{ width: "max(100%, 1200px)", height: "max(100%, 600px)" }}
+            className="relative min-w-[800px] min-h-[400px] md:min-w-[1200px] md:min-h-[600px]"
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
@@ -504,6 +503,7 @@ export function WorkflowBuilder({
                     </span>
                     <button
                       type="button"
+                      aria-label="Remove node"
                       onClick={(e) => {
                         e.stopPropagation();
                         removeNode(node.id);

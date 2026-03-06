@@ -1,7 +1,34 @@
 import { logger } from "@repo/logs";
 import type { NextRequest } from "next/server";
 
+const MAX_BODY_BYTES = 8_192;
+
+const ipBuckets = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10;
+const WINDOW_MS = 60_000;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const bucket = ipBuckets.get(ip);
+  if (!bucket || now >= bucket.resetAt) {
+    ipBuckets.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+  bucket.count++;
+  return bucket.count > RATE_LIMIT;
+}
+
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (isRateLimited(ip)) {
+    return new Response(null, { status: 429 });
+  }
+
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_BODY_BYTES) {
+    return new Response(null, { status: 413 });
+  }
+
   try {
     const body = await request.json();
     const message = typeof body.message === "string" ? body.message.slice(0, 500) : "Unknown";

@@ -21,6 +21,7 @@ import {
   claimSession,
   getSessionById,
   getWorkflowById,
+  updateSession,
   WorkflowGraphSchema,
 } from "@repo/database";
 import { executeWorkflow } from "@repo/api/modules/ai-agents/lib/agent-executor";
@@ -132,7 +133,17 @@ export async function GET(request: NextRequest) {
           type: "error",
           error: "Execution failed. Please try again.",
         });
+        await updateSession(sessionId, {
+          status: "failed",
+          errorMessage: err instanceof Error ? err.message : "Execution failed",
+        }).catch(() => {});
       } finally {
+        if (abortController.signal.aborted) {
+          await updateSession(sessionId, {
+            status: "failed",
+            errorMessage: "Client disconnected",
+          }).catch(() => {});
+        }
         controller.close();
       }
     },

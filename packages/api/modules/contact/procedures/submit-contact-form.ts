@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
+import { escapeHtml } from "@repo/utils";
 import { config } from "../../../config";
 import { localeMiddleware } from "../../../orpc/middleware/locale-middleware";
 import { publicRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
@@ -44,11 +45,3 @@ export const submitContactForm = publicProcedure
 		},
 	);
 
-function escapeHtml(str: string): string {
-	return str
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-}

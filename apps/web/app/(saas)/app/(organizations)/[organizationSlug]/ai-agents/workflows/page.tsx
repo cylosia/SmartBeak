@@ -177,6 +177,7 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
+                        aria-label="Workflow actions"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <MoreHorizontalIcon className="h-4 w-4" />

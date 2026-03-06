@@ -4,6 +4,7 @@ import {
   countAttemptsForJob,
   getContentItemById,
   getDomainById,
+  getPublishAttemptsForJobFull,
   getPublishingJobById,
   getPublishTargetsForDomain,
   recordPublishAttempt,
@@ -43,8 +44,14 @@ export const executePublishingJobProcedure = protectedProcedure
       throw new ORPCError("FORBIDDEN", { message: "Job does not belong to this org." });
     }
 
-    // Check attempt count
-    const attemptCount = await countAttemptsForJob(input.jobId);
+    const existingAttempts = await getPublishAttemptsForJobFull(input.jobId);
+    const alreadyPublished = existingAttempts.some((a) => a.status === "success");
+    if (alreadyPublished) {
+      await updatePublishingJobStatus(input.jobId, "published");
+      return { success: true, result: { alreadyPublished: true } };
+    }
+
+    const attemptCount = existingAttempts.length;
     if (attemptCount >= MAX_ATTEMPTS) {
       await updatePublishingJobStatus(input.jobId, "failed", {
         error: `Max retry attempts (${MAX_ATTEMPTS}) exceeded.`,
@@ -69,7 +76,7 @@ export const executePublishingJobProcedure = protectedProcedure
     try {
       const { decrypt } = await import("@repo/utils");
       const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY;
-      if (!configSecret) throw new Error("SMARTBEAK_ENCRYPTION_KEY is required");
+      if (!configSecret) throw new ORPCError("PRECONDITION_FAILED", { message: "SMARTBEAK_ENCRYPTION_KEY is not configured." });
       const configJson = await decrypt(targetConfig.encryptedConfig, configSecret);
       config = JSON.parse(configJson);
     } catch (decryptErr) {

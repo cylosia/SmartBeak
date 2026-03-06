@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { getOrganizationMembership, getPurchaseById } from "@repo/database";
 import { logger } from "@repo/logs";
 import { createCustomerPortalLink as createCustomerPortalLinkFn } from "@repo/payments";
+import { getBaseUrl } from "@repo/utils";
 import { z } from "zod";
 import { localeMiddleware } from "../../../orpc/middleware/locale-middleware";
 import { protectedProcedure } from "../../../orpc/procedures";
@@ -24,6 +25,14 @@ export const createCustomerPortalLink = protectedProcedure
 	)
 	.handler(
 		async ({ input: { purchaseId, redirectUrl }, context: { user } }) => {
+			if (redirectUrl) {
+				const allowed = new URL(getBaseUrl()).origin;
+				const target = new URL(redirectUrl).origin;
+				if (target !== allowed) {
+					throw new ORPCError("BAD_REQUEST", { message: "redirectUrl must point to the same origin." });
+				}
+			}
+
 			const purchase = await getPurchaseById(purchaseId);
 
 			if (!purchase) {

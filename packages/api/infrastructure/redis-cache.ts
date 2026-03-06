@@ -107,7 +107,7 @@ async function getRedisClient(): Promise<RedisClient | null> {
   } catch (err) {
     logger.warn(
       "[SmartBeak Cache] Redis unavailable, using in-memory fallback:",
-      (err as Error).message,
+      err instanceof Error ? err.message : String(err),
     );
     redisAvailable = false;
     return null;
@@ -148,7 +148,7 @@ export const cache = {
       if (!raw) return null;
       return JSON.parse(raw) as T;
     } catch (err) {
-      logger.warn("[SmartBeak Cache] Failed to parse cached value:", (err as Error).message);
+      logger.warn("[SmartBeak Cache] Failed to parse cached value:", err instanceof Error ? err.message : String(err));
       return null;
     }
   },

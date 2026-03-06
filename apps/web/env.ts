@@ -32,6 +32,6 @@ export function validateEnv() {
     );
   }
 
-  optionalSchema.parse(process.env);
+  optionalSchema.safeParse(process.env);
   validated = true;
 }

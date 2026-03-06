@@ -6,6 +6,7 @@ import {
 	getCustomerIdFromEntity,
 } from "@repo/payments";
 import { config } from "@repo/payments/config";
+import { getBaseUrl } from "@repo/utils";
 import { z } from "zod";
 import { localeMiddleware } from "../../../orpc/middleware/locale-middleware";
 import { protectedProcedure } from "../../../orpc/procedures";
@@ -33,6 +34,14 @@ export const createCheckoutLink = protectedProcedure
 			input: { productId, redirectUrl, type, organizationId },
 			context: { user },
 		}) => {
+			if (redirectUrl) {
+				const allowed = new URL(getBaseUrl()).origin;
+				const target = new URL(redirectUrl).origin;
+				if (target !== allowed) {
+					throw new ORPCError("BAD_REQUEST", { message: "redirectUrl must point to the same origin." });
+				}
+			}
+
 			if (organizationId) {
 				const membership = await getOrganizationMembership(organizationId, user.id);
 				if (!membership) {

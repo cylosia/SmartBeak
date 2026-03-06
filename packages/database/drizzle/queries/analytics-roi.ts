@@ -139,24 +139,26 @@ export async function upsertDiligenceCheck(data: {
   status?: string;
   completedAt?: Date;
 }) {
-  const existing = await db.query.diligenceChecks.findFirst({
-    where: and(
-      eq(diligenceChecks.domainId, data.domainId),
-      eq(diligenceChecks.type, data.type),
-    ),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.diligenceChecks.findFirst({
+      where: and(
+        eq(diligenceChecks.domainId, data.domainId),
+        eq(diligenceChecks.type, data.type),
+      ),
+    });
+    if (existing) {
+      return tx
+        .update(diligenceChecks)
+        .set({
+          result: data.result ?? existing.result,
+          status: data.status ?? existing.status,
+          completedAt: data.completedAt ?? existing.completedAt,
+        })
+        .where(eq(diligenceChecks.id, existing.id))
+        .returning();
+    }
+    return tx.insert(diligenceChecks).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(diligenceChecks)
-      .set({
-        result: data.result ?? existing.result,
-        status: data.status ?? existing.status,
-        completedAt: data.completedAt ?? existing.completedAt,
-      })
-      .where(eq(diligenceChecks.id, existing.id))
-      .returning();
-  }
-  return db.insert(diligenceChecks).values(data).returning();
 }
 
 export async function runDiligenceChecksForDomain(domainId: string) {

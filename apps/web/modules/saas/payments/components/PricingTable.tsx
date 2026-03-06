@@ -199,9 +199,9 @@ export function PricingTable({
 										{!!features?.length && (
 											<ul className="mt-4 grid list-none gap-2 text-sm">
 												{features.map(
-													(feature, key) => (
+													(feature) => (
 														<li
-															key={key}
+															key={feature}
 															className="flex items-center justify-start"
 														>
 															<CheckIcon className="mr-2 size-4 text-primary" />

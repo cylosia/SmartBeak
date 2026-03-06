@@ -4,6 +4,10 @@ import { db } from "../client";
 import { member, organization } from "../schema/postgres";
 import type { OrganizationUpdateSchema } from "../zod";
 
+function escapeLikePattern(input: string): string {
+	return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+}
+
 export async function getOrganizations({
 	limit,
 	offset,
@@ -15,7 +19,7 @@ export async function getOrganizations({
 }) {
 	return db.query.organization.findMany({
 		where: query
-			? (org, { ilike, or }) => or(ilike(org.name, `%${query}%`))
+			? (org, { ilike, or }) => or(ilike(org.name, `%${escapeLikePattern(query)}%`))
 			: undefined,
 		limit,
 		offset,

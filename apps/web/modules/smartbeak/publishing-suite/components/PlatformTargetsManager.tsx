@@ -156,6 +156,7 @@ export function PlatformTargetsManager({
                 </div>
                 {configured && (
                   <button
+                    aria-label={configured.enabled ? "Disable platform" : "Enable platform"}
                     onClick={() =>
                       toggleMutation.mutate({
                         organizationSlug,

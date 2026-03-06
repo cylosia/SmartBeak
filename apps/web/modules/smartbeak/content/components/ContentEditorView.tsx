@@ -49,7 +49,7 @@ import DOMPurify from "dompurify";
 import { z } from "zod";
 
 function sanitizeHtml(html: string): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined") return html;
   return DOMPurify.sanitize(html);
 }
 

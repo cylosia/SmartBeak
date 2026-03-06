@@ -5,6 +5,11 @@ export async function generateMetadata() {
 	const t = await getTranslations();
 	return {
 		title: t("contact.title"),
+		description: t("contact.description"),
+		openGraph: {
+			title: t("contact.title"),
+			description: t("contact.description"),
+		},
 	};
 }
 

@@ -1,17 +1,10 @@
+import { escapeHtml } from "@repo/utils";
+
 interface ThemeConfig {
   name: string;
   description: string;
   primaryColor: string;
   fontFamily: string;
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 export const THEME_IDS = [

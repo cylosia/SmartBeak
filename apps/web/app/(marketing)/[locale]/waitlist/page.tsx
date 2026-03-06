@@ -25,7 +25,7 @@ export default function WaitlistPage() {
       </section>
 
       {/* Waitlist form */}
-      <Suspense>
+      <Suspense fallback={<div className="flex justify-center py-16"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
         <WaitlistSection />
       </Suspense>
 

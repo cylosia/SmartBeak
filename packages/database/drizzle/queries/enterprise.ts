@@ -462,7 +462,7 @@ export async function getAuditEventsForExport(
     .from(auditEvents)
     .where(and(...conditions))
     .orderBy(desc(auditEvents.createdAt))
-    .limit(opts.limit ?? 10000);
+    .limit(Math.min(opts.limit ?? 1000, 5000));
 }
 
 // ─── Billing Tiers ────────────────────────────────────────────────────────────
