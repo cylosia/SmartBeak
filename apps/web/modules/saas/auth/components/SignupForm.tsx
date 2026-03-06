@@ -79,6 +79,9 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 
 	const onSubmit = form.handleSubmit(async ({ email, password, name }) => {
 		try {
+			// #region agent log
+			console.log('[SmartBeak-Debug][Client] signUp.email called', { email, hasPassword: !!password, hasName: !!name });
+			// #endregion
 			const result = await (authConfig.enablePasswordLogin
 				? await authClient.signUp.email({
 						email,
@@ -92,6 +95,9 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 						callbackURL: redirectPath,
 					}));
 
+			// #region agent log
+			console.log('[SmartBeak-Debug][Client] signUp result', { hasError: !!result.error, errorCode: (result.error as any)?.code, errorMessage: (result.error as any)?.message, errorStatus: (result.error as any)?.status });
+			// #endregion
 			const { error } = result;
 
 			if (error) {
@@ -111,6 +117,9 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 				router.push(config.saas.redirectAfterSignIn);
 			}
 		} catch (e) {
+			// #region agent log
+			console.error('[SmartBeak-Debug][Client] signUp CAUGHT error', { error: JSON.stringify(e), code: (e as any)?.code, message: (e as any)?.message, status: (e as any)?.status, statusCode: (e as any)?.statusCode });
+			// #endregion
 			form.setError("root", {
 				message: getAuthErrorMessage(
 					e && typeof e === "object" && "code" in e
