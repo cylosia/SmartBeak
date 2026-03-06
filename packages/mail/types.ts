@@ -1,4 +1,5 @@
 import type { Locale } from "@repo/i18n";
+import type { AbstractIntlMessages } from "use-intl/core";
 
 export interface SendEmailParams {
 	to: string;
@@ -19,5 +20,5 @@ export interface MailProvider {
 
 export type BaseMailProps = {
 	locale: Locale;
-	translations: Record<string, unknown>;
+	translations: AbstractIntlMessages;
 };
