@@ -8,6 +8,7 @@
 
 import { generateText, openai } from "@repo/ai";
 import { updateAgentMemory } from "@repo/database";
+import { logger } from "@repo/logs";
 import type { AiMemoryContext } from "@repo/database";
 
 const memoryModel = openai("gpt-4o-mini");
@@ -78,8 +79,7 @@ Respond ONLY with valid JSON, no markdown.`;
     await updateAgentMemory(agentId, updatedMemory);
     return updatedMemory;
   } catch (err) {
-    if (process.env.NODE_ENV !== "production")
-      console.warn("[agent-memory] compression failed:", (err as Error).message);
+    logger.warn("[agent-memory] compression failed:", (err as Error).message);
     return existingMemory;
   }
 }

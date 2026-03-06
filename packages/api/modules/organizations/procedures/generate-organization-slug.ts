@@ -3,6 +3,7 @@ import { getOrganizationBySlug } from "@repo/database";
 import slugify from "@sindresorhus/slugify";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { publicRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
 import { publicProcedure } from "../../../orpc/procedures";
 
 export const generateOrganizationSlug = publicProcedure
@@ -15,9 +16,10 @@ export const generateOrganizationSlug = publicProcedure
 	})
 	.input(
 		z.object({
-			name: z.string().min(1),
+			name: z.string().min(1).max(255),
 		}),
 	)
+	.use(publicRateLimitMiddleware({ limit: 15, windowMs: 60_000 }))
 	.handler(async ({ input: { name } }) => {
 		const baseSlug = slugify(name, {
 			lowercase: true,

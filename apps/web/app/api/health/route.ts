@@ -28,12 +28,9 @@ export async function GET() {
         database: {
           healthy: dbHealth.healthy,
           latencyMs: dbHealth.latencyMs,
-          ...(dbHealth.error && { error: dbHealth.error }),
         },
         cache: {
-          // Cache is always "available" — it falls back to in-memory.
           healthy: true,
-          backend: process.env.REDIS_URL ? "redis" : "in-memory",
         },
       },
     },

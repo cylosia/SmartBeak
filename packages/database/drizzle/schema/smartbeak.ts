@@ -200,7 +200,9 @@ export const usageRecords = pgTable('usage_records', {
   metric: text('metric').notNull(),
   value: integer('value').notNull(),
   recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('usage_records_org_id_idx').on(t.orgId),
+]);
 
 export const monetizationDecaySignals = pgTable('monetization_decay_signals', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -221,7 +223,9 @@ export const siteShards = pgTable('site_shards', {
   deployedUrl: text('deployed_url'),
   status: text('status').default('deployed'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('site_shards_domain_id_idx').on(t.domainId),
+]);
 
 // 9. Diligence & Portfolio
 export const diligenceChecks = pgTable('diligence_checks', {
@@ -231,7 +235,9 @@ export const diligenceChecks = pgTable('diligence_checks', {
   result: jsonb('result'),
   status: text('status').default('pending'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-});
+}, (t) => [
+  index('diligence_checks_domain_id_idx').on(t.domainId),
+]);
 
 export const portfolioSummaries = pgTable('portfolio_summaries', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -292,7 +298,9 @@ export const buyerSessions = pgTable('buyer_sessions', {
   buyerEmail: text('buyer_email'),
   intent: text('intent'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('buyer_sessions_domain_id_idx').on(t.domainId),
+]);
 
 export const timelineEvents = pgTable('timeline_events', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -300,7 +308,9 @@ export const timelineEvents = pgTable('timeline_events', {
   eventType: text('event_type').notNull(),
   details: jsonb('details'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('timeline_events_domain_id_idx').on(t.domainId),
+]);
 
 export const guardrails = pgTable('guardrails', {
   id: uuid('id').primaryKey().defaultRandom(),

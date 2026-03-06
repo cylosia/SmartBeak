@@ -58,7 +58,6 @@
 		"recharts": "^3.7.0",
 		"server-only": "^0.0.1",
 		"sharp": "^0.34.5",
-		"slugify": "^1.6.6",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.5.0",
 		"ufo": "^1.6.3",

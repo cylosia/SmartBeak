@@ -7,7 +7,7 @@ import {
   users, domains, siteShards, deploymentVersions, auditLogs,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -23,6 +23,7 @@ export interface IStorage {
   getSiteShards(domainId: string): Promise<SiteShard[]>;
   getSiteShard(id: string): Promise<SiteShard | undefined>;
   getLatestSiteShard(domainId: string): Promise<SiteShard | undefined>;
+  getLatestSiteShardsByDomainIds(domainIds: string[]): Promise<Map<string, SiteShard>>;
   createSiteShard(shard: InsertSiteShard): Promise<SiteShard>;
   updateSiteShard(id: string, data: Partial<InsertSiteShard>): Promise<SiteShard>;
 
@@ -85,6 +86,22 @@ export class DatabaseStorage implements IStorage {
   async getLatestSiteShard(domainId: string): Promise<SiteShard | undefined> {
     const [shard] = await db.select().from(siteShards).where(eq(siteShards.domainId, domainId)).orderBy(desc(siteShards.version)).limit(1);
     return shard || undefined;
+  }
+
+  async getLatestSiteShardsByDomainIds(domainIds: string[]): Promise<Map<string, SiteShard>> {
+    if (domainIds.length === 0) return new Map();
+    const rows = await db
+      .select()
+      .from(siteShards)
+      .where(inArray(siteShards.domainId, domainIds))
+      .orderBy(desc(siteShards.version));
+    const map = new Map<string, SiteShard>();
+    for (const row of rows) {
+      if (!map.has(row.domainId)) {
+        map.set(row.domainId, row);
+      }
+    }
+    return map;
   }
 
   async createSiteShard(shard: InsertSiteShard): Promise<SiteShard> {

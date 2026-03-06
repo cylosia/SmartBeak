@@ -14,15 +14,16 @@ export async function registerRoutes(
   app.get("/api/domains", async (_req, res) => {
     try {
       const domainList = await storage.getDomains();
-      const domainsWithShards = await Promise.all(
-        domainList.map(async (domain) => {
-          const latestShard = await storage.getLatestSiteShard(domain.id);
-          return { ...domain, latestShard };
-        })
+      const shardMap = await storage.getLatestSiteShardsByDomainIds(
+        domainList.map((d) => d.id),
       );
+      const domainsWithShards = domainList.map((domain) => ({
+        ...domain,
+        latestShard: shardMap.get(domain.id) ?? null,
+      }));
       res.json(domainsWithShards);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -35,8 +36,8 @@ export async function registerRoutes(
       const shards = await storage.getSiteShards(domain.id);
       const latestShard = shards[0] || null;
       res.json({ ...domain, shards, latestShard });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -51,8 +52,8 @@ export async function registerRoutes(
         details: { name: domain.name, theme: domain.theme },
       });
       res.status(201).json(domain);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(400).json({ message: err instanceof Error ? err.message : "Bad request" });
     }
   });
 
@@ -66,8 +67,8 @@ export async function registerRoutes(
       const parsed = updateSchema.parse(req.body);
       const updated = await storage.updateDomain(req.params.id, parsed);
       res.json(updated);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(400).json({ message: err instanceof Error ? err.message : "Bad request" });
     }
   });
 
@@ -81,8 +82,8 @@ export async function registerRoutes(
         details: {},
       });
       res.json({ ok: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -101,8 +102,8 @@ export async function registerRoutes(
 
       const shard = await deployToVercel(domain.id, selectedTheme, domain.name);
       res.status(201).json(shard);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -113,8 +114,8 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Shard not found" });
       }
       res.json(shard);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -122,8 +123,8 @@ export async function registerRoutes(
     try {
       const versions = await storage.getDeploymentVersions(req.params.id);
       res.json(versions);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -141,8 +142,8 @@ export async function registerRoutes(
       const html = generateThemeHtml(theme, domainName);
       res.setHeader("Content-Type", "text/html");
       res.send(html);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 
@@ -153,8 +154,8 @@ export async function registerRoutes(
         req.query.entityId as string
       );
       res.json(logs);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
     }
   });
 

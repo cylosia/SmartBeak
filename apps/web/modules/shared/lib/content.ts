@@ -1,4 +1,4 @@
-import slugify from "slugify";
+import slugify from "@sindresorhus/slugify";
 
 export type ContentStructureItem = {
 	label: string;
@@ -139,10 +139,7 @@ export function getLocalizedDocumentWithFallback<
 
 export function slugifyHeadline(headline: string) {
 	return slugify(headline, {
-		lower: true,
-		replacement: "-",
-		trim: true,
-		strict: true,
-		remove: /[*+~.()'"!:@]/g,
+		lowercase: true,
+		separator: "-",
 	});
 }

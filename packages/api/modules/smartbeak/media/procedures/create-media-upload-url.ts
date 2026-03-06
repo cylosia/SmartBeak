@@ -17,11 +17,11 @@ export const createMediaUploadUrl = protectedProcedure
   })
   .input(
     z.object({
-      organizationSlug: z.string().min(1),
+      organizationSlug: z.string().min(1).max(255),
       domainId: z.string().uuid(),
       fileName: z.string().min(1).max(500),
-      type: z.string().min(1).max(100),
-      size: z.number().int().positive().optional(),
+      type: z.string().min(1).max(100).regex(/^[a-z]+\/[a-z0-9.+-]+$/i, "Invalid MIME type"),
+      size: z.number().int().positive().max(100 * 1024 * 1024).optional(),
     }),
   )
   .handler(async ({ context: { user }, input }) => {

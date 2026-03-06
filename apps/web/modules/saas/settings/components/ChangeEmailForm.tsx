@@ -52,7 +52,10 @@ export function ChangeEmailForm() {
 					onSubmit();
 				}}
 			>
-				<Input type="email" {...form.register("email")} />
+				<label htmlFor="settings-email" className="sr-only">
+					{t("settings.account.changeEmail.title")}
+				</label>
+				<Input type="email" id="settings-email" {...form.register("email")} />
 
 				<div className="mt-4 flex justify-end">
 					<Button

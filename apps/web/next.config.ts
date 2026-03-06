@@ -21,6 +21,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+	poweredByHeader: false,
+	experimental: {
+		optimizePackageImports: ["lucide-react", "@repo/ui"],
+	},
 	transpilePackages: [
 		"@repo/api",
 		"@repo/auth",

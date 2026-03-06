@@ -3,6 +3,7 @@ import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
 import { config } from "../../../config";
 import { localeMiddleware } from "../../../orpc/middleware/locale-middleware";
+import { publicRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
 import { publicProcedure } from "../../../orpc/procedures";
 import { contactFormSchema } from "../types";
 
@@ -14,6 +15,7 @@ export const submitContactForm = publicProcedure
 		summary: "Submit contact form",
 	})
 	.input(contactFormSchema)
+	.use(publicRateLimitMiddleware({ limit: 5, windowMs: 60_000 }))
 	.use(localeMiddleware)
 	.handler(
 		async ({ input: { email, name, message }, context: { locale } }) => {

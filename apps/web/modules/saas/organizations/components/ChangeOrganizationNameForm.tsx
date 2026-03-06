@@ -69,7 +69,10 @@ export function ChangeOrganizationNameForm() {
 	return (
 		<SettingsItem title={t("organizations.settings.changeName.title")}>
 			<form onSubmit={onSubmit}>
-				<Input {...form.register("name")} />
+				<label htmlFor="org-name" className="sr-only">
+					{t("organizations.settings.changeName.title")}
+				</label>
+				<Input id="org-name" {...form.register("name")} />
 
 				<div className="mt-4 flex justify-end">
 					<Button

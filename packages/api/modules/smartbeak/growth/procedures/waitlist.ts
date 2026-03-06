@@ -15,6 +15,7 @@ import { sendEmail } from "@repo/mail";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { getBaseUrl } from "@repo/utils";
+import { publicRateLimitMiddleware } from "../../../../orpc/middleware/rate-limit-middleware";
 import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
 function generateReferralCode(email: string): string {
@@ -27,6 +28,7 @@ function generateReferralCode(email: string): string {
 export const joinWaitlistProcedure = publicProcedure
   .route({ method: "POST", path: "/smartbeak/growth/waitlist/join", tags: ["SmartBeak - Growth"], summary: "Join the waitlist" })
   .input(JoinWaitlistInputSchema)
+  .use(publicRateLimitMiddleware({ limit: 5, windowMs: 60_000 }))
   .handler(async ({ input }) => {
     const { email, referredBy, firstName, lastName, company, useCase } = input;
 
@@ -116,6 +118,7 @@ export const joinWaitlistProcedure = publicProcedure
 export const getWaitlistStatusProcedure = publicProcedure
   .route({ method: "GET", path: "/smartbeak/growth/waitlist/status", tags: ["SmartBeak - Growth"], summary: "Get waitlist status by email" })
   .input(z.object({ email: z.string().email() }))
+  .use(publicRateLimitMiddleware({ limit: 10, windowMs: 60_000 }))
   .handler(async ({ input }) => {
     const entry = await getWaitlistEntryByEmail(input.email);
     if (!entry) return null;

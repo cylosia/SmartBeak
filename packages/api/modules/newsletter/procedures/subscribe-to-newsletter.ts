@@ -3,6 +3,7 @@ import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
 import { localeMiddleware } from "../../../orpc/middleware/locale-middleware";
+import { publicRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
 import { publicProcedure } from "../../../orpc/procedures";
 
 export const subscribeToNewsletter = publicProcedure
@@ -17,6 +18,7 @@ export const subscribeToNewsletter = publicProcedure
 			email: z.string().email(),
 		}),
 	)
+	.use(publicRateLimitMiddleware({ limit: 5, windowMs: 60_000 }))
 	.use(localeMiddleware)
 	.handler(async ({ input, context: { locale } }) => {
 		const { email } = input;

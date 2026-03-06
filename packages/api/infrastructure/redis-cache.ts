@@ -162,8 +162,8 @@ export const cache = {
       } else {
         memSet(key, serialized, ttlSeconds);
       }
-    } catch {
-      // Cache write failures must never block the main operation.
+    } catch (err) {
+      logger.debug("Cache write failed", err);
     }
   },
 
@@ -178,8 +178,8 @@ export const cache = {
       } else {
         memDel(key);
       }
-    } catch {
-      // Ignore cache deletion errors.
+    } catch (err) {
+      logger.debug("Cache delete failed", err);
     }
   },
 
@@ -198,8 +198,8 @@ export const cache = {
       } else {
         memInvalidatePrefix(prefix);
       }
-    } catch {
-      // Ignore cache invalidation errors.
+    } catch (err) {
+      logger.debug("Cache invalidation failed", err);
     }
   },
 

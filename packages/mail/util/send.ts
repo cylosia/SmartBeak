@@ -5,6 +5,8 @@ import { send } from "../provider";
 import type { TemplateId } from "./templates";
 import { getTemplate } from "./templates";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function sendEmail<T extends TemplateId>(
 	params: {
 		to: string;
@@ -26,6 +28,11 @@ export async function sendEmail<T extends TemplateId>(
 	),
 ) {
 	const { to, from, locale = i18nConfig.defaultLocale } = params;
+
+	if (!EMAIL_REGEX.test(to)) {
+		logger.error(`Invalid email recipient: ${to}`);
+		return false;
+	}
 
 	let html: string;
 	let text: string;

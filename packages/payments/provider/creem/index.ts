@@ -246,11 +246,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		}
 		return new Response(null, { status: 204 });
 	} catch (error) {
-		return new Response(
-			`Webhook error: ${error instanceof Error ? error.message : ""}`,
-			{
-				status: 400,
-			},
-		);
+		logger.error("Creem webhook processing error", error);
+		return new Response("Webhook processing failed", {
+			status: 400,
+		});
 	}
 };

@@ -11,13 +11,17 @@ import { GrantRewardInputSchema } from "@repo/database";
 import { ORPCError } from "@orpc/server";
 import { getBaseUrl } from "@repo/utils";
 import { z } from "zod";
+import { publicRateLimitMiddleware } from "../../../../orpc/middleware/rate-limit-middleware";
 import { protectedProcedure, publicProcedure, adminProcedure } from "../../../../orpc/procedures";
 
 // ── get-my-referrals (auth) ───────────────────────────────────────────────────
 export const getMyReferralsProcedure = protectedProcedure
   .route({ method: "GET", path: "/smartbeak/growth/referrals/mine", tags: ["SmartBeak - Growth"], summary: "Get my referrals" })
   .input(z.object({ email: z.string().email() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
+    if (context.user.email !== input.email) {
+      throw new ORPCError("FORBIDDEN", { message: "Access denied." });
+    }
     const entry = await getWaitlistEntryByEmail(input.email);
     if (!entry) return { referrals: [], stats: null };
     const referrals = await getReferralsByReferrer(entry.id);
@@ -48,6 +52,7 @@ export const grantRewardProcedure = adminProcedure
 export const getReferralStatsByCodeProcedure = publicProcedure
   .route({ method: "GET", path: "/smartbeak/growth/referrals/stats", tags: ["SmartBeak - Growth"], summary: "Get referral stats by code" })
   .input(z.object({ referralCode: z.string().min(1) }))
+  .use(publicRateLimitMiddleware({ limit: 15, windowMs: 60_000 }))
   .handler(async ({ input }) => {
     const referrer = await getWaitlistEntryByReferralCode(input.referralCode);
     if (!referrer) return null;

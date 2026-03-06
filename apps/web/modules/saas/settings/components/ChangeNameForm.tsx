@@ -48,7 +48,10 @@ export function ChangeNameForm() {
 	return (
 		<SettingsItem title={t("settings.account.changeName.title")}>
 			<form onSubmit={onSubmit}>
-				<Input type="text" {...form.register("name")} />
+				<label htmlFor="settings-name" className="sr-only">
+					{t("settings.account.changeName.title")}
+				</label>
+				<Input type="text" id="settings-name" {...form.register("name")} />
 
 				<div className="mt-4 flex justify-end">
 					<Button

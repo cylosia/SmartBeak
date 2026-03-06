@@ -23,8 +23,16 @@ export function OrganizationsGrid() {
 				{allOrganizations?.map((organization) => (
 					<Card
 						key={organization.id}
+						role="button"
+						tabIndex={0}
 						className="flex cursor-pointer items-center gap-4 overflow-hidden p-4"
 						onClick={() => setActiveOrganization(organization.slug)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								setActiveOrganization(organization.slug);
+							}
+						}}
 					>
 						<OrganizationLogo
 							name={organization.name}
