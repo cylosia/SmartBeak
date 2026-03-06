@@ -183,6 +183,7 @@ export {
 	deleteWorkflow,
 	createSession,
 	updateSession,
+	claimSession,
 	getSessionsForOrg,
 	getSessionById,
 	getAgentAnalytics,

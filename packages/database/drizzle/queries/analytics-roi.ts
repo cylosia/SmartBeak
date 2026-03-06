@@ -227,22 +227,24 @@ export async function getSellReadyScore(domainId: string) {
   if (!domain) return null;
 
   const healthScore = extractHealthScore(domain.health);
-  const diligenceScore = diligence.score;
+  const diligenceScore = Number.isFinite(diligence.score) ? diligence.score : 0;
   const avgDecay =
     decay.length > 0
-      ? decay.reduce((sum, d) => sum + Number(d.decayFactor), 0) / decay.length
+      ? decay.reduce((sum, d) => {
+          const val = Number(d.decayFactor);
+          return sum + (Number.isFinite(val) ? val : 0);
+        }, 0) / decay.length
       : 1;
-  const buyerInterest = Math.min(buyerSess.length * 5, 30); // up to 30 pts
-  const timelineActivity = Math.min(timeline.length * 2, 20); // up to 20 pts
+  const buyerInterest = Math.min(buyerSess.length * 5, 30);
+  const timelineActivity = Math.min(timeline.length * 2, 20);
 
-  // Weighted sell-ready score (0–100)
-  const sellReadyScore = Math.round(
+  const rawScore =
     healthScore * 0.25 +
-      diligenceScore * 0.3 +
-      avgDecay * 100 * 0.2 +
-      buyerInterest +
-      timelineActivity,
-  );
+    diligenceScore * 0.3 +
+    avgDecay * 100 * 0.2 +
+    buyerInterest +
+    timelineActivity;
+  const sellReadyScore = Number.isFinite(rawScore) ? Math.round(rawScore) : 0;
 
   const recommendations: Array<{ area: string; message: string; priority: "high" | "medium" | "low" }> = [];
 

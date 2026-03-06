@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import {
   deletePublishTarget,
   getDomainById,
+  getPublishTargetById,
   getPublishTargetsForDomain,
   togglePublishTarget,
   upsertPublishTarget,
@@ -69,8 +70,8 @@ export const upsertPlatformTargetProcedure = protectedProcedure
       throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
     }
     const { encrypt } = await import("@repo/utils");
-    const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
-    if (!configSecret) throw new ORPCError("PRECONDITION_FAILED", { message: "Encryption key not configured." });
+    const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY;
+    if (!configSecret) throw new ORPCError("PRECONDITION_FAILED", { message: "SMARTBEAK_ENCRYPTION_KEY is not configured." });
     const encryptedConfig = await encrypt(JSON.stringify(input.config), configSecret);
     const [target] = await upsertPublishTarget({
       domainId: input.domainId,
@@ -106,7 +107,18 @@ export const togglePlatformTargetProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    const target = await getPublishTargetById(input.targetId);
+    if (!target) {
+      throw new ORPCError("NOT_FOUND", { message: "Publishing target not found." });
+    }
+    const domain = await getDomainById(target.domainId);
+    if (!domain || domain.orgId !== org.id) {
+      throw new ORPCError("NOT_FOUND", { message: "Publishing target not found." });
+    }
     const [updated] = await togglePublishTarget(input.targetId, input.enabled);
+    if (!updated) {
+      throw new ORPCError("NOT_FOUND", { message: "Publishing target not found." });
+    }
     await audit({
       orgId: org.id,
       actorId: user.id,
@@ -115,7 +127,7 @@ export const togglePlatformTargetProcedure = protectedProcedure
       entityId: input.targetId,
       details: {},
     });
-    return { updated };
+    return { updated: { id: updated.id, target: updated.target, enabled: updated.enabled } };
   });
 
 export const deletePlatformTargetProcedure = protectedProcedure
@@ -129,6 +141,14 @@ export const deletePlatformTargetProcedure = protectedProcedure
   .handler(async ({ context: { user }, input }) => {
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
+    const target = await getPublishTargetById(input.targetId);
+    if (!target) {
+      throw new ORPCError("NOT_FOUND", { message: "Publishing target not found." });
+    }
+    const domain = await getDomainById(target.domainId);
+    if (!domain || domain.orgId !== org.id) {
+      throw new ORPCError("NOT_FOUND", { message: "Publishing target not found." });
+    }
     await deletePublishTarget(input.targetId);
     await audit({
       orgId: org.id,

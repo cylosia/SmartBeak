@@ -9,6 +9,22 @@
 import { tool } from "@repo/ai";
 import { z } from "zod";
 
+// ─── SSRF Protection ─────────────────────────────────────────────────────────
+
+const BLOCKED_HOST_RE =
+  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1?\])$/i;
+
+function isSafeUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    if (BLOCKED_HOST_RE.test(parsed.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Web Search Tool ──────────────────────────────────────────────────────────
 
 /**
@@ -58,6 +74,9 @@ export const readUrlTool = tool({
     url: z.string().url().describe("The URL to fetch and read."),
   }),
   execute: async ({ url }) => {
+    if (!isSafeUrl(url)) {
+      return { url, error: "URL not allowed (private/internal addresses are blocked)", content: null };
+    }
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);

@@ -18,6 +18,7 @@
 
 import { auth } from "@repo/auth";
 import {
+  claimSession,
   getSessionById,
   getWorkflowById,
   WorkflowGraphSchema,
@@ -58,6 +59,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const claimed = await claimSession(sessionId);
+  if (!claimed) {
+    return new Response(
+      JSON.stringify({ error: "Session already claimed by another request" }),
+      { status: 409, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   // ── Load workflow ───────────────────────────────────────────────────────────
   if (!agentSession.workflowId) {
     return new Response("Session has no associated workflow", { status: 400 });
@@ -83,6 +92,9 @@ export async function GET(request: NextRequest) {
   // ── Stream SSE ──────────────────────────────────────────────────────────────
   const encoder = new TextEncoder();
 
+  const abortController = new AbortController();
+  request.signal.addEventListener("abort", () => abortController.abort());
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: unknown) => {
@@ -102,6 +114,10 @@ export async function GET(request: NextRequest) {
           prompt,
           context,
         )) {
+          if (abortController.signal.aborted) {
+            logger.info("[workflow-stream] client disconnected, aborting");
+            break;
+          }
           send(event);
           if (
             event.type === "session_complete" ||

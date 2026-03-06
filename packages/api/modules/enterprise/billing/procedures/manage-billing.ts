@@ -21,7 +21,7 @@ import {
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
-import { cachedGetBillingTiers, cachedGetOrgTier } from "../../../../infrastructure/redis-cache";
+import { cachedGetBillingTiers, cachedGetOrgTier, invalidateOrgCache } from "../../../../infrastructure/redis-cache";
 import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { audit } from "../../lib/audit";
@@ -89,6 +89,8 @@ export const setOrgTierProcedure = protectedProcedure
       overageEnabled: input.overageEnabled,
     });
 
+    await invalidateOrgCache(org.id, input.organizationSlug);
+
     await audit({
       orgId: org.id,
       actorId: user.id,
@@ -131,6 +133,8 @@ export const updateSeatsProcedure = protectedProcedure
     }
 
     const updated = await updateOrgSeats(org.id, input.seats);
+
+    await invalidateOrgCache(org.id, input.organizationSlug);
 
     await audit({
       orgId: org.id,

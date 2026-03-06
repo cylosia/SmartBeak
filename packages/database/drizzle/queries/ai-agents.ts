@@ -241,6 +241,15 @@ export async function updateSession(
   return rows[0] ?? null;
 }
 
+export async function claimSession(sessionId: string): Promise<boolean> {
+  const rows = await db
+    .update(aiAgentSessions)
+    .set({ status: "running" })
+    .where(and(eq(aiAgentSessions.id, sessionId), eq(aiAgentSessions.status, "pending")))
+    .returning({ id: aiAgentSessions.id });
+  return rows.length > 0;
+}
+
 export async function getSessionsForOrg(
   orgId: string,
   opts: { limit?: number; offset?: number; workflowId?: string } = {},

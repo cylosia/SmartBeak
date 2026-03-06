@@ -572,6 +572,9 @@ importers:
       '@prisma/client':
         specifier: 7.4.2
         version: 7.4.2(prisma@7.4.2(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      '@repo/logs':
+        specifier: workspace:*
+        version: link:../logs
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -714,9 +717,6 @@ importers:
       '@repo/logs':
         specifier: workspace:*
         version: link:../logs
-      chargebee-typescript:
-        specifier: ^2.53.0
-        version: 2.53.0
       dodopayments:
         specifier: ^2.23.1
         version: 2.23.1
@@ -4711,11 +4711,6 @@ packages:
   character-reference-invalid@2.0.1:
     resolution: {integrity: sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw==}
 
-  chargebee-typescript@2.53.0:
-    resolution: {integrity: sha512-xPxkQvgAdBaBU6kYTxvV7t1XTCto8TxO1kqTG5CL+AobV0mkccOKr+/o0P9WcsHOaJK/HROPgaLdzMNAaU52Ew==}
-    engines: {node: '>=8.0.0'}
-    deprecated: 'This package (chargebee-typescript) is fully deprecated. Support and updates ended on September 30, 2025. Please migrate to the actively maintained chargebee package: https://www.npmjs.com/package/chargebee. Migration guide: https://github.com/chargebee/chargebee-node/wiki/Migration-guide-for-v3'
-
   check-more-types@2.24.0:
     resolution: {integrity: sha512-Pj779qHxV2tuapviy1bSZNEL1maXr13bPYpsvSDB68HlYcYuhlDrmGd63i0JHMCLKzc7rUSNIrpdJlhVlNwrxA==}
     engines: {node: '>= 0.8.0'}
@@ -6802,14 +6797,6 @@ packages:
   pvutils@1.1.5:
     resolution: {integrity: sha512-KTqnxsgGiQ6ZAzZCVlJH5eOjSnvlyEgx1m8bkRJfOhmGRqfo5KLvmAlACQkrjEtOQ4B7wF9TdSLIs9O90MX9xA==}
     engines: {node: '>=16.0.0'}
-
-  q@1.5.1:
-    resolution: {integrity: sha512-kV/CThkXo6xyFEZUugw/+pIOywXcDbFYgSct5cT3gqlbkBE1SJdwy6UQoZvodiWF/ckQLZyDE/Bu1M6gVu5lVw==}
-    engines: {node: '>=0.6.0', teleport: '>=0.2.0'}
-    deprecated: |-
-      You or someone you depend on is using Q, the JavaScript Promise library that gave JavaScript developers strong feelings about promises. They can almost certainly migrate to the native JavaScript promise now. Thank you literally everyone for joining me in this bet against the odds. Be excellent to each other.
-
-      (For a CapTP with native promises, see @endo/eventual-send and @endo/captp)
 
   qr.js@0.0.0:
     resolution: {integrity: sha512-c4iYnWb+k2E+vYpRimHqSu575b1/wKl4XFeJGpFmrJQz5I88v9aY2czh7s0w36srfCM1sXgC/xpoJz5dJfq+OQ==}
@@ -11689,10 +11676,6 @@ snapshots:
 
   character-reference-invalid@2.0.1: {}
 
-  chargebee-typescript@2.53.0:
-    dependencies:
-      q: 1.5.1
-
   check-more-types@2.24.0: {}
 
   chevrotain@10.5.0:
@@ -14102,8 +14085,6 @@ snapshots:
       tslib: 2.8.1
 
   pvutils@1.1.5: {}
-
-  q@1.5.1: {}
 
   qr.js@0.0.0: {}
 

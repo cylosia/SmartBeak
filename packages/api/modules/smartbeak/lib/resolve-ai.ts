@@ -6,9 +6,9 @@ import {
 import { getIntegrationByProvider } from "@repo/database";
 import { decrypt } from "@repo/utils";
 
-const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
+const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY;
 if (!ENCRYPTION_SECRET) {
-  throw new Error("SMARTBEAK_ENCRYPTION_KEY or BETTER_AUTH_SECRET is required for encryption");
+  throw new Error("SMARTBEAK_ENCRYPTION_KEY is required for encryption");
 }
 
 /**

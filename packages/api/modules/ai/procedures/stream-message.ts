@@ -22,10 +22,10 @@ export const streamMessage = protectedProcedure
 				z.object({
 					id: z.string(),
 					role: z.enum(["user", "assistant", "system"]),
-					content: z.string(),
+					content: z.string().max(32_000),
 					parts: z.array(z.record(z.unknown())).optional(),
 				}).passthrough() as unknown as z.ZodType<UIMessage>,
-			),
+			).max(100),
 		}),
 	)
 	.handler(async ({ input }) => {

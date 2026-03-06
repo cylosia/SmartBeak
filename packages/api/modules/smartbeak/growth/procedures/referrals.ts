@@ -37,7 +37,9 @@ export const completeReferralProcedure = adminProcedure
   .handler(async ({ input }) => {
     const referral = await getReferralByCode(input.referralCode);
     if (!referral) throw new ORPCError("NOT_FOUND", { message: "Referral not found." });
-    return completeReferral(referral.id, input.referredUserId);
+    const completed = await completeReferral(referral.id, input.referredUserId);
+    if (!completed) throw new ORPCError("NOT_FOUND", { message: "Referral could not be completed." });
+    return completed;
   });
 
 // ── grant-reward (admin) ──────────────────────────────────────────────────────
@@ -45,7 +47,9 @@ export const grantRewardProcedure = adminProcedure
   .route({ method: "POST", path: "/smartbeak/growth/referrals/reward", tags: ["SmartBeak - Growth"], summary: "Grant a referral reward (admin)" })
   .input(GrantRewardInputSchema)
   .handler(async ({ input }) => {
-    return grantReferralReward(input.referralId, input.rewardType, input.rewardValue);
+    const rewarded = await grantReferralReward(input.referralId, input.rewardType, input.rewardValue);
+    if (!rewarded) throw new ORPCError("NOT_FOUND", { message: "Referral not found." });
+    return rewarded;
   });
 
 // ── get-referral-stats (public, by referral code) ─────────────────────────────

@@ -51,15 +51,32 @@ export const joinWaitlistProcedure = publicProcedure
     }
 
     const referralCode = generateReferralCode(email);
-    const entry = await createWaitlistEntry({
-      email,
-      referralCode,
-      referredBy: referrerEntry ? referredBy : undefined,
-      firstName,
-      lastName,
-      company,
-      useCase,
-    });
+    let entry;
+    try {
+      entry = await createWaitlistEntry({
+        email,
+        referralCode,
+        referredBy: referrerEntry ? referredBy : undefined,
+        firstName,
+        lastName,
+        company,
+        useCase,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("unique")) {
+        const race = await getWaitlistEntryByEmail(email);
+        if (race) {
+          return {
+            success: true,
+            alreadyJoined: true,
+            referralCode: race.referralCode,
+            referralLink: `${getBaseUrl()}/waitlist?ref=${race.referralCode}`,
+            position: null,
+          };
+        }
+      }
+      throw err;
+    }
 
     // Create a referral record for the referrer
     if (referrerEntry) {
