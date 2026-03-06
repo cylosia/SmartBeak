@@ -5,6 +5,8 @@ import {
   updateSeoGscData,
   updateSeoScore,
 } from "@repo/database";
+import { logger } from "@repo/logs";
+import { fetchWithTimeout } from "@repo/utils";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgEditor } from "../../lib/membership";
@@ -43,19 +45,21 @@ async function fetchGscData(
     startRow: 0,
   };
 
-  const res = await fetch(endpoint, {
+  const res = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    timeoutMs: 30_000,
   });
 
   if (!res.ok) {
     const err = await res.text();
+    logger.warn(`GSC API error ${res.status}`, { err });
     throw new ORPCError("BAD_GATEWAY", {
-      message: `GSC API error ${res.status}: ${err}`,
+      message: "Google Search Console API returned an error. Please try again.",
     });
   }
 
@@ -136,8 +140,9 @@ export const syncGsc = protectedProcedure
         input.endDate,
       );
     } catch (err) {
+      logger.error("[sync-gsc] fetch error:", err);
       throw new ORPCError("BAD_GATEWAY", {
-        message: `GSC API error: ${err instanceof Error ? err.message : String(err)}`,
+        message: "Failed to sync Google Search Console data. Please try again.",
       });
     }
 

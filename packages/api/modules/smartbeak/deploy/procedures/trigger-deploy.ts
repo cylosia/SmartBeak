@@ -7,6 +7,7 @@ import {
   updateSiteShard,
 } from "@repo/database";
 import { logger } from "@repo/logs";
+import { fetchWithTimeout } from "@repo/utils";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
@@ -75,6 +76,8 @@ export const triggerDeploy = protectedProcedure
       });
     }
 
+    await updateDomain(domain.id, { status: "pending" });
+
     await audit({
       orgId: org.id,
       actorId: user.id,
@@ -83,6 +86,8 @@ export const triggerDeploy = protectedProcedure
       entityId: shard.id,
       details: { domainId: domain.id, themeId, version: nextVersion },
     });
+
+    logger.info(`[trigger-deploy] deploy v${nextVersion} started for domain=${domain.id}`);
 
     (async () => {
       try {
@@ -108,7 +113,7 @@ export const triggerDeploy = protectedProcedure
 
         await updateSiteShard(shard.id, { status: "deploying" });
 
-        const deployRes = await fetch(`${VERCEL_API}/v13/deployments`, {
+        const deployRes = await fetchWithTimeout(`${VERCEL_API}/v13/deployments`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -120,12 +125,14 @@ export const triggerDeploy = protectedProcedure
             projectSettings: { framework: null },
             target: "production",
           }),
+          timeoutMs: 30_000,
         });
 
         if (!deployRes.ok) {
           const errText = await deployRes.text();
+          logger.error(`[trigger-deploy] Vercel API ${deployRes.status}`, { errText });
           throw new ORPCError("BAD_GATEWAY", {
-            message: `Vercel API error: ${deployRes.status} - ${errText}`,
+            message: "Deployment failed. Vercel API returned an error.",
           });
         }
 
@@ -156,19 +163,19 @@ export const triggerDeploy = protectedProcedure
           await new Promise((r) => setTimeout(r, 2000));
           attempts++;
 
-          const statusRes = await fetch(
+          const statusRes = await fetchWithTimeout(
             `${VERCEL_API}/v13/deployments/${deployData.id}`,
             {
               headers: { Authorization: `Bearer ${token}` },
+              timeoutMs: 10_000,
             },
           );
           if (!statusRes.ok) {
-            const errBody = await statusRes.text();
             if (statusRes.status >= 400 && statusRes.status < 500) {
               consecutive4xx++;
               if (consecutive4xx >= 3) {
                 throw new ORPCError("BAD_GATEWAY", {
-                  message: `Vercel API returned ${statusRes.status} on 3 consecutive status checks: ${errBody.slice(0, 200)}`,
+                  message: "Deployment status check failed after multiple retries.",
                 });
               }
             }
@@ -214,7 +221,7 @@ export const triggerDeploy = protectedProcedure
           details: { url: deployedUrl, version: nextVersion },
         });
       } catch (err: unknown) {
-        if (process.env.NODE_ENV !== "production") logger.warn("[trigger-deploy] deployment error:", err);
+        logger.error("[trigger-deploy] deployment error:", err);
         const message =
           err instanceof Error ? err.message : "Unknown deployment error";
         await updateSiteShard(shard.id, { status: "error" });
@@ -227,7 +234,9 @@ export const triggerDeploy = protectedProcedure
           details: { error: message },
         });
       }
-    })();
+    })().catch((fatal) => {
+      logger.error("[trigger-deploy] unhandled deploy failure:", fatal);
+    });
 
     return { shard };
   });

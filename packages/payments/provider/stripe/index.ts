@@ -132,13 +132,24 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		});
 	}
 
+	const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+	if (!webhookSecret) {
+		logger.error("[stripe] STRIPE_WEBHOOK_SECRET is not configured");
+		return new Response("Webhook secret not configured.", { status: 500 });
+	}
+
+	const signatureHeader = req.headers.get("stripe-signature");
+	if (!signatureHeader) {
+		return new Response("Missing stripe-signature header.", { status: 400 });
+	}
+
 	let event: Stripe.Event | undefined;
 
 	try {
 		event = await stripeClient.webhooks.constructEventAsync(
 			await req.text(),
-			req.headers.get("stripe-signature") as string,
-			process.env.STRIPE_WEBHOOK_SECRET as string,
+			signatureHeader,
+			webhookSecret,
 		);
 	} catch (e) {
 		logger.error(e);
@@ -243,11 +254,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 
 		return new Response(null, { status: 204 });
 	} catch (error) {
-		return new Response(
-			`Webhook error: ${error instanceof Error ? error.message : ""}`,
-			{
-				status: 400,
-			},
-		);
+		logger.error("[stripe] Webhook processing failed:", error);
+		return new Response("Webhook processing failed.", {
+			status: 400,
+		});
 	}
 };

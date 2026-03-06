@@ -7,7 +7,7 @@ import {
   users, domains, siteShards, deploymentVersions, auditLogs,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -90,16 +90,14 @@ export class DatabaseStorage implements IStorage {
 
   async getLatestSiteShardsByDomainIds(domainIds: string[]): Promise<Map<string, SiteShard>> {
     if (domainIds.length === 0) return new Map();
-    const rows = await db
-      .select()
-      .from(siteShards)
-      .where(inArray(siteShards.domainId, domainIds))
-      .orderBy(desc(siteShards.version));
+    const rows = await db.execute(
+      sql`SELECT DISTINCT ON (domain_id) * FROM site_shards
+          WHERE domain_id = ANY(${domainIds})
+          ORDER BY domain_id, version DESC`
+    );
     const map = new Map<string, SiteShard>();
-    for (const row of rows) {
-      if (!map.has(row.domainId)) {
-        map.set(row.domainId, row);
-      }
+    for (const row of rows as unknown as SiteShard[]) {
+      map.set(row.domainId, row);
     }
     return map;
   }

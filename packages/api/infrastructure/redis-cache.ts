@@ -54,15 +54,17 @@ function memInvalidatePrefix(prefix: string): void {
   }
 }
 
-// Periodically clean up expired entries.
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of memoryStore) {
-    if (now > entry.expiresAt) {
-      memoryStore.delete(key);
+const globalRef = globalThis as typeof globalThis & { __cacheCleanupInterval?: ReturnType<typeof setInterval> };
+if (!globalRef.__cacheCleanupInterval) {
+  globalRef.__cacheCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of memoryStore) {
+      if (now > entry.expiresAt) {
+        memoryStore.delete(key);
+      }
     }
-  }
-}, 30_000);
+  }, 30_000);
+}
 
 // ─── Redis client (lazy-loaded) ───────────────────────────────────────────────
 
@@ -71,6 +73,7 @@ type RedisClient = {
   set(key: string, value: string, options?: { EX?: number }): Promise<unknown>;
   del(key: string | string[]): Promise<unknown>;
   keys(pattern: string): Promise<string[]>;
+  scanIterator(options: { MATCH: string; COUNT: number }): AsyncIterable<string>;
   ping(): Promise<string>;
 };
 
@@ -191,9 +194,16 @@ export const cache = {
     try {
       const redis = await getRedisClient();
       if (redis) {
-        const keys = await redis.keys(`${prefix}*`);
-        if (keys.length > 0) {
-          await redis.del(keys);
+        const batch: string[] = [];
+        for await (const key of redis.scanIterator({ MATCH: `${prefix}*`, COUNT: 100 })) {
+          batch.push(key);
+          if (batch.length >= 100) {
+            await redis.del([...batch]);
+            batch.length = 0;
+          }
+        }
+        if (batch.length > 0) {
+          await redis.del(batch);
         }
       } else {
         memInvalidatePrefix(prefix);

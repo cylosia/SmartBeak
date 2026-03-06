@@ -4,6 +4,7 @@ import {
   getDomainById,
   getKeywordsForDomain,
 } from "@repo/database";
+import { logger } from "@repo/logs";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
@@ -118,8 +119,9 @@ Focus on topics with high commercial intent, clear search demand, and realistic 
       });
       result = object;
     } catch (err) {
+      logger.error("[generate-ai-ideas] AI generation failed:", err);
       throw new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: `AI generation failed: ${err instanceof Error ? err.message : String(err)}`,
+        message: "AI content generation failed. Please try again later.",
       });
     }
 

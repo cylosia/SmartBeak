@@ -16,11 +16,9 @@ const TAG_LENGTH = 16;
 function getEncryptionKey(): Buffer {
   const key = process.env.ENTERPRISE_ENCRYPTION_KEY;
   if (!key) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("ENTERPRISE_ENCRYPTION_KEY is required in production");
-    }
-    const devKey = process.env.SMARTBEAK_DEV_ENCRYPTION_KEY ?? "smartbeak-dev-encryption-key-32b";
-    return createHash("sha256").update(devKey).digest();
+    throw new Error(
+      "ENTERPRISE_ENCRYPTION_KEY is required. Set a 64-character hex string in your environment.",
+    );
   }
   const buf = Buffer.from(key, "hex");
   if (buf.length !== 32) {

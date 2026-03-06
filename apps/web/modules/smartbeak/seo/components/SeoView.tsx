@@ -11,9 +11,17 @@ import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { CardGridSkeleton, TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { SearchIcon, PlusIcon, Loader2Icon, BarChart3Icon, LinkIcon } from "lucide-react";
-import { KeywordDataTable } from "./KeywordDataTable";
-import { SeoDashboard } from "./SeoDashboard";
+import dynamic from "next/dynamic";
 import { IntegrationsPanel } from "./IntegrationsPanel";
+
+const KeywordDataTable = dynamic(
+  () => import("./KeywordDataTable").then((m) => m.KeywordDataTable),
+  { ssr: false, loading: () => <div className="animate-pulse h-64 rounded-lg bg-muted" /> },
+);
+const SeoDashboard = dynamic(
+  () => import("./SeoDashboard").then((m) => m.SeoDashboard),
+  { ssr: false, loading: () => <div className="animate-pulse h-64 rounded-lg bg-muted" /> },
+);
 
 export function SeoView({
   organizationSlug,

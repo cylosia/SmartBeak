@@ -7,6 +7,7 @@ import {
 	lemonSqueezySetup,
 	updateSubscriptionItem,
 } from "@lemonsqueezy/lemonsqueezy.js";
+import { logger } from "@repo/logs";
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
@@ -116,10 +117,11 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 		}
 		const hmac = createHmac("sha256", webhookSecret);
 		const digest = Buffer.from(hmac.update(text).digest("hex"), "utf8");
-		const signature = Buffer.from(
-			req.headers.get("x-signature") as string,
-			"utf8",
-		);
+		const signatureHeader = req.headers.get("x-signature");
+		if (!signatureHeader) {
+			return new Response("Missing signature header.", { status: 400 });
+		}
+		const signature = Buffer.from(signatureHeader, "utf8");
 
 		if (!timingSafeEqual(digest, signature)) {
 			return new Response("Invalid signature.", {
@@ -243,11 +245,9 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 
 		return new Response(null, { status: 204 });
 	} catch (error) {
-		return new Response(
-			`Webhook error: ${error instanceof Error ? error.message : ""}`,
-			{
-				status: 400,
-			},
-		);
+		logger.error("[lemonsqueezy] Webhook processing failed:", error);
+		return new Response("Webhook processing failed.", {
+			status: 400,
+		});
 	}
 };

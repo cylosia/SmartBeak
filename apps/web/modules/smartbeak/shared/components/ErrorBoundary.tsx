@@ -23,9 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
-    // Errors are captured by React's built-in error reporting.
-    // Production monitoring (e.g. Sentry) hooks into window.onerror.
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[ErrorBoundary]", error, errorInfo.componentStack);
   }
 
   render() {

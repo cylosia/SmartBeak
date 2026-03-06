@@ -7,6 +7,10 @@
 
 import { and, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { db } from "../client";
+
+function escapeLikePattern(pattern: string): string {
+  return pattern.replace(/[%_\\]/g, "\\$&");
+}
 import {
   enterpriseAuditRetention,
   enterpriseBillingTiers,
@@ -397,7 +401,7 @@ export async function searchAuditEvents(
     conditions.push(eq(auditEvents.actorId, opts.actorId));
   }
   if (opts.action) {
-    conditions.push(ilike(auditEvents.action, `%${opts.action}%`));
+    conditions.push(ilike(auditEvents.action, `%${escapeLikePattern(opts.action)}%`));
   }
   if (opts.startDate) {
     conditions.push(gte(auditEvents.createdAt, opts.startDate));

@@ -1,9 +1,20 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { getActiveOrganization } from "@saas/auth/lib/server";
-import { DiligenceEngineView } from "@/modules/smartbeak/analytics-roi/components/DiligenceEngineView";
-import { SellReadyPanel } from "@/modules/smartbeak/analytics-roi/components/SellReadyPanel";
-import { BuyerAttributionView } from "@/modules/smartbeak/analytics-roi/components/BuyerAttributionView";
 import { notFound } from "next/navigation";
+import dynamic from "next/dynamic";
+
+const DiligenceEngineView = dynamic(
+  () => import("@/modules/smartbeak/analytics-roi/components/DiligenceEngineView").then((m) => m.DiligenceEngineView),
+  { ssr: false, loading: () => <div className="animate-pulse h-64 rounded-lg bg-muted" /> },
+);
+const SellReadyPanel = dynamic(
+  () => import("@/modules/smartbeak/analytics-roi/components/SellReadyPanel").then((m) => m.SellReadyPanel),
+  { ssr: false, loading: () => <div className="animate-pulse h-64 rounded-lg bg-muted" /> },
+);
+const BuyerAttributionView = dynamic(
+  () => import("@/modules/smartbeak/analytics-roi/components/BuyerAttributionView").then((m) => m.BuyerAttributionView),
+  { ssr: false, loading: () => <div className="animate-pulse h-64 rounded-lg bg-muted" /> },
+);
 
 export default async function DomainAnalyticsPage({
   params,

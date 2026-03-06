@@ -3,6 +3,7 @@
  * Uses only locked v9 schema tables. No schema modifications.
  */
 import { and, avg, count, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { logger } from "@repo/logs";
 import { db } from "../client";
 import {
   buyerSessions,
@@ -276,6 +277,7 @@ export async function getBuyerAttributionForDomain(domainId: string) {
   const sessions = await db.query.buyerSessions.findMany({
     where: eq(buyerSessions.domainId, domainId),
     orderBy: [desc(buyerSessions.createdAt)],
+    limit: 5000,
   });
 
   // Attribution breakdown by intent
@@ -325,6 +327,7 @@ export async function getBuyerAttributionForOrg(orgId: string) {
   const allSessions = await db.query.buyerSessions.findMany({
     where: sql`${buyerSessions.domainId} = ANY(ARRAY[${sql.join(domainIds.map((id) => sql`${id}::uuid`), sql`, `)}])`,
     orderBy: [desc(buyerSessions.createdAt)],
+    limit: 10000,
   });
 
   const sessionsByDomain = new Map<string, typeof allSessions>();
@@ -474,7 +477,7 @@ export async function getPortfolioRoiMaterializedView(orgId: string) {
     );
     return result.rows[0] ?? null;
   } catch (err) {
-    if (process.env.NODE_ENV !== "production") console.warn("[analytics-roi] materialized view error:", err);
+    logger.warn("[analytics-roi] materialized view error:", err);
     return null;
   }
 }

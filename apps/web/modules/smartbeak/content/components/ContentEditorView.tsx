@@ -45,20 +45,11 @@ import { formatDistanceToNow } from "date-fns";
 import { AiIdeaCard, AiIdeaCardSkeleton } from "./AiIdeaCard";
 import { ContentSeoSidebar } from "./ContentSeoSidebar";
 
+import DOMPurify from "dompurify";
+
 function sanitizeHtml(html: string): string {
   if (typeof window === "undefined") return html;
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  for (const el of doc.querySelectorAll("script, iframe, object, embed, form")) {
-    el.remove();
-  }
-  for (const el of doc.querySelectorAll("*")) {
-    for (const attr of [...el.attributes]) {
-      if (attr.name.startsWith("on") || attr.name === "formaction") {
-        el.removeAttribute(attr.name);
-      }
-    }
-  }
-  return doc.body.innerHTML;
+  return DOMPurify.sanitize(html);
 }
 
 export function ContentEditorView({

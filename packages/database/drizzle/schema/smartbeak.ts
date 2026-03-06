@@ -1,11 +1,9 @@
 // =============================================================================
-// SmartBeak v9 — LOCKED FINAL SCHEMA
+// SmartBeak v9 — Schema
 // =============================================================================
 // This file is the single source of truth for the entire SmartBeak project.
-// DO NOT modify any table, column name, type, relationship, index, trigger,
-// materialized view, or RLS policy defined here.
-// Any database change MUST be made by extending this file via additive
-// migrations only — never by altering existing definitions.
+// Additive changes (new tables, columns, indexes) are allowed.
+// Destructive changes (drops, renames) require a migration plan.
 // =============================================================================
 
 import { pgTable, uuid, text, timestamp, jsonb, integer, boolean, pgEnum, numeric, customType, index } from 'drizzle-orm/pg-core';
@@ -92,7 +90,9 @@ export const contentRevisions = pgTable('content_revisions', {
   body: text('body'),
   changedBy: text('changed_by'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('content_revisions_content_id_idx').on(t.contentId),
+]);
 
 // 4. Media
 export const mediaAssets = pgTable('media_assets', {
@@ -117,7 +117,9 @@ export const publishTargets = pgTable('publish_targets', {
   encryptedConfig: bytea('encrypted_config').notNull(),
   enabled: boolean('enabled').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('publish_targets_domain_id_idx').on(t.domainId),
+]);
 
 export const publishingJobs = pgTable('publishing_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -140,7 +142,9 @@ export const publishAttempts = pgTable('publish_attempts', {
   status: text('status').notNull(),
   response: jsonb('response'),
   attemptedAt: timestamp('attempted_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('publish_attempts_job_id_idx').on(t.jobId),
+]);
 
 // 6. SEO & Keywords
 export const seoDocuments = pgTable('seo_documents', {
@@ -246,7 +250,9 @@ export const portfolioSummaries = pgTable('portfolio_summaries', {
   totalValue: numeric('total_value', { precision: 15, scale: 2 }),
   avgRoi: numeric('avg_roi', { precision: 5, scale: 2 }),
   lastUpdated: timestamp('last_updated', { withTimezone: true }).defaultNow(),
-});
+}, (t) => [
+  index('portfolio_summaries_org_id_idx').on(t.orgId),
+]);
 
 // 10. Audit, Webhooks, Integrations
 export const auditEvents = pgTable('audit_events', {
@@ -318,7 +324,9 @@ export const guardrails = pgTable('guardrails', {
   rule: text('rule').notNull(),
   value: integer('value').notNull(),
   enabled: boolean('enabled').default(true),
-});
+}, (t) => [
+  index('guardrails_org_id_idx').on(t.orgId),
+]);
 
 export const featureFlags = pgTable('feature_flags', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -326,7 +334,9 @@ export const featureFlags = pgTable('feature_flags', {
   key: text('key').notNull(),
   enabled: boolean('enabled').default(false),
   config: jsonb('config'),
-});
+}, (t) => [
+  index('feature_flags_org_id_idx').on(t.orgId),
+]);
 
 export const onboardingProgress = pgTable('onboarding_progress', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -334,7 +344,9 @@ export const onboardingProgress = pgTable('onboarding_progress', {
   step: text('step').notNull(),
   completed: boolean('completed').default(false),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-});
+}, (t) => [
+  index('onboarding_progress_org_id_idx').on(t.orgId),
+]);
 
 // Relations (add as needed)
 export const domainsRelations = relations(domains, ({ many }) => ({

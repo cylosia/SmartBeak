@@ -1,7 +1,12 @@
 import { getActiveOrganization } from "@saas/auth/lib/server";
 import { PageHeader } from "@saas/shared/components/PageHeader";
 import { notFound } from "next/navigation";
-import { PortfolioView } from "@/modules/smartbeak/portfolio/components/PortfolioView";
+import dynamic from "next/dynamic";
+
+const PortfolioView = dynamic(
+  () => import("@/modules/smartbeak/portfolio/components/PortfolioView").then((m) => m.PortfolioView),
+  { ssr: false, loading: () => <div className="animate-pulse h-96 rounded-lg bg-muted" /> },
+);
 
 export default async function PortfolioPage({
   params,

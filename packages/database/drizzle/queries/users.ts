@@ -70,7 +70,7 @@ export async function createUser({
 	emailVerified: boolean;
 	onboardingComplete: boolean;
 }) {
-	const [{ id }] = await db
+	const [newUser] = await db
 		.insert(user)
 		.values({
 			email,
@@ -81,11 +81,7 @@ export async function createUser({
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		})
-		.returning({
-			id: user.id,
-		});
-
-	const newUser = await getUserById(id);
+		.returning();
 
 	return newUser;
 }

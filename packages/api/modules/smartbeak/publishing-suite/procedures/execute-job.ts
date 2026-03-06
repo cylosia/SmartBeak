@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/server";
+import { logger } from "@repo/logs";
 import {
   countAttemptsForJob,
   getContentItemById,
@@ -67,12 +68,15 @@ export const executePublishingJobProcedure = protectedProcedure
     let config: Record<string, unknown> = {};
     try {
       const { decrypt } = await import("@repo/utils");
-      const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
-      if (!configSecret) throw new Error("Encryption key not configured");
+      const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY;
+      if (!configSecret) throw new Error("SMARTBEAK_ENCRYPTION_KEY is required");
       const configJson = decrypt(targetConfig.encryptedConfig, configSecret);
       config = JSON.parse(configJson);
-    } catch {
-      config = {};
+    } catch (decryptErr) {
+      logger.error("[execute-job] Failed to decrypt publish target config:", decryptErr);
+      throw new ORPCError("INTERNAL_SERVER_ERROR", {
+        message: "Failed to decrypt publishing credentials.",
+      });
     }
 
     // Get content payload
@@ -114,9 +118,10 @@ export const executePublishingJobProcedure = protectedProcedure
       result = await adapter.publish(config, payload);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
+      logger.error("[execute-job] publish error:", err);
       await recordPublishAttempt({ jobId: input.jobId, status: "error", response: { error: errorMsg } });
       await updatePublishingJobStatus(input.jobId, "failed", { error: errorMsg });
-      throw new ORPCError("INTERNAL_SERVER_ERROR", { message: errorMsg });
+      throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Publishing failed. Check the job details for more information." });
     }
 
     // Record attempt

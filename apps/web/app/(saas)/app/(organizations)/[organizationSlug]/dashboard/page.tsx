@@ -1,7 +1,12 @@
 import { getActiveOrganization } from "@saas/auth/lib/server";
 import { PageHeader } from "@saas/shared/components/PageHeader";
 import { notFound } from "next/navigation";
-import { DashboardOverview } from "@/modules/smartbeak/dashboard/components/DashboardOverview";
+import dynamic from "next/dynamic";
+
+const DashboardOverview = dynamic(
+  () => import("@/modules/smartbeak/dashboard/components/DashboardOverview").then((m) => m.DashboardOverview),
+  { ssr: false, loading: () => <div className="animate-pulse h-96 rounded-lg bg-muted" /> },
+);
 
 export async function generateMetadata({
   params,

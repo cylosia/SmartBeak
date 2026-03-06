@@ -268,7 +268,7 @@ export const auth = betterAuth({
 				});
 			},
 		}),
-		openAPI(),
+		...(process.env.NODE_ENV !== "production" ? [openAPI()] : []),
 		invitationOnlyPlugin(),
 		twoFactor(),
 	],

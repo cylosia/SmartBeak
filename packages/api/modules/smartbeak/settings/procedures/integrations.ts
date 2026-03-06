@@ -12,9 +12,9 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
-const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
+const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY;
 if (!ENCRYPTION_SECRET) {
-  throw new Error("SMARTBEAK_ENCRYPTION_KEY or BETTER_AUTH_SECRET is required for encryption");
+  throw new Error("SMARTBEAK_ENCRYPTION_KEY is required for encryption");
 }
 
 const SUPPORTED_PROVIDERS = ["openai", "google_search_console", "ahrefs"] as const;

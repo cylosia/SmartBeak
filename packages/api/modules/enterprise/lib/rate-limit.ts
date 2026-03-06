@@ -50,12 +50,14 @@ export function checkRateLimit(
   };
 }
 
-// Periodically clean up expired windows to prevent memory leaks.
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, window] of windows) {
-    if (now >= window.resetAt) {
-      windows.delete(key);
+const globalRef = globalThis as typeof globalThis & { __rateLimitCleanupInterval?: ReturnType<typeof setInterval> };
+if (!globalRef.__rateLimitCleanupInterval) {
+  globalRef.__rateLimitCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, window] of windows) {
+      if (now >= window.resetAt) {
+        windows.delete(key);
+      }
     }
-  }
-}, 60_000);
+  }, 60_000);
+}

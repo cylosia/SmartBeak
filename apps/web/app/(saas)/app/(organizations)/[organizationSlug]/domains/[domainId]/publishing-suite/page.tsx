@@ -4,7 +4,11 @@ import { useParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { Button } from "@repo/ui/components/button";
 import { PublishingCalendar } from "@/modules/smartbeak/publishing-suite/components/PublishingCalendar";
-import { PublishAnalyticsView } from "@/modules/smartbeak/publishing-suite/components/PublishAnalyticsView";
+import dynamic from "next/dynamic";
+const PublishAnalyticsView = dynamic(
+  () => import("@/modules/smartbeak/publishing-suite/components/PublishAnalyticsView").then((m) => m.PublishAnalyticsView),
+  { ssr: false, loading: () => <div className="animate-pulse h-64 rounded-lg bg-muted" /> },
+);
 import { EmailSeriesBuilder } from "@/modules/smartbeak/publishing-suite/components/EmailSeriesBuilder";
 import { BulkScheduleDialog } from "@/modules/smartbeak/publishing-suite/components/BulkScheduleDialog";
 import { PlatformTargetsManager } from "@/modules/smartbeak/publishing-suite/components/PlatformTargetsManager";

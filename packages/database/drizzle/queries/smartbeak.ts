@@ -91,18 +91,20 @@ export async function upsertSmartBeakOrgMember(data: {
   userId: string;
   role: "owner" | "admin" | "editor" | "viewer";
 }) {
-  const existing = await db.query.organizationMembers.findFirst({
-    where: (m, { and: a, eq: e }) =>
-      a(e(m.orgId, data.orgId), e(m.userId, data.userId)),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.organizationMembers.findFirst({
+      where: (m, { and: a, eq: e }) =>
+        a(e(m.orgId, data.orgId), e(m.userId, data.userId)),
+    });
+    if (existing) {
+      return tx
+        .update(organizationMembers)
+        .set({ role: data.role })
+        .where(eq(organizationMembers.id, existing.id))
+        .returning();
+    }
+    return tx.insert(organizationMembers).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(organizationMembers)
-      .set({ role: data.role })
-      .where(eq(organizationMembers.id, existing.id))
-      .returning();
-  }
-  return db.insert(organizationMembers).values(data).returning();
 }
 
 // ─── Domains ──────────────────────────────────────────────────────────────────
@@ -490,24 +492,26 @@ export async function upsertSeoDocument(data: {
   decaySignals?: Record<string, unknown> | null;
   score?: number;
 }) {
-  const existing = await db.query.seoDocuments.findFirst({
-    where: (s, { eq: e }) => e(s.domainId, data.domainId),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.seoDocuments.findFirst({
+      where: (s, { eq: e }) => e(s.domainId, data.domainId),
+    });
+    if (existing) {
+      return tx
+        .update(seoDocuments)
+        .set({
+          keywords: data.keywords ?? [],
+          gscData: data.gscData,
+          ahrefsData: data.ahrefsData,
+          decaySignals: data.decaySignals,
+          score: data.score ?? 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(seoDocuments.id, existing.id))
+        .returning();
+    }
+    return tx.insert(seoDocuments).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(seoDocuments)
-      .set({
-        keywords: data.keywords ?? [],
-        gscData: data.gscData,
-        ahrefsData: data.ahrefsData,
-        decaySignals: data.decaySignals,
-        score: data.score ?? 0,
-        updatedAt: new Date(),
-      })
-      .where(eq(seoDocuments.id, existing.id))
-      .returning();
-  }
-  return db.insert(seoDocuments).values(data).returning();
 }
 
 // ─── Keyword Tracking ─────────────────────────────────────────────────────────
@@ -533,24 +537,26 @@ export async function upsertKeyword(data: {
   position?: number;
   decayFactor?: string;
 }) {
-  const existing = await db.query.keywordTracking.findFirst({
-    where: (k, { and: a, eq: e }) =>
-      a(e(k.domainId, data.domainId), e(k.keyword, data.keyword)),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.keywordTracking.findFirst({
+      where: (k, { and: a, eq: e }) =>
+        a(e(k.domainId, data.domainId), e(k.keyword, data.keyword)),
+    });
+    if (existing) {
+      return tx
+        .update(keywordTracking)
+        .set({
+          volume: data.volume,
+          difficulty: data.difficulty,
+          position: data.position,
+          decayFactor: data.decayFactor,
+          lastUpdated: new Date(),
+        })
+        .where(eq(keywordTracking.id, existing.id))
+        .returning();
+    }
+    return tx.insert(keywordTracking).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(keywordTracking)
-      .set({
-        volume: data.volume,
-        difficulty: data.difficulty,
-        position: data.position,
-        decayFactor: data.decayFactor,
-        lastUpdated: new Date(),
-      })
-      .where(eq(keywordTracking.id, existing.id))
-      .returning();
-  }
-  return db.insert(keywordTracking).values(data).returning();
 }
 
 export async function deleteKeyword(id: string) {
@@ -572,22 +578,24 @@ export async function upsertSubscription(data: {
   plan: string;
   currentPeriodEnd?: Date;
 }) {
-  const existing = await db.query.subscriptions.findFirst({
-    where: (s, { eq: e }) => e(s.orgId, data.orgId),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.subscriptions.findFirst({
+      where: (s, { eq: e }) => e(s.orgId, data.orgId),
+    });
+    if (existing) {
+      return tx
+        .update(subscriptions)
+        .set({
+          stripeSubscriptionId: data.stripeSubscriptionId ?? existing.stripeSubscriptionId,
+          status: data.status ?? "active",
+          plan: data.plan,
+          currentPeriodEnd: data.currentPeriodEnd,
+        })
+        .where(eq(subscriptions.id, existing.id))
+        .returning();
+    }
+    return tx.insert(subscriptions).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(subscriptions)
-      .set({
-        stripeSubscriptionId: data.stripeSubscriptionId ?? existing.stripeSubscriptionId,
-        status: data.status ?? "active",
-        plan: data.plan,
-        currentPeriodEnd: data.currentPeriodEnd,
-      })
-      .where(eq(subscriptions.id, existing.id))
-      .returning();
-  }
-  return db.insert(subscriptions).values(data).returning();
 }
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
@@ -732,22 +740,24 @@ export async function upsertPortfolioSummary(data: {
   totalValue?: string;
   avgRoi?: string;
 }) {
-  const existing = await db.query.portfolioSummaries.findFirst({
-    where: (p, { eq: e }) => e(p.orgId, data.orgId),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.portfolioSummaries.findFirst({
+      where: (p, { eq: e }) => e(p.orgId, data.orgId),
+    });
+    if (existing) {
+      return tx
+        .update(portfolioSummaries)
+        .set({
+          totalDomains: data.totalDomains ?? 0,
+          totalValue: data.totalValue,
+          avgRoi: data.avgRoi,
+          lastUpdated: new Date(),
+        })
+        .where(eq(portfolioSummaries.id, existing.id))
+        .returning();
+    }
+    return tx.insert(portfolioSummaries).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(portfolioSummaries)
-      .set({
-        totalDomains: data.totalDomains ?? 0,
-        totalValue: data.totalValue,
-        avgRoi: data.avgRoi,
-        lastUpdated: new Date(),
-      })
-      .where(eq(portfolioSummaries.id, existing.id))
-      .returning();
-  }
-  return db.insert(portfolioSummaries).values(data).returning();
 }
 
 // ─── Audit Events ─────────────────────────────────────────────────────────────
@@ -908,18 +918,20 @@ export async function upsertGuardrail(data: {
   value: number;
   enabled?: boolean;
 }) {
-  const existing = await db.query.guardrails.findFirst({
-    where: (g, { and: a, eq: e }) =>
-      a(e(g.orgId, data.orgId), e(g.rule, data.rule)),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.guardrails.findFirst({
+      where: (g, { and: a, eq: e }) =>
+        a(e(g.orgId, data.orgId), e(g.rule, data.rule)),
+    });
+    if (existing) {
+      return tx
+        .update(guardrails)
+        .set({ value: data.value, enabled: data.enabled ?? true })
+        .where(eq(guardrails.id, existing.id))
+        .returning();
+    }
+    return tx.insert(guardrails).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(guardrails)
-      .set({ value: data.value, enabled: data.enabled ?? true })
-      .where(eq(guardrails.id, existing.id))
-      .returning();
-  }
-  return db.insert(guardrails).values(data).returning();
 }
 
 // ─── Feature Flags ────────────────────────────────────────────────────────────
@@ -942,18 +954,20 @@ export async function upsertFeatureFlag(data: {
   enabled?: boolean;
   config?: Record<string, unknown>;
 }) {
-  const existing = await db.query.featureFlags.findFirst({
-    where: (f, { and: a, eq: e }) =>
-      a(e(f.orgId, data.orgId), e(f.key, data.key)),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.featureFlags.findFirst({
+      where: (f, { and: a, eq: e }) =>
+        a(e(f.orgId, data.orgId), e(f.key, data.key)),
+    });
+    if (existing) {
+      return tx
+        .update(featureFlags)
+        .set({ enabled: data.enabled ?? false, config: data.config })
+        .where(eq(featureFlags.id, existing.id))
+        .returning();
+    }
+    return tx.insert(featureFlags).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(featureFlags)
-      .set({ enabled: data.enabled ?? false, config: data.config })
-      .where(eq(featureFlags.id, existing.id))
-      .returning();
-  }
-  return db.insert(featureFlags).values(data).returning();
 }
 
 // ─── Onboarding Progress ──────────────────────────────────────────────────────
@@ -969,19 +983,21 @@ export async function upsertOnboardingStep(data: {
   step: string;
   completed?: boolean;
 }) {
-  const existing = await db.query.onboardingProgress.findFirst({
-    where: (o, { and: a, eq: e }) =>
-      a(e(o.orgId, data.orgId), e(o.step, data.step)),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.onboardingProgress.findFirst({
+      where: (o, { and: a, eq: e }) =>
+        a(e(o.orgId, data.orgId), e(o.step, data.step)),
+    });
+    if (existing) {
+      return tx
+        .update(onboardingProgress)
+        .set({
+          completed: data.completed ?? false,
+          completedAt: data.completed ? new Date() : null,
+        })
+        .where(eq(onboardingProgress.id, existing.id))
+        .returning();
+    }
+    return tx.insert(onboardingProgress).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(onboardingProgress)
-      .set({
-        completed: data.completed ?? false,
-        completedAt: data.completed ? new Date() : null,
-      })
-      .where(eq(onboardingProgress.id, existing.id))
-      .returning();
-  }
-  return db.insert(onboardingProgress).values(data).returning();
 }

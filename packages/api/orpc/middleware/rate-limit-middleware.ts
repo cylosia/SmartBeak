@@ -1,5 +1,4 @@
-import { ORPCError } from "@orpc/server";
-import { checkRateLimit } from "../../modules/enterprise/lib/rate-limit";
+import { enforceRateLimit } from "../../infrastructure/rate-limit-redis";
 
 interface RateLimitOptions {
 	limit: number;
@@ -13,7 +12,7 @@ const PUBLIC_RATE_LIMIT: RateLimitOptions = {
 
 /**
  * oRPC middleware that enforces IP-based rate limiting on public endpoints.
- * Uses the in-memory rate limiter by default (works without Redis).
+ * Uses Redis when available, falling back to in-memory.
  */
 export function publicRateLimitMiddleware(
 	opts: RateLimitOptions = PUBLIC_RATE_LIMIT,
@@ -31,13 +30,10 @@ export function publicRateLimitMiddleware(
 			"unknown";
 
 		const key = `public:${ip}`;
-		const result = checkRateLimit(key, opts.limit, opts.windowMs);
-
-		if (!result.allowed) {
-			throw new ORPCError("TOO_MANY_REQUESTS", {
-				message: `Rate limit exceeded. Please retry after ${Math.ceil((result.resetAt - Date.now()) / 1000)} seconds.`,
-			});
-		}
+		await enforceRateLimit(key, {
+			limit: opts.limit,
+			windowSeconds: Math.ceil(opts.windowMs / 1000),
+		});
 
 		return next();
 	};

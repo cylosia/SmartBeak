@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDomainSchema, THEME_OPTIONS, type ThemeOption } from "@shared/schema";
@@ -6,10 +6,26 @@ import { deployToVercel } from "./deploy";
 import { getThemeConfigs, generateThemeHtml } from "./themes";
 import { z } from "zod";
 
+function requireApiKey(req: Request, res: Response, next: NextFunction): void {
+  const apiKey = req.headers["x-api-key"] ?? req.query.apiKey;
+  const expected = process.env.SERVER_API_KEY;
+  if (!expected) {
+    res.status(503).json({ message: "Server API key not configured" });
+    return;
+  }
+  if (apiKey !== expected) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.use("/api", requireApiKey);
 
   app.get("/api/domains", async (_req, res) => {
     try {
