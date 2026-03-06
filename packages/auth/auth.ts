@@ -39,12 +39,23 @@ const getLocaleFromRequest = (request?: Request) => {
 const appUrl = getBaseUrl();
 
 // #region agent log
-console.log('[SmartBeak-Debug] auth.ts module loaded — deployment canary', { appUrl, enableSignup: config.enableSignup, timestamp: new Date().toISOString() });
+const trustedOrigins = [appUrl];
+if (process.env.VERCEL_URL) {
+	trustedOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+	trustedOrigins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+}
+if (process.env.VERCEL_BRANCH_URL) {
+	trustedOrigins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+}
+const uniqueOrigins = [...new Set(trustedOrigins)];
+console.log('[SmartBeak-Debug] auth.ts module loaded — deployment canary', { appUrl, trustedOrigins: uniqueOrigins, enableSignup: config.enableSignup, timestamp: new Date().toISOString() });
 // #endregion
 
 export const auth = betterAuth({
 	baseURL: appUrl,
-	trustedOrigins: [appUrl],
+	trustedOrigins: uniqueOrigins,
 	database: prismaAdapter(db, {
 		provider: "postgresql",
 	}),
