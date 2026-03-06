@@ -5,7 +5,7 @@
 		"@repo/database": "workspace:*",
 		"@repo/logs": "workspace:*",
 		"chargebee-typescript": "^2.53.0",
-		"dodopayments": "^2.23.0",
+		"dodopayments": "^2.23.1",
 		"stripe": "^20.4.0",
 		"ufo": "^1.6.3",
 		"zod": "^4.3.6"
