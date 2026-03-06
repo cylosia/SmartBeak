@@ -31,6 +31,10 @@ export async function sendEmail<T extends TemplateId>(
 	let text: string;
 	let subject: string;
 
+	// #region agent log
+	console.log('[SmartBeak-Debug] sendEmail called', { to, templateId: 'templateId' in params ? (params as any).templateId : 'N/A', locale, mailProvider: process.env.MAIL_PROVIDER ?? '(unset → console)' });
+	// #endregion
+
 	if ("templateId" in params) {
 		const { templateId, context } = params;
 		try {
@@ -43,6 +47,9 @@ export async function sendEmail<T extends TemplateId>(
 			text = template.text;
 			html = template.html;
 		} catch (templateErr) {
+			// #region agent log
+			console.error('[SmartBeak-Debug] getTemplate FAILED', { error: String(templateErr) });
+			// #endregion
 			logger.error(templateErr);
 			return false;
 		}
@@ -60,8 +67,14 @@ export async function sendEmail<T extends TemplateId>(
 			text,
 			html,
 		});
+		// #region agent log
+		console.log('[SmartBeak-Debug] send() completed', { to, provider: process.env.MAIL_PROVIDER ?? '(unset → console)' });
+		// #endregion
 		return true;
 	} catch (e) {
+		// #region agent log
+		console.error('[SmartBeak-Debug] send() FAILED', { error: String(e) });
+		// #endregion
 		logger.error(e);
 		return false;
 	}
