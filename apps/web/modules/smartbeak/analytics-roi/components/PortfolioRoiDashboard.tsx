@@ -78,9 +78,9 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
     .slice(0, 10);
 
   const barData = topDomains.map((d) => ({
-    name: d.name.length > 20 ? d.name.slice(0, 18) + "…" : d.name,
+    name: (d.name ?? "").length > 20 ? (d.name ?? "").slice(0, 18) + "…" : (d.name ?? ""),
     value: d.riskAdjustedScore,
-    estimatedValue: Math.round(d.estimatedValue),
+    estimatedValue: Math.round(Number(d.estimatedValue) || 0),
   }));
 
   return (

@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { sendEmail } from "@repo/mail";
+import { getBaseUrl } from "@repo/utils";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
@@ -20,7 +21,7 @@ const ONBOARDING_SEQUENCE = [
           <li><strong>Run the Diligence Engine</strong> — get your domain's sell-ready score instantly</li>
           <li><strong>Generate your first AI content idea</strong> — use the SEO Intelligence panel</li>
         </ol>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/app"
+        <a href="${getBaseUrl()}/app"
            style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
           Open SmartBeak →
         </a>
@@ -42,7 +43,7 @@ const ONBOARDING_SEQUENCE = [
           <strong>Try it now:</strong> Navigate to any domain → SEO Intelligence → AI Ideas Generator.
           Enter your niche and get 5 structured content ideas with titles, outlines, and SEO scores in seconds.
         </p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/app"
+        <a href="${getBaseUrl()}/app"
            style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
           Generate Ideas →
         </a>
@@ -64,7 +65,7 @@ const ONBOARDING_SEQUENCE = [
           Domains with a score above 80 sell for <strong>2-4x more</strong> than unoptimized ones.
           See exactly what to fix to maximise your exit value.
         </p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/app"
+        <a href="${getBaseUrl()}/app"
            style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
           Check My Score →
         </a>
@@ -94,7 +95,7 @@ export const triggerOnboardingSequenceProcedure = protectedProcedure
         to: email,
         subject: step1.subject,
         html: step1.body(firstName),
-        text: `Welcome to SmartBeak! Open the app at: ${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/app`,
+        text: `Welcome to SmartBeak! Open the app at: ${getBaseUrl()}/app`,
       });
       results.push({ step: 1, sent: true });
     } catch (err) {
@@ -131,7 +132,7 @@ export const sendOnboardingStepProcedure = adminProcedure
       to: email,
       subject: seq.subject,
       html: seq.body(firstName),
-      text: `Open SmartBeak: ${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/app`,
+      text: `Open SmartBeak: ${getBaseUrl()}/app`,
     });
     return { sent: true, step };
   });

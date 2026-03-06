@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { createMediaAsset, getDomainById } from "@repo/database";
 import { getSignedUploadUrl } from "@repo/storage";
+import { getBaseUrl } from "@repo/utils";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
@@ -36,7 +37,7 @@ export const createMediaUploadUrl = protectedProcedure
       bucket: "avatars", // reuse existing bucket; production would use a dedicated media bucket
     });
     // Pre-register the asset so the client can reference it immediately
-    const publicUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/media/${path}`;
+    const publicUrl = `${getBaseUrl()}/api/media/${path}`;
     const [asset] = await createMediaAsset({
       domainId: input.domainId,
       fileName: input.fileName,

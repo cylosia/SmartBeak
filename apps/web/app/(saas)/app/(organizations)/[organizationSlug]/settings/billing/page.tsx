@@ -1,5 +1,6 @@
+import { isOrganizationAdmin } from "@repo/auth/lib/helper";
 import { createPurchasesHelper } from "@repo/payments/lib/helper";
-import { getActiveOrganization } from "@saas/auth/lib/server";
+import { getActiveOrganization, getSession } from "@saas/auth/lib/server";
 import { ActivePlan } from "@saas/payments/components/ActivePlan";
 import { ChangePlan } from "@saas/payments/components/ChangePlan";
 import { SettingsList } from "@saas/shared/components/SettingsList";
@@ -23,10 +24,11 @@ export default async function BillingSettingsPage({
 }: {
 	params: Promise<{ organizationSlug: string }>;
 }) {
+	const session = await getSession();
 	const { organizationSlug } = await params;
 	const organization = await getActiveOrganization(organizationSlug);
 
-	if (!organization) {
+	if (!organization || !isOrganizationAdmin(organization, session?.user)) {
 		return notFound();
 	}
 
@@ -36,11 +38,7 @@ export default async function BillingSettingsPage({
 		}),
 	);
 
-	if (error) {
-		throw new Error("Failed to fetch purchases");
-	}
-
-	const purchases = purchasesData?.purchases ?? [];
+	const purchases = error ? [] : (purchasesData?.purchases ?? []);
 	const queryClient = getServerQueryClient();
 
 	await queryClient.prefetchQuery({

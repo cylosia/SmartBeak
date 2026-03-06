@@ -10,6 +10,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
+import { logger } from "@repo/logs";
 import { checkRateLimit } from "../modules/enterprise/lib/rate-limit";
 
 // ─── Tier-based rate limit configurations ─────────────────────────────────────
@@ -109,7 +110,7 @@ export async function enforceRateLimit(
     } catch (err) {
       if (err instanceof ORPCError) throw err;
       // Redis error — fall through to in-memory fallback.
-      console.warn("[RateLimit] Redis eval failed, using in-memory fallback:", err);
+      logger.warn("[RateLimit] Redis eval failed, using in-memory fallback:", err);
     }
   }
 

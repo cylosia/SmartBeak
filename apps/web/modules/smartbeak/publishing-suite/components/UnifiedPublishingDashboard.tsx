@@ -207,7 +207,7 @@ export function UnifiedPublishingDashboard({ organizationSlug }: { organizationS
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.jobs.map((job: {
+                {(data?.jobs ?? []).map((job: {
                   id: string;
                   target: string;
                   status: string;

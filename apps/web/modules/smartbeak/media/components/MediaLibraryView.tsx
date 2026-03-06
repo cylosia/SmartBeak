@@ -53,7 +53,7 @@ export function MediaLibraryView({
         toastSuccess("Media deleted");
       },
       onError: (err) => {
-        toastError("Error", err.message);
+        toastError("Error", err instanceof Error ? err.message : "An unexpected error occurred");
       },
     }),
   );

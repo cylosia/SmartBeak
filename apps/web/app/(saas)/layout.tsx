@@ -39,11 +39,13 @@ export default async function SaaSLayout({ children }: PropsWithChildren) {
 	}
 
 	if (paymentsConfig.billingAttachedTo === "user") {
-		await queryClient.prefetchQuery(
-			orpc.payments.listPurchases.queryOptions({
-				input: {},
-			}),
-		);
+		try {
+			await queryClient.prefetchQuery(
+				orpc.payments.listPurchases.queryOptions({
+					input: {},
+				}),
+			);
+		} catch {}
 	}
 
 	return (

@@ -9,6 +9,7 @@
  */
 
 import { db } from "@repo/database";
+import { logger } from "@repo/logs";
 
 // ─── Cursor-based pagination ───────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ export async function timedQuery<T>(
     const result = await fn();
     const elapsed = performance.now() - start;
     if (elapsed > slowThresholdMs && process.env.NODE_ENV !== "production") {
-      console.warn(
+      logger.warn(
         `[SlowQuery] "${label}" took ${elapsed.toFixed(1)}ms (threshold: ${slowThresholdMs}ms)`,
       );
     }
@@ -113,7 +114,7 @@ export async function timedQuery<T>(
   } catch (err) {
     const elapsed = performance.now() - start;
     if (process.env.NODE_ENV !== "production") {
-      console.error(`[QueryError] "${label}" failed after ${elapsed.toFixed(1)}ms:`, err);
+      logger.error(`[QueryError] "${label}" failed after ${elapsed.toFixed(1)}ms:`, err);
     }
     throw err;
   }

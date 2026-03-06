@@ -105,7 +105,7 @@ export function BuyerAttributionView({
             />
             <MetricCard
               title="Intent Types"
-              value={String(data.intentBreakdown.length)}
+              value={String((data.intentBreakdown ?? []).length)}
               icon={TargetIcon}
               subtitle="Distinct buyer intents"
             />

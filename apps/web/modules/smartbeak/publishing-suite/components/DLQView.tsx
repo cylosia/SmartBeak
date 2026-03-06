@@ -247,7 +247,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dlqWebhooksQuery.data.events.map((event: { id: string; provider: string; eventType: string; error: string | null; replayCount: number | null; createdAt: Date | string }) => (
+                    {(dlqWebhooksQuery.data?.events ?? []).map((event: { id: string; provider: string; eventType: string; error: string | null; replayCount: number | null; createdAt: Date | string }) => (
                       <TableRow key={event.id}>
                         <TableCell className="font-medium capitalize">{event.provider}</TableCell>
                         <TableCell className="text-sm">{event.eventType}</TableCell>

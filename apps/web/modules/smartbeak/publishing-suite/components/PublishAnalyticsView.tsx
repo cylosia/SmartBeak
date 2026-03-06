@@ -45,10 +45,10 @@ export function PublishAnalyticsView({
 
   const chartData = Object.entries(byPlatform).map(([platform, stats]) => ({
     platform,
-    views: stats.views,
-    clicks: stats.clicks,
-    engagement: stats.engagement,
-    impressions: stats.impressions,
+    views: stats.views ?? 0,
+    clicks: stats.clicks ?? 0,
+    engagement: stats.engagement ?? 0,
+    impressions: stats.impressions ?? 0,
   }));
 
   return (
@@ -129,10 +129,10 @@ export function PublishAnalyticsView({
                       <TableRow key={row.platform}>
                         <TableCell className="font-medium capitalize">{row.platform}</TableCell>
                         <TableCell className="text-right">{byPlatform[row.platform]?.posts ?? 0}</TableCell>
-                        <TableCell className="text-right">{row.views.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">{row.clicks.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">{row.engagement.toLocaleString()}</TableCell>
-                        <TableCell className="text-right">{row.impressions.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{(row.views || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{(row.clicks || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{(row.engagement || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{(row.impressions || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">{ctr}{ctr !== "—" ? "%" : ""}</TableCell>
                       </TableRow>
                     );

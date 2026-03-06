@@ -16,8 +16,9 @@ const TAG_LENGTH = 16;
 function getEncryptionKey(): Buffer {
   const key = process.env.ENTERPRISE_ENCRYPTION_KEY;
   if (!key) {
-    // Fallback to a derived key from DATABASE_URL for development.
-    // In production, ENTERPRISE_ENCRYPTION_KEY must be set to a 32-byte hex string.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ENTERPRISE_ENCRYPTION_KEY is required in production");
+    }
     const fallback = process.env.DATABASE_URL ?? "smartbeak-dev-encryption-key-32b";
     return createHash("sha256").update(fallback).digest();
   }

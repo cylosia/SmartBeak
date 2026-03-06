@@ -105,7 +105,7 @@ export function DashboardOverview({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard
               title="Total Domains"
-              value={summary?.totalDomains ?? domainsQuery.data?.total ?? 0}
+              value={(summary?.totalDomains ?? domainsQuery.data?.total) || 0}
               subtitle="Managed properties"
               icon={GlobeIcon}
               trend={{ value: 12, label: "vs last month" }}

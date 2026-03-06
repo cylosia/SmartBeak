@@ -82,13 +82,15 @@ export function ContentEditorView({
   const item = contentQuery.data?.item;
 
   useEffect(() => {
-    if (item && initializedRef.current !== item.id) {
+    if (!item) return;
+    if (initializedRef.current !== item.id) {
       initializedRef.current = item.id;
       setTitle(item.title);
       setBody(item.body ?? "");
       setStatus(item.status ?? "draft");
     }
   }, [item]);
+
 
   const updateMutation = useMutation(
     orpc.smartbeak.content.update.mutationOptions({

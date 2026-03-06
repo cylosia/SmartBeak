@@ -100,7 +100,7 @@ export function EnterpriseBillingDashboard({
         setChangePlanOpen(false);
         toastSuccess("Billing plan updated.");
       },
-      onError: (err) => toastError("Error", err.message),
+      onError: (err) => toastError("Error", err instanceof Error ? err.message : "An unexpected error occurred"),
     }),
   );
 
@@ -115,7 +115,7 @@ export function EnterpriseBillingDashboard({
         setUpdateSeatsOpen(false);
         toastSuccess("Seat count updated.");
       },
-      onError: (err) => toastError("Error", err.message),
+      onError: (err) => toastError("Error", err instanceof Error ? err.message : "An unexpected error occurred"),
     }),
   );
 

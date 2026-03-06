@@ -9,6 +9,7 @@ import {
 } from "@repo/database";
 import { GrantRewardInputSchema } from "@repo/database";
 import { ORPCError } from "@orpc/server";
+import { getBaseUrl } from "@repo/utils";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, adminProcedure } from "../../../../orpc/procedures";
 
@@ -20,7 +21,7 @@ export const getMyReferralsProcedure = protectedProcedure
     if (!entry) return { referrals: [], stats: null };
     const referrals = await getReferralsByReferrer(entry.id);
     const stats = await getReferralStats(entry.id);
-    const referralLink = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/waitlist?ref=${entry.referralCode}`;
+    const referralLink = `${getBaseUrl()}/waitlist?ref=${entry.referralCode}`;
     return { referrals, stats, referralCode: entry.referralCode, referralLink };
   });
 
@@ -50,6 +51,6 @@ export const getReferralStatsByCodeProcedure = publicProcedure
     return {
       referralCode: input.referralCode,
       stats,
-      referralLink: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/waitlist?ref=${input.referralCode}`,
+      referralLink: `${getBaseUrl()}/waitlist?ref=${input.referralCode}`,
     };
   });

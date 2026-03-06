@@ -12,7 +12,10 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
-const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET ?? "";
+if (!process.env.BETTER_AUTH_SECRET) {
+  throw new Error("BETTER_AUTH_SECRET is required for encryption");
+}
+const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET;
 
 const SUPPORTED_PROVIDERS = ["openai", "google_search_console", "ahrefs"] as const;
 
@@ -60,12 +63,6 @@ export const upsertIntegration = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    if (!ENCRYPTION_SECRET) {
-      throw new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: "Encryption secret not configured.",
-      });
-    }
-
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
 
@@ -148,12 +145,6 @@ export const testIntegration = protectedProcedure
     }),
   )
   .handler(async ({ context: { user }, input }) => {
-    if (!ENCRYPTION_SECRET) {
-      throw new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: "Encryption secret not configured.",
-      });
-    }
-
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgAdmin(org.supastarterOrgId, user.id);
 

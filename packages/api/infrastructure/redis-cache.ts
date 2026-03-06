@@ -14,6 +14,8 @@
  *   await cache.invalidatePrefix("org:slug:"); // Invalidate all keys with prefix
  */
 
+import { logger } from "@repo/logs";
+
 // ─── In-memory fallback store ─────────────────────────────────────────────────
 
 interface MemoryEntry {
@@ -90,17 +92,17 @@ async function getRedisClient(): Promise<RedisClient | null> {
     const { createClient } = await import("redis");
     const client = createClient({ url: redisUrl });
     client.on("error", (err: Error) => {
-      console.warn("[SmartBeak Cache] Redis error, falling back to memory:", err.message);
+      logger.warn("[SmartBeak Cache] Redis error, falling back to memory:", err.message);
       redisAvailable = false;
     });
     await client.connect();
     await client.ping();
     redisClient = client as unknown as RedisClient;
     redisAvailable = true;
-    console.info("[SmartBeak Cache] Redis connected successfully.");
+    logger.info("[SmartBeak Cache] Redis connected successfully.");
     return redisClient;
   } catch (err) {
-    console.warn(
+    logger.warn(
       "[SmartBeak Cache] Redis unavailable, using in-memory fallback:",
       (err as Error).message,
     );

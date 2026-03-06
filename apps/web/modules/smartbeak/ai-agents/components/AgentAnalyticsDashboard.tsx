@@ -148,7 +148,7 @@ export function AgentAnalyticsDashboard({
   }
 
   const { summary, workflowBreakdown, dailyTrend } = data;
-  const avgDurationSec = (summary.avgDurationMs / 1000).toFixed(1);
+  const avgDurationSec = ((Number(summary?.avgDurationMs) || 0) / 1000).toFixed(1);
   const totalTokens = summary.totalInputTokens + summary.totalOutputTokens;
 
   return (

@@ -79,7 +79,7 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
     .slice(0, 10)
     .map((d) => ({
       id: d.domain.id,
-      name: d.domain.name.length > 16 ? d.domain.name.slice(0, 14) + "…" : d.domain.name,
+      name: (d.domain?.name ?? "").length > 16 ? (d.domain?.name ?? "").slice(0, 14) + "…" : (d.domain?.name ?? ""),
       decay: Math.round(d.avgDecay * 100),
     }));
 

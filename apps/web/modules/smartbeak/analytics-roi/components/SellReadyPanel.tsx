@@ -132,7 +132,7 @@ export function SellReadyPanel({
             <div className="flex flex-col items-center gap-6 sm:flex-row">
               <ScoreRing score={data.score} />
               <div className="flex-1 space-y-3">
-                {Object.entries(data.breakdown).map(([key, value]) => {
+                {Object.entries(data.breakdown ?? {}).map(([key, value]) => {
                   const labels: Record<string, { label: string; max: number }> = {
                     health: { label: "Domain Health", max: 25 },
                     diligence: { label: "Diligence Score", max: 30 },
@@ -158,7 +158,7 @@ export function SellReadyPanel({
         </Card>
 
         {/* Recommendations */}
-        {data.recommendations.length > 0 && (
+        {(data.recommendations ?? []).length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">Improvement Recommendations</CardTitle>
@@ -167,7 +167,7 @@ export function SellReadyPanel({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {data.recommendations.map((rec, i) => {
+              {(data.recommendations ?? []).map((rec, i) => {
                 const cfg = PRIORITY_CONFIG[rec.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.low;
                 const Icon = cfg.icon;
                 return (
@@ -192,7 +192,7 @@ export function SellReadyPanel({
           </Card>
         )}
 
-        {data.recommendations.length === 0 && (
+        {(data.recommendations ?? []).length === 0 && (
           <Card className="border-green-500/20 bg-green-500/5">
             <CardContent className="flex items-center gap-3 py-4">
               <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />

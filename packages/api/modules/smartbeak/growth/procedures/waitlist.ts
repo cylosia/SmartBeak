@@ -12,6 +12,7 @@ import { JoinWaitlistInputSchema, WaitlistStatusUpdateInputSchema } from "@repo/
 import { ORPCError } from "@orpc/server";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
+import { getBaseUrl } from "@repo/utils";
 import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
 // ── Helper: generate a unique referral code ───────────────────────────────────
@@ -34,7 +35,7 @@ export const joinWaitlistProcedure = publicProcedure
         success: true,
         alreadyJoined: true,
         referralCode: existing.referralCode,
-        referralLink: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/waitlist?ref=${existing.referralCode}`,
+        referralLink: `${getBaseUrl()}/waitlist?ref=${existing.referralCode}`,
         position: null,
       };
     }
@@ -66,7 +67,7 @@ export const joinWaitlistProcedure = publicProcedure
       });
     }
 
-    const referralLink = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/waitlist?ref=${referralCode}`;
+    const referralLink = `${getBaseUrl()}/waitlist?ref=${referralCode}`;
 
     // Send confirmation email
     try {
@@ -116,7 +117,7 @@ export const getWaitlistStatusProcedure = publicProcedure
   .handler(async ({ input }) => {
     const entry = await getWaitlistEntryByEmail(input.email);
     if (!entry) return null;
-    const referralLink = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/waitlist?ref=${entry.referralCode}`;
+    const referralLink = `${getBaseUrl()}/waitlist?ref=${entry.referralCode}`;
     return {
       id: entry.id,
       status: entry.status,
@@ -164,14 +165,14 @@ export const updateWaitlistStatusProcedure = adminProcedure
               <p style="color: #475569; font-size: 16px; line-height: 1.6;">
                 Great news — you've been approved for early access to SmartBeak. Your account is ready.
               </p>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/auth/signup"
+              <a href="${getBaseUrl()}/auth/signup"
                  style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
                 Create Your Account →
               </a>
               <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">The SmartBeak Team</p>
             </div>
           `,
-          text: `You've been approved! Sign up at: ${process.env.NEXT_PUBLIC_APP_URL ?? "https://smartbeak.io"}/auth/signup`,
+          text: `You've been approved! Sign up at: ${getBaseUrl()}/auth/signup`,
         });
       } catch (err) {
         if (process.env.NODE_ENV !== "production")

@@ -6,7 +6,10 @@ import {
 import { getIntegrationByProvider } from "@repo/database";
 import { decrypt } from "@repo/utils";
 
-const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET ?? "";
+if (!process.env.BETTER_AUTH_SECRET) {
+  throw new Error("BETTER_AUTH_SECRET is required for encryption");
+}
+const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET;
 
 /**
  * Resolves the OpenAI text model for a SmartBeak organization.
@@ -16,10 +19,6 @@ const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET ?? "";
 export async function resolveTextModel(
 	orgId: string,
 ): Promise<LanguageModel> {
-	if (!ENCRYPTION_SECRET) {
-		return globalTextModel;
-	}
-
 	const integration = await getIntegrationByProvider(orgId, "openai");
 	if (!integration?.enabled || !integration.encryptedConfig) {
 		return globalTextModel;

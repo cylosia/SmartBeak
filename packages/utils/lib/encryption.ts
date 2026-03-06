@@ -33,13 +33,17 @@ export function encrypt(plaintext: string, secret: string): Buffer {
  * Expects format: [12-byte IV][16-byte auth tag][ciphertext]
  */
 export function decrypt(encrypted: Buffer, secret: string): string {
-	const key = deriveKey(secret);
-	const iv = encrypted.subarray(0, IV_LENGTH);
-	const authTag = encrypted.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
-	const ciphertext = encrypted.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
+	try {
+		const key = deriveKey(secret);
+		const iv = encrypted.subarray(0, IV_LENGTH);
+		const authTag = encrypted.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
+		const ciphertext = encrypted.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
 
-	const decipher = createDecipheriv(ALGORITHM, key, iv);
-	decipher.setAuthTag(authTag);
+		const decipher = createDecipheriv(ALGORITHM, key, iv);
+		decipher.setAuthTag(authTag);
 
-	return decipher.update(ciphertext) + decipher.final("utf8");
+		return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+	} catch {
+		throw new Error("Failed to decrypt data");
+	}
 }
