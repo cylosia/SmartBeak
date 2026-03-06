@@ -150,8 +150,11 @@ export function EmailSeriesBuilder({
               >
                 {/* Step header */}
                 <div
+                  role="button"
+                  tabIndex={0}
                   className="flex cursor-pointer items-center gap-2 px-3 py-2"
                   onClick={() => setExpandedStep(expandedStep === i ? -1 : i)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedStep(expandedStep === i ? -1 : i); } }}
                 >
                   <GripVerticalIcon className="h-4 w-4 text-muted-foreground" />
                   <span className="flex-1 text-sm font-medium">
@@ -185,7 +188,7 @@ export function EmailSeriesBuilder({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                      className="h-6 w-6 p-0 text-destructive hover:text-destructive/80"
                       onClick={(e) => { e.stopPropagation(); removeStep(i); }}
                       disabled={steps.length === 1}
                       aria-label="Remove step"

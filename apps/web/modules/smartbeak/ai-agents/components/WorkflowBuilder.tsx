@@ -14,7 +14,7 @@
  * - The graph is serialized and saved via the updateWorkflow orpc procedure.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
@@ -75,10 +75,6 @@ export function WorkflowBuilder({
   const queryClient = useQueryClient();
   
 
-  const [graph, setGraph] = useState<WorkflowGraph>({
-    nodes: [],
-    edges: [],
-  });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [runPrompt, setRunPrompt] = useState("");
   const [showRunPanel, setShowRunPanel] = useState(false);
@@ -87,6 +83,7 @@ export function WorkflowBuilder({
     offsetX: number;
     offsetY: number;
   } | null>(null);
+  const [localGraph, setLocalGraph] = useState<WorkflowGraph | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -108,12 +105,16 @@ export function WorkflowBuilder({
     }),
   );
 
-  useEffect(() => {
-    const data = workflowQuery.data as { workflow: { stepsJson: WorkflowGraph } } | undefined;
-    if (data?.workflow?.stepsJson) {
-      setGraph(data.workflow.stepsJson as WorkflowGraph);
-    }
-  }, [workflowQuery.data]);
+  const serverGraph = (workflowQuery.data as { workflow: { stepsJson: WorkflowGraph } } | undefined)
+    ?.workflow?.stepsJson as WorkflowGraph | undefined;
+
+  const graph: WorkflowGraph = localGraph ?? serverGraph ?? { nodes: [], edges: [] };
+  const setGraph = (updater: WorkflowGraph | ((prev: WorkflowGraph) => WorkflowGraph)) => {
+    setLocalGraph((prev) => {
+      const current = prev ?? serverGraph ?? { nodes: [], edges: [] };
+      return typeof updater === "function" ? updater(current) : updater;
+    });
+  };
 
   const agentsQuery = useQuery(
     orpc.aiAgents.listAgents.queryOptions({

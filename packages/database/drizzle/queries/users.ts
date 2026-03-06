@@ -4,6 +4,10 @@ import { db } from "../client";
 import { account, user } from "../schema/postgres";
 import type { UserUpdateSchema } from "../zod";
 
+function escapeLikePattern(pattern: string): string {
+	return pattern.replace(/[%_\\]/g, "\\$&");
+}
+
 export async function getUsers({
 	limit,
 	offset,
@@ -17,8 +21,8 @@ export async function getUsers({
 		where: query
 			? (user, { ilike, or }) =>
 					or(
-						ilike(user.name, `%${query}%`),
-						ilike(user.email, `%${query}%`),
+						ilike(user.name, `%${escapeLikePattern(query)}%`),
+						ilike(user.email, `%${escapeLikePattern(query)}%`),
 					)
 			: undefined,
 		limit,
@@ -33,8 +37,8 @@ export async function countAllUsers({ query }: { query?: string }) {
 		.where(
 			query
 				? or(
-						ilike(user.name, `%${query}%`),
-						ilike(user.email, `%${query}%`),
+						ilike(user.name, `%${escapeLikePattern(query)}%`),
+						ilike(user.email, `%${escapeLikePattern(query)}%`),
 					)
 				: undefined,
 		);

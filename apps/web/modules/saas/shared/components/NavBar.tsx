@@ -37,7 +37,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { config as webConfig } from "@/config";
-import { OrganzationSelect } from "../../organizations/components/OrganizationSelect";
+import { OrganizationSelect } from "../../organizations/components/OrganizationSelect";
 import { useSidebar } from "../lib/sidebar-context";
 
 export function NavBar() {
@@ -228,7 +228,7 @@ export function NavBar() {
 										</span>
 									)}
 
-									<OrganzationSelect
+									<OrganizationSelect
 										className={cn({
 											"md:mt-2": useSidebarLayout,
 											"md:flex md:justify-center":

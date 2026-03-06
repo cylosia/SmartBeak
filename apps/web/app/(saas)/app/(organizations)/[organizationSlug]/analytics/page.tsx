@@ -1,7 +1,28 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
-import { PortfolioRoiDashboard } from "@/modules/smartbeak/analytics-roi/components/PortfolioRoiDashboard";
-import { BuyerAttributionView } from "@/modules/smartbeak/analytics-roi/components/BuyerAttributionView";
-import { AdvancedAnalyticsOverview } from "@/modules/smartbeak/analytics-roi/components/AdvancedAnalyticsOverview";
+import dynamic from "next/dynamic";
+
+const AdvancedAnalyticsOverview = dynamic(
+  () => import("@/modules/smartbeak/analytics-roi/components/AdvancedAnalyticsOverview").then((m) => m.AdvancedAnalyticsOverview),
+  { loading: () => <AnalyticsSkeleton /> },
+);
+const PortfolioRoiDashboard = dynamic(
+  () => import("@/modules/smartbeak/analytics-roi/components/PortfolioRoiDashboard").then((m) => m.PortfolioRoiDashboard),
+  { loading: () => <AnalyticsSkeleton /> },
+);
+const BuyerAttributionView = dynamic(
+  () => import("@/modules/smartbeak/analytics-roi/components/BuyerAttributionView").then((m) => m.BuyerAttributionView),
+  { loading: () => <AnalyticsSkeleton /> },
+);
+
+function AnalyticsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
+      ))}
+    </div>
+  );
+}
 
 export default async function AnalyticsPage({
   params,

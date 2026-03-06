@@ -32,7 +32,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { OrganizationLogo } from "./OrganizationLogo";
 
-export function OrganzationSelect({
+export function OrganizationSelect({
 	className,
 	collapsed = false,
 }: {

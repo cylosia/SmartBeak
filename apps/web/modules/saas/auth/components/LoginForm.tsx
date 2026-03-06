@@ -35,6 +35,7 @@ import { useForm } from "react-hook-form";
 import { withQuery } from "ufo";
 import { z } from "zod";
 import { config } from "@/config";
+import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import {
 	type OAuthProvider,
 	oAuthProviders,
@@ -79,7 +80,7 @@ export function LoginForm() {
 
 	const redirectPath = invitationId
 		? `/organization-invitation/${invitationId}`
-		: (redirectTo ?? config.saas.redirectAfterSignIn);
+		: safeRedirectPath(redirectTo, config.saas.redirectAfterSignIn);
 
 	useEffect(() => {
 		if (sessionLoaded && user) {

@@ -3,6 +3,7 @@ import { authClient } from "@repo/auth/client";
 import { Progress } from "@repo/ui/components/progress";
 import { useRouter } from "@shared/hooks/router";
 import { clearCache } from "@shared/lib/cache";
+import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { withQuery } from "ufo";
@@ -35,7 +36,7 @@ export function OnboardingForm() {
 		} as Record<string, unknown>);
 
 		await clearCache();
-		router.replace(redirectTo ?? "/app");
+		router.replace(safeRedirectPath(redirectTo, "/app"));
 	};
 
 	const steps = [

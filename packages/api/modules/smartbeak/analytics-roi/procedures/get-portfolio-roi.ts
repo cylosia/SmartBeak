@@ -3,6 +3,7 @@ import {
   getPortfolioRoiMaterializedView,
   upsertPortfolioSummary,
 } from "@repo/database";
+import { logger } from "@repo/logs";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
@@ -34,11 +35,9 @@ export const getPortfolioRoi = protectedProcedure
         totalValue: live.totalValue.toFixed(2),
         avgRoi: live.avgRoi.toFixed(2),
       }).catch((err) => {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[portfolio-roi] Failed to upsert summary:", err);
-      }
-      return null;
-    }); // non-blocking
+        logger.warn("[portfolio-roi] Failed to upsert summary", err);
+        return null;
+      });
     }
 
     return { ...live, cached };

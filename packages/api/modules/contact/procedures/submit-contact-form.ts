@@ -17,12 +17,23 @@ export const submitContactForm = publicProcedure
 	.use(localeMiddleware)
 	.handler(
 		async ({ input: { email, name, message }, context: { locale } }) => {
+			if (!config.contactFormTo) {
+				logger.error(
+					"Contact form submission failed: CONTACT_FORM_TO_MAIL not configured",
+				);
+				throw new ORPCError("INTERNAL_SERVER_ERROR");
+			}
+
 			try {
+				const escapedName = escapeHtml(name);
+				const escapedEmail = escapeHtml(email);
+				const escapedMessage = escapeHtml(message);
+
 				await sendEmail({
 					to: config.contactFormTo,
 					locale,
 					subject: "Contact Form Submission",
-					text: `Name: ${name}\n\nEmail: ${email}\n\nMessage: ${message}`,
+					text: `Name: ${escapedName}\n\nEmail: ${escapedEmail}\n\nMessage: ${escapedMessage}`,
 				});
 			} catch (error) {
 				logger.error(error);
@@ -30,3 +41,12 @@ export const submitContactForm = publicProcedure
 			}
 		},
 	);
+
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}

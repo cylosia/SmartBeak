@@ -1,9 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import {
-  getOrganizationBySlug,
-  getSmartBeakOrgBySlug,
-  upsertSmartBeakOrg,
-} from "@repo/database";
+import { getOrganizationBySlug, upsertSmartBeakOrg } from "@repo/database";
 
 interface ResolvedOrg {
   id: string;
@@ -21,6 +17,8 @@ interface ResolvedOrg {
  * with a proper UUID id. If the SmartBeak org doesn't exist yet, it is
  * created automatically by syncing from the Supastarter org.
  *
+ * Uses upsert to avoid TOCTOU race conditions between concurrent requests.
+ *
  * Returns both the SmartBeak org (UUID id for data tables) and the
  * Supastarter org id (cuid for Better Auth membership checks).
  */
@@ -32,16 +30,11 @@ export async function resolveSmartBeakOrg(slug: string): Promise<ResolvedOrg> {
     });
   }
 
-  const existing = await getSmartBeakOrgBySlug(slug);
-  if (existing) {
-    return { ...existing, supastarterOrgId: supastarterOrg.id };
-  }
-
-  const [created] = await upsertSmartBeakOrg({
+  const [org] = await upsertSmartBeakOrg({
     id: crypto.randomUUID(),
     name: supastarterOrg.name,
     slug,
   });
 
-  return { ...created, supastarterOrgId: supastarterOrg.id };
+  return { ...org, supastarterOrgId: supastarterOrg.id };
 }
