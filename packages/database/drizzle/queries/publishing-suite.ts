@@ -272,7 +272,7 @@ export async function createWebhookEvent(data: {
   eventType: string;
   payload?: Record<string, unknown>;
 }) {
-  return db.insert(webhookEvents).values(data as any).returning();
+  return db.insert(webhookEvents).values(data as typeof webhookEvents.$inferInsert).returning();
 }
 
 // ─── Integrations (encrypted platform credentials) ────────────────────────────

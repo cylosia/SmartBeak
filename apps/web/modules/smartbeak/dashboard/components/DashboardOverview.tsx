@@ -114,7 +114,7 @@ export function DashboardOverview({
               title="Portfolio Value"
               value={
                 summary?.totalValue
-                  ? `$${Number(summary.totalValue).toLocaleString()}`
+                  ? `$${(Number(summary.totalValue) || 0).toLocaleString()}`
                   : "—"
               }
               subtitle="Estimated total value"

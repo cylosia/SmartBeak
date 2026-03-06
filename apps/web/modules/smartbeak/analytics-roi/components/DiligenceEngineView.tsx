@@ -171,7 +171,7 @@ export function DiligenceEngineView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {report.checks.map((check) => {
+                {(report.checks ?? []).map((check) => {
                   const cfg = STATUS_CONFIG[check.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pending;
                   const Icon = cfg.icon;
                   return (

@@ -162,7 +162,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                           className="rounded"
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedJobIds(new Set(dlqJobsQuery.data.jobs.map((j: { id: string }) => j.id)));
+                              setSelectedJobIds(new Set((dlqJobsQuery.data?.jobs ?? []).map((j: { id: string }) => j.id)));
                             } else {
                               setSelectedJobIds(new Set());
                             }
@@ -176,7 +176,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dlqJobsQuery.data.jobs.map((job: { id: string; target: string; error: string | null; createdAt: Date | string }) => (
+                    {(dlqJobsQuery.data?.jobs ?? []).map((job: { id: string; target: string; error: string | null; createdAt: Date | string }) => (
                       <TableRow key={job.id}>
                         <TableCell>
                           <input

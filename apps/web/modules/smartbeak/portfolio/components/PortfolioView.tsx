@@ -84,7 +84,7 @@ export function PortfolioView({
               title="Portfolio Value"
               value={
                 summary?.totalValue
-                  ? `$${Number(summary.totalValue).toLocaleString()}`
+                  ? `$${(Number(summary.totalValue) || 0).toLocaleString()}`
                   : "$0"
               }
               subtitle="Estimated total"

@@ -162,7 +162,7 @@ export const RunWorkflowInputSchema = z.object({
 });
 
 export const GetAnalyticsInputSchema = z.object({
-  organizationSlug: z.string(),
+  organizationSlug: z.string().min(1),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   agentId: z.string().uuid().optional(),

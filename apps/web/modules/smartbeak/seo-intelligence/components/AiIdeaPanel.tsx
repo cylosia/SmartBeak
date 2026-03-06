@@ -138,7 +138,7 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
           </p>
           <ul className="space-y-1">
             {(idea.outline ?? []).map((h, i) => (
-              <li key={i} className="text-xs text-foreground flex items-start gap-1.5">
+              <li key={`outline-${i}-${h.slice(0, 20)}`} className="text-xs text-foreground flex items-start gap-1.5">
                 <span className="text-muted-foreground mt-0.5">—</span>
                 {h}
               </li>

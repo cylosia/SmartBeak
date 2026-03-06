@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/ui/components/table";
-import { ActivityIcon, TrendingDownIcon, TrendingUpIcon, ShieldIcon } from "lucide-react";
+import { ActivityIcon, AlertTriangleIcon, TrendingDownIcon, TrendingUpIcon, ShieldIcon } from "lucide-react";
 
 export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSlug: string }) {
   const overviewQuery = useQuery(
@@ -78,6 +78,7 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
     .sort((a, b) => a.avgDecay - b.avgDecay)
     .slice(0, 10)
     .map((d) => ({
+      id: d.domain.id,
       name: d.domain.name.length > 16 ? d.domain.name.slice(0, 14) + "…" : d.domain.name,
       decay: Math.round(d.avgDecay * 100),
     }));
@@ -147,7 +148,13 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
               <CardDescription>Domains with lowest decay (highest risk first)</CardDescription>
             </CardHeader>
             <CardContent>
-              {decayBarData.length === 0 ? (
+              {decayQuery.isError ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                  <p className="text-sm text-destructive">Failed to load decay data</p>
+                  <Button variant="outline" size="sm" onClick={() => decayQuery.refetch()}>Try Again</Button>
+                </div>
+              ) : decayBarData.length === 0 ? (
                 <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
                   No decay data available yet
                 </div>
@@ -161,7 +168,7 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
                     <Bar dataKey="decay" radius={[0, 4, 4, 0]}>
                       {decayBarData.map((entry, i) => (
                         <Cell
-                          key={i}
+                          key={`decay-${entry.id ?? i}`}
                           fill={entry.decay >= 70 ? "hsl(var(--chart-1))" : entry.decay >= 40 ? "hsl(var(--chart-3))" : "hsl(var(--chart-5))"}
                         />
                       ))}

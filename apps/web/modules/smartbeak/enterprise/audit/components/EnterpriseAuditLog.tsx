@@ -168,7 +168,7 @@ export function EnterpriseAuditLog({ organizationSlug }: EnterpriseAuditLogProps
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-              <LockIcon className="size-5 text-slate-600" />
+              <LockIcon className="size-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
               <h2 className="text-lg font-semibold">Enterprise Audit Log</h2>

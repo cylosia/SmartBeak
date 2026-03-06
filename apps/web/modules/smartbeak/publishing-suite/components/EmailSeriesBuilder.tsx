@@ -145,7 +145,7 @@ export function EmailSeriesBuilder({
 
             {steps.map((step, i) => (
               <div
-                key={i}
+                key={`step-${step.subject}-${step.delayDays}-${i}`}
                 className="rounded-lg border border-border bg-background"
               >
                 {/* Step header */}

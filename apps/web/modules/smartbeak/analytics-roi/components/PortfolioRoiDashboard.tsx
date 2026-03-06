@@ -34,6 +34,7 @@ import {
   DollarSignIcon,
   ActivityIcon,
   GlobeIcon,
+  AlertTriangleIcon,
 } from "lucide-react";
 
 function RiskBadge({ score }: { score: number }) {
@@ -151,7 +152,13 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
               <CardDescription>Average monetization decay factor over 30 days</CardDescription>
             </CardHeader>
             <CardContent>
-              {trendData.length === 0 ? (
+              {trendQuery.isError ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <AlertTriangleIcon className="size-8 text-destructive opacity-60" />
+                  <p className="text-sm text-destructive">Failed to load trend data</p>
+                  <Button variant="outline" size="sm" onClick={() => trendQuery.refetch()}>Try Again</Button>
+                </div>
+              ) : trendData.length === 0 ? (
                 <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
                   No trend data available yet
                 </div>
@@ -224,14 +231,14 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">
-                      ${domain.estimatedValue.toLocaleString()}
+                      ${(Number(domain.estimatedValue) || 0).toLocaleString()}
                     </TableCell>
                     <TableCell>
                       <RiskBadge score={domain.riskAdjustedScore} />
                     </TableCell>
                   </TableRow>
                 ))}
-                {data.domains.length === 0 && (
+                {(data.domains ?? []).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                       No domains found. Add domains to see portfolio analytics.
