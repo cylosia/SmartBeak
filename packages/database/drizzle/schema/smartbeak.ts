@@ -133,6 +133,7 @@ export const publishingJobs = pgTable('publishing_jobs', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index('publishing_jobs_domain_id_idx').on(t.domainId),
+  index('publishing_jobs_content_id_idx').on(t.contentId),
   index('publishing_jobs_scheduled_idx').on(t.domainId, t.scheduledFor),
 ]);
 

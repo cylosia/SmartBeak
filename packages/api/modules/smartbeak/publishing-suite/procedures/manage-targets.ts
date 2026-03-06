@@ -71,7 +71,7 @@ export const upsertPlatformTargetProcedure = protectedProcedure
     const { encrypt } = await import("@repo/utils");
     const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
     if (!configSecret) throw new ORPCError("PRECONDITION_FAILED", { message: "Encryption key not configured." });
-    const encryptedConfig = encrypt(JSON.stringify(input.config), configSecret);
+    const encryptedConfig = await encrypt(JSON.stringify(input.config), configSecret);
     const [target] = await upsertPublishTarget({
       domainId: input.domainId,
       target: input.target,

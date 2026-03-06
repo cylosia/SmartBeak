@@ -51,7 +51,7 @@ export const grantRewardProcedure = adminProcedure
 // ── get-referral-stats (public, by referral code) ─────────────────────────────
 export const getReferralStatsByCodeProcedure = publicProcedure
   .route({ method: "GET", path: "/smartbeak/growth/referrals/stats", tags: ["SmartBeak - Growth"], summary: "Get referral stats by code" })
-  .input(z.object({ referralCode: z.string().min(1) }))
+  .input(z.object({ referralCode: z.string().min(1).max(64) }))
   .use(publicRateLimitMiddleware({ limit: 15, windowMs: 60_000 }))
   .handler(async ({ input }) => {
     const referrer = await getWaitlistEntryByReferralCode(input.referralCode);

@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { getOrganizationBySlug, upsertSmartBeakOrg } from "@repo/database";
-import { cachedGetOrgBySlug } from "../../../infrastructure/redis-cache";
+import { cachedGetOrgBySlug, cachedGetSmartBeakOrgBySlug } from "../../../infrastructure/redis-cache";
 
 interface ResolvedOrg {
   id: string;
@@ -35,11 +35,14 @@ export async function resolveSmartBeakOrg(slug: string): Promise<ResolvedOrg> {
     });
   }
 
-  const [org] = await upsertSmartBeakOrg({
-    id: crypto.randomUUID(),
-    name: supastarterOrg.name,
-    slug,
-  });
+  const smartBeakOrg = await cachedGetSmartBeakOrgBySlug(slug, async () => {
+    const [org] = await upsertSmartBeakOrg({
+      id: crypto.randomUUID(),
+      name: supastarterOrg.name,
+      slug,
+    });
+    return org;
+  }) as Awaited<ReturnType<typeof upsertSmartBeakOrg>>[0];
 
-  return { ...org, supastarterOrgId: supastarterOrg.id };
+  return { ...smartBeakOrg, supastarterOrgId: supastarterOrg.id };
 }

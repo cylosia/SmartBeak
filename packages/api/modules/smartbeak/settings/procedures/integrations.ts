@@ -67,7 +67,7 @@ export const upsertIntegration = protectedProcedure
     await requireOrgAdmin(org.supastarterOrgId, user.id);
 
     const configJson = JSON.stringify(input.config);
-    const encryptedConfig = encrypt(configJson, ENCRYPTION_SECRET);
+    const encryptedConfig = await encrypt(configJson, ENCRYPTION_SECRET);
 
     const existing = await getIntegrationByProvider(org.id, input.provider);
 
@@ -157,7 +157,7 @@ export const testIntegration = protectedProcedure
 
     let config: { apiKey: string; siteUrl?: string };
     try {
-      const configJson = decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
+      const configJson = await decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
       config = JSON.parse(configJson) as { apiKey: string; siteUrl?: string };
     } catch {
       throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to decrypt integration config." });

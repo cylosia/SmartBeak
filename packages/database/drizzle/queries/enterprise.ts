@@ -235,39 +235,41 @@ export async function upsertSsoProvider(data: {
   metadata?: Record<string, unknown>;
   createdBy: string;
 }) {
-  const existing = await db.query.enterpriseSsoProviders.findFirst({
-    where: (p, { and, eq }) =>
-      and(eq(p.orgId, data.orgId), eq(p.type, data.type)),
-  });
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.enterpriseSsoProviders.findFirst({
+      where: (p, { and, eq }) =>
+        and(eq(p.orgId, data.orgId), eq(p.type, data.type)),
+    });
 
-  if (existing) {
-    const rows = await db
-      .update(enterpriseSsoProviders)
-      .set({
+    if (existing) {
+      const rows = await tx
+        .update(enterpriseSsoProviders)
+        .set({
+          domain: data.domain,
+          providerName: data.providerName ?? null,
+          encryptedConfig: data.encryptedConfig,
+          metadata: data.metadata ?? {},
+          updatedAt: new Date(),
+        })
+        .where(eq(enterpriseSsoProviders.id, existing.id))
+        .returning();
+      return rows[0]!;
+    }
+
+    const rows = await tx
+      .insert(enterpriseSsoProviders)
+      .values({
+        orgId: data.orgId,
+        type: data.type,
         domain: data.domain,
         providerName: data.providerName ?? null,
         encryptedConfig: data.encryptedConfig,
         metadata: data.metadata ?? {},
-        updatedAt: new Date(),
+        createdBy: data.createdBy,
       })
-      .where(eq(enterpriseSsoProviders.id, existing.id))
       .returning();
     return rows[0]!;
-  }
-
-  const rows = await db
-    .insert(enterpriseSsoProviders)
-    .values({
-      orgId: data.orgId,
-      type: data.type,
-      domain: data.domain,
-      providerName: data.providerName ?? null,
-      encryptedConfig: data.encryptedConfig,
-      metadata: data.metadata ?? {},
-      createdBy: data.createdBy,
-    })
-    .returning();
-  return rows[0]!;
+  });
 }
 
 export async function updateSsoProviderStatus(

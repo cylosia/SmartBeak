@@ -170,8 +170,8 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		.update(bodyText)
 		.digest("hex");
 
-	const computedBuf = Buffer.from(computedSignature, "utf8");
-	const signatureBuf = Buffer.from(signature, "utf8");
+	const computedBuf = Buffer.from(computedSignature, "hex");
+	const signatureBuf = Buffer.from(signature, "hex");
 	if (computedBuf.length !== signatureBuf.length || !timingSafeEqual(computedBuf, signatureBuf)) {
 		return new Response("Invalid signature.", {
 			status: 400,

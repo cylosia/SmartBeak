@@ -40,6 +40,7 @@ export async function getPortfolioRoiForOrg(orgId: string) {
       status: true,
       createdAt: true,
     },
+    limit: 500,
   });
 
   const decayRows = await db
@@ -319,6 +320,7 @@ export async function getBuyerAttributionForOrg(orgId: string) {
   const orgDomains = await db.query.domains.findMany({
     where: eq(domains.orgId, orgId),
     columns: { id: true, name: true },
+    limit: 500,
   });
 
   if (orgDomains.length === 0) {
@@ -383,6 +385,7 @@ export async function getMonetizationDecayForOrg(orgId: string) {
   const orgDomains = await db.query.domains.findMany({
     where: eq(domains.orgId, orgId),
     columns: { id: true, name: true, health: true },
+    limit: 500,
   });
 
   if (orgDomains.length === 0) return [];
@@ -417,6 +420,7 @@ export async function getPortfolioTrend(orgId: string, days = 30) {
   const orgDomains = await db.query.domains.findMany({
     where: eq(domains.orgId, orgId),
     columns: { id: true },
+    limit: 500,
   });
 
   const domainIds = orgDomains.map((d) => d.id);
@@ -428,6 +432,7 @@ export async function getPortfolioTrend(orgId: string, days = 30) {
       gte(monetizationDecaySignals.recordedAt, since),
     ),
     orderBy: [desc(monetizationDecaySignals.recordedAt)],
+    limit: 5000,
   });
 
   const byDay = signals.reduce<Record<string, { sum: number; count: number }>>((acc, s) => {

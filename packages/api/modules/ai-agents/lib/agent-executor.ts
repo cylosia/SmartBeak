@@ -332,6 +332,8 @@ export async function* executeWorkflow(
     const errorMessage =
       err instanceof Error ? err.message : "Unknown execution error";
 
+    logger.error("[agent-executor] Execution failed:", err);
+
     await updateSession(sessionId, {
       status: "failed",
       errorMessage,
@@ -339,7 +341,7 @@ export async function* executeWorkflow(
       completedAt: new Date(),
     });
 
-    yield { type: "error", error: errorMessage };
+    yield { type: "error", error: "Agent execution failed. Please try again." };
   }
 }
 

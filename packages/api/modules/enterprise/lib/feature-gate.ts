@@ -8,6 +8,7 @@
 import { ORPCError } from "@orpc/server";
 import { getOrgTier } from "@repo/database";
 import type { EnterpriseTierFeatures } from "@repo/database";
+import { cachedGetOrgTier } from "../../../infrastructure/redis-cache";
 
 type FeatureKey = keyof EnterpriseTierFeatures;
 
@@ -22,7 +23,7 @@ export async function requireEnterpriseFeature(
   orgId: string,
   feature: FeatureKey,
 ) {
-  const orgTier = await getOrgTier(orgId);
+  const orgTier = await cachedGetOrgTier(orgId, () => getOrgTier(orgId)) as Awaited<ReturnType<typeof getOrgTier>>;
 
   if (!orgTier?.tier) {
     // No tier configured — treat as Starter (no enterprise features).

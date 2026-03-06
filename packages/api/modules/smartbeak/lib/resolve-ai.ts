@@ -26,7 +26,7 @@ export async function resolveTextModel(
 
 	let config: { apiKey: string };
 	try {
-		const configJson = decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
+		const configJson = await decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
 		config = JSON.parse(configJson) as { apiKey: string };
 	} catch (err) {
 		const { logger } = await import("@repo/logs");

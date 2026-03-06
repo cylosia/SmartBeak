@@ -70,7 +70,7 @@ export const executePublishingJobProcedure = protectedProcedure
       const { decrypt } = await import("@repo/utils");
       const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY;
       if (!configSecret) throw new Error("SMARTBEAK_ENCRYPTION_KEY is required");
-      const configJson = decrypt(targetConfig.encryptedConfig, configSecret);
+      const configJson = await decrypt(targetConfig.encryptedConfig, configSecret);
       config = JSON.parse(configJson);
     } catch (decryptErr) {
       logger.error("[execute-job] Failed to decrypt publish target config:", decryptErr);

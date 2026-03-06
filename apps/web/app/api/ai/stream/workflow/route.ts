@@ -23,6 +23,7 @@ import {
   WorkflowGraphSchema,
 } from "@repo/database";
 import { executeWorkflow } from "@repo/api/modules/ai-agents/lib/agent-executor";
+import { logger } from "@repo/logs";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
           }
         }
       } catch (err) {
-        console.error("[workflow-stream] execution error:", err);
+        logger.error("[workflow-stream] execution error:", err);
         send({
           type: "error",
           error: "Execution failed. Please try again.",

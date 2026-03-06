@@ -193,14 +193,14 @@ export async function deployToVercel(
 
       await storage.updateDeploymentVersion(deployVersion.id, {
         status: "error",
-        buildLog: `Error: ${err.message}`,
+        buildLog: `Error: ${errMsg}`,
       });
 
       await storage.createAuditLog({
         action: "deploy_error",
         entityType: "site_shard",
         entityId: shard.id,
-        details: { error: err.message },
+        details: { error: errMsg },
       });
     }
   })();

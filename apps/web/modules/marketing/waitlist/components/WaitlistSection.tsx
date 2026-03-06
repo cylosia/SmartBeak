@@ -34,6 +34,7 @@ export function WaitlistSection() {
   const [result, setResult] = useState<WaitlistResult | null>(null);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(copyTimerRef.current), []);
 
   const joinMutation = useMutation(
     orpc.smartbeak.growth.joinWaitlist.mutationOptions(),

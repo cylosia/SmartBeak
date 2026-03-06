@@ -21,6 +21,7 @@ import {
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
+import { cachedGetBillingTiers, cachedGetOrgTier } from "../../../../infrastructure/redis-cache";
 import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { audit } from "../../lib/audit";
@@ -35,7 +36,7 @@ export const listBillingTiersProcedure = protectedProcedure
   })
   .input(z.object({}))
   .handler(async () => {
-    const tiers = await getActiveBillingTiers();
+    const tiers = await cachedGetBillingTiers(() => getActiveBillingTiers());
     return { tiers };
   });
 
@@ -51,7 +52,7 @@ export const getOrgTierProcedure = protectedProcedure
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
 
-    const orgTier = await getOrgTier(org.id);
+    const orgTier = await cachedGetOrgTier(org.id, () => getOrgTier(org.id));
     return { orgTier };
   });
 

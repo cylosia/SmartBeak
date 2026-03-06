@@ -116,12 +116,12 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 			return new Response("Missing webhook secret.", { status: 500 });
 		}
 		const hmac = createHmac("sha256", webhookSecret);
-		const digest = Buffer.from(hmac.update(text).digest("hex"), "utf8");
+		const digest = Buffer.from(hmac.update(text).digest("hex"), "hex");
 		const signatureHeader = req.headers.get("x-signature");
 		if (!signatureHeader) {
 			return new Response("Missing signature header.", { status: 400 });
 		}
-		const signature = Buffer.from(signatureHeader, "utf8");
+		const signature = Buffer.from(signatureHeader, "hex");
 
 		if (!timingSafeEqual(digest, signature)) {
 			return new Response("Invalid signature.", {

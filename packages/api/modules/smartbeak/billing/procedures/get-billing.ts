@@ -5,6 +5,7 @@ import {
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
+import { cachedGetSubscription } from "../../../../infrastructure/redis-cache";
 import { requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
@@ -24,7 +25,7 @@ export const getBilling = protectedProcedure
     const org = await resolveSmartBeakOrg(input.organizationSlug);
     await requireOrgMembership(org.supastarterOrgId, user.id);
     const [subscription, invoices, usageRecords] = await Promise.all([
-      getSubscriptionForOrg(org.id),
+      cachedGetSubscription(org.id, () => getSubscriptionForOrg(org.id)),
       getInvoicesForOrg(org.id, { limit: 10 }),
       getUsageRecordsForOrg(org.id, { limit: 50 }),
     ]);
