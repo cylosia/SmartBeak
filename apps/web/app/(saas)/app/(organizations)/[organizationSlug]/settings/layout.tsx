@@ -12,7 +12,7 @@ import {
 	TriangleAlertIcon,
 	Users2Icon,
 } from "lucide-react";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import type { PropsWithChildren } from "react";
 
@@ -71,28 +71,28 @@ export default async function SettingsLayout({
 							},
 						]
 					: []),
-			...(userIsOrganizationAdmin
-				? [
-						{
-							title: t(
-								"settings.menu.organization.integrations",
-							),
-							href: `${organizationSettingsBasePath}/integrations`,
-							icon: (
-								<PlugIcon className="size-4 opacity-50" />
-							),
-						},
-						{
-							title: t(
-								"settings.menu.organization.dangerZone",
-							),
-							href: `${organizationSettingsBasePath}/danger-zone`,
-							icon: (
-								<TriangleAlertIcon className="size-4 opacity-50" />
-							),
-						},
-					]
-				: []),
+				...(userIsOrganizationAdmin
+					? [
+							{
+								title: t(
+									"settings.menu.organization.integrations",
+								),
+								href: `${organizationSettingsBasePath}/integrations`,
+								icon: (
+									<PlugIcon className="size-4 opacity-50" />
+								),
+							},
+							{
+								title: t(
+									"settings.menu.organization.dangerZone",
+								),
+								href: `${organizationSettingsBasePath}/danger-zone`,
+								icon: (
+									<TriangleAlertIcon className="size-4 opacity-50" />
+								),
+							},
+						]
+					: []),
 			],
 		},
 	];

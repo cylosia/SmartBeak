@@ -19,7 +19,8 @@ export async function getOrganizations({
 }) {
 	return db.query.organization.findMany({
 		where: query
-			? (org, { ilike, or }) => or(ilike(org.name, `%${escapeLikePattern(query)}%`))
+			? (org, { ilike, or }) =>
+					or(ilike(org.name, `%${escapeLikePattern(query)}%`))
 			: undefined,
 		limit,
 		offset,
@@ -36,7 +37,11 @@ export async function countAllOrganizations({ query }: { query?: string }) {
 	const result = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(organization)
-		.where(query ? or(ilike(organization.name, `%${escapeLikePattern(query)}%`)) : undefined);
+		.where(
+			query
+				? or(ilike(organization.name, `%${escapeLikePattern(query)}%`))
+				: undefined,
+		);
 	return Number(result[0]?.count ?? 0);
 }
 

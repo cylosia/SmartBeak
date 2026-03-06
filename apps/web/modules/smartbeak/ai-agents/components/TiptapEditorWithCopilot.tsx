@@ -23,86 +23,89 @@
  *   Mod+Shift+O — Optimize for SEO
  */
 
-import { useEffect, useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { useEffect, useState } from "react";
 import { AiCopilotExtension } from "./AiCopilotExtension";
 import { AiCopilotToolbar } from "./AiCopilotToolbar";
 
 interface TiptapEditorWithCopilotProps {
-  value?: string;
-  onChange?: (value: string) => void;
-  placeholder?: string;
-  documentTitle?: string;
-  className?: string;
-  editable?: boolean;
+	value?: string;
+	onChange?: (value: string) => void;
+	placeholder?: string;
+	documentTitle?: string;
+	className?: string;
+	editable?: boolean;
 }
 
 export function TiptapEditorWithCopilot({
-  value = "",
-  onChange,
-  placeholder = "Start writing...",
-  documentTitle,
-  className,
-  editable = true,
+	value = "",
+	onChange,
+	placeholder = "Start writing...",
+	documentTitle,
+	className,
+	editable = true,
 }: TiptapEditorWithCopilotProps) {
-  const [isMounted, setIsMounted] = useState(false);
+	const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+	useEffect(() => {
+		setIsMounted(true);
+	}, []);
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder,
-        emptyEditorClass: "is-editor-empty",
-      }),
-      AiCopilotExtension.configure({
-        enabled: true,
-      }),
-    ],
-    content: value,
-    editable,
-    onUpdate: ({ editor: e }) => {
-      onChange?.(e.getHTML());
-    },
-    editorProps: {
-      attributes: {
-        class: [
-          "prose prose-sm dark:prose-invert max-w-none",
-          "focus:outline-none min-h-[200px] px-4 py-3",
-          "prose-headings:font-semibold prose-p:leading-relaxed",
-          "[&_.ai-copilot-suggestion]:text-muted-foreground/40 [&_.ai-copilot-suggestion]:italic",
-          className ?? "",
-        ]
-          .filter(Boolean)
-          .join(" "),
-      },
-    },
-  });
+	const editor = useEditor({
+		immediatelyRender: false,
+		extensions: [
+			StarterKit,
+			Placeholder.configure({
+				placeholder,
+				emptyEditorClass: "is-editor-empty",
+			}),
+			AiCopilotExtension.configure({
+				enabled: true,
+			}),
+		],
+		content: value,
+		editable,
+		onUpdate: ({ editor: e }) => {
+			onChange?.(e.getHTML());
+		},
+		editorProps: {
+			attributes: {
+				class: [
+					"prose prose-sm dark:prose-invert max-w-none",
+					"focus:outline-none min-h-[200px] px-4 py-3",
+					"prose-headings:font-semibold prose-p:leading-relaxed",
+					"[&_.ai-copilot-suggestion]:text-muted-foreground/40 [&_.ai-copilot-suggestion]:italic",
+					className ?? "",
+				]
+					.filter(Boolean)
+					.join(" "),
+			},
+		},
+	});
 
-  if (!isMounted) {
-    return (
-      <div className="rounded-xl border bg-background">
-        <div className="border-b px-3 py-2 h-10 bg-muted/30 animate-pulse rounded-t-xl" />
-        <div className="min-h-[200px] animate-pulse bg-muted/10 rounded-b-xl" />
-      </div>
-    );
-  }
+	if (!isMounted) {
+		return (
+			<div className="rounded-xl border bg-background">
+				<div className="border-b px-3 py-2 h-10 bg-muted/30 animate-pulse rounded-t-xl" />
+				<div className="min-h-[200px] animate-pulse bg-muted/10 rounded-b-xl" />
+			</div>
+		);
+	}
 
-  return (
-    <div className="rounded-xl border bg-background overflow-hidden">
-      {/* Co-Pilot Toolbar */}
-      <div className="flex items-center gap-1 border-b px-3 py-1.5 bg-muted/30 min-h-[40px] flex-wrap">
-        <AiCopilotToolbar editor={editor} documentTitle={documentTitle} />
-      </div>
+	return (
+		<div className="rounded-xl border bg-background overflow-hidden">
+			{/* Co-Pilot Toolbar */}
+			<div className="flex items-center gap-1 border-b px-3 py-1.5 bg-muted/30 min-h-[40px] flex-wrap">
+				<AiCopilotToolbar
+					editor={editor}
+					documentTitle={documentTitle}
+				/>
+			</div>
 
-      {/* Editor */}
-      <EditorContent editor={editor} />
-    </div>
-  );
+			{/* Editor */}
+			<EditorContent editor={editor} />
+		</div>
+	);
 }

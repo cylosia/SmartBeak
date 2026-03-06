@@ -11,196 +11,218 @@
 import { useCallback, useRef, useState } from "react";
 
 export interface AgentStreamEvent {
-  type:
-    | "session_start"
-    | "node_start"
-    | "node_stream"
-    | "node_complete"
-    | "session_complete"
-    | "error";
-  nodeId?: string;
-  agentId?: string;
-  agentName?: string;
-  chunk?: string;
-  output?: string;
-  costCents?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  totalCostCents?: number;
-  error?: string;
+	type:
+		| "session_start"
+		| "node_start"
+		| "node_stream"
+		| "node_complete"
+		| "session_complete"
+		| "error";
+	nodeId?: string;
+	agentId?: string;
+	agentName?: string;
+	chunk?: string;
+	output?: string;
+	costCents?: number;
+	inputTokens?: number;
+	outputTokens?: number;
+	totalCostCents?: number;
+	error?: string;
 }
 
 export interface AgentNodeState {
-  nodeId: string;
-  agentName: string;
-  status: "pending" | "running" | "complete" | "error";
-  output: string;
-  costCents: number;
-  inputTokens: number;
-  outputTokens: number;
+	nodeId: string;
+	agentName: string;
+	status: "pending" | "running" | "complete" | "error";
+	output: string;
+	costCents: number;
+	inputTokens: number;
+	outputTokens: number;
 }
 
 export interface UseAgentStreamReturn {
-  isStreaming: boolean;
-  isComplete: boolean;
-  error: string | null;
-  nodeStates: AgentNodeState[];
-  finalOutput: string;
-  totalCostCents: number;
-  startStream: (sessionId: string) => void;
-  reset: () => void;
+	isStreaming: boolean;
+	isComplete: boolean;
+	error: string | null;
+	nodeStates: AgentNodeState[];
+	finalOutput: string;
+	totalCostCents: number;
+	startStream: (sessionId: string) => void;
+	reset: () => void;
 }
 
 export function useAgentStream(): UseAgentStreamReturn {
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [nodeStates, setNodeStates] = useState<AgentNodeState[]>([]);
-  const [finalOutput, setFinalOutput] = useState("");
-  const [totalCostCents, setTotalCostCents] = useState(0);
+	const [isStreaming, setIsStreaming] = useState(false);
+	const [isComplete, setIsComplete] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [nodeStates, setNodeStates] = useState<AgentNodeState[]>([]);
+	const [finalOutput, setFinalOutput] = useState("");
+	const [totalCostCents, setTotalCostCents] = useState(0);
 
-  const abortRef = useRef<AbortController | null>(null);
+	const abortRef = useRef<AbortController | null>(null);
 
-  const reset = useCallback(() => {
-    abortRef.current?.abort();
-    setIsStreaming(false);
-    setIsComplete(false);
-    setError(null);
-    setNodeStates([]);
-    setFinalOutput("");
-    setTotalCostCents(0);
-  }, []);
+	const reset = useCallback(() => {
+		abortRef.current?.abort();
+		setIsStreaming(false);
+		setIsComplete(false);
+		setError(null);
+		setNodeStates([]);
+		setFinalOutput("");
+		setTotalCostCents(0);
+	}, []);
 
-  const startStream = useCallback((sessionId: string) => {
-    reset();
-    setIsStreaming(true);
+	const startStream = useCallback(
+		(sessionId: string) => {
+			reset();
+			setIsStreaming(true);
 
-    const controller = new AbortController();
-    abortRef.current = controller;
+			const controller = new AbortController();
+			abortRef.current = controller;
 
-    const url = `/api/ai/stream/workflow?sessionId=${encodeURIComponent(sessionId)}`;
+			const url = `/api/ai/stream/workflow?sessionId=${encodeURIComponent(sessionId)}`;
 
-    (async () => {
-      try {
-        const response = await fetch(url, {
-          signal: controller.signal,
-          headers: { Accept: "text/event-stream" },
-        });
+			(async () => {
+				try {
+					const response = await fetch(url, {
+						signal: controller.signal,
+						headers: { Accept: "text/event-stream" },
+					});
 
-        if (!response.ok) {
-          throw new Error(`Stream failed: HTTP ${response.status}`);
-        }
+					if (!response.ok) {
+						throw new Error(
+							`Stream failed: HTTP ${response.status}`,
+						);
+					}
 
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
+					const reader = response.body?.getReader();
+					if (!reader) {
+						throw new Error("No response body");
+					}
 
-        const decoder = new TextDecoder();
-        let buffer = "";
+					const decoder = new TextDecoder();
+					let buffer = "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) {
+							break;
+						}
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
+						buffer += decoder.decode(value, { stream: true });
+						const lines = buffer.split("\n");
+						buffer = lines.pop() ?? "";
 
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const jsonStr = line.slice(6).trim();
-            if (!jsonStr) continue;
+						for (const line of lines) {
+							if (!line.startsWith("data: ")) {
+								continue;
+							}
+							const jsonStr = line.slice(6).trim();
+							if (!jsonStr) {
+								continue;
+							}
 
-            let event: AgentStreamEvent;
-            try {
-              event = JSON.parse(jsonStr) as AgentStreamEvent;
-            } catch {
-              continue;
-            }
+							let event: AgentStreamEvent;
+							try {
+								event = JSON.parse(jsonStr) as AgentStreamEvent;
+							} catch {
+								continue;
+							}
 
-            handleEvent(event);
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setError(err instanceof Error ? err.message : "Stream error");
-        }
-      } finally {
-        setIsStreaming(false);
-      }
-    })();
+							handleEvent(event);
+						}
+					}
+				} catch (err) {
+					if ((err as Error).name !== "AbortError") {
+						setError(
+							err instanceof Error ? err.message : "Stream error",
+						);
+					}
+				} finally {
+					setIsStreaming(false);
+				}
+			})();
 
-    function handleEvent(event: AgentStreamEvent) {
-      switch (event.type) {
-        case "node_start":
-          setNodeStates((prev) => [
-            ...prev,
-            {
-              nodeId: event.nodeId ?? "",
-              agentName: event.agentName ?? "Agent",
-              status: "running",
-              output: "",
-              costCents: 0,
-              inputTokens: 0,
-              outputTokens: 0,
-            },
-          ]);
-          break;
+			function handleEvent(event: AgentStreamEvent) {
+				switch (event.type) {
+					case "node_start":
+						setNodeStates((prev) => [
+							...prev,
+							{
+								nodeId: event.nodeId ?? "",
+								agentName: event.agentName ?? "Agent",
+								status: "running",
+								output: "",
+								costCents: 0,
+								inputTokens: 0,
+								outputTokens: 0,
+							},
+						]);
+						break;
 
-        case "node_stream":
-          setNodeStates((prev) =>
-            prev.map((n) =>
-              n.nodeId === event.nodeId
-                ? { ...n, output: n.output + (event.chunk ?? "") }
-                : n,
-            ),
-          );
-          break;
+					case "node_stream":
+						setNodeStates((prev) =>
+							prev.map((n) =>
+								n.nodeId === event.nodeId
+									? {
+											...n,
+											output:
+												n.output + (event.chunk ?? ""),
+										}
+									: n,
+							),
+						);
+						break;
 
-        case "node_complete":
-          setNodeStates((prev) =>
-            prev.map((n) =>
-              n.nodeId === event.nodeId
-                ? {
-                    ...n,
-                    status: "complete",
-                    output: event.output ?? n.output,
-                    costCents: event.costCents ?? 0,
-                    inputTokens: event.inputTokens ?? 0,
-                    outputTokens: event.outputTokens ?? 0,
-                  }
-                : n,
-            ),
-          );
-          break;
+					case "node_complete":
+						setNodeStates((prev) =>
+							prev.map((n) =>
+								n.nodeId === event.nodeId
+									? {
+											...n,
+											status: "complete",
+											output: event.output ?? n.output,
+											costCents: event.costCents ?? 0,
+											inputTokens: event.inputTokens ?? 0,
+											outputTokens:
+												event.outputTokens ?? 0,
+										}
+									: n,
+							),
+						);
+						break;
 
-        case "session_complete":
-          setFinalOutput(event.output ?? "");
-          setTotalCostCents(event.totalCostCents ?? 0);
-          setIsComplete(true);
-          setIsStreaming(false);
-          break;
+					case "session_complete":
+						setFinalOutput(event.output ?? "");
+						setTotalCostCents(event.totalCostCents ?? 0);
+						setIsComplete(true);
+						setIsStreaming(false);
+						break;
 
-        case "error":
-          setError(event.error ?? "Unknown error");
-          setNodeStates((prev) =>
-            prev.map((n) =>
-              n.status === "running" ? { ...n, status: "error" } : n,
-            ),
-          );
-          setIsStreaming(false);
-          break;
-      }
-    }
-  }, [reset]);
+					case "error":
+						setError(event.error ?? "Unknown error");
+						setNodeStates((prev) =>
+							prev.map((n) =>
+								n.status === "running"
+									? { ...n, status: "error" }
+									: n,
+							),
+						);
+						setIsStreaming(false);
+						break;
+				}
+			}
+		},
+		[reset],
+	);
 
-  return {
-    isStreaming,
-    isComplete,
-    error,
-    nodeStates,
-    finalOutput,
-    totalCostCents,
-    startStream,
-    reset,
-  };
+	return {
+		isStreaming,
+		isComplete,
+		error,
+		nodeStates,
+		finalOutput,
+		totalCostCents,
+		startStream,
+		reset,
+	};
 }

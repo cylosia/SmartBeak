@@ -73,9 +73,14 @@ export function ActiveOrganizationProvider({
 		}
 
 		queryClient.setQueryData(sessionQueryKey, (data: unknown) => {
-			if (!data || typeof data !== "object") return data;
+			if (!data || typeof data !== "object") {
+				return data;
+			}
 			const prev = data as Record<string, unknown>;
-			const prevSession = prev.session && typeof prev.session === "object" ? prev.session as Record<string, unknown> : {};
+			const prevSession =
+				prev.session && typeof prev.session === "object"
+					? (prev.session as Record<string, unknown>)
+					: {};
 			return {
 				...prev,
 				session: {

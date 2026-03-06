@@ -1,7 +1,4 @@
-import {
-	countAllOrganizations,
-	getOrganizations,
-} from "@repo/database";
+import { countAllOrganizations, getOrganizations } from "@repo/database";
 import { z } from "zod";
 import { adminProcedure } from "../../../orpc/procedures";
 

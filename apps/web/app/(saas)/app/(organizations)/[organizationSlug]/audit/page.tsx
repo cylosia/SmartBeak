@@ -4,21 +4,23 @@ import { notFound } from "next/navigation";
 import { AuditLogView } from "@/modules/smartbeak/audit/components/AuditLogView";
 
 export default async function AuditPage({
-  params,
+	params,
 }: {
-  params: Promise<{ organizationSlug: string }>;
+	params: Promise<{ organizationSlug: string }>;
 }) {
-  const { organizationSlug } = await params;
-  const org = await getActiveOrganization(organizationSlug);
-  if (!org) return notFound();
+	const { organizationSlug } = await params;
+	const org = await getActiveOrganization(organizationSlug);
+	if (!org) {
+		return notFound();
+	}
 
-  return (
-    <div>
-      <PageHeader
-        title="Audit Log"
-        subtitle="Immutable record of all actions taken within this organization."
-      />
-      <AuditLogView organizationSlug={organizationSlug} />
-    </div>
-  );
+	return (
+		<div>
+			<PageHeader
+				title="Audit Log"
+				subtitle="Immutable record of all actions taken within this organization."
+			/>
+			<AuditLogView organizationSlug={organizationSlug} />
+		</div>
+	);
 }

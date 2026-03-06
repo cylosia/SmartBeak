@@ -1,4 +1,3 @@
-import { ORPCError } from "@orpc/server";
 import { getOrganizationBySlug } from "@repo/database";
 import slugify from "@sindresorhus/slugify";
 import { nanoid } from "nanoid";

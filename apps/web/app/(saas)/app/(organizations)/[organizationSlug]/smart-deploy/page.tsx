@@ -4,21 +4,23 @@ import { notFound } from "next/navigation";
 import { SmartDeployView } from "@/modules/smartbeak/smart-deploy/components/SmartDeployView";
 
 export default async function SmartDeployPage({
-  params,
+	params,
 }: {
-  params: Promise<{ organizationSlug: string }>;
+	params: Promise<{ organizationSlug: string }>;
 }) {
-  const { organizationSlug } = await params;
-  const org = await getActiveOrganization(organizationSlug);
-  if (!org) return notFound();
+	const { organizationSlug } = await params;
+	const org = await getActiveOrganization(organizationSlug);
+	if (!org) {
+		return notFound();
+	}
 
-  return (
-    <div>
-      <PageHeader
-        title="SmartDeploy"
-        subtitle="One-click site deployment engine — edge-powered global publishing."
-      />
-      <SmartDeployView organizationSlug={organizationSlug} />
-    </div>
-  );
+	return (
+		<div>
+			<PageHeader
+				title="SmartDeploy"
+				subtitle="One-click site deployment engine — edge-powered global publishing."
+			/>
+			<SmartDeployView organizationSlug={organizationSlug} />
+		</div>
+	);
 }

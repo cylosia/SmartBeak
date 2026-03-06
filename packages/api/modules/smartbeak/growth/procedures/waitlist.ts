@@ -1,110 +1,120 @@
-import {
-  createReferral,
-  createWaitlistEntry,
-  getWaitlistEntryByEmail,
-  getWaitlistEntryByReferralCode,
-  getReferralLeaderboard,
-  getWaitlistStats,
-  listWaitlistEntries,
-  updateWaitlistEntryStatus,
-} from "@repo/database";
-import { JoinWaitlistInputSchema, WaitlistStatusUpdateInputSchema } from "@repo/database";
+import { randomBytes } from "node:crypto";
 import { ORPCError } from "@orpc/server";
+import {
+	createReferral,
+	createWaitlistEntry,
+	getReferralLeaderboard,
+	getWaitlistEntryByEmail,
+	getWaitlistEntryByReferralCode,
+	getWaitlistStats,
+	JoinWaitlistInputSchema,
+	listWaitlistEntries,
+	updateWaitlistEntryStatus,
+	WaitlistStatusUpdateInputSchema,
+} from "@repo/database";
 import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
-import { z } from "zod";
-import { randomBytes } from "node:crypto";
 import { getBaseUrl } from "@repo/utils";
+import { z } from "zod";
 import { publicRateLimitMiddleware } from "../../../../orpc/middleware/rate-limit-middleware";
-import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
+import { adminProcedure, publicProcedure } from "../../../../orpc/procedures";
 
 function escapeHtml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+	return unsafe
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;");
 }
 
 function generateReferralCode(email: string): string {
-  const prefix = email.split("@")[0]!.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase();
-  const suffix = randomBytes(4).toString("hex").slice(0, 5).toUpperCase();
-  return `${prefix}-${suffix}`;
+	const prefix = email
+		.split("@")[0]
+		?.replace(/[^a-z0-9]/gi, "")
+		.slice(0, 6)
+		.toUpperCase();
+	const suffix = randomBytes(4).toString("hex").slice(0, 5).toUpperCase();
+	return `${prefix}-${suffix}`;
 }
 
 // ── join-waitlist (public) ────────────────────────────────────────────────────
 export const joinWaitlistProcedure = publicProcedure
-  .route({ method: "POST", path: "/smartbeak/growth/waitlist/join", tags: ["SmartBeak - Growth"], summary: "Join the waitlist" })
-  .input(JoinWaitlistInputSchema)
-  .use(publicRateLimitMiddleware({ limit: 5, windowMs: 60_000 }))
-  .handler(async ({ input }) => {
-    const { email, referredBy, firstName, lastName, company, useCase } = input;
+	.route({
+		method: "POST",
+		path: "/smartbeak/growth/waitlist/join",
+		tags: ["SmartBeak - Growth"],
+		summary: "Join the waitlist",
+	})
+	.input(JoinWaitlistInputSchema)
+	.use(publicRateLimitMiddleware({ limit: 5, windowMs: 60_000 }))
+	.handler(async ({ input }) => {
+		const { email, referredBy, firstName, lastName, company, useCase } =
+			input;
 
-    // Idempotent: return existing entry if already on waitlist
-    const existing = await getWaitlistEntryByEmail(email);
-    if (existing) {
-      return {
-        success: true,
-        alreadyJoined: true,
-        referralCode: existing.referralCode,
-        referralLink: `${getBaseUrl()}/waitlist?ref=${existing.referralCode}`,
-        position: null,
-      };
-    }
+		// Idempotent: return existing entry if already on waitlist
+		const existing = await getWaitlistEntryByEmail(email);
+		if (existing) {
+			return {
+				success: true,
+				alreadyJoined: true,
+				referralCode: existing.referralCode,
+				referralLink: `${getBaseUrl()}/waitlist?ref=${existing.referralCode}`,
+				position: null,
+			};
+		}
 
-    // Validate referral code if provided
-    let referrerEntry = null;
-    if (referredBy) {
-      referrerEntry = await getWaitlistEntryByReferralCode(referredBy);
-    }
+		// Validate referral code if provided
+		let referrerEntry = null;
+		if (referredBy) {
+			referrerEntry = await getWaitlistEntryByReferralCode(referredBy);
+		}
 
-    const referralCode = generateReferralCode(email);
-    let entry;
-    try {
-      entry = await createWaitlistEntry({
-        email,
-        referralCode,
-        referredBy: referrerEntry ? referredBy : undefined,
-        firstName,
-        lastName,
-        company,
-        useCase,
-      });
-    } catch (err) {
-      if (err instanceof Error && err.message.includes("unique")) {
-        const race = await getWaitlistEntryByEmail(email);
-        if (race) {
-          return {
-            success: true,
-            alreadyJoined: true,
-            referralCode: race.referralCode,
-            referralLink: `${getBaseUrl()}/waitlist?ref=${race.referralCode}`,
-            position: null,
-          };
-        }
-      }
-      throw err;
-    }
+		const referralCode = generateReferralCode(email);
+		try {
+			await createWaitlistEntry({
+				email,
+				referralCode,
+				referredBy: referrerEntry ? referredBy : undefined,
+				firstName,
+				lastName,
+				company,
+				useCase,
+			});
+		} catch (err) {
+			if (err instanceof Error && err.message.includes("unique")) {
+				const race = await getWaitlistEntryByEmail(email);
+				if (race) {
+					return {
+						success: true,
+						alreadyJoined: true,
+						referralCode: race.referralCode,
+						referralLink: `${getBaseUrl()}/waitlist?ref=${race.referralCode}`,
+						position: null,
+					};
+				}
+			}
+			throw err;
+		}
 
-    // Create a referral record for the referrer
-    if (referrerEntry) {
-      await createReferral({
-        referrerId: referrerEntry.id,
-        referredEmail: email,
-        referralCode: referredBy!,
-        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
-      });
-    }
+		// Create a referral record for the referrer
+		if (referrerEntry) {
+			await createReferral({
+				referrerId: referrerEntry.id,
+				referredEmail: email,
+				referralCode: referredBy ?? "",
+				expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+			});
+		}
 
-    const referralLink = `${getBaseUrl()}/waitlist?ref=${referralCode}`;
+		const referralLink = `${getBaseUrl()}/waitlist?ref=${referralCode}`;
 
-    // Send confirmation email
-    try {
-      await sendEmail({
-        to: email,
-        subject: "You're on the SmartBeak waitlist! 🎉",
-        html: `
+		// Send confirmation email
+		try {
+			await sendEmail({
+				to: email,
+				subject: "You're on the SmartBeak waitlist! 🎉",
+				html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
             <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">Welcome to SmartBeak${firstName ? `, ${escapeHtml(firstName)}` : ""}!</h1>
             <p style="color: #475569; font-size: 16px; line-height: 1.6;">
@@ -125,74 +135,101 @@ export const joinWaitlistProcedure = publicProcedure
             </p>
           </div>
         `,
-        text: `Welcome to SmartBeak! Your referral link: ${referralLink}`,
-      });
-    } catch (err) {
-      logger.warn("[waitlist] Failed to send confirmation email:", (err as Error).message);
-    }
+				text: `Welcome to SmartBeak! Your referral link: ${referralLink}`,
+			});
+		} catch (err) {
+			logger.warn(
+				"[waitlist] Failed to send confirmation email:",
+				(err as Error).message,
+			);
+		}
 
-    return {
-      success: true,
-      alreadyJoined: false,
-      referralCode,
-      referralLink,
-      position: null,
-    };
-  });
+		return {
+			success: true,
+			alreadyJoined: false,
+			referralCode,
+			referralLink,
+			position: null,
+		};
+	});
 
 // ── get-waitlist-status (public, by email) ────────────────────────────────────
 export const getWaitlistStatusProcedure = publicProcedure
-  .route({ method: "GET", path: "/smartbeak/growth/waitlist/status", tags: ["SmartBeak - Growth"], summary: "Get waitlist status by email" })
-  .input(z.object({ email: z.string().email() }))
-  .use(publicRateLimitMiddleware({ limit: 10, windowMs: 60_000 }))
-  .handler(async ({ input }) => {
-    const entry = await getWaitlistEntryByEmail(input.email);
-    if (!entry) return null;
-    const referralLink = `${getBaseUrl()}/waitlist?ref=${entry.referralCode}`;
-    return {
-      id: entry.id,
-      status: entry.status,
-      referralCode: entry.referralCode,
-      referralLink,
-      joinedAt: entry.joinedAt,
-    };
-  });
+	.route({
+		method: "GET",
+		path: "/smartbeak/growth/waitlist/status",
+		tags: ["SmartBeak - Growth"],
+		summary: "Get waitlist status by email",
+	})
+	.input(z.object({ email: z.string().email() }))
+	.use(publicRateLimitMiddleware({ limit: 10, windowMs: 60_000 }))
+	.handler(async ({ input }) => {
+		const entry = await getWaitlistEntryByEmail(input.email);
+		if (!entry) {
+			return null;
+		}
+		const referralLink = `${getBaseUrl()}/waitlist?ref=${entry.referralCode}`;
+		return {
+			id: entry.id,
+			status: entry.status,
+			referralCode: entry.referralCode,
+			referralLink,
+			joinedAt: entry.joinedAt,
+		};
+	});
 
 // ── admin: list-waitlist ──────────────────────────────────────────────────────
 export const listWaitlistProcedure = adminProcedure
-  .route({ method: "GET", path: "/smartbeak/growth/waitlist", tags: ["SmartBeak - Growth"], summary: "List waitlist entries (admin)" })
-  .input(
-    z.object({
-      status: z.enum(["pending", "approved", "rejected", "converted"]).optional(),
-      limit: z.number().int().min(1).max(200).default(50),
-      offset: z.number().int().min(0).default(0),
-    }),
-  )
-  .handler(async ({ input }) => {
-    const entries = await listWaitlistEntries({
-      status: input.status,
-      limit: input.limit,
-      offset: input.offset,
-    });
-    const stats = await getWaitlistStats();
-    return { entries, stats };
-  });
+	.route({
+		method: "GET",
+		path: "/smartbeak/growth/waitlist",
+		tags: ["SmartBeak - Growth"],
+		summary: "List waitlist entries (admin)",
+	})
+	.input(
+		z.object({
+			status: z
+				.enum(["pending", "approved", "rejected", "converted"])
+				.optional(),
+			limit: z.number().int().min(1).max(200).default(50),
+			offset: z.number().int().min(0).default(0),
+		}),
+	)
+	.handler(async ({ input }) => {
+		const entries = await listWaitlistEntries({
+			status: input.status,
+			limit: input.limit,
+			offset: input.offset,
+		});
+		const stats = await getWaitlistStats();
+		return { entries, stats };
+	});
 
 // ── admin: update-waitlist-status ─────────────────────────────────────────────
 export const updateWaitlistStatusProcedure = adminProcedure
-  .route({ method: "PATCH", path: "/smartbeak/growth/waitlist/status", tags: ["SmartBeak - Growth"], summary: "Update waitlist entry status (admin)" })
-  .input(WaitlistStatusUpdateInputSchema)
-  .handler(async ({ input }) => {
-    const entry = await updateWaitlistEntryStatus(input.id, input.status);
-    if (!entry) throw new ORPCError("NOT_FOUND", { message: "Waitlist entry not found." });
+	.route({
+		method: "PATCH",
+		path: "/smartbeak/growth/waitlist/status",
+		tags: ["SmartBeak - Growth"],
+		summary: "Update waitlist entry status (admin)",
+	})
+	.input(WaitlistStatusUpdateInputSchema)
+	.handler(async ({ input }) => {
+		const entry = await updateWaitlistEntryStatus(input.id, input.status);
+		if (!entry) {
+			throw new ORPCError("NOT_FOUND", {
+				message: "Waitlist entry not found.",
+			});
+		}
 
-    // Send approval email
-    if (input.status === "approved") {
-      try {
-        await sendEmail({
-          to: entry.email,
-          subject: "You've been approved for SmartBeak early access! 🚀",
-          html: `
+		// Send approval email
+		if (input.status === "approved") {
+			try {
+				await sendEmail({
+					to: entry.email,
+					subject:
+						"You've been approved for SmartBeak early access! 🚀",
+					html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
               <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">You're in${entry.firstName ? `, ${escapeHtml(entry.firstName)}` : ""}!</h1>
               <p style="color: #475569; font-size: 16px; line-height: 1.6;">
@@ -205,22 +242,30 @@ export const updateWaitlistStatusProcedure = adminProcedure
               <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">The SmartBeak Team</p>
             </div>
           `,
-          text: `You've been approved! Sign up at: ${getBaseUrl()}/auth/signup`,
-        });
-      } catch (err) {
-        logger.warn("[waitlist] Failed to send approval email:", (err as Error).message);
-      }
-    }
+					text: `You've been approved! Sign up at: ${getBaseUrl()}/auth/signup`,
+				});
+			} catch (err) {
+				logger.warn(
+					"[waitlist] Failed to send approval email:",
+					(err as Error).message,
+				);
+			}
+		}
 
-    return entry;
-  });
+		return entry;
+	});
 
 // ── get-waitlist-stats (admin) ────────────────────────────────────────────────
 export const getWaitlistStatsProcedure = adminProcedure
-  .route({ method: "GET", path: "/smartbeak/growth/waitlist/stats", tags: ["SmartBeak - Growth"], summary: "Get waitlist statistics (admin)" })
-  .input(z.object({}))
-  .handler(async () => {
-    const stats = await getWaitlistStats();
-    const leaderboard = await getReferralLeaderboard(10);
-    return { stats, leaderboard };
-  });
+	.route({
+		method: "GET",
+		path: "/smartbeak/growth/waitlist/stats",
+		tags: ["SmartBeak - Growth"],
+		summary: "Get waitlist statistics (admin)",
+	})
+	.input(z.object({}))
+	.handler(async () => {
+		const stats = await getWaitlistStats();
+		const leaderboard = await getReferralLeaderboard(10);
+		return { stats, leaderboard };
+	});

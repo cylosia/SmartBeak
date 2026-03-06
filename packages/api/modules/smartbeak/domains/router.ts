@@ -5,9 +5,9 @@ import { listDomains } from "./procedures/list-domains";
 import { updateDomainProcedure } from "./procedures/update-domain";
 
 export const domainsRouter = {
-  list: listDomains,
-  get: getDomain,
-  create: createDomainProcedure,
-  update: updateDomainProcedure,
-  delete: deleteDomainProcedure,
+	list: listDomains,
+	get: getDomain,
+	create: createDomainProcedure,
+	update: updateDomainProcedure,
+	delete: deleteDomainProcedure,
 };

@@ -4,21 +4,23 @@ import { notFound } from "next/navigation";
 import { SeoReportView } from "@/modules/smartbeak/seo-intelligence/components/SeoReportView";
 
 export default async function SeoReportPage({
-  params,
+	params,
 }: {
-  params: Promise<{ organizationSlug: string }>;
+	params: Promise<{ organizationSlug: string }>;
 }) {
-  const { organizationSlug } = await params;
-  const org = await getActiveOrganization(organizationSlug);
-  if (!org) return notFound();
+	const { organizationSlug } = await params;
+	const org = await getActiveOrganization(organizationSlug);
+	if (!org) {
+		return notFound();
+	}
 
-  return (
-    <div>
-      <PageHeader
-        title="SEO Report"
-        subtitle="Org-wide SEO health overview: all domains, keyword counts, scores, and decay signals."
-      />
-      <SeoReportView organizationSlug={organizationSlug} />
-    </div>
-  );
+	return (
+		<div>
+			<PageHeader
+				title="SEO Report"
+				subtitle="Org-wide SEO health overview: all domains, keyword counts, scores, and decay signals."
+			/>
+			<SeoReportView organizationSlug={organizationSlug} />
+		</div>
+	);
 }

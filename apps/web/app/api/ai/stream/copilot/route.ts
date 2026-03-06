@@ -17,35 +17,35 @@
  * - tone: Adjust the tone of the selected text.
  */
 
-import { auth } from "@repo/auth";
 import { createOpenAI, streamText } from "@repo/ai";
 import { enforceRateLimit } from "@repo/api/infrastructure/rate-limit-redis";
-import { z } from "zod";
+import { auth } from "@repo/auth";
 import type { NextRequest } from "next/server";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CopilotRequestSchema = z.object({
-  action: z.enum([
-    "suggest",
-    "rewrite",
-    "fact_check",
-    "optimize",
-    "shorten",
-    "expand",
-    "tone",
-  ]),
-  /** The selected text or text around the cursor. */
-  selectedText: z.string().max(10000).optional(),
-  /** The full document context (truncated). */
-  documentContext: z.string().max(5000).optional(),
-  /** The document title. */
-  title: z.string().max(200).optional(),
-  /** For tone action: the target tone. */
-  targetTone: z
-    .enum(["professional", "casual", "persuasive", "academic", "friendly"])
-    .optional(),
+	action: z.enum([
+		"suggest",
+		"rewrite",
+		"fact_check",
+		"optimize",
+		"shorten",
+		"expand",
+		"tone",
+	]),
+	/** The selected text or text around the cursor. */
+	selectedText: z.string().max(10000).optional(),
+	/** The full document context (truncated). */
+	documentContext: z.string().max(5000).optional(),
+	/** The document title. */
+	title: z.string().max(200).optional(),
+	/** For tone action: the target tone. */
+	targetTone: z
+		.enum(["professional", "casual", "persuasive", "academic", "friendly"])
+		.optional(),
 });
 
 const SYSTEM_PROMPT = `You are an expert AI writing co-pilot embedded in a content editor.
@@ -54,114 +54,117 @@ Always respond with clean, publication-ready text only — no explanations, no m
 no "Here is the rewritten version:" preambles. Just the improved text.`;
 
 function buildPrompt(
-  action: string,
-  selectedText: string,
-  documentContext: string,
-  title: string,
-  targetTone?: string,
+	action: string,
+	selectedText: string,
+	documentContext: string,
+	title: string,
+	targetTone?: string,
 ): string {
-  const contextBlock =
-    documentContext.length > 0
-      ? `\n\nDocument context (for reference):\n${documentContext}`
-      : "";
-  const titleBlock = title ? `\nDocument title: "${title}"` : "";
+	const contextBlock =
+		documentContext.length > 0
+			? `\n\nDocument context (for reference):\n${documentContext}`
+			: "";
+	const titleBlock = title ? `\nDocument title: "${title}"` : "";
 
-  switch (action) {
-    case "suggest":
-      return `${titleBlock}${contextBlock}\n\nContinue writing naturally from this point:\n${selectedText}\n\nWrite the next 1-3 sentences that flow naturally from the above.`;
+	switch (action) {
+		case "suggest":
+			return `${titleBlock}${contextBlock}\n\nContinue writing naturally from this point:\n${selectedText}\n\nWrite the next 1-3 sentences that flow naturally from the above.`;
 
-    case "rewrite":
-      return `${titleBlock}${contextBlock}\n\nRewrite the following text to improve clarity, flow, and impact while preserving the original meaning:\n\n${selectedText}`;
+		case "rewrite":
+			return `${titleBlock}${contextBlock}\n\nRewrite the following text to improve clarity, flow, and impact while preserving the original meaning:\n\n${selectedText}`;
 
-    case "fact_check":
-      return `${titleBlock}${contextBlock}\n\nReview the following text and identify any specific factual claims that should be verified. For each claim, briefly explain why it needs verification. Format as a concise list:\n\n${selectedText}`;
+		case "fact_check":
+			return `${titleBlock}${contextBlock}\n\nReview the following text and identify any specific factual claims that should be verified. For each claim, briefly explain why it needs verification. Format as a concise list:\n\n${selectedText}`;
 
-    case "optimize":
-      return `${titleBlock}${contextBlock}\n\nOptimize the following text for SEO and readability. Improve keyword usage, sentence structure, and engagement while keeping the same length:\n\n${selectedText}`;
+		case "optimize":
+			return `${titleBlock}${contextBlock}\n\nOptimize the following text for SEO and readability. Improve keyword usage, sentence structure, and engagement while keeping the same length:\n\n${selectedText}`;
 
-    case "shorten":
-      return `${titleBlock}${contextBlock}\n\nMake the following text more concise. Remove redundancy and filler words while preserving all key information:\n\n${selectedText}`;
+		case "shorten":
+			return `${titleBlock}${contextBlock}\n\nMake the following text more concise. Remove redundancy and filler words while preserving all key information:\n\n${selectedText}`;
 
-    case "expand":
-      return `${titleBlock}${contextBlock}\n\nExpand the following text with more detail, examples, and supporting information. Keep the same tone and style:\n\n${selectedText}`;
+		case "expand":
+			return `${titleBlock}${contextBlock}\n\nExpand the following text with more detail, examples, and supporting information. Keep the same tone and style:\n\n${selectedText}`;
 
-    case "tone":
-      return `${titleBlock}${contextBlock}\n\nRewrite the following text in a ${targetTone ?? "professional"} tone while preserving the core message:\n\n${selectedText}`;
+		case "tone":
+			return `${titleBlock}${contextBlock}\n\nRewrite the following text in a ${targetTone ?? "professional"} tone while preserving the core message:\n\n${selectedText}`;
 
-    default:
-      return `${titleBlock}${contextBlock}\n\nImprove the following text:\n\n${selectedText}`;
-  }
+		default:
+			return `${titleBlock}${contextBlock}\n\nImprove the following text:\n\n${selectedText}`;
+	}
 }
 
 export async function POST(request: NextRequest) {
-  // ── Authentication ──────────────────────────────────────────────────────────
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+	// ── Authentication ──────────────────────────────────────────────────────────
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session) {
+		return new Response("Unauthorized", { status: 401 });
+	}
 
-  // ── Rate limiting ──────────────────────────────────────────────────────────
-  try {
-    await enforceRateLimit(`copilot:${session.user.id}`, { limit: 20, windowSeconds: 60 });
-  } catch {
-    return new Response("Too many requests", { status: 429 });
-  }
+	// ── Rate limiting ──────────────────────────────────────────────────────────
+	try {
+		await enforceRateLimit(`copilot:${session.user.id}`, {
+			limit: 20,
+			windowSeconds: 60,
+		});
+	} catch {
+		return new Response("Too many requests", { status: 429 });
+	}
 
-  // ── Parse and validate request ──────────────────────────────────────────────
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return new Response("Invalid JSON body", { status: 400 });
-  }
+	// ── Parse and validate request ──────────────────────────────────────────────
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch {
+		return new Response("Invalid JSON body", { status: 400 });
+	}
 
-  const parsed = CopilotRequestSchema.safeParse(body);
-  if (!parsed.success) {
-    return new Response(JSON.stringify(parsed.error.flatten()), {
-      status: 422,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+	const parsed = CopilotRequestSchema.safeParse(body);
+	if (!parsed.success) {
+		return new Response(JSON.stringify(parsed.error.flatten()), {
+			status: 422,
+			headers: { "Content-Type": "application/json" },
+		});
+	}
 
-  const {
-    action,
-    selectedText = "",
-    documentContext = "",
-    title = "",
-    targetTone,
-  } = parsed.data;
+	const {
+		action,
+		selectedText = "",
+		documentContext = "",
+		title = "",
+		targetTone,
+	} = parsed.data;
 
-  if (!selectedText && action !== "suggest") {
-    return new Response("selectedText is required for this action", {
-      status: 400,
-    });
-  }
+	if (!selectedText && action !== "suggest") {
+		return new Response("selectedText is required for this action", {
+			status: 400,
+		});
+	}
 
-  // ── Stream AI response ──────────────────────────────────────────────────────
-  const openai = createOpenAI({});
-  const model = openai("gpt-4o-mini");
-  const prompt = buildPrompt(
-    action,
-    selectedText,
-    documentContext,
-    title,
-    targetTone,
-  );
+	// ── Stream AI response ──────────────────────────────────────────────────────
+	const openai = createOpenAI({});
+	const model = openai("gpt-4o-mini");
+	const prompt = buildPrompt(
+		action,
+		selectedText,
+		documentContext,
+		title,
+		targetTone,
+	);
 
-  try {
-    const result = streamText({
-      model,
-      system: SYSTEM_PROMPT,
-      prompt,
-      maxOutputTokens: 2048,
-      temperature: action === "fact_check" ? 0.2 : 0.7,
-    });
+	try {
+		const result = streamText({
+			model,
+			system: SYSTEM_PROMPT,
+			prompt,
+			maxOutputTokens: 2048,
+			temperature: action === "fact_check" ? 0.2 : 0.7,
+		});
 
-    return result.toTextStreamResponse();
-  } catch (error) {
-    return Response.json(
-      { error: "Failed to generate AI response. Please try again." },
-      { status: 500 },
-    );
-  }
+		return result.toTextStreamResponse();
+	} catch (_error) {
+		return Response.json(
+			{ error: "Failed to generate AI response. Please try again." },
+			{ status: 500 },
+		);
+	}
 }

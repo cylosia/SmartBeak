@@ -8,18 +8,18 @@ import { syncGsc } from "./procedures/sync-gsc";
 import { updateKeyword } from "./procedures/update-keyword-metrics";
 
 export const seoIntelligenceRouter = {
-  // Keyword dashboard
-  getKeywordDashboard,
-  updateKeyword,
-  // AI content generation
-  generateAiIdeas,
-  // Real-time content optimizer
-  optimizeContent,
-  // Integrations
-  syncGsc,
-  syncAhrefs,
-  // Background jobs
-  runDecayJob,
-  // Reports
-  getSeoReport,
+	// Keyword dashboard
+	getKeywordDashboard,
+	updateKeyword,
+	// AI content generation
+	generateAiIdeas,
+	// Real-time content optimizer
+	optimizeContent,
+	// Integrations
+	syncGsc,
+	syncAhrefs,
+	// Background jobs
+	runDecayJob,
+	// Reports
+	getSeoReport,
 };

@@ -1,9 +1,9 @@
 import {
-  completeOnboardingStep,
-  getOnboardingProgress,
+	completeOnboardingStep,
+	getOnboardingProgress,
 } from "./procedures/onboarding";
 
 export const onboardingRouter = {
-  getProgress: getOnboardingProgress,
-  completeStep: completeOnboardingStep,
+	getProgress: getOnboardingProgress,
+	completeStep: completeOnboardingStep,
 };

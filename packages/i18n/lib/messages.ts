@@ -3,10 +3,10 @@ import { config } from "../config";
 import type { Messages } from "../types";
 
 export const importLocale = async (locale: string): Promise<Messages> => {
-	if (!(locale in config.locales)) {
-		locale = config.defaultLocale;
-	}
-	return (await import(`../translations/${locale}.json`)).default as Messages;
+	const resolvedLocale =
+		locale in config.locales ? locale : config.defaultLocale;
+	return (await import(`../translations/${resolvedLocale}.json`))
+		.default as Messages;
 };
 
 export const getMessagesForLocale = async (

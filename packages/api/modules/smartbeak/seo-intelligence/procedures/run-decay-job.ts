@@ -1,8 +1,4 @@
-import { ORPCError } from "@orpc/server";
-import {
-  getStaleKeywords,
-  recalculateDecayFactor,
-} from "@repo/database";
+import { getStaleKeywords, recalculateDecayFactor } from "@repo/database";
 import z from "zod";
 import { adminProcedure } from "../../../../orpc/procedures";
 
@@ -23,77 +19,97 @@ import { adminProcedure } from "../../../../orpc/procedures";
  * Or: call from a Supabase Edge Function with a service role key.
  */
 export const runDecayJob = adminProcedure
-  .route({
-    method: "POST",
-    path: "/smartbeak/seo-intelligence/jobs/decay",
-    tags: ["SmartBeak - SEO Intelligence"],
-    summary: "Background job: recalculate keyword decay factors and generate alerts",
-  })
-  .input(
-    z.object({
-      olderThanHours: z.number().int().min(1).max(168).default(24),
-      dryRun: z.boolean().default(false),
-    }),
-  )
-  .handler(async ({ input }) => {
-    const staleKeywords = await getStaleKeywords(input.olderThanHours);
+	.route({
+		method: "POST",
+		path: "/smartbeak/seo-intelligence/jobs/decay",
+		tags: ["SmartBeak - SEO Intelligence"],
+		summary:
+			"Background job: recalculate keyword decay factors and generate alerts",
+	})
+	.input(
+		z.object({
+			olderThanHours: z.number().int().min(1).max(168).default(24),
+			dryRun: z.boolean().default(false),
+		}),
+	)
+	.handler(async ({ input }) => {
+		const staleKeywords = await getStaleKeywords(input.olderThanHours);
 
-    if (staleKeywords.length === 0) {
-      return {
-        processed: 0,
-        criticalAlerts: [],
-        warningAlerts: [],
-        dryRun: input.dryRun,
-      };
-    }
+		if (staleKeywords.length === 0) {
+			return {
+				processed: 0,
+				criticalAlerts: [],
+				warningAlerts: [],
+				dryRun: input.dryRun,
+			};
+		}
 
-    const criticalAlerts: Array<{ id: string; keyword: string; decayFactor: string }> = [];
-    const warningAlerts: Array<{ id: string; keyword: string; decayFactor: string }> = [];
+		const criticalAlerts: Array<{
+			id: string;
+			keyword: string;
+			decayFactor: string;
+		}> = [];
+		const warningAlerts: Array<{
+			id: string;
+			keyword: string;
+			decayFactor: string;
+		}> = [];
 
-    if (!input.dryRun) {
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < staleKeywords.length; i += BATCH_SIZE) {
-        const batch = staleKeywords.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(
-          batch.map((kw) => recalculateDecayFactor(kw.id, kw.lastUpdated)),
-        );
-        for (const [updated] of results) {
-          const decay = parseFloat(updated.decayFactor ?? "1");
-          if (decay < 0.3) {
-            criticalAlerts.push({
-              id: updated.id,
-              keyword: updated.keyword,
-              decayFactor: updated.decayFactor ?? "0",
-            });
-          } else if (decay < 0.5) {
-            warningAlerts.push({
-              id: updated.id,
-              keyword: updated.keyword,
-              decayFactor: updated.decayFactor ?? "0",
-            });
-          }
-        }
-      }
-    } else {
-      // Dry run: compute without persisting
-      for (const kw of staleKeywords) {
-        const daysSince =
-          (Date.now() - kw.lastUpdated.getTime()) / (1000 * 60 * 60 * 24);
-        const decay = Math.max(0, Math.min(1, 1 - daysSince / 30));
-        const decayFactor = decay.toFixed(4);
+		if (!input.dryRun) {
+			const BATCH_SIZE = 50;
+			for (let i = 0; i < staleKeywords.length; i += BATCH_SIZE) {
+				const batch = staleKeywords.slice(i, i + BATCH_SIZE);
+				const results = await Promise.all(
+					batch.map((kw) =>
+						recalculateDecayFactor(kw.id, kw.lastUpdated),
+					),
+				);
+				for (const [updated] of results) {
+					const decay = Number.parseFloat(updated.decayFactor ?? "1");
+					if (decay < 0.3) {
+						criticalAlerts.push({
+							id: updated.id,
+							keyword: updated.keyword,
+							decayFactor: updated.decayFactor ?? "0",
+						});
+					} else if (decay < 0.5) {
+						warningAlerts.push({
+							id: updated.id,
+							keyword: updated.keyword,
+							decayFactor: updated.decayFactor ?? "0",
+						});
+					}
+				}
+			}
+		} else {
+			// Dry run: compute without persisting
+			for (const kw of staleKeywords) {
+				const daysSince =
+					(Date.now() - kw.lastUpdated.getTime()) /
+					(1000 * 60 * 60 * 24);
+				const decay = Math.max(0, Math.min(1, 1 - daysSince / 30));
+				const decayFactor = decay.toFixed(4);
 
-        if (decay < 0.3) {
-          criticalAlerts.push({ id: kw.id, keyword: kw.keyword, decayFactor });
-        } else if (decay < 0.5) {
-          warningAlerts.push({ id: kw.id, keyword: kw.keyword, decayFactor });
-        }
-      }
-    }
+				if (decay < 0.3) {
+					criticalAlerts.push({
+						id: kw.id,
+						keyword: kw.keyword,
+						decayFactor,
+					});
+				} else if (decay < 0.5) {
+					warningAlerts.push({
+						id: kw.id,
+						keyword: kw.keyword,
+						decayFactor,
+					});
+				}
+			}
+		}
 
-    return {
-      processed: staleKeywords.length,
-      criticalAlerts,
-      warningAlerts,
-      dryRun: input.dryRun,
-    };
-  });
+		return {
+			processed: staleKeywords.length,
+			criticalAlerts,
+			warningAlerts,
+			dryRun: input.dryRun,
+		};
+	});

@@ -15,6 +15,9 @@
 			"complexity": {
 				"noForEach": "off"
 			},
+			"a11y": {
+				"useSemanticElements": "warn"
+			},
 			"correctness": {
 				"useExhaustiveDependencies": "off",
 				"noUnusedImports": {

@@ -145,7 +145,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 
 	const signatureHeader = req.headers.get("stripe-signature");
 	if (!signatureHeader) {
-		return new Response("Missing stripe-signature header.", { status: 400 });
+		return new Response("Missing stripe-signature header.", {
+			status: 400,
+		});
 	}
 
 	let event: Stripe.Event | undefined;
@@ -189,18 +191,26 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				await createPurchase({
 					organizationId: metadata?.organization_id || null,
 					userId: metadata?.user_id || null,
-			customerId: typeof customer === "string" ? customer : customer?.id ?? null,
-				type: "ONE_TIME",
-				productId,
-			});
+					customerId:
+						typeof customer === "string"
+							? customer
+							: (customer?.id ?? null),
+					type: "ONE_TIME",
+					productId,
+				});
 
-				await setCustomerIdToEntity(typeof customer === "string" ? customer : customer?.id ?? "", {
-				organizationId: metadata?.organization_id,
-				userId: metadata?.user_id,
-			});
+				await setCustomerIdToEntity(
+					typeof customer === "string"
+						? customer
+						: (customer?.id ?? ""),
+					{
+						organizationId: metadata?.organization_id,
+						userId: metadata?.user_id,
+					},
+				);
 
 				break;
-		}
+			}
 			case "customer.subscription.created": {
 				const { metadata, customer, items, id } = event.data.object;
 
@@ -212,17 +222,20 @@ export const webhookHandler: WebhookHandler = async (req) => {
 					});
 				}
 
-				const custId = typeof customer === "string" ? customer : customer?.id ?? null;
+				const custId =
+					typeof customer === "string"
+						? customer
+						: (customer?.id ?? null);
 
 				await createPurchase({
-				subscriptionId: id,
-				organizationId: metadata?.organization_id || null,
-				userId: metadata?.user_id || null,
-				customerId: custId,
-				type: "SUBSCRIPTION",
-				productId,
-				status: event.data.object.status,
-			});
+					subscriptionId: id,
+					organizationId: metadata?.organization_id || null,
+					userId: metadata?.user_id || null,
+					customerId: custId,
+					type: "SUBSCRIPTION",
+					productId,
+					status: event.data.object.status,
+				});
 
 				await setCustomerIdToEntity(custId ?? "", {
 					organizationId: metadata?.organization_id,
@@ -237,13 +250,13 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				const existingPurchase =
 					await getPurchaseBySubscriptionId(subscriptionId);
 
-			if (existingPurchase) {
-				await updatePurchase({
-					id: existingPurchase.id,
-					status: event.data.object.status,
-					productId: event.data.object.items?.data[0]?.price?.id,
-				});
-			}
+				if (existingPurchase) {
+					await updatePurchase({
+						id: existingPurchase.id,
+						status: event.data.object.status,
+						productId: event.data.object.items?.data[0]?.price?.id,
+					});
+				}
 
 				break;
 			}

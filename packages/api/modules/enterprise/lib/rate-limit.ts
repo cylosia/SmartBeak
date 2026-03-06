@@ -10,8 +10,8 @@
  */
 
 interface RateLimitWindow {
-  count: number;
-  resetAt: number;
+	count: number;
+	resetAt: number;
 }
 
 const windows = new Map<string, RateLimitWindow>();
@@ -25,39 +25,41 @@ const windows = new Map<string, RateLimitWindow>();
  * @returns `{ allowed: boolean; remaining: number; resetAt: number }`
  */
 export function checkRateLimit(
-  key: string,
-  limit: number,
-  windowMs: number,
+	key: string,
+	limit: number,
+	windowMs: number,
 ): { allowed: boolean; remaining: number; resetAt: number } {
-  const now = Date.now();
-  const existing = windows.get(key);
+	const now = Date.now();
+	const existing = windows.get(key);
 
-  if (!existing || now >= existing.resetAt) {
-    // Start a new window.
-    windows.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: limit - 1, resetAt: now + windowMs };
-  }
+	if (!existing || now >= existing.resetAt) {
+		// Start a new window.
+		windows.set(key, { count: 1, resetAt: now + windowMs });
+		return { allowed: true, remaining: limit - 1, resetAt: now + windowMs };
+	}
 
-  if (existing.count >= limit) {
-    return { allowed: false, remaining: 0, resetAt: existing.resetAt };
-  }
+	if (existing.count >= limit) {
+		return { allowed: false, remaining: 0, resetAt: existing.resetAt };
+	}
 
-  existing.count += 1;
-  return {
-    allowed: true,
-    remaining: limit - existing.count,
-    resetAt: existing.resetAt,
-  };
+	existing.count += 1;
+	return {
+		allowed: true,
+		remaining: limit - existing.count,
+		resetAt: existing.resetAt,
+	};
 }
 
-const globalRef = globalThis as typeof globalThis & { __rateLimitCleanupInterval?: ReturnType<typeof setInterval> };
+const globalRef = globalThis as typeof globalThis & {
+	__rateLimitCleanupInterval?: ReturnType<typeof setInterval>;
+};
 if (!globalRef.__rateLimitCleanupInterval) {
-  globalRef.__rateLimitCleanupInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [key, window] of windows) {
-      if (now >= window.resetAt) {
-        windows.delete(key);
-      }
-    }
-  }, 60_000);
+	globalRef.__rateLimitCleanupInterval = setInterval(() => {
+		const now = Date.now();
+		for (const [key, window] of windows) {
+			if (now >= window.resetAt) {
+				windows.delete(key);
+			}
+		}
+	}, 60_000);
 }

@@ -214,27 +214,34 @@ export const twoFactor = pgTable(
 	],
 );
 
-export const purchase = pgTable("purchase", {
-	id: text("id")
-		.$defaultFn(() => cuid())
-		.primaryKey(),
-	organizationId: text("organizationId").references(() => organization.id, {
-		onDelete: "cascade",
-	}),
-	userId: text("userId").references(() => user.id, {
-		onDelete: "cascade",
-	}),
-	type: purchaseTypeEnum("type").notNull(),
-	customerId: text("customerId").notNull(),
-	subscriptionId: text("subscriptionId").unique(),
-	productId: text("productId").notNull(),
-	status: text("status"),
-	createdAt: timestamp("createdAt").defaultNow().notNull(),
-	updatedAt: timestamp("updatedAt"),
-}, (t) => [
-	index("purchase_organization_id_idx").on(t.organizationId),
-	index("purchase_user_id_idx").on(t.userId),
-]);
+export const purchase = pgTable(
+	"purchase",
+	{
+		id: text("id")
+			.$defaultFn(() => cuid())
+			.primaryKey(),
+		organizationId: text("organizationId").references(
+			() => organization.id,
+			{
+				onDelete: "cascade",
+			},
+		),
+		userId: text("userId").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		type: purchaseTypeEnum("type").notNull(),
+		customerId: text("customerId").notNull(),
+		subscriptionId: text("subscriptionId").unique(),
+		productId: text("productId").notNull(),
+		status: text("status"),
+		createdAt: timestamp("createdAt").defaultNow().notNull(),
+		updatedAt: timestamp("updatedAt"),
+	},
+	(t) => [
+		index("purchase_organization_id_idx").on(t.organizationId),
+		index("purchase_user_id_idx").on(t.userId),
+	],
+);
 
 export const sessionRelations = relations(session, ({ one }) => ({
 	user: one(user, {

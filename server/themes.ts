@@ -1,76 +1,76 @@
 import type { ThemeOption } from "@shared/schema";
 
 function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 }
 
 interface ThemeConfig {
-  name: string;
-  description: string;
-  primaryColor: string;
-  accentColor: string;
-  fontFamily: string;
-  icon: string;
+	name: string;
+	description: string;
+	primaryColor: string;
+	accentColor: string;
+	fontFamily: string;
+	icon: string;
 }
 
 const THEME_CONFIGS: Record<ThemeOption, ThemeConfig> = {
-  "affiliate-comparison": {
-    name: "Affiliate Comparison",
-    description: "Product comparison & affiliate marketing site",
-    primaryColor: "#6366f1",
-    accentColor: "#818cf8",
-    fontFamily: "'Inter', sans-serif",
-    icon: "comparison",
-  },
-  "authority-site": {
-    name: "Authority Site",
-    description: "Authoritative content & knowledge hub",
-    primaryColor: "#0f172a",
-    accentColor: "#3b82f6",
-    fontFamily: "'Merriweather', serif",
-    icon: "authority",
-  },
-  "landing-leadgen": {
-    name: "Landing Page - Lead Gen",
-    description: "High-converting lead generation landing page",
-    primaryColor: "#059669",
-    accentColor: "#34d399",
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    icon: "leadgen",
-  },
-  "local-business": {
-    name: "Local Business",
-    description: "Professional local business website",
-    primaryColor: "#dc2626",
-    accentColor: "#f97316",
-    fontFamily: "'Open Sans', sans-serif",
-    icon: "business",
-  },
-  "media-newsletter": {
-    name: "Media & Newsletter",
-    description: "Media publication & newsletter signup",
-    primaryColor: "#7c3aed",
-    accentColor: "#a78bfa",
-    fontFamily: "'Playfair Display', serif",
-    icon: "newsletter",
-  },
+	"affiliate-comparison": {
+		name: "Affiliate Comparison",
+		description: "Product comparison & affiliate marketing site",
+		primaryColor: "#6366f1",
+		accentColor: "#818cf8",
+		fontFamily: "'Inter', sans-serif",
+		icon: "comparison",
+	},
+	"authority-site": {
+		name: "Authority Site",
+		description: "Authoritative content & knowledge hub",
+		primaryColor: "#0f172a",
+		accentColor: "#3b82f6",
+		fontFamily: "'Merriweather', serif",
+		icon: "authority",
+	},
+	"landing-leadgen": {
+		name: "Landing Page - Lead Gen",
+		description: "High-converting lead generation landing page",
+		primaryColor: "#059669",
+		accentColor: "#34d399",
+		fontFamily: "'Plus Jakarta Sans', sans-serif",
+		icon: "leadgen",
+	},
+	"local-business": {
+		name: "Local Business",
+		description: "Professional local business website",
+		primaryColor: "#dc2626",
+		accentColor: "#f97316",
+		fontFamily: "'Open Sans', sans-serif",
+		icon: "business",
+	},
+	"media-newsletter": {
+		name: "Media & Newsletter",
+		description: "Media publication & newsletter signup",
+		primaryColor: "#7c3aed",
+		accentColor: "#a78bfa",
+		fontFamily: "'Playfair Display', serif",
+		icon: "newsletter",
+	},
 };
 
 export function getThemeConfig(theme: ThemeOption): ThemeConfig {
-  return THEME_CONFIGS[theme];
+	return THEME_CONFIGS[theme];
 }
 
 export function getThemeConfigs(): Record<ThemeOption, ThemeConfig> {
-  return THEME_CONFIGS;
+	return THEME_CONFIGS;
 }
 
 function generateAffiliateComparison(domainName: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -151,7 +151,7 @@ function generateAffiliateComparison(domainName: string): string {
 }
 
 function generateAuthoritySite(domainName: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -223,7 +223,7 @@ function generateAuthoritySite(domainName: string): string {
 }
 
 function generateLandingLeadgen(domainName: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -309,7 +309,7 @@ function generateLandingLeadgen(domainName: string): string {
 }
 
 function generateLocalBusiness(domainName: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -401,7 +401,7 @@ function generateLocalBusiness(domainName: string): string {
 }
 
 function generateMediaNewsletter(domainName: string): string {
-  return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -487,19 +487,22 @@ function generateMediaNewsletter(domainName: string): string {
 </body></html>`;
 }
 
-export function generateThemeHtml(theme: ThemeOption, domainName: string): string {
-  switch (theme) {
-    case "affiliate-comparison":
-      return generateAffiliateComparison(domainName);
-    case "authority-site":
-      return generateAuthoritySite(domainName);
-    case "landing-leadgen":
-      return generateLandingLeadgen(domainName);
-    case "local-business":
-      return generateLocalBusiness(domainName);
-    case "media-newsletter":
-      return generateMediaNewsletter(domainName);
-    default:
-      return generateLandingLeadgen(domainName);
-  }
+export function generateThemeHtml(
+	theme: ThemeOption,
+	domainName: string,
+): string {
+	switch (theme) {
+		case "affiliate-comparison":
+			return generateAffiliateComparison(domainName);
+		case "authority-site":
+			return generateAuthoritySite(domainName);
+		case "landing-leadgen":
+			return generateLandingLeadgen(domainName);
+		case "local-business":
+			return generateLocalBusiness(domainName);
+		case "media-newsletter":
+			return generateMediaNewsletter(domainName);
+		default:
+			return generateLandingLeadgen(domainName);
+	}
 }

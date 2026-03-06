@@ -3,9 +3,18 @@ import { Card } from "@repo/ui/components/card";
 import type { ChartConfig } from "@repo/ui/components/chart";
 import { StatsTile } from "@saas/start/components/StatsTile";
 import dynamic from "next/dynamic";
+
 const StatsTileChart = dynamic(
-	() => import("@saas/start/components/StatsTileChart").then((m) => m.StatsTileChart),
-	{ ssr: false, loading: () => <div className="animate-pulse h-24 rounded-lg bg-muted" /> },
+	() =>
+		import("@saas/start/components/StatsTileChart").then(
+			(m) => m.StatsTileChart,
+		),
+	{
+		ssr: false,
+		loading: () => (
+			<div className="animate-pulse h-24 rounded-lg bg-muted" />
+		),
+	},
 );
 
 const clientsData = [

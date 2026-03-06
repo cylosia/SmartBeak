@@ -18,6 +18,7 @@ import { useAuthErrorMessages } from "@saas/auth/hooks/errors-messages";
 import { sessionQueryKey } from "@saas/auth/lib/api";
 import { OrganizationInvitationAlert } from "@saas/organizations/components/OrganizationInvitationAlert";
 import { useRouter } from "@shared/hooks/router";
+import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	AlertTriangleIcon,
@@ -35,7 +36,6 @@ import { useForm } from "react-hook-form";
 import { withQuery } from "ufo";
 import { z } from "zod";
 import { config } from "@/config";
-import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import {
 	type OAuthProvider,
 	oAuthProviders,
@@ -99,7 +99,11 @@ export function LoginForm() {
 					throw error;
 				}
 
-				if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+				if (
+					data &&
+					"twoFactorRedirect" in data &&
+					data.twoFactorRedirect
+				) {
 					router.replace(
 						withQuery(
 							"/auth/verify",

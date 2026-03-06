@@ -6,32 +6,32 @@
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import {
-  auditEvents,
-  buyerSessions,
-  contentItems,
-  contentRevisions,
-  diligenceChecks,
-  domains,
-  featureFlags,
-  guardrails,
-  integrations,
-  invoices,
-  keywordTracking,
-  mediaAssets,
-  monetizationDecaySignals,
-  onboardingProgress,
-  organizationMembers,
-  organizations,
-  portfolioSummaries,
-  publishAttempts,
-  publishTargets,
-  publishingJobs,
-  seoDocuments,
-  siteShards,
-  subscriptions,
-  timelineEvents,
-  usageRecords,
-  webhookEvents,
+	auditEvents,
+	buyerSessions,
+	contentItems,
+	contentRevisions,
+	diligenceChecks,
+	domains,
+	featureFlags,
+	guardrails,
+	integrations,
+	invoices,
+	keywordTracking,
+	mediaAssets,
+	monetizationDecaySignals,
+	onboardingProgress,
+	organizationMembers,
+	organizations,
+	portfolioSummaries,
+	publishAttempts,
+	publishingJobs,
+	publishTargets,
+	seoDocuments,
+	siteShards,
+	subscriptions,
+	timelineEvents,
+	usageRecords,
+	webhookEvents,
 } from "./schema/smartbeak";
 
 // Organizations
@@ -41,7 +41,8 @@ export type SmartBeakOrg = typeof organizations.$inferSelect;
 
 // Organization Members
 export const SmartBeakOrgMemberSchema = createSelectSchema(organizationMembers);
-export const SmartBeakOrgMemberInsertSchema = createInsertSchema(organizationMembers);
+export const SmartBeakOrgMemberInsertSchema =
+	createInsertSchema(organizationMembers);
 export type SmartBeakOrgMember = typeof organizationMembers.$inferSelect;
 
 // Domains
@@ -151,86 +152,90 @@ export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
 // ─── API Input Schemas (used in oRPC procedures) ──────────────────────────────
 
 export const CreateDomainInputSchema = z.object({
-  name: z.string().min(1).max(255),
-  slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
-  themeId: z.string().optional(),
+	name: z.string().min(1).max(255),
+	slug: z
+		.string()
+		.min(1)
+		.max(255)
+		.regex(/^[a-z0-9-]+$/),
+	themeId: z.string().optional(),
 });
 
 export const UpdateDomainInputSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1).max(255).optional(),
-  status: z.enum(["active", "pending", "suspended", "deployed"]).optional(),
-  themeId: z.string().optional(),
-  deployedUrl: z.string().url().nullable().optional(),
-  registryData: z.record(z.string(), z.unknown()).nullable().optional(),
-  health: z.record(z.string(), z.unknown()).nullable().optional(),
-  lifecycle: z.record(z.string(), z.unknown()).nullable().optional(),
+	id: z.string().uuid(),
+	name: z.string().min(1).max(255).optional(),
+	status: z.enum(["active", "pending", "suspended", "deployed"]).optional(),
+	themeId: z.string().optional(),
+	deployedUrl: z.string().url().nullable().optional(),
+	registryData: z.record(z.string(), z.unknown()).nullable().optional(),
+	health: z.record(z.string(), z.unknown()).nullable().optional(),
+	lifecycle: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export const CreateContentItemInputSchema = z.object({
-  domainId: z.string().uuid(),
-  title: z.string().min(1).max(500),
-  body: z.string().optional(),
-  status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
-  scheduledFor: z.string().datetime().nullable().optional(),
+	domainId: z.string().uuid(),
+	title: z.string().min(1).max(500),
+	body: z.string().optional(),
+	status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
+	scheduledFor: z.string().datetime().nullable().optional(),
 });
 
 export const UpdateContentItemInputSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(500).optional(),
-  body: z.string().optional(),
-  status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
-  scheduledFor: z.string().datetime().nullable().optional(),
+	id: z.string().uuid(),
+	title: z.string().min(1).max(500).optional(),
+	body: z.string().optional(),
+	status: z.enum(["draft", "published", "scheduled", "archived"]).optional(),
+	scheduledFor: z.string().datetime().nullable().optional(),
 });
 
 export const CreatePublishingJobInputSchema = z.object({
-  contentId: z.string().uuid().optional(),
-  domainId: z.string().uuid(),
-  target: z.enum([
-    "web",
-    "linkedin",
-    "facebook",
-    "instagram",
-    "youtube",
-    "wordpress",
-    "email",
-    "tiktok",
-    "pinterest",
-    "vimeo",
-    "soundcloud",
-  ]),
-  scheduledFor: z.string().datetime().nullable().optional(),
+	contentId: z.string().uuid().optional(),
+	domainId: z.string().uuid(),
+	target: z.enum([
+		"web",
+		"linkedin",
+		"facebook",
+		"instagram",
+		"youtube",
+		"wordpress",
+		"email",
+		"tiktok",
+		"pinterest",
+		"vimeo",
+		"soundcloud",
+	]),
+	scheduledFor: z.string().datetime().nullable().optional(),
 });
 
 export const UpsertSeoDocumentInputSchema = z.object({
-  domainId: z.string().uuid(),
-  keywords: z.array(z.string()).optional(),
-  score: z.number().int().min(0).max(100).optional(),
+	domainId: z.string().uuid(),
+	keywords: z.array(z.string()).optional(),
+	score: z.number().int().min(0).max(100).optional(),
 });
 
 export const AddKeywordInputSchema = z.object({
-  domainId: z.string().uuid(),
-  keyword: z.string().min(1).max(255),
-  volume: z.number().int().optional(),
-  difficulty: z.number().int().min(0).max(100).optional(),
-  position: z.number().int().optional(),
+	domainId: z.string().uuid(),
+	keyword: z.string().min(1).max(255),
+	volume: z.number().int().optional(),
+	difficulty: z.number().int().min(0).max(100).optional(),
+	position: z.number().int().optional(),
 });
 
 export const UpsertFeatureFlagInputSchema = z.object({
-  orgId: z.string().uuid(),
-  key: z.string().min(1).max(100),
-  enabled: z.boolean().optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
+	orgId: z.string().uuid(),
+	key: z.string().min(1).max(100),
+	enabled: z.boolean().optional(),
+	config: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const UpsertGuardrailInputSchema = z.object({
-  orgId: z.string().uuid(),
-  rule: z.string().min(1).max(100),
-  value: z.number().int(),
-  enabled: z.boolean().optional(),
+	orgId: z.string().uuid(),
+	rule: z.string().min(1).max(100),
+	value: z.number().int(),
+	enabled: z.boolean().optional(),
 });
 
 export const CompleteOnboardingStepInputSchema = z.object({
-  orgId: z.string().uuid(),
-  step: z.string().min(1).max(100),
+	orgId: z.string().uuid(),
+	step: z.string().min(1).max(100),
 });

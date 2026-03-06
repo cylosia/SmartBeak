@@ -23,9 +23,14 @@ export const listPurchases = protectedProcedure
 	)
 	.handler(async ({ input: { organizationId }, context: { user } }) => {
 		if (organizationId) {
-			const membership = await getOrganizationMembership(organizationId, user.id);
+			const membership = await getOrganizationMembership(
+				organizationId,
+				user.id,
+			);
 			if (!membership) {
-				throw new ORPCError("FORBIDDEN", { message: "You are not a member of this organization." });
+				throw new ORPCError("FORBIDDEN", {
+					message: "You are not a member of this organization.",
+				});
 			}
 
 			const purchases =

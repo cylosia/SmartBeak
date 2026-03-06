@@ -18,11 +18,13 @@ export async function getTemplate<T extends TemplateId>({
 	const template = mailTemplates[templateId];
 	const translations = await getMessagesForLocale(locale);
 
-	const email = (template as (props: Record<string, unknown>) => JSX.Element)({
-		...context,
-		locale,
-		translations,
-	});
+	const email = (template as (props: Record<string, unknown>) => JSX.Element)(
+		{
+			...context,
+			locale,
+			translations,
+		},
+	);
 
 	const subject =
 		"subject" in translations.mail[templateId as keyof Messages["mail"]]

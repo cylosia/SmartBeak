@@ -3,7 +3,7 @@ import { getJobAttempts } from "./procedures/get-job-attempts";
 import { listPublishingJobs } from "./procedures/list-jobs";
 
 export const publishingRouter = {
-  listJobs: listPublishingJobs,
-  createJob: createPublishingJobProcedure,
-  getJobAttempts,
+	listJobs: listPublishingJobs,
+	createJob: createPublishingJobProcedure,
+	getJobAttempts,
 };

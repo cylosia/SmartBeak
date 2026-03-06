@@ -1,7 +1,7 @@
 "use client";
 
 export default function GlobalError({
-	error,
+	error: _error,
 	reset,
 }: {
 	error: Error & { digest?: string };
@@ -40,6 +40,7 @@ export default function GlobalError({
 						An unexpected error occurred. Please try again.
 					</p>
 					<button
+						type="button"
 						onClick={reset}
 						style={{
 							padding: "0.5rem 1.5rem",

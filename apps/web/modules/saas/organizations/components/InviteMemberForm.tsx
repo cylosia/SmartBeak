@@ -88,17 +88,17 @@ export function InviteMemberForm({
 								control={form.control}
 								name="email"
 								render={({ field }) => (
-							<FormItem>
-									<FormLabel>
-										{t(
-											"organizations.settings.members.inviteMember.email",
-										)}
-									</FormLabel>
-									<FormControl>
-										<Input type="email" {...field} />
-									</FormControl>
-									<FormMessage />
-								</FormItem>
+									<FormItem>
+										<FormLabel>
+											{t(
+												"organizations.settings.members.inviteMember.email",
+											)}
+										</FormLabel>
+										<FormControl>
+											<Input type="email" {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
 								)}
 							/>
 						</div>
@@ -108,20 +108,20 @@ export function InviteMemberForm({
 								control={form.control}
 								name="role"
 								render={({ field }) => (
-							<FormItem>
-									<FormLabel>
-										{t(
-											"organizations.settings.members.inviteMember.role",
-										)}
-									</FormLabel>
-									<FormControl>
-										<OrganizationRoleSelect
-											value={field.value}
-											onSelect={field.onChange}
-										/>
-									</FormControl>
-									<FormMessage />
-								</FormItem>
+									<FormItem>
+										<FormLabel>
+											{t(
+												"organizations.settings.members.inviteMember.role",
+											)}
+										</FormLabel>
+										<FormControl>
+											<OrganizationRoleSelect
+												value={field.value}
+												onSelect={field.onChange}
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
 								)}
 							/>
 						</div>

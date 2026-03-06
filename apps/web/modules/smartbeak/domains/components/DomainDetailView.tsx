@@ -1,354 +1,401 @@
 "use client";
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 function isSafeUrl(url: string | null | undefined): url is string {
-  if (!url) return false;
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
+	if (!url) {
+		return false;
+	}
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "https:" || parsed.protocol === "http:";
+	} catch {
+		return false;
+	}
 }
-import { orpc } from "@shared/lib/orpc-query-utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
+
 import { Button } from "@repo/ui/components/button";
-import { toastSuccess, toastError } from "@repo/ui/components/toast";
-import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
-import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
-import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
-import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
-  GlobeIcon,
-  ShieldCheckIcon,
-  FileTextIcon,
-  ImageIcon,
-  SendIcon,
-  SearchIcon,
-  BrainCircuitIcon,
-  TrendingUpIcon,
-  ZapIcon,
-  RocketIcon,
-  ExternalLinkIcon,
-  Loader2Icon,
-  EyeIcon,
+	Card,
+	CardContent,
+	CardHeader,
+	CardTitle,
+} from "@repo/ui/components/card";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
+import { orpc } from "@shared/lib/orpc-query-utils";
+import { formatDistanceToNow } from "date-fns";
+import {
+	BrainCircuitIcon,
+	ExternalLinkIcon,
+	EyeIcon,
+	FileTextIcon,
+	GlobeIcon,
+	ImageIcon,
+	Loader2Icon,
+	RocketIcon,
+	SearchIcon,
+	SendIcon,
+	ShieldCheckIcon,
+	TrendingUpIcon,
+	ZapIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
+import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
+import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 
 export function DomainDetailView({
-  organizationSlug,
-  domainId,
+	organizationSlug,
+	domainId,
 }: {
-  organizationSlug: string;
-  domainId: string;
+	organizationSlug: string;
+	domainId: string;
 }) {
-  const queryClient = useQueryClient();
-  const [showPreview, setShowPreview] = useState(false);
+	const queryClient = useQueryClient();
+	const [showPreview, setShowPreview] = useState(false);
 
-  const domainQuery = useQuery(
-    orpc.smartbeak.domains.get.queryOptions({
-      input: { organizationSlug, id: domainId },
-    }),
-  );
+	const domainQuery = useQuery(
+		orpc.smartbeak.domains.get.queryOptions({
+			input: { organizationSlug, id: domainId },
+		}),
+	);
 
-  const deployStatusQuery = useQuery(
-    orpc.smartbeak.deploy.status.queryOptions({
-      input: { organizationSlug, domainId },
-      refetchInterval: (query) => {
-        const latest = query.state.data?.latest;
-        if (latest && (latest.status === "building" || latest.status === "deploying")) {
-          return 3000;
-        }
-        return false;
-      },
-    }),
-  );
+	const deployStatusQuery = useQuery(
+		orpc.smartbeak.deploy.status.queryOptions({
+			input: { organizationSlug, domainId },
+			refetchInterval: (query) => {
+				const latest = query.state.data?.latest;
+				if (
+					latest &&
+					(latest.status === "building" ||
+						latest.status === "deploying")
+				) {
+					return 3000;
+				}
+				return false;
+			},
+		}),
+	);
 
-  const deployMutation = useMutation(
-    orpc.smartbeak.deploy.trigger.mutationOptions({
-      onSuccess: (data) => {
-        toastSuccess(
-          "Deployment started",
-          `Version ${data.shard.version} is being deployed.`,
-        );
-        queryClient.invalidateQueries({
-          queryKey: orpc.smartbeak.deploy.status.key(),
-        });
-      },
-      onError: (err) => {
-        toastError("Deploy failed", err.message);
-      },
-    }),
-  );
+	const deployMutation = useMutation(
+		orpc.smartbeak.deploy.trigger.mutationOptions({
+			onSuccess: (data) => {
+				toastSuccess(
+					"Deployment started",
+					`Version ${data.shard.version} is being deployed.`,
+				);
+				queryClient.invalidateQueries({
+					queryKey: orpc.smartbeak.deploy.status.key(),
+				});
+			},
+			onError: (err) => {
+				toastError("Deploy failed", err.message);
+			},
+		}),
+	);
 
-  const domain = domainQuery.data?.domain;
-  const registry = (domain?.registryData ?? {}) as Record<string, unknown>;
-  const healthData = (domain?.health ?? {}) as Record<string, unknown>;
-  const latestShard = deployStatusQuery.data?.latest;
-  const isDeploying = latestShard?.status === "building" || latestShard?.status === "deploying";
+	const domain = domainQuery.data?.domain;
+	const registry = (domain?.registryData ?? {}) as Record<string, unknown>;
+	const healthData = (domain?.health ?? {}) as Record<string, unknown>;
+	const latestShard = deployStatusQuery.data?.latest;
+	const isDeploying =
+		latestShard?.status === "building" ||
+		latestShard?.status === "deploying";
 
-  const QUICK_LINKS = [
-    {
-      label: "Content",
-      icon: FileTextIcon,
-      href: `/app/${organizationSlug}/domains/${domainId}/content`,
-      description: "Manage articles and pages",
-    },
-    {
-      label: "Media",
-      icon: ImageIcon,
-      href: `/app/${organizationSlug}/domains/${domainId}/media`,
-      description: "Upload and manage assets",
-    },
-    {
-      label: "Publishing",
-      icon: SendIcon,
-      href: `/app/${organizationSlug}/domains/${domainId}/publishing`,
-      description: "Multi-channel distribution",
-    },
-    {
-      label: "SEO",
-      icon: SearchIcon,
-      href: `/app/${organizationSlug}/domains/${domainId}/seo`,
-      description: "Keyword tracking and scores",
-    },
-    {
-      label: "SEO Intelligence",
-      icon: BrainCircuitIcon,
-      href: `/app/${organizationSlug}/domains/${domainId}/seo-intelligence`,
-      description: "AI ideas, decay signals, and content optimizer",
-    },
-    {
-      label: "Analytics",
-      icon: TrendingUpIcon,
-      href: `/app/${organizationSlug}/domains/${domainId}/analytics`,
-      description: "Diligence, sell-ready score, and attribution",
-    },
-    {
-      label: "SmartDeploy",
-      icon: ZapIcon,
-      href: `/app/${organizationSlug}/smart-deploy`,
-      description: "Deploy to edge network",
-    },
-  ];
+	const QUICK_LINKS = [
+		{
+			label: "Content",
+			icon: FileTextIcon,
+			href: `/app/${organizationSlug}/domains/${domainId}/content`,
+			description: "Manage articles and pages",
+		},
+		{
+			label: "Media",
+			icon: ImageIcon,
+			href: `/app/${organizationSlug}/domains/${domainId}/media`,
+			description: "Upload and manage assets",
+		},
+		{
+			label: "Publishing",
+			icon: SendIcon,
+			href: `/app/${organizationSlug}/domains/${domainId}/publishing`,
+			description: "Multi-channel distribution",
+		},
+		{
+			label: "SEO",
+			icon: SearchIcon,
+			href: `/app/${organizationSlug}/domains/${domainId}/seo`,
+			description: "Keyword tracking and scores",
+		},
+		{
+			label: "SEO Intelligence",
+			icon: BrainCircuitIcon,
+			href: `/app/${organizationSlug}/domains/${domainId}/seo-intelligence`,
+			description: "AI ideas, decay signals, and content optimizer",
+		},
+		{
+			label: "Analytics",
+			icon: TrendingUpIcon,
+			href: `/app/${organizationSlug}/domains/${domainId}/analytics`,
+			description: "Diligence, sell-ready score, and attribution",
+		},
+		{
+			label: "SmartDeploy",
+			icon: ZapIcon,
+			href: `/app/${organizationSlug}/smart-deploy`,
+			description: "Deploy to edge network",
+		},
+	];
 
-  return (
-    <ErrorBoundary>
-      <div className="space-y-8">
-        {/* Domain Info Cards */}
-        {domainQuery.isError ? (
-          <div className="flex flex-col items-center py-8 text-center">
-            <p className="text-sm text-destructive">Failed to load domain.</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => domainQuery.refetch()}>
-              Retry
-            </Button>
-          </div>
-        ) : domainQuery.isLoading ? (
-          <CardGridSkeleton count={4} />
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard
-              title="Domain"
-              value={domain?.name ?? "—"}
-              subtitle="Primary domain name"
-              icon={GlobeIcon}
-            />
-            <MetricCard
-              title="Status"
-              value={domain?.status ?? "—"}
-              subtitle="Current domain status"
-              icon={ShieldCheckIcon}
-            />
-            <MetricCard
-              title="DNS Verified"
-              value={registry.dnsVerified ? "Yes" : "No"}
-              subtitle={
-                registry.dnsVerifiedAt
-                  ? `Verified ${formatDistanceToNow(new Date(registry.dnsVerifiedAt as string), { addSuffix: true })}`
-                  : "Not yet verified"
-              }
-              icon={ShieldCheckIcon}
-            />
-            <MetricCard
-              title="Health Score"
-              value={healthData.score != null ? `${healthData.score}/100` : "—"}
-              subtitle={
-                healthData.lastCheck
-                  ? `Checked ${formatDistanceToNow(new Date(healthData.lastCheck as string), { addSuffix: true })}`
-                  : "No checks yet"
-              }
-              icon={TrendingUpIcon}
-            />
-          </div>
-        )}
+	return (
+		<ErrorBoundary>
+			<div className="space-y-8">
+				{/* Domain Info Cards */}
+				{domainQuery.isError ? (
+					<div className="flex flex-col items-center py-8 text-center">
+						<p className="text-sm text-destructive">
+							Failed to load domain.
+						</p>
+						<Button
+							variant="outline"
+							size="sm"
+							className="mt-2"
+							onClick={() => domainQuery.refetch()}
+						>
+							Retry
+						</Button>
+					</div>
+				) : domainQuery.isLoading ? (
+					<CardGridSkeleton count={4} />
+				) : (
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+						<MetricCard
+							title="Domain"
+							value={domain?.name ?? "—"}
+							subtitle="Primary domain name"
+							icon={GlobeIcon}
+						/>
+						<MetricCard
+							title="Status"
+							value={domain?.status ?? "—"}
+							subtitle="Current domain status"
+							icon={ShieldCheckIcon}
+						/>
+						<MetricCard
+							title="DNS Verified"
+							value={registry.dnsVerified ? "Yes" : "No"}
+							subtitle={
+								registry.dnsVerifiedAt
+									? `Verified ${formatDistanceToNow(new Date(registry.dnsVerifiedAt as string), { addSuffix: true })}`
+									: "Not yet verified"
+							}
+							icon={ShieldCheckIcon}
+						/>
+						<MetricCard
+							title="Health Score"
+							value={
+								healthData.score != null
+									? `${healthData.score}/100`
+									: "—"
+							}
+							subtitle={
+								healthData.lastCheck
+									? `Checked ${formatDistanceToNow(new Date(healthData.lastCheck as string), { addSuffix: true })}`
+									: "No checks yet"
+							}
+							icon={TrendingUpIcon}
+						/>
+					</div>
+				)}
 
-        {/* Domain Details */}
-        {domain && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium">
-                Domain Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Registrar
-                  </p>
-                  <p className="text-sm font-medium mt-1">
-                    {(registry.registrar as string) ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Expiry Date
-                  </p>
-                  <p className="text-sm font-medium mt-1">
-                    {registry.expiryDate
-                      ? new Date(registry.expiryDate as string).toLocaleDateString()
-                      : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    DNS Provider
-                  </p>
-                  <p className="text-sm font-medium mt-1">
-                    {(registry.dnsProvider as string) ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Nameservers
-                  </p>
-                  <p className="text-sm font-medium mt-1 font-mono text-xs">
-                    {Array.isArray(registry.nameservers)
-                      ? (registry.nameservers as string[]).join(", ")
-                      : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Theme
-                  </p>
-                  <p className="text-sm font-medium mt-1 capitalize">
-                    {domain.themeId?.replace(/-/g, " ") ?? "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    Created
-                  </p>
-                  <p className="text-sm font-medium mt-1">
-                    {domain.createdAt
-                      ? formatDistanceToNow(new Date(domain.createdAt), {
-                          addSuffix: true,
-                        })
-                      : "—"}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+				{/* Domain Details */}
+				{domain && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="text-sm font-medium">
+								Domain Configuration
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+								<div>
+									<p className="text-xs text-muted-foreground uppercase tracking-wide">
+										Registrar
+									</p>
+									<p className="text-sm font-medium mt-1">
+										{(registry.registrar as string) ?? "—"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-muted-foreground uppercase tracking-wide">
+										Expiry Date
+									</p>
+									<p className="text-sm font-medium mt-1">
+										{registry.expiryDate
+											? new Date(
+													registry.expiryDate as string,
+												).toLocaleDateString()
+											: "—"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-muted-foreground uppercase tracking-wide">
+										DNS Provider
+									</p>
+									<p className="text-sm font-medium mt-1">
+										{(registry.dnsProvider as string) ??
+											"—"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-muted-foreground uppercase tracking-wide">
+										Nameservers
+									</p>
+									<p className="text-sm font-medium mt-1 font-mono text-xs">
+										{Array.isArray(registry.nameservers)
+											? (
+													registry.nameservers as string[]
+												).join(", ")
+											: "—"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-muted-foreground uppercase tracking-wide">
+										Theme
+									</p>
+									<p className="text-sm font-medium mt-1 capitalize">
+										{domain.themeId?.replace(/-/g, " ") ??
+											"—"}
+									</p>
+								</div>
+								<div>
+									<p className="text-xs text-muted-foreground uppercase tracking-wide">
+										Created
+									</p>
+									<p className="text-sm font-medium mt-1">
+										{domain.createdAt
+											? formatDistanceToNow(
+													new Date(domain.createdAt),
+													{
+														addSuffix: true,
+													},
+												)
+											: "—"}
+									</p>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+				)}
 
-        {/* Deploy & Preview */}
-        {domain && (
-          <Card className="border-primary/20">
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <RocketIcon className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">SmartDeploy</p>
-                  {isSafeUrl(latestShard?.deployedUrl) ? (
-                    <a
-                      href={latestShard.deployedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline underline-offset-2 flex items-center gap-1"
-                    >
-                      {latestShard.deployedUrl}
-                      <ExternalLinkIcon className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Not deployed yet</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {isSafeUrl(latestShard?.deployedUrl) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowPreview(!showPreview)}
-                  >
-                    <EyeIcon className="mr-2 h-4 w-4" />
-                    {showPreview ? "Hide Preview" : "Preview"}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    deployMutation.mutate({
-                      organizationSlug,
-                      domainId,
-                    })
-                  }
-                  disabled={deployMutation.isPending || isDeploying}
-                >
-                  {deployMutation.isPending || isDeploying ? (
-                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RocketIcon className="mr-2 h-4 w-4" />
-                  )}
-                  {isDeploying ? "Deploying..." : "Deploy Site"}
-                </Button>
-              </div>
-            </CardContent>
-            {showPreview && isSafeUrl(latestShard?.deployedUrl) && (
-              <div className="border-t border-border">
-                <iframe
-                  src={latestShard.deployedUrl}
-                  title="Site preview"
-                  className="w-full h-[500px] bg-muted rounded-b-xl"
-                  sandbox="allow-scripts allow-same-origin"
-                />
-              </div>
-            )}
-          </Card>
-        )}
+				{/* Deploy & Preview */}
+				{domain && (
+					<Card className="border-primary/20">
+						<CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+							<div className="flex items-center gap-3">
+								<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+									<RocketIcon className="h-5 w-5 text-primary" />
+								</div>
+								<div>
+									<p className="text-sm font-medium">
+										SmartDeploy
+									</p>
+									{isSafeUrl(latestShard?.deployedUrl) ? (
+										<a
+											href={latestShard.deployedUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-xs text-primary hover:underline underline-offset-2 flex items-center gap-1"
+										>
+											{latestShard.deployedUrl}
+											<ExternalLinkIcon className="h-3 w-3" />
+										</a>
+									) : (
+										<p className="text-xs text-muted-foreground">
+											Not deployed yet
+										</p>
+									)}
+								</div>
+							</div>
+							<div className="flex items-center gap-2">
+								{isSafeUrl(latestShard?.deployedUrl) && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() =>
+											setShowPreview(!showPreview)
+										}
+									>
+										<EyeIcon className="mr-2 h-4 w-4" />
+										{showPreview
+											? "Hide Preview"
+											: "Preview"}
+									</Button>
+								)}
+								<Button
+									size="sm"
+									onClick={() =>
+										deployMutation.mutate({
+											organizationSlug,
+											domainId,
+										})
+									}
+									disabled={
+										deployMutation.isPending || isDeploying
+									}
+								>
+									{deployMutation.isPending || isDeploying ? (
+										<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+									) : (
+										<RocketIcon className="mr-2 h-4 w-4" />
+									)}
+									{isDeploying
+										? "Deploying..."
+										: "Deploy Site"}
+								</Button>
+							</div>
+						</CardContent>
+						{showPreview && isSafeUrl(latestShard?.deployedUrl) && (
+							<div className="border-t border-border">
+								<iframe
+									src={latestShard.deployedUrl}
+									title="Site preview"
+									className="w-full h-[500px] bg-muted rounded-b-xl"
+									sandbox="allow-scripts allow-same-origin"
+								/>
+							</div>
+						)}
+					</Card>
+				)}
 
-        {/* Quick Links Grid */}
-        <div>
-          <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-            Domain Tools
-          </h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {QUICK_LINKS.map((link) => (
-              <Link key={link.label} href={link.href}>
-                <Card className="hover:border-primary/50 hover:bg-primary/5 hover:scale-[1.02] transition-all cursor-pointer group">
-                  <CardContent className="flex items-center gap-3 py-4">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                      <link.icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{link.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {link.description}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-    </ErrorBoundary>
-  );
+				{/* Quick Links Grid */}
+				<div>
+					<h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+						Domain Tools
+					</h3>
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+						{QUICK_LINKS.map((link) => (
+							<Link key={link.label} href={link.href}>
+								<Card className="hover:border-primary/50 hover:bg-primary/5 hover:scale-[1.02] transition-all cursor-pointer group">
+									<CardContent className="flex items-center gap-3 py-4">
+										<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+											<link.icon className="h-5 w-5 text-primary" />
+										</div>
+										<div>
+											<p className="text-sm font-medium">
+												{link.label}
+											</p>
+											<p className="text-xs text-muted-foreground">
+												{link.description}
+											</p>
+										</div>
+									</CardContent>
+								</Card>
+							</Link>
+						))}
+					</div>
+				</div>
+			</div>
+		</ErrorBoundary>
+	);
 }

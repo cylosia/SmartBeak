@@ -18,7 +18,10 @@ export function AnalyticsScript() {
 
 declare global {
 	interface Window {
-		pirsch?: (event: string, options?: { meta?: Record<string, unknown> }) => void;
+		pirsch?: (
+			event: string,
+			options?: { meta?: Record<string, unknown> },
+		) => void;
 	}
 }
 

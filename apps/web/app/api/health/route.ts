@@ -10,23 +10,23 @@
  * information disclosure to unauthenticated callers.
  */
 
-import { NextResponse } from "next/server";
 import { checkDatabaseHealth } from "@repo/api/infrastructure";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const dbHealth = await checkDatabaseHealth();
+	const dbHealth = await checkDatabaseHealth();
 
-  const status = dbHealth.healthy ? "healthy" : "degraded";
-  const httpStatus = dbHealth.healthy ? 200 : 503;
+	const status = dbHealth.healthy ? "healthy" : "degraded";
+	const httpStatus = dbHealth.healthy ? 200 : 503;
 
-  return NextResponse.json(
-    {
-      status,
-      timestamp: new Date().toISOString(),
-    },
-    { status: httpStatus },
-  );
+	return NextResponse.json(
+		{
+			status,
+			timestamp: new Date().toISOString(),
+		},
+		{ status: httpStatus },
+	);
 }

@@ -49,7 +49,11 @@ export function getContentStructure({
 			const path = isPage ? item.path : rootItemPath;
 			const metaData = meta
 				.filter((m) => m.path === subPath)
-				.sort((a, b) => (a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1))
+				.sort(
+					(a, b) =>
+						(a.locale === locale ? -1 : 1) -
+						(b.locale === locale ? -1 : 1),
+				)
 				.at(0)?.data[pathParts[0]];
 			const label = metaData
 				? typeof metaData === "string"
@@ -57,7 +61,11 @@ export function getContentStructure({
 					: metaData.title
 				: (documents
 						.filter((page) => page.path === rootItemPath)
-						.sort((a, b) => (a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1))
+						.sort(
+							(a, b) =>
+								(a.locale === locale ? -1 : 1) -
+								(b.locale === locale ? -1 : 1),
+						)
 						.at(0)?.title ?? pathParts[0]);
 
 			rootItem = {
@@ -96,14 +104,22 @@ export function getContentStructure({
 			const aIndex = Object.entries(
 				meta
 					.filter((meta) => meta.path === basePath)
-					.sort((a, b) => (a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1))
+					.sort(
+						(a, b) =>
+							(a.locale === locale ? -1 : 1) -
+							(b.locale === locale ? -1 : 1),
+					)
 					.at(0)?.data ?? {},
 			).findIndex(([key]) => key === a.path.replace(`${basePath}/`, ""));
 
 			const bIndex = Object.entries(
 				meta
 					.filter((meta) => meta.path === basePath)
-					.sort((a, b) => (a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1))
+					.sort(
+						(a, b) =>
+							(a.locale === locale ? -1 : 1) -
+							(b.locale === locale ? -1 : 1),
+					)
 					.at(0)?.data ?? {},
 			).findIndex(([key]) => key === b.path.replace(`${basePath}/`, ""));
 
@@ -135,7 +151,10 @@ export function getLocalizedDocumentWithFallback<
 >(documents: T[], path: string, locale: string) {
 	return documents
 		.filter((doc) => doc.path === path)
-		.sort((a, b) => (a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1))[0];
+		.sort(
+			(a, b) =>
+				(a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1),
+		)[0];
 }
 
 export function slugifyHeadline(headline: string) {

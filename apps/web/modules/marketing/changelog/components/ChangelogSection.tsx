@@ -6,7 +6,10 @@ export function ChangelogSection({ items }: { items: ChangelogItem[] }) {
 		<section id="changelog">
 			<div className="mx-auto grid w-full max-w-xl grid-cols-1 gap-4 text-left">
 				{items?.map((item) => (
-					<div key={`${item.date}-${item.title}`} className="rounded-3xl bg-muted p-6 lg:p-8">
+					<div
+						key={`${item.date}-${item.title}`}
+						className="rounded-3xl bg-muted p-6 lg:p-8"
+					>
 						<div className="flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-between">
 							<h2 className="text-xl font-semibold">
 								{item.title}

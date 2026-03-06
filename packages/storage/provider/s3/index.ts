@@ -63,10 +63,17 @@ const ALLOWED_CONTENT_TYPES = new Set([
 function inferContentType(path: string): string {
 	const ext = path.split(".").pop()?.toLowerCase();
 	const map: Record<string, string> = {
-		jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-		webp: "image/webp", gif: "image/gif", svg: "image/svg+xml",
-		pdf: "application/pdf", mp4: "video/mp4", webm: "video/webm",
-		mp3: "audio/mpeg", wav: "audio/wav",
+		jpg: "image/jpeg",
+		jpeg: "image/jpeg",
+		png: "image/png",
+		webp: "image/webp",
+		gif: "image/gif",
+		svg: "image/svg+xml",
+		pdf: "application/pdf",
+		mp4: "video/mp4",
+		webm: "video/webm",
+		mp3: "audio/mpeg",
+		wav: "audio/wav",
 	};
 	return map[ext ?? ""] ?? "application/octet-stream";
 }

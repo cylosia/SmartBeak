@@ -1,8 +1,8 @@
 import { defineCollection, defineConfig } from "@content-collections/core";
 import { compileMDX } from "@content-collections/mdx";
+import { config } from "@repo/i18n/config";
 import rehypeShiki from "@shikijs/rehype";
 import { z } from "zod";
-import { config } from "@repo/i18n/config";
 
 function sanitizePath(path: string) {
 	return path

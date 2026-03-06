@@ -13,8 +13,8 @@ import { sendEmail } from "@repo/mail";
 import { cancelSubscription } from "@repo/payments";
 import { getBaseUrl } from "@repo/utils";
 import { betterAuth } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { createAuthMiddleware } from "better-auth/api";
 import {
 	admin,
 	magicLink,

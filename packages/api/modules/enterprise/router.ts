@@ -4,8 +4,8 @@ import { ssoRouter } from "./sso/router";
 import { teamsRouter } from "./teams/router";
 
 export const enterpriseRouter = {
-  teams: teamsRouter,
-  sso: ssoRouter,
-  audit: enterpriseAuditRouter,
-  billing: enterpriseBillingRouter,
+	teams: teamsRouter,
+	sso: ssoRouter,
+	audit: enterpriseAuditRouter,
+	billing: enterpriseBillingRouter,
 };

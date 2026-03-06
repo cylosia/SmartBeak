@@ -17,8 +17,8 @@ export default function ErrorPage({
 			</div>
 			<h1 className="font-bold text-2xl">Something went wrong</h1>
 			<p className="max-w-md text-muted-foreground">
-				An unexpected error occurred. Please try again or contact support if the
-				problem persists.
+				An unexpected error occurred. Please try again or contact
+				support if the problem persists.
 			</p>
 			{error.digest && (
 				<p className="font-mono text-xs text-muted-foreground">

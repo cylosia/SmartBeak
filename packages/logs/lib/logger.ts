@@ -1,4 +1,4 @@
-import { createConsola, type ConsolaReporter, type LogObject } from "consola";
+import { type ConsolaReporter, createConsola, type LogObject } from "consola";
 
 const jsonReporter: ConsolaReporter = {
 	log(logObj: LogObject) {
@@ -10,8 +10,7 @@ const jsonReporter: ConsolaReporter = {
 				.join(" "),
 			...(logObj.tag ? { tag: logObj.tag } : {}),
 		};
-		const stream =
-			logObj.level >= 2 ? process.stdout : process.stderr;
+		const stream = logObj.level >= 2 ? process.stdout : process.stderr;
 		stream.write(`${JSON.stringify(entry)}\n`);
 	},
 };

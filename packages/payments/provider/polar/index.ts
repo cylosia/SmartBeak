@@ -3,13 +3,13 @@ import {
 	validateEvent,
 	WebhookVerificationError,
 } from "@polar-sh/sdk/webhooks.js";
-import { logger } from "@repo/logs";
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
 	getPurchaseBySubscriptionId,
 	updatePurchase,
 } from "@repo/database";
+import { logger } from "@repo/logs";
 import { setCustomerIdToEntity } from "../../lib/customer";
 import type {
 	CancelSubscription,

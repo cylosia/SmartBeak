@@ -16,15 +16,16 @@
  * - error: An error occurred during execution.
  */
 
+import { executeWorkflow } from "@repo/api/modules/ai-agents/lib/agent-executor";
+import { enforceRateLimit } from "@repo/api/infrastructure/rate-limit-redis";
 import { auth } from "@repo/auth";
 import {
-  claimSession,
-  getSessionById,
-  getWorkflowById,
-  updateSession,
-  WorkflowGraphSchema,
+	claimSession,
+	getSessionById,
+	getWorkflowById,
+	updateSession,
+	WorkflowGraphSchema,
 } from "@repo/database";
-import { executeWorkflow } from "@repo/api/modules/ai-agents/lib/agent-executor";
 import { logger } from "@repo/logs";
 import type { NextRequest } from "next/server";
 
@@ -32,129 +33,152 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  // ── Authentication ──────────────────────────────────────────────────────────
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+	// ── Authentication ──────────────────────────────────────────────────────────
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session) {
+		return new Response("Unauthorized", { status: 401 });
+	}
 
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const sessionId = request.nextUrl.searchParams.get("sessionId");
-  if (!sessionId || !UUID_RE.test(sessionId)) {
-    return new Response("Missing or invalid sessionId parameter", { status: 400 });
-  }
+	// ── Rate limiting ──────────────────────────────────────────────────────────
+	try {
+		await enforceRateLimit(`workflow:${session.user.id}`, {
+			limit: 10,
+			windowSeconds: 60,
+		});
+	} catch {
+		return new Response("Too many requests", { status: 429 });
+	}
 
-  const agentSession = await getSessionById(sessionId);
-  if (!agentSession) {
-    return new Response("Session not found", { status: 404 });
-  }
+	const UUID_RE =
+		/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+	const sessionId = request.nextUrl.searchParams.get("sessionId");
+	if (!sessionId || !UUID_RE.test(sessionId)) {
+		return new Response("Missing or invalid sessionId parameter", {
+			status: 400,
+		});
+	}
 
-  if (agentSession.triggeredBy !== session.user.id) {
-    return new Response("Forbidden", { status: 403 });
-  }
+	const agentSession = await getSessionById(sessionId);
+	if (!agentSession) {
+		return new Response("Session not found", { status: 404 });
+	}
 
-  if (agentSession.status !== "pending") {
-    return new Response(
-      JSON.stringify({ error: "Session is not in pending state", status: agentSession.status }),
-      { status: 409, headers: { "Content-Type": "application/json" } },
-    );
-  }
+	if (agentSession.triggeredBy !== session.user.id) {
+		return new Response("Forbidden", { status: 403 });
+	}
 
-  const claimed = await claimSession(sessionId);
-  if (!claimed) {
-    return new Response(
-      JSON.stringify({ error: "Session already claimed by another request" }),
-      { status: 409, headers: { "Content-Type": "application/json" } },
-    );
-  }
+	if (agentSession.status !== "pending") {
+		return new Response(
+			JSON.stringify({
+				error: "Session is not in pending state",
+				status: agentSession.status,
+			}),
+			{ status: 409, headers: { "Content-Type": "application/json" } },
+		);
+	}
 
-  // ── Load workflow ───────────────────────────────────────────────────────────
-  if (!agentSession.workflowId) {
-    return new Response("Session has no associated workflow", { status: 400 });
-  }
+	const claimed = await claimSession(sessionId);
+	if (!claimed) {
+		return new Response(
+			JSON.stringify({
+				error: "Session already claimed by another request",
+			}),
+			{ status: 409, headers: { "Content-Type": "application/json" } },
+		);
+	}
 
-  const workflow = await getWorkflowById(agentSession.workflowId);
-  if (!workflow) {
-    return new Response("Workflow not found", { status: 404 });
-  }
+	// ── Load workflow ───────────────────────────────────────────────────────────
+	if (!agentSession.workflowId) {
+		return new Response("Session has no associated workflow", {
+			status: 400,
+		});
+	}
 
-  const graph = WorkflowGraphSchema.safeParse(workflow.stepsJson);
-  if (!graph.success) {
-    return new Response("Invalid workflow graph", { status: 400 });
-  }
+	const workflow = await getWorkflowById(agentSession.workflowId);
+	if (!workflow) {
+		return new Response("Workflow not found", { status: 404 });
+	}
 
-  const inputData = agentSession.inputData as {
-    prompt?: string;
-    context?: string;
-  };
-  const prompt = inputData.prompt ?? "";
-  const context = inputData.context;
+	const graph = WorkflowGraphSchema.safeParse(workflow.stepsJson);
+	if (!graph.success) {
+		return new Response("Invalid workflow graph", { status: 400 });
+	}
 
-  // ── Stream SSE ──────────────────────────────────────────────────────────────
-  const encoder = new TextEncoder();
+	const inputData = agentSession.inputData as {
+		prompt?: string;
+		context?: string;
+	};
+	const prompt = inputData.prompt ?? "";
+	const context = inputData.context;
 
-  const abortController = new AbortController();
-  request.signal.addEventListener("abort", () => abortController.abort());
+	// ── Stream SSE ──────────────────────────────────────────────────────────────
+	const encoder = new TextEncoder();
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (data: unknown) => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
-          );
-        } catch {
-          // Client disconnected
-        }
-      };
+	const abortController = new AbortController();
+	request.signal.addEventListener("abort", () => abortController.abort());
 
-      try {
-        for await (const event of executeWorkflow(
-          sessionId,
-          graph.data,
-          prompt,
-          context,
-        )) {
-          if (abortController.signal.aborted) {
-            logger.info("[workflow-stream] client disconnected, aborting");
-            break;
-          }
-          send(event);
-          if (
-            event.type === "session_complete" ||
-            event.type === "error"
-          ) {
-            break;
-          }
-        }
-      } catch (err) {
-        logger.error("[workflow-stream] execution error:", err);
-        send({
-          type: "error",
-          error: "Execution failed. Please try again.",
-        });
-        await updateSession(sessionId, {
-          status: "failed",
-          errorMessage: err instanceof Error ? err.message : "Execution failed",
-        }).catch(() => {});
-      } finally {
-        if (abortController.signal.aborted) {
-          await updateSession(sessionId, {
-            status: "failed",
-            errorMessage: "Client disconnected",
-          }).catch(() => {});
-        }
-        controller.close();
-      }
-    },
-  });
+	const stream = new ReadableStream({
+		async start(controller) {
+			const send = (data: unknown) => {
+				try {
+					controller.enqueue(
+						encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
+					);
+				} catch {
+					// Client disconnected
+				}
+			};
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
+			try {
+				for await (const event of executeWorkflow(
+					sessionId,
+					graph.data,
+					prompt,
+					context,
+				)) {
+					if (abortController.signal.aborted) {
+						logger.info(
+							"[workflow-stream] client disconnected, aborting",
+						);
+						break;
+					}
+					send(event);
+					if (
+						event.type === "session_complete" ||
+						event.type === "error"
+					) {
+						break;
+					}
+				}
+			} catch (err) {
+				logger.error("[workflow-stream] execution error:", err);
+				send({
+					type: "error",
+					error: "Execution failed. Please try again.",
+				});
+				await updateSession(sessionId, {
+					status: "failed",
+					errorMessage:
+						err instanceof Error ? err.message : "Execution failed",
+				}).catch(() => {});
+			} finally {
+				if (abortController.signal.aborted) {
+					await updateSession(sessionId, {
+						status: "failed",
+						errorMessage: "Client disconnected",
+					}).catch(() => {});
+				}
+				controller.close();
+			}
+		},
+	});
+
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache, no-transform",
+			Connection: "keep-alive",
+			"X-Accel-Buffering": "no",
+		},
+	});
 }

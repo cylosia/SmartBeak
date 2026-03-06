@@ -8,8 +8,8 @@ import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { ArrowLeftIcon } from "lucide-react";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
 export default async function OrganizationFormPage({
 	params,
@@ -35,7 +35,9 @@ export default async function OrganizationFormPage({
 			}),
 	});
 
-	if (!organization) notFound();
+	if (!organization) {
+		notFound();
+	}
 
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>

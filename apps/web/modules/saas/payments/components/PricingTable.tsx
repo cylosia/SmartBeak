@@ -3,8 +3,8 @@ import { LocaleLink } from "@i18n/routing";
 import { config as paymentsConfig } from "@repo/payments/config";
 import { cn } from "@repo/ui";
 import { Button } from "@repo/ui/components/button";
-import { toastError } from "@repo/ui/components/toast";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
+import { toastError } from "@repo/ui/components/toast";
 import { usePlanData } from "@saas/payments/hooks/plan-data";
 import type { PlanId } from "@saas/payments/types";
 import { useLocaleCurrency } from "@shared/hooks/locale-currency";
@@ -77,7 +77,12 @@ export function PricingTable({
 
 			window.location.href = checkoutLink;
 		} catch (error) {
-			toastError("Checkout failed", error instanceof Error ? error.message : "Could not create checkout link. Please try again.");
+			toastError(
+				"Checkout failed",
+				error instanceof Error
+					? error.message
+					: "Could not create checkout link. Please try again.",
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -198,19 +203,15 @@ export function PricingTable({
 
 										{!!features?.length && (
 											<ul className="mt-4 grid list-none gap-2 text-sm">
-												{features.map(
-													(feature) => (
-														<li
-															key={feature}
-															className="flex items-center justify-start"
-														>
-															<CheckIcon className="mr-2 size-4 text-primary" />
-															<span>
-																{feature}
-															</span>
-														</li>
-													),
-												)}
+												{features.map((feature) => (
+													<li
+														key={feature}
+														className="flex items-center justify-start"
+													>
+														<CheckIcon className="mr-2 size-4 text-primary" />
+														<span>{feature}</span>
+													</li>
+												))}
 											</ul>
 										)}
 

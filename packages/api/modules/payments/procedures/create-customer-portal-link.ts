@@ -29,14 +29,18 @@ export const createCustomerPortalLink = protectedProcedure
 				const allowed = new URL(getBaseUrl()).origin;
 				const target = new URL(redirectUrl).origin;
 				if (target !== allowed) {
-					throw new ORPCError("BAD_REQUEST", { message: "redirectUrl must point to the same origin." });
+					throw new ORPCError("BAD_REQUEST", {
+						message: "redirectUrl must point to the same origin.",
+					});
 				}
 			}
 
 			const purchase = await getPurchaseById(purchaseId);
 
 			if (!purchase) {
-				throw new ORPCError("NOT_FOUND", { message: "Purchase not found." });
+				throw new ORPCError("NOT_FOUND", {
+					message: "Purchase not found.",
+				});
 			}
 
 			if (purchase.organizationId) {
@@ -53,7 +57,9 @@ export const createCustomerPortalLink = protectedProcedure
 					throw new ORPCError("FORBIDDEN");
 				}
 			} else {
-				throw new ORPCError("FORBIDDEN", { message: "Purchase has no owner." });
+				throw new ORPCError("FORBIDDEN", {
+					message: "Purchase has no owner.",
+				});
 			}
 
 			try {

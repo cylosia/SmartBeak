@@ -23,7 +23,9 @@ export const createLogoUploadUrl = protectedProcedure
 		const organization = await getOrganizationById(organizationId);
 
 		if (!organization) {
-			throw new ORPCError("NOT_FOUND", { message: "Organization not found." });
+			throw new ORPCError("NOT_FOUND", {
+				message: "Organization not found.",
+			});
 		}
 
 		const membership = await verifyOrganizationMembership(

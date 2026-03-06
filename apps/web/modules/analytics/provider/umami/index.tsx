@@ -17,7 +17,12 @@ export function AnalyticsScript() {
 
 declare global {
 	interface Window {
-		umami?: { track: (event: string, options?: { props?: Record<string, unknown> }) => void };
+		umami?: {
+			track: (
+				event: string,
+				options?: { props?: Record<string, unknown> },
+			) => void;
+		};
 	}
 }
 

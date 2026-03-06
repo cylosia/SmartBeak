@@ -91,7 +91,9 @@ export function NavBar() {
 						label: "SmartDeploy",
 						href: `${basePath}/smart-deploy`,
 						icon: ZapIcon,
-						isActive: pathname.startsWith(`${basePath}/smart-deploy`),
+						isActive: pathname.startsWith(
+							`${basePath}/smart-deploy`,
+						),
 					},
 					{
 						label: "Audit Log",
@@ -103,25 +105,32 @@ export function NavBar() {
 						label: "SEO Intelligence",
 						href: `${basePath}/seo-report`,
 						icon: SearchIcon,
-						isActive: pathname.startsWith(`${basePath}/seo-report`) || pathname.includes("/seo-intelligence"),
+						isActive:
+							pathname.startsWith(`${basePath}/seo-report`) ||
+							pathname.includes("/seo-intelligence"),
 					},
-						{
-							label: "Publishing Suite",
-							href: `${basePath}/publishing-suite`,
-							icon: SendIcon,
-							isActive: pathname.startsWith(`${basePath}/publishing-suite`) || pathname.includes("/publishing-suite"),
-						},
-						{
-							label: "Analytics",
-							href: `${basePath}/analytics`,
-							icon: TrendingUpIcon,
-							isActive: pathname.startsWith(`${basePath}/analytics`),
-						},
+					{
+						label: "Publishing Suite",
+						href: `${basePath}/publishing-suite`,
+						icon: SendIcon,
+						isActive:
+							pathname.startsWith(
+								`${basePath}/publishing-suite`,
+							) || pathname.includes("/publishing-suite"),
+					},
+					{
+						label: "Analytics",
+						href: `${basePath}/analytics`,
+						icon: TrendingUpIcon,
+						isActive: pathname.startsWith(`${basePath}/analytics`),
+					},
 					{
 						label: "Get Started",
 						href: `${basePath}/onboarding-wizard`,
 						icon: FileTextIcon,
-						isActive: pathname.startsWith(`${basePath}/onboarding-wizard`),
+						isActive: pathname.startsWith(
+							`${basePath}/onboarding-wizard`,
+						),
 					},
 					{
 						label: "Referral Program",

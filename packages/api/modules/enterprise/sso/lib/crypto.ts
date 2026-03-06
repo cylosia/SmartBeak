@@ -1,1 +1,6 @@
-export { encryptConfig, decryptConfig, generateScimToken, hashToken } from "../../lib/crypto";
+export {
+	decryptConfig,
+	encryptConfig,
+	generateScimToken,
+	hashToken,
+} from "../../lib/crypto";

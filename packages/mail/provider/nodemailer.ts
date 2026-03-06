@@ -12,8 +12,15 @@ export const send: SendEmailHandler = async ({
 	text,
 	html,
 }) => {
-	if (!process.env.MAIL_HOST || !process.env.MAIL_PORT || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
-		throw new Error("Missing required MAIL_* environment variables for nodemailer");
+	if (
+		!process.env.MAIL_HOST ||
+		!process.env.MAIL_PORT ||
+		!process.env.MAIL_USER ||
+		!process.env.MAIL_PASS
+	) {
+		throw new Error(
+			"Missing required MAIL_* environment variables for nodemailer",
+		);
 	}
 	const transporter = nodemailer.createTransport({
 		host: process.env.MAIL_HOST,

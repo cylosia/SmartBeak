@@ -3,7 +3,7 @@ import { deleteMediaProcedure } from "./procedures/delete-media";
 import { listMedia } from "./procedures/list-media";
 
 export const mediaRouter = {
-  list: listMedia,
-  createUploadUrl: createMediaUploadUrl,
-  delete: deleteMediaProcedure,
+	list: listMedia,
+	createUploadUrl: createMediaUploadUrl,
+	delete: deleteMediaProcedure,
 };

@@ -1,11 +1,11 @@
 "use client";
 
 import { config } from "@repo/auth/config";
+import { Button } from "@repo/ui/components/button";
 import { Card } from "@repo/ui/components/card";
 import { OrganizationLogo } from "@saas/organizations/components/OrganizationLogo";
 import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
 import { useOrganizationListQuery } from "@saas/organizations/lib/api";
-import { Button } from "@repo/ui/components/button";
 import { ChevronRightIcon, PlusCircleIcon } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -13,7 +13,12 @@ import { useTranslations } from "next-intl";
 export function OrganizationsGrid() {
 	const t = useTranslations();
 	const { setActiveOrganization } = useActiveOrganization();
-	const { data: allOrganizations, isLoading, isError, refetch } = useOrganizationListQuery();
+	const {
+		data: allOrganizations,
+		isLoading,
+		isError,
+		refetch,
+	} = useOrganizationListQuery();
 
 	if (isLoading) {
 		return (
@@ -23,7 +28,10 @@ export function OrganizationsGrid() {
 				</h2>
 				<div className="grid @2xl:grid-cols-3 @lg:grid-cols-2 grid-cols-1 gap-4">
 					{[1, 2, 3].map((i) => (
-						<div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+						<div
+							key={i}
+							className="h-20 animate-pulse rounded-2xl bg-muted"
+						/>
 					))}
 				</div>
 			</div>
@@ -37,8 +45,15 @@ export function OrganizationsGrid() {
 					{t("organizations.organizationsGrid.title")}
 				</h2>
 				<div className="flex flex-col items-center py-8 text-center">
-					<p className="text-sm text-destructive">Failed to load organizations.</p>
-					<Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>
+					<p className="text-sm text-destructive">
+						Failed to load organizations.
+					</p>
+					<Button
+						variant="outline"
+						size="sm"
+						className="mt-2"
+						onClick={() => refetch()}
+					>
 						Retry
 					</Button>
 				</div>

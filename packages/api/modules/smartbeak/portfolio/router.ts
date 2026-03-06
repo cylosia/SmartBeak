@@ -1,6 +1,9 @@
-import { getDomainDiligence, getPortfolioSummary } from "./procedures/get-portfolio";
+import {
+	getDomainDiligence,
+	getPortfolioSummary,
+} from "./procedures/get-portfolio";
 
 export const portfolioRouter = {
-  getSummary: getPortfolioSummary,
-  getDiligence: getDomainDiligence,
+	getSummary: getPortfolioSummary,
+	getDiligence: getDomainDiligence,
 };

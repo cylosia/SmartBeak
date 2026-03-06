@@ -3,7 +3,7 @@
  * This avoids circular imports while keeping the enterprise module self-contained.
  */
 export {
-  requireOrgMembership,
-  requireOrgAdmin,
-  requireOrgEditor,
+	requireOrgAdmin,
+	requireOrgEditor,
+	requireOrgMembership,
 } from "../../smartbeak/lib/membership";

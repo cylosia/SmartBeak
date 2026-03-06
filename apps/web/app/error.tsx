@@ -3,8 +3,8 @@
 import { Button } from "@repo/ui/components/button";
 import { AlertTriangleIcon } from "lucide-react";
 
-export default function Error({
-	error,
+export default function ErrorPage({
+	error: _error,
 	reset,
 }: {
 	error: Error & { digest?: string };
@@ -23,7 +23,10 @@ export default function Error({
 				<Button variant="outline" onClick={reset}>
 					Try Again
 				</Button>
-				<Button variant="ghost" onClick={() => (window.location.href = "/")}>
+				<Button
+					variant="ghost"
+					onClick={() => (window.location.href = "/")}
+				>
 					Go Home
 				</Button>
 			</div>

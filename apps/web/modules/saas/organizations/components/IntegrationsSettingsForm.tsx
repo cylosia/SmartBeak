@@ -1,13 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { orpc } from "@shared/lib/orpc-query-utils";
-import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
-import { SettingsItem } from "@saas/shared/components/SettingsItem";
-import { Button } from "@repo/ui/components/button";
 import { Badge } from "@repo/ui/components/badge";
-import { Input } from "@repo/ui/components/input";
-import { Label } from "@repo/ui/components/label";
+import { Button } from "@repo/ui/components/button";
 import {
 	Card,
 	CardContent,
@@ -15,21 +9,27 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@repo/ui/components/card";
-import { toastSuccess, toastError } from "@repo/ui/components/toast";
+import { Input } from "@repo/ui/components/input";
+import { Label } from "@repo/ui/components/label";
+import { Skeleton } from "@repo/ui/components/skeleton";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
+import { useActiveOrganization } from "@saas/organizations/hooks/use-active-organization";
+import { SettingsItem } from "@saas/shared/components/SettingsItem";
+import { orpc } from "@shared/lib/orpc-query-utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	AlertTriangleIcon,
 	BrainCircuitIcon,
-	SearchIcon,
-	LinkIcon,
 	CheckCircle2Icon,
 	CircleDotIcon,
+	LinkIcon,
 	Loader2Icon,
+	SearchIcon,
 	Trash2Icon,
 	ZapIcon,
 } from "lucide-react";
-import { useState } from "react";
 import type { ReactNode } from "react";
-import { Skeleton } from "@repo/ui/components/skeleton";
+import { useState } from "react";
 
 interface ProviderDefinition {
 	id: "openai" | "google_search_console" | "ahrefs";
@@ -51,7 +51,8 @@ const PROVIDERS: ProviderDefinition[] = [
 	{
 		id: "openai",
 		name: "OpenAI",
-		description: "Powers AI content ideas, SEO optimization, and content generation.",
+		description:
+			"Powers AI content ideas, SEO optimization, and content generation.",
 		icon: <BrainCircuitIcon className="h-5 w-5 text-primary" />,
 		fields: [
 			{
@@ -138,7 +139,10 @@ function ProviderCard({
 	const upsertMutation = useMutation(
 		orpc.smartbeak.settings.integrations.upsert.mutationOptions({
 			onSuccess: () => {
-				toastSuccess("Integration saved", `${provider.name} key has been saved and encrypted.`);
+				toastSuccess(
+					"Integration saved",
+					`${provider.name} key has been saved and encrypted.`,
+				);
 				setFieldValues({});
 				onMutationSuccess();
 				setIsSaving(false);
@@ -153,7 +157,10 @@ function ProviderCard({
 	const testMutation = useMutation(
 		orpc.smartbeak.settings.integrations.test.mutationOptions({
 			onSuccess: (data) => {
-				toastSuccess("Connection test passed", (data as { message: string }).message);
+				toastSuccess(
+					"Connection test passed",
+					(data as { message: string }).message,
+				);
 				setIsTesting(false);
 			},
 			onError: (err) => {
@@ -166,7 +173,10 @@ function ProviderCard({
 	const deleteMutation = useMutation(
 		orpc.smartbeak.settings.integrations.delete.mutationOptions({
 			onSuccess: () => {
-				toastSuccess("Integration removed", `${provider.name} has been disconnected.`);
+				toastSuccess(
+					"Integration removed",
+					`${provider.name} has been disconnected.`,
+				);
 				setFieldValues({});
 				onMutationSuccess();
 				setIsDeleting(false);
@@ -221,7 +231,9 @@ function ProviderCard({
 							{provider.icon}
 						</div>
 						<div>
-							<CardTitle className="text-base">{provider.name}</CardTitle>
+							<CardTitle className="text-base">
+								{provider.name}
+							</CardTitle>
 							<CardDescription className="text-xs">
 								{provider.description}
 							</CardDescription>
@@ -244,16 +256,28 @@ function ProviderCard({
 			<CardContent className="space-y-4">
 				{provider.fields.map((field) => (
 					<div key={field.key} className="space-y-1.5">
-						<Label htmlFor={`${provider.id}-${field.key}`} className="text-sm">
+						<Label
+							htmlFor={`${provider.id}-${field.key}`}
+							className="text-sm"
+						>
 							{field.label}
 						</Label>
 						<Input
 							id={`${provider.id}-${field.key}`}
 							type={field.type}
-							placeholder={isConnected && field.key === "apiKey" ? "••••••••••••••••" : field.placeholder}
+							placeholder={
+								isConnected && field.key === "apiKey"
+									? "••••••••••••••••"
+									: field.placeholder
+							}
 							value={fieldValues[field.key] ?? ""}
-							onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-								setFieldValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+							onChange={(
+								e: React.ChangeEvent<HTMLInputElement>,
+							) =>
+								setFieldValues((prev) => ({
+									...prev,
+									[field.key]: e.target.value,
+								}))
 							}
 						/>
 					</div>
@@ -346,12 +370,19 @@ export function IntegrationsSettingsForm() {
 				<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-destructive/40 py-12 gap-3">
 					<AlertTriangleIcon className="h-8 w-8 text-destructive opacity-60" />
 					<div className="text-center">
-						<p className="font-medium text-destructive text-sm">Failed to load integrations</p>
+						<p className="font-medium text-destructive text-sm">
+							Failed to load integrations
+						</p>
 						<p className="text-xs text-muted-foreground mt-1">
-							{integrationsQuery.error?.message ?? "An unexpected error occurred."}
+							{integrationsQuery.error?.message ??
+								"An unexpected error occurred."}
 						</p>
 					</div>
-					<Button variant="outline" size="sm" onClick={() => integrationsQuery.refetch()}>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => integrationsQuery.refetch()}
+					>
 						Try Again
 					</Button>
 				</div>
@@ -365,7 +396,9 @@ export function IntegrationsSettingsForm() {
 							<ProviderCard
 								key={provider.id}
 								provider={provider}
-								integration={integration as IntegrationState | undefined}
+								integration={
+									integration as IntegrationState | undefined
+								}
 								organizationSlug={organizationSlug}
 								onMutationSuccess={handleMutationSuccess}
 							/>

@@ -16,6 +16,7 @@ import {
 import { Input } from "@repo/ui/components/input";
 import { useAuthErrorMessages } from "@saas/auth/hooks/errors-messages";
 import { OrganizationInvitationAlert } from "@saas/organizations/components/OrganizationInvitationAlert";
+import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import {
 	AlertTriangleIcon,
 	ArrowRightIcon,
@@ -31,7 +32,6 @@ import { useForm } from "react-hook-form";
 import { withQuery } from "ufo";
 import { z } from "zod";
 import { config } from "@/config";
-import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import { useSession } from "@/modules/saas/auth/hooks/use-session";
 import {
 	type OAuthProvider,

@@ -57,7 +57,7 @@ export default async function Layout({ children }: PropsWithChildren) {
 			}),
 		);
 
-			const purchases = error ? [] : (data?.purchases ?? []);
+		const purchases = error ? [] : (data?.purchases ?? []);
 
 		const { activePlan } = createPurchasesHelper(purchases);
 

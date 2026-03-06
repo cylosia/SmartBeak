@@ -16,31 +16,31 @@ import { checkRateLimit } from "../modules/enterprise/lib/rate-limit";
 // ─── Tier-based rate limit configurations ─────────────────────────────────────
 
 interface RateLimitConfig {
-  /** Maximum requests per window. */
-  limit: number;
-  /** Window duration in seconds. */
-  windowSeconds: number;
+	/** Maximum requests per window. */
+	limit: number;
+	/** Window duration in seconds. */
+	windowSeconds: number;
 }
 
 export const RATE_LIMITS: Record<string, Record<string, RateLimitConfig>> = {
-  starter: {
-    api: { limit: 1_000, windowSeconds: 86400 },
-    ai: { limit: 100, windowSeconds: 86400 },
-    export: { limit: 5, windowSeconds: 3600 },
-    scim: { limit: 0, windowSeconds: 3600 },
-  },
-  growth: {
-    api: { limit: 10_000, windowSeconds: 86400 },
-    ai: { limit: 1_000, windowSeconds: 86400 },
-    export: { limit: 50, windowSeconds: 3600 },
-    scim: { limit: 0, windowSeconds: 3600 },
-  },
-  enterprise: {
-    api: { limit: 1_000_000, windowSeconds: 86400 },
-    ai: { limit: 1_000_000, windowSeconds: 86400 },
-    export: { limit: 1_000, windowSeconds: 3600 },
-    scim: { limit: 500, windowSeconds: 3600 },
-  },
+	starter: {
+		api: { limit: 1_000, windowSeconds: 86400 },
+		ai: { limit: 100, windowSeconds: 86400 },
+		export: { limit: 5, windowSeconds: 3600 },
+		scim: { limit: 0, windowSeconds: 3600 },
+	},
+	growth: {
+		api: { limit: 10_000, windowSeconds: 86400 },
+		ai: { limit: 1_000, windowSeconds: 86400 },
+		export: { limit: 50, windowSeconds: 3600 },
+		scim: { limit: 0, windowSeconds: 3600 },
+	},
+	enterprise: {
+		api: { limit: 1_000_000, windowSeconds: 86400 },
+		ai: { limit: 1_000_000, windowSeconds: 86400 },
+		export: { limit: 1_000, windowSeconds: 3600 },
+		scim: { limit: 500, windowSeconds: 3600 },
+	},
 };
 
 // ─── Redis Lua script for atomic sliding window ───────────────────────────────
@@ -70,62 +70,71 @@ return {1, current, redis.call('TTL', key)}
  * @param redisClient - Optional Redis client. Falls back to in-memory if null.
  */
 export async function enforceRateLimit(
-  key: string,
-  config: RateLimitConfig,
-  redisClient?: {
-    eval(
-      script: string,
-      numkeys: number,
-      key: string,
-      ...args: string[]
-    ): Promise<[number, number, number]>;
-  } | null,
+	key: string,
+	config: RateLimitConfig,
+	redisClient?: {
+		eval(
+			script: string,
+			numkeys: number,
+			key: string,
+			...args: string[]
+		): Promise<[number, number, number]>;
+	} | null,
 ): Promise<{ remaining: number; resetIn: number }> {
-  if (config.limit === 0) {
-    throw new ORPCError("FORBIDDEN", {
-      message: "This feature is not available on your current plan.",
-    });
-  }
+	if (config.limit === 0) {
+		throw new ORPCError("FORBIDDEN", {
+			message: "This feature is not available on your current plan.",
+		});
+	}
 
-  if (redisClient) {
-    try {
-      const [allowed, current, ttl] = await redisClient.eval(
-        SLIDING_WINDOW_LUA,
-        1,
-        key,
-        String(config.limit),
-        String(config.windowSeconds),
-      );
+	if (redisClient) {
+		try {
+			const [allowed, current, ttl] = await redisClient.eval(
+				SLIDING_WINDOW_LUA,
+				1,
+				key,
+				String(config.limit),
+				String(config.windowSeconds),
+			);
 
-      if (!allowed) {
-        throw new ORPCError("TOO_MANY_REQUESTS", {
-          message: `Rate limit exceeded. Please retry after ${ttl} seconds.`,
-        });
-      }
+			if (!allowed) {
+				throw new ORPCError("TOO_MANY_REQUESTS", {
+					message: `Rate limit exceeded. Please retry after ${ttl} seconds.`,
+				});
+			}
 
-      return {
-        remaining: config.limit - current,
-        resetIn: ttl,
-      };
-    } catch (err) {
-      if (err instanceof ORPCError) throw err;
-      // Redis error — fall through to in-memory fallback.
-      logger.warn("[RateLimit] Redis eval failed, using in-memory fallback:", err);
-    }
-  }
+			return {
+				remaining: config.limit - current,
+				resetIn: ttl,
+			};
+		} catch (err) {
+			if (err instanceof ORPCError) {
+				throw err;
+			}
+			// Redis error — fall through to in-memory fallback.
+			logger.warn(
+				"[RateLimit] Redis eval failed, using in-memory fallback:",
+				err,
+			);
+		}
+	}
 
-  // In-memory fallback.
-  const result = checkRateLimit(key, config.limit, config.windowSeconds * 1000);
-  if (!result.allowed) {
-    throw new ORPCError("TOO_MANY_REQUESTS", {
-      message: `Rate limit exceeded. Please retry after ${Math.ceil((result.resetAt - Date.now()) / 1000)} seconds.`,
-    });
-  }
+	// In-memory fallback.
+	const result = checkRateLimit(
+		key,
+		config.limit,
+		config.windowSeconds * 1000,
+	);
+	if (!result.allowed) {
+		throw new ORPCError("TOO_MANY_REQUESTS", {
+			message: `Rate limit exceeded. Please retry after ${Math.ceil((result.resetAt - Date.now()) / 1000)} seconds.`,
+		});
+	}
 
-  return {
-    remaining: result.remaining,
-    resetIn: Math.ceil((result.resetAt - Date.now()) / 1000),
-  };
+	return {
+		remaining: result.remaining,
+		resetIn: Math.ceil((result.resetAt - Date.now()) / 1000),
+	};
 }
 
 /**
@@ -133,9 +142,10 @@ export async function enforceRateLimit(
  * Falls back to the "starter" tier if the tier is not recognized.
  */
 export function getRateLimitConfig(
-  tierName: string,
-  operation: string,
+	tierName: string,
+	operation: string,
 ): RateLimitConfig {
-  const tierConfig = RATE_LIMITS[tierName.toLowerCase()] ?? RATE_LIMITS.starter!;
-  return tierConfig[operation] ?? { limit: 100, windowSeconds: 3600 };
+	const tierConfig =
+		RATE_LIMITS[tierName.toLowerCase()] ?? RATE_LIMITS.starter;
+	return tierConfig[operation] ?? { limit: 100, windowSeconds: 3600 };
 }

@@ -20,6 +20,7 @@ import {
 } from "@repo/ui/components/input-otp";
 import { useAuthErrorMessages } from "@saas/auth/hooks/errors-messages";
 import { useRouter } from "@shared/hooks/router";
+import { safeRedirectPath } from "@shared/lib/safe-redirect";
 import { AlertTriangleIcon, ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -27,7 +28,6 @@ import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { config } from "@/config";
-import { safeRedirectPath } from "@shared/lib/safe-redirect";
 
 const formSchema = z.object({
 	code: z.string().min(6).max(6),

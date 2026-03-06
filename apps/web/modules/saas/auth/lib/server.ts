@@ -44,9 +44,14 @@ export const getSession = cache(async (): Promise<AppSession | null> => {
 		},
 	});
 
-	if (!session) return null;
+	if (!session) {
+		return null;
+	}
 
-	const { token: _token, ...safeSession } = session.session as Record<string, unknown>;
+	const { token: _token, ...safeSession } = session.session as Record<
+		string,
+		unknown
+	>;
 	return {
 		...session,
 		session: safeSession,
@@ -73,22 +78,20 @@ export const getActiveOrganization = cache(
 	},
 );
 
-export const getOrganizationList = cache(
-	async (): Promise<Organization[]> => {
-		try {
-			const organizationList = await auth.api.listOrganizations({
-				headers: await headers(),
-			});
+export const getOrganizationList = cache(async (): Promise<Organization[]> => {
+	try {
+		const organizationList = await auth.api.listOrganizations({
+			headers: await headers(),
+		});
 
-			return organizationList as Organization[];
-		} catch (err) {
-			if (process.env.NODE_ENV !== "production") {
-				console.warn("[auth] getOrganizationList failed:", err);
-			}
-			return [];
+		return organizationList as Organization[];
+	} catch (err) {
+		if (process.env.NODE_ENV !== "production") {
+			console.warn("[auth] getOrganizationList failed:", err);
 		}
-	},
-);
+		return [];
+	}
+});
 
 export const getUserAccounts = cache(
 	async (): Promise<{ providerId: string; accountId: string }[]> => {
@@ -108,13 +111,19 @@ export const getUserAccounts = cache(
 );
 
 export const getUserPasskeys = cache(
-	async (): Promise<{ id: string; name?: string | null; createdAt: Date }[]> => {
+	async (): Promise<
+		{ id: string; name?: string | null; createdAt: Date }[]
+	> => {
 		try {
 			const userPasskeys = await auth.api.listPasskeys({
 				headers: await headers(),
 			});
 
-			return userPasskeys as { id: string; name?: string | null; createdAt: Date }[];
+			return userPasskeys as {
+				id: string;
+				name?: string | null;
+				createdAt: Date;
+			}[];
 		} catch (err) {
 			if (process.env.NODE_ENV !== "production") {
 				console.warn("[auth] getUserPasskeys failed:", err);

@@ -2,14 +2,17 @@ import { ORPCError } from "@orpc/server";
 import { sendEmail } from "@repo/mail";
 import { escapeHtml, getBaseUrl } from "@repo/utils";
 import { z } from "zod";
-import { protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
+import {
+	adminProcedure,
+	protectedProcedure,
+} from "../../../../orpc/procedures";
 
 const ONBOARDING_SEQUENCE = [
-  {
-    step: 1,
-    subject: "Welcome to SmartBeak — let's get your first domain live",
-    delayDays: 0,
-    body: (name: string) => `
+	{
+		step: 1,
+		subject: "Welcome to SmartBeak — let's get your first domain live",
+		delayDays: 0,
+		body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
         <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Welcome${name ? `, ${escapeHtml(name)}` : ""}! 🎉</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
@@ -27,12 +30,12 @@ const ONBOARDING_SEQUENCE = [
         </a>
       </div>
     `,
-  },
-  {
-    step: 2,
-    subject: "Your SmartBeak SEO Intelligence is ready to use",
-    delayDays: 2,
-    body: (name: string) => `
+	},
+	{
+		step: 2,
+		subject: "Your SmartBeak SEO Intelligence is ready to use",
+		delayDays: 2,
+		body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
         <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Unlock your SEO potential${name ? `, ${escapeHtml(name)}` : ""}</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
@@ -49,12 +52,12 @@ const ONBOARDING_SEQUENCE = [
         </a>
       </div>
     `,
-  },
-  {
-    step: 3,
-    subject: "Is your domain sell-ready? Check your score now",
-    delayDays: 5,
-    body: (name: string) => `
+	},
+	{
+		step: 3,
+		subject: "Is your domain sell-ready? Check your score now",
+		delayDays: 5,
+		body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
         <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Your Sell-Ready Score${name ? `, ${escapeHtml(name)}` : ""}</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
@@ -71,70 +74,90 @@ const ONBOARDING_SEQUENCE = [
         </a>
       </div>
     `,
-  },
+	},
 ];
 
 // ── trigger-onboarding-sequence (called on new user signup) ───────────────────
 export const triggerOnboardingSequenceProcedure = protectedProcedure
-  .route({ method: "POST", path: "/smartbeak/growth/onboarding/trigger", tags: ["SmartBeak - Growth"], summary: "Trigger onboarding email sequence" })
-  .input(
-    z.object({
-      firstName: z.string().optional(),
-    }),
-  )
-  .handler(async ({ context: { user }, input }) => {
-    const email = user.email;
-    const firstName = input.firstName ?? "";
-    const results: { step: number; sent: boolean; error?: string }[] = [];
+	.route({
+		method: "POST",
+		path: "/smartbeak/growth/onboarding/trigger",
+		tags: ["SmartBeak - Growth"],
+		summary: "Trigger onboarding email sequence",
+	})
+	.input(
+		z.object({
+			firstName: z.string().optional(),
+		}),
+	)
+	.handler(async ({ context: { user }, input }) => {
+		const email = user.email;
+		const firstName = input.firstName ?? "";
+		const results: { step: number; sent: boolean; error?: string }[] = [];
 
-    // Step 1 is sent immediately; steps 2 and 3 are queued (in production,
-    // use a job queue like Inngest or Trigger.dev — here we send step 1 only
-    // and return the full sequence plan for the queue to handle).
-    const step1 = ONBOARDING_SEQUENCE[0]!;
-    try {
-      await sendEmail({
-        to: email,
-        subject: step1.subject,
-        html: step1.body(firstName),
-        text: `Welcome to SmartBeak! Open the app at: ${getBaseUrl()}/app`,
-      });
-      results.push({ step: 1, sent: true });
-    } catch (err) {
-      results.push({ step: 1, sent: false, error: "Failed to send email" });
-    }
+		// Step 1 is sent immediately; steps 2 and 3 are queued (in production,
+		// use a job queue like Inngest or Trigger.dev — here we send step 1 only
+		// and return the full sequence plan for the queue to handle).
+		const step1 = ONBOARDING_SEQUENCE.at(0);
+		if (!step1) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Onboarding sequence is empty.",
+			});
+		}
+		try {
+			await sendEmail({
+				to: email,
+				subject: step1.subject,
+				html: step1.body(firstName),
+				text: `Welcome to SmartBeak! Open the app at: ${getBaseUrl()}/app`,
+			});
+			results.push({ step: 1, sent: true });
+		} catch (_err) {
+			results.push({
+				step: 1,
+				sent: false,
+				error: "Failed to send email",
+			});
+		}
 
-    return {
-      results,
-      sequencePlan: ONBOARDING_SEQUENCE.map((s) => ({
-        step: s.step,
-        subject: s.subject,
-        delayDays: s.delayDays,
-      })),
-    };
-  });
+		return {
+			results,
+			sequencePlan: ONBOARDING_SEQUENCE.map((s) => ({
+				step: s.step,
+				subject: s.subject,
+				delayDays: s.delayDays,
+			})),
+		};
+	});
 
 // ── send-onboarding-step (admin / cron trigger) ───────────────────────────────
 export const sendOnboardingStepProcedure = adminProcedure
-  .route({ method: "POST", path: "/smartbeak/growth/onboarding/send-step", tags: ["SmartBeak - Growth"], summary: "Send a specific onboarding step (admin)" })
-  .input(
-    z.object({
-      email: z.string().email(),
-      firstName: z.string().optional(),
-      step: z.number().int().min(1).max(3),
-    }),
-  )
-  .handler(async ({ input }) => {
-    const { email, firstName = "", step } = input;
-    const seq = ONBOARDING_SEQUENCE.find((s) => s.step === step);
-    if (!seq)
-      throw new ORPCError("NOT_FOUND", {
-        message: `Onboarding step ${step} not found`,
-      });
-    await sendEmail({
-      to: email,
-      subject: seq.subject,
-      html: seq.body(firstName),
-      text: `Open SmartBeak: ${getBaseUrl()}/app`,
-    });
-    return { sent: true, step };
-  });
+	.route({
+		method: "POST",
+		path: "/smartbeak/growth/onboarding/send-step",
+		tags: ["SmartBeak - Growth"],
+		summary: "Send a specific onboarding step (admin)",
+	})
+	.input(
+		z.object({
+			email: z.string().email(),
+			firstName: z.string().optional(),
+			step: z.number().int().min(1).max(3),
+		}),
+	)
+	.handler(async ({ input }) => {
+		const { email, firstName = "", step } = input;
+		const seq = ONBOARDING_SEQUENCE.find((s) => s.step === step);
+		if (!seq) {
+			throw new ORPCError("NOT_FOUND", {
+				message: `Onboarding step ${step} not found`,
+			});
+		}
+		await sendEmail({
+			to: email,
+			subject: seq.subject,
+			html: seq.body(firstName),
+			text: `Open SmartBeak: ${getBaseUrl()}/app`,
+		});
+		return { sent: true, step };
+	});

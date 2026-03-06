@@ -1,6 +1,7 @@
 import { openai } from "@ai-sdk/openai";
-export { openai, createOpenAI } from "@ai-sdk/openai";
+
 export { createAnthropic } from "@ai-sdk/anthropic";
+export { createOpenAI, openai } from "@ai-sdk/openai";
 
 export const textModel = openai("gpt-4o-mini");
 export const imageModel = openai("dall-e-3");

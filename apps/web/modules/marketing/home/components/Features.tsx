@@ -26,7 +26,11 @@ export const featureTabs: Array<{
 	highlights?: {
 		title: string;
 		description: string;
-		icon: ComponentType<{ className?: string; width?: string; height?: string }>;
+		icon: ComponentType<{
+			className?: string;
+			width?: string;
+			height?: string;
+		}>;
 		demoLink?: string;
 		docsLink?: string;
 	}[];

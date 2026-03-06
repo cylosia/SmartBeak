@@ -154,7 +154,11 @@ export function AiChat() {
 						>
 							{message.parts?.map((part, partIndex) =>
 								part.type === "text" ? (
-									<span key={`${message.id}-part-${partIndex}`}>{part.text}</span>
+									<span
+										key={`${message.id}-part-${partIndex}`}
+									>
+										{part.text}
+									</span>
 								) : null,
 							)}
 						</div>
