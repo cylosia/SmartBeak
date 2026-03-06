@@ -12,13 +12,14 @@ export function TabGroup({
 	className?: string;
 }) {
 	const selectedSegment = useSelectedLayoutSegment();
+	const safeItems = items ?? [];
 	const activeItem = useMemo(() => {
-		return items.find((item) => item.segment === selectedSegment);
-	}, [items, selectedSegment]);
+		return safeItems.find((item) => item.segment === selectedSegment);
+	}, [safeItems, selectedSegment]);
 
 	return (
 		<div className={` flex border-b-2 ${className}`}>
-			{items.map((item) => (
+			{safeItems.map((item) => (
 				<Link
 					key={item.href}
 					href={item.href}

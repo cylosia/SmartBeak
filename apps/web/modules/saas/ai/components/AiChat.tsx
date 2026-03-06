@@ -102,11 +102,11 @@ export function AiChat() {
 				{messages.length === 0 && (
 					<div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 w-full">
-							{PROMPT_SUGGESTIONS.map((suggestion, index) => {
+							{PROMPT_SUGGESTIONS.map((suggestion) => {
 								const Icon = suggestion.icon;
 								return (
 									<Button
-										key={index}
+										key={suggestion.prompt}
 										type="button"
 										variant="secondary"
 										onClick={async () => {
@@ -134,9 +134,9 @@ export function AiChat() {
 					</div>
 				)}
 
-				{messages.map((message, index) => (
+				{messages.map((message) => (
 					<div
-						key={index}
+						key={message.id}
 						className={cn(
 							"flex flex-col gap-2",
 							message.role === "user"
@@ -152,9 +152,9 @@ export function AiChat() {
 									: "bg-muted",
 							)}
 						>
-							{message.parts?.map((part, index) =>
+							{message.parts?.map((part, partIndex) =>
 								part.type === "text" ? (
-									<span key={index}>{part.text}</span>
+									<span key={`${message.id}-part-${partIndex}`}>{part.text}</span>
 								) : null,
 							)}
 						</div>
@@ -193,6 +193,7 @@ export function AiChat() {
 					variant="primary"
 					className="absolute right-3 bottom-3"
 					disabled={!input.trim() || status === "streaming"}
+					aria-label="Send message"
 				>
 					<ArrowUpIcon className="size-4" />
 				</Button>

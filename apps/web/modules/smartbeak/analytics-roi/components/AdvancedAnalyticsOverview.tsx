@@ -61,16 +61,17 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
   const overview = overviewQuery.data;
   if (!overview) return null;
 
+  const roi = overview.roi ?? { avgRoi: 0, totalValue: 0, totalDomains: 0 };
+  const attribution = overview.attribution ?? { totalSessions: 0, overallConversionRate: 0 };
   const decayDomains = decayQuery.data?.domains ?? [];
 
-  // Radar chart data for portfolio health dimensions
   const radarData = [
-    { subject: "Health", value: Math.round(overview.roi.avgRoi) },
-    { subject: "Diligence", value: 0 }, // populated from diligence if available
-    { subject: "Buyer Interest", value: Math.min(overview.attribution.totalSessions * 2, 100) },
-    { subject: "Conversion", value: overview.attribution.overallConversionRate },
+    { subject: "Health", value: Math.round(roi.avgRoi) },
+    { subject: "Diligence", value: 0 },
+    { subject: "Buyer Interest", value: Math.min(attribution.totalSessions * 2, 100) },
+    { subject: "Conversion", value: attribution.overallConversionRate },
     { subject: "Monetization", value: Math.round(decayDomains.reduce((s, d) => s + d.avgDecay, 0) / Math.max(decayDomains.length, 1) * 100) },
-    { subject: "Portfolio Size", value: Math.min(overview.roi.totalDomains * 10, 100) },
+    { subject: "Portfolio Size", value: Math.min(roi.totalDomains * 10, 100) },
   ];
 
   // Decay bar chart
@@ -90,13 +91,13 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             title="Portfolio Health Index"
-            value={`${overview.portfolioHealthIndex}%`}
+            value={`${overview.portfolioHealthIndex ?? 0}%`}
             icon={ShieldIcon}
             subtitle="Composite health score"
           />
           <MetricCard
             title="Total Portfolio Value"
-            value={`$${(overview.roi.totalValue / 1000).toFixed(1)}K`}
+            value={`$${(roi.totalValue / 1000).toFixed(1)}K`}
             icon={TrendingUpIcon}
             subtitle="Risk-adjusted estimate"
           />
@@ -108,9 +109,9 @@ export function AdvancedAnalyticsOverview({ organizationSlug }: { organizationSl
           />
           <MetricCard
             title="Buyer Sessions"
-            value={String(overview.attribution.totalSessions)}
+            value={String(attribution.totalSessions)}
             icon={ActivityIcon}
-            subtitle={`${overview.attribution.overallConversionRate}% conversion rate`}
+            subtitle={`${attribution.overallConversionRate}% conversion rate`}
           />
         </div>
 

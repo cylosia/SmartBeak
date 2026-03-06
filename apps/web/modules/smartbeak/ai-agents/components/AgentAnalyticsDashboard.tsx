@@ -147,9 +147,15 @@ export function AgentAnalyticsDashboard({
     );
   }
 
-  const { summary, workflowBreakdown, dailyTrend } = data;
-  const avgDurationSec = ((Number(summary?.avgDurationMs) || 0) / 1000).toFixed(1);
-  const totalTokens = summary.totalInputTokens + summary.totalOutputTokens;
+  const summary = data.summary ?? {
+    totalSessions: 0, totalCostUsd: 0, totalInputTokens: 0,
+    totalOutputTokens: 0, avgDurationMs: 0, successRate: 0,
+    completedCount: 0, failedCount: 0,
+  };
+  const workflowBreakdown = data.workflowBreakdown ?? [];
+  const dailyTrend = data.dailyTrend ?? [];
+  const avgDurationSec = ((Number(summary.avgDurationMs) || 0) / 1000).toFixed(1);
+  const totalTokens = (summary.totalInputTokens ?? 0) + (summary.totalOutputTokens ?? 0);
 
   return (
     <div className="space-y-6">
@@ -289,13 +295,13 @@ export function AgentAnalyticsDashboard({
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      {w.sessionCount.toLocaleString()}
+                      {(w.sessionCount ?? 0).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      ${w.totalCostUsd.toFixed(4)}
+                      ${(w.totalCostUsd ?? 0).toFixed(4)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {(w.avgDurationMs / 1000).toFixed(1)}s
+                      {((w.avgDurationMs ?? 0) / 1000).toFixed(1)}s
                     </TableCell>
                   </TableRow>
                 ))}

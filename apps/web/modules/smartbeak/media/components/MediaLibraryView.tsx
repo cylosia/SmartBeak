@@ -1,6 +1,16 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+
+function isSafeImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -115,6 +125,7 @@ export function MediaLibraryView({
             <Button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
+              aria-label="Upload media file"
             >
               {uploading ? (
                 <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -156,7 +167,7 @@ export function MediaLibraryView({
                 className="group relative rounded-xl border border-border overflow-hidden bg-muted/30 hover:border-primary/50 transition-colors"
               >
                 <div className="aspect-square flex items-center justify-center bg-muted">
-                  {asset.type?.startsWith("image/") ? (
+                  {asset.type?.startsWith("image/") && isSafeImageUrl(asset.url) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={asset.url}

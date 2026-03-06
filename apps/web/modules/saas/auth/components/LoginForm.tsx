@@ -98,7 +98,7 @@ export function LoginForm() {
 					throw error;
 				}
 
-				if ((data as any).twoFactorRedirect) {
+				if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
 					router.replace(
 						withQuery(
 							"/auth/verify",

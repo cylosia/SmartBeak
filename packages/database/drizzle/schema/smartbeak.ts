@@ -8,7 +8,7 @@
 // migrations only — never by altering existing definitions.
 // =============================================================================
 
-import { pgTable, uuid, text, timestamp, jsonb, integer, boolean, pgEnum, numeric, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, integer, boolean, pgEnum, numeric, customType, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // bytea custom type — drizzle-orm 0.44.x does not export bytea from pg-core;
@@ -41,7 +41,10 @@ export const organizationMembers = pgTable('organization_members', {
   userId: text('user_id').notNull(),
   role: memberRole('role').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('org_members_org_id_idx').on(t.orgId),
+  index('org_members_user_id_idx').on(t.userId),
+]);
 
 // 2. Domains
 export const domains = pgTable('domains', {
@@ -57,7 +60,9 @@ export const domains = pgTable('domains', {
   lifecycle: jsonb('lifecycle'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('domains_org_id_idx').on(t.orgId),
+]);
 
 // 3. Content
 export const contentItems = pgTable('content_items', {
@@ -75,7 +80,10 @@ export const contentItems = pgTable('content_items', {
   version: integer('version').default(1).notNull(),
   createdBy: text('created_by'),
   updatedBy: text('updated_by'),
-});
+}, (t) => [
+  index('content_items_domain_id_idx').on(t.domainId),
+  index('content_items_domain_deleted_idx').on(t.domainId, t.deletedAt),
+]);
 
 export const contentRevisions = pgTable('content_revisions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -97,7 +105,9 @@ export const mediaAssets = pgTable('media_assets', {
   metadata: jsonb('metadata'),
   lifecycle: jsonb('lifecycle'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('media_assets_domain_id_idx').on(t.domainId),
+]);
 
 // 5. Publishing
 export const publishTargets = pgTable('publish_targets', {
@@ -119,7 +129,10 @@ export const publishingJobs = pgTable('publishing_jobs', {
   executedAt: timestamp('executed_at', { withTimezone: true }),
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('publishing_jobs_domain_id_idx').on(t.domainId),
+  index('publishing_jobs_scheduled_idx').on(t.domainId, t.scheduledFor),
+]);
 
 export const publishAttempts = pgTable('publish_attempts', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -139,7 +152,9 @@ export const seoDocuments = pgTable('seo_documents', {
   decaySignals: jsonb('decay_signals'),
   score: integer('score').default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('seo_documents_domain_id_idx').on(t.domainId),
+]);
 
 export const keywordTracking = pgTable('keyword_tracking', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -150,7 +165,9 @@ export const keywordTracking = pgTable('keyword_tracking', {
   position: integer('position'),
   decayFactor: numeric('decay_factor', { precision: 5, scale: 4 }),
   lastUpdated: timestamp('last_updated', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('keyword_tracking_domain_id_idx').on(t.domainId),
+]);
 
 // 7. Billing & Usage
 export const subscriptions = pgTable('subscriptions', {
@@ -161,7 +178,9 @@ export const subscriptions = pgTable('subscriptions', {
   plan: text('plan').notNull(),
   currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('subscriptions_org_id_idx').on(t.orgId),
+]);
 
 export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -171,7 +190,9 @@ export const invoices = pgTable('invoices', {
   status: text('status').default('draft').notNull(),
   pdfUrl: text('pdf_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('invoices_org_id_idx').on(t.orgId),
+]);
 
 export const usageRecords = pgTable('usage_records', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -187,7 +208,10 @@ export const monetizationDecaySignals = pgTable('monetization_decay_signals', {
   decayFactor: numeric('decay_factor', { precision: 5, scale: 4 }).notNull(),
   signalType: text('signal_type').notNull(),
   recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('decay_signals_domain_id_idx').on(t.domainId),
+  index('decay_signals_domain_recorded_idx').on(t.domainId, t.recordedAt),
+]);
 
 // 8. SmartDeploy
 export const siteShards = pgTable('site_shards', {
@@ -228,7 +252,10 @@ export const auditEvents = pgTable('audit_events', {
   entityId: uuid('entity_id'),
   details: jsonb('details'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('audit_events_org_id_idx').on(t.orgId),
+  index('audit_events_org_created_idx').on(t.orgId, t.createdAt),
+]);
 
 export const webhookEvents = pgTable('webhook_events', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -240,7 +267,9 @@ export const webhookEvents = pgTable('webhook_events', {
   replayCount: integer('replay_count').default(0),
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('webhook_events_processed_outbox_idx').on(t.processed, t.outboxStatus),
+]);
 
 export const integrations = pgTable('integrations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -250,7 +279,10 @@ export const integrations = pgTable('integrations', {
   encryptedConfig: bytea('encrypted_config').notNull(),
   enabled: boolean('enabled').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (t) => [
+  index('integrations_org_id_idx').on(t.orgId),
+  index('integrations_org_provider_idx').on(t.orgId, t.provider),
+]);
 
 // 11. Remaining Tables
 export const buyerSessions = pgTable('buyer_sessions', {

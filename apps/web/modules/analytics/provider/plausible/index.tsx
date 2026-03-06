@@ -15,13 +15,19 @@ export function AnalyticsScript() {
 	);
 }
 
+declare global {
+	interface Window {
+		plausible?: (event: string, options?: { props?: Record<string, unknown> }) => void;
+	}
+}
+
 export function useAnalytics() {
 	const trackEvent = (event: string, data?: Record<string, unknown>) => {
-		if (typeof window === "undefined" || !(window as any).plausible) {
+		if (typeof window === "undefined" || !window.plausible) {
 			return;
 		}
 
-		(window as any).plausible(event, {
+		window.plausible(event, {
 			props: data,
 		});
 	};

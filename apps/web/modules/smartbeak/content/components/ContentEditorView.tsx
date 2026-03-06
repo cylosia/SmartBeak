@@ -45,6 +45,22 @@ import { formatDistanceToNow } from "date-fns";
 import { AiIdeaCard, AiIdeaCardSkeleton } from "./AiIdeaCard";
 import { ContentSeoSidebar } from "./ContentSeoSidebar";
 
+function sanitizeHtml(html: string): string {
+  if (typeof window === "undefined") return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const el of doc.querySelectorAll("script, iframe, object, embed, form")) {
+    el.remove();
+  }
+  for (const el of doc.querySelectorAll("*")) {
+    for (const attr of [...el.attributes]) {
+      if (attr.name.startsWith("on") || attr.name === "formaction") {
+        el.removeAttribute(attr.name);
+      }
+    }
+  }
+  return doc.body.innerHTML;
+}
+
 export function ContentEditorView({
   organizationSlug,
   domainId,
@@ -179,7 +195,7 @@ export function ContentEditorView({
       }> }).structured;
       if (structured && structured.length > 0) {
         setAiIdeas(structured);
-      } else {
+      } else if (typeof result.ideas === "string" && result.ideas.trim()) {
         try {
           const parsed = JSON.parse(result.ideas);
           setAiIdeas(Array.isArray(parsed) ? parsed : []);
@@ -187,6 +203,8 @@ export function ContentEditorView({
           setAiIdeas([]);
           toastError("AI Error", "Could not parse AI response.");
         }
+      } else {
+        setAiIdeas([]);
       }
     } catch {
       toastError("AI Error", "Failed to generate ideas.");
@@ -356,7 +374,7 @@ export function ContentEditorView({
                     <div className="space-y-3">
                       {aiIdeas.map((idea) => (
                         <AiIdeaCard
-                          key={idea.title}
+                          key={`${idea.title}-${idea.contentType}`}
                           idea={idea}
                           onUseTitle={(t) => {
                             setTitle(t);
@@ -425,7 +443,7 @@ export function ContentEditorView({
                   <CardContent>
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       {body ? (
-                        <div dangerouslySetInnerHTML={{ __html: body }} />
+                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }} />
                       ) : (
                         <p className="text-muted-foreground">No content yet.</p>
                       )}

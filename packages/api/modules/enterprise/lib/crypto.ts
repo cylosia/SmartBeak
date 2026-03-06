@@ -7,7 +7,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96-bit IV for GCM
@@ -19,8 +19,8 @@ function getEncryptionKey(): Buffer {
     if (process.env.NODE_ENV === "production") {
       throw new Error("ENTERPRISE_ENCRYPTION_KEY is required in production");
     }
-    const fallback = process.env.DATABASE_URL ?? "smartbeak-dev-encryption-key-32b";
-    return createHash("sha256").update(fallback).digest();
+    const devKey = process.env.SMARTBEAK_DEV_ENCRYPTION_KEY ?? "smartbeak-dev-encryption-key-32b";
+    return createHash("sha256").update(devKey).digest();
   }
   const buf = Buffer.from(key, "hex");
   if (buf.length !== 32) {
@@ -52,10 +52,14 @@ export function decryptConfig(data: Buffer): Record<string, unknown> {
   const iv = data.subarray(0, IV_LENGTH);
   const tag = data.subarray(data.length - TAG_LENGTH);
   const ciphertext = data.subarray(IV_LENGTH, data.length - TAG_LENGTH);
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(tag);
-  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  return JSON.parse(decrypted.toString("utf8")) as Record<string, unknown>;
+  try {
+    const decipher = createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return JSON.parse(decrypted.toString("utf8")) as Record<string, unknown>;
+  } catch {
+    throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to decrypt configuration." });
+  }
 }
 
 /**

@@ -104,6 +104,7 @@ export function ActiveSessionsBlock() {
 								size="icon"
 								className="shrink-0"
 								onClick={() => revokeSession(session.token)}
+								aria-label="Revoke session"
 							>
 								<XIcon className="size-4" />
 							</Button>

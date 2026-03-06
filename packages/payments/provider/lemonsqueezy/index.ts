@@ -110,10 +110,11 @@ export const cancelSubscription: CancelSubscription = async (id) => {
 export const webhookHandler: WebhookHandler = async (req: Request) => {
 	try {
 		const text = await req.text();
-		const hmac = createHmac(
-			"sha256",
-			process.env.LEMONSQUEEZY_WEBHOOK_SECRET as string,
-		);
+		const webhookSecret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
+		if (!webhookSecret) {
+			return new Response("Missing webhook secret.", { status: 500 });
+		}
+		const hmac = createHmac("sha256", webhookSecret);
 		const digest = Buffer.from(hmac.update(text).digest("hex"), "utf8");
 		const signature = Buffer.from(
 			req.headers.get("x-signature") as string,
@@ -126,7 +127,7 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 			});
 		}
 
-		const payload = JSON.parse(text) as {
+		let payload: {
 			meta: {
 				event_name: string;
 				custom_data: {
@@ -146,6 +147,12 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 				};
 			};
 		} | null;
+
+		try {
+			payload = JSON.parse(text);
+		} catch {
+			return new Response("Invalid JSON payload.", { status: 400 });
+		}
 
 		if (!payload) {
 			return new Response("Invalid payload.", {

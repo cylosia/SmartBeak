@@ -1,6 +1,16 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+function isSafeUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
 import { Button } from "@repo/ui/components/button";
@@ -255,7 +265,7 @@ export function DomainDetailView({
                 </div>
                 <div>
                   <p className="text-sm font-medium">SmartDeploy</p>
-                  {latestShard?.deployedUrl ? (
+                  {isSafeUrl(latestShard?.deployedUrl) ? (
                     <a
                       href={latestShard.deployedUrl}
                       target="_blank"
@@ -271,7 +281,7 @@ export function DomainDetailView({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {latestShard?.deployedUrl && (
+                {isSafeUrl(latestShard?.deployedUrl) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -300,7 +310,7 @@ export function DomainDetailView({
                 </Button>
               </div>
             </CardContent>
-            {showPreview && latestShard?.deployedUrl && (
+            {showPreview && isSafeUrl(latestShard?.deployedUrl) && (
               <div className="border-t border-border">
                 <iframe
                   src={latestShard.deployedUrl}

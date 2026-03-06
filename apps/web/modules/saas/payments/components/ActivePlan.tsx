@@ -49,9 +49,9 @@ export function ActivePlan({
 
 					{!!activePlanData.features?.length && (
 						<ul className="mt-2 grid list-none gap-2 text-sm">
-							{activePlanData.features.map((feature, key) => (
+							{activePlanData.features.map((feature) => (
 								<li
-									key={key}
+									key={feature}
 									className="flex items-center justify-start"
 								>
 									<CheckIcon className="mr-2 size-4 text-primary" />

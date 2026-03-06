@@ -16,13 +16,19 @@ export function AnalyticsScript() {
 	);
 }
 
+declare global {
+	interface Window {
+		pirsch?: (event: string, options?: { meta?: Record<string, unknown> }) => void;
+	}
+}
+
 export function useAnalytics() {
 	const trackEvent = (event: string, data?: Record<string, unknown>) => {
-		if (typeof window === "undefined" || !(window as any).pirsch) {
+		if (typeof window === "undefined" || !window.pirsch) {
 			return;
 		}
 
-		(window as any).pirsch(event, {
+		window.pirsch(event, {
 			meta: data,
 		});
 	};

@@ -90,13 +90,13 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             title="Total Portfolio Value"
-            value={`$${(data.totalValue / 1000).toFixed(1)}K`}
+            value={`$${((data.totalValue ?? 0) / 1000).toFixed(1)}K`}
             icon={DollarSignIcon}
             subtitle="Risk-adjusted estimated value"
           />
           <MetricCard
             title="Average ROI Score"
-            value={`${data.avgRoi.toFixed(1)}`}
+            value={`${(data.avgRoi ?? 0).toFixed(1)}`}
             icon={TrendingUpIcon}
             subtitle="Weighted health × decay factor"
           />
@@ -108,7 +108,7 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
           />
           <MetricCard
             title="Portfolio Health Index"
-            value={`${Math.round(data.avgRoi)}%`}
+            value={`${Math.round(data.avgRoi ?? 0)}%`}
             icon={ActivityIcon}
             subtitle="Overall portfolio health"
           />
@@ -220,14 +220,14 @@ export function PortfolioRoiDashboard({ organizationSlug }: { organizationSlug: 
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={domain.decayFactor >= 0.7 ? "text-green-600 dark:text-green-400" : domain.decayFactor >= 0.4 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}>
-                        {(domain.decayFactor * 100).toFixed(1)}%
+                      <span className={(domain.decayFactor ?? 0) >= 0.7 ? "text-green-600 dark:text-green-400" : (domain.decayFactor ?? 0) >= 0.4 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}>
+                        {((domain.decayFactor ?? 0) * 100).toFixed(1)}%
                       </span>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Progress value={domain.riskAdjustedScore} className="h-1.5 w-20" />
-                        <span className="text-xs font-medium">{domain.riskAdjustedScore.toFixed(1)}</span>
+                        <Progress value={domain.riskAdjustedScore ?? 0} className="h-1.5 w-20" />
+                        <span className="text-xs font-medium">{(domain.riskAdjustedScore ?? 0).toFixed(1)}</span>
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">

@@ -30,11 +30,11 @@ export function SettingsMenu({
 	return (
 		<div className={cn("relative border-b", className)}>
 			<nav className="flex gap-0">
-				{allItems.map((item, index) => {
+				{allItems.map((item) => {
 					const isActive = isActiveMenuItem(item.href);
 					return (
 						<Link
-							key={index}
+							key={item.href}
 							href={item.href}
 							className={cn(
 								"relative border-b-2 px-4 py-2 text-sm transition-colors",

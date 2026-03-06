@@ -1,5 +1,3 @@
-"use client";
-
 import {
   GlobeIcon,
   PenToolIcon,
@@ -21,7 +19,7 @@ const FEATURES = [
     title: "Domain Management",
     description:
       "Manage unlimited domains with DNS verification, health scoring, and transfer-readiness tracking. Full RBAC with owner/admin/editor/viewer roles.",
-    color: "text-blue-500",
+    color: "text-blue-500 dark:text-blue-400",
     bg: "bg-blue-500/10",
   },
   {
@@ -29,7 +27,7 @@ const FEATURES = [
     title: "AI Content Editor",
     description:
       "Rich Tiptap editor with revision history, AI idea generation, and real-time SEO scoring as you type. Powered by the Vercel AI SDK.",
-    color: "text-violet-500",
+    color: "text-violet-500 dark:text-violet-400",
     bg: "bg-violet-500/10",
   },
   {
@@ -37,7 +35,7 @@ const FEATURES = [
     title: "11-Platform Publishing",
     description:
       "Publish to Web, Email (Resend), LinkedIn, YouTube, TikTok, Instagram, Pinterest, Vimeo, Facebook, WordPress, and SoundCloud from one place.",
-    color: "text-pink-500",
+    color: "text-pink-500 dark:text-pink-400",
     bg: "bg-pink-500/10",
   },
   {
@@ -45,7 +43,7 @@ const FEATURES = [
     title: "SEO Intelligence",
     description:
       "Keyword tracking with volume, difficulty, position, and real-time decay signals. GSC + Ahrefs integration with automated daily reports.",
-    color: "text-green-500",
+    color: "text-green-500 dark:text-green-400",
     bg: "bg-green-500/10",
   },
   {
@@ -53,7 +51,7 @@ const FEATURES = [
     title: "Portfolio ROI Dashboard",
     description:
       "Risk-adjusted scoring, total portfolio value, performance trends, and buyer attribution tracking. Materialized views for instant queries.",
-    color: "text-orange-500",
+    color: "text-orange-500 dark:text-orange-400",
     bg: "bg-orange-500/10",
   },
   {
@@ -61,7 +59,7 @@ const FEATURES = [
     title: "Diligence Engine",
     description:
       "Automated ownership, legal, financial, and content checks. One-click Sell-Ready score with specific improvement recommendations.",
-    color: "text-cyan-500",
+    color: "text-cyan-500 dark:text-cyan-400",
     bg: "bg-cyan-500/10",
   },
   {
@@ -69,7 +67,7 @@ const FEATURES = [
     title: "Bulk Scheduling",
     description:
       "Drag-and-drop calendar view for scheduling content across all platforms. Bulk schedule with one form, live status tracking.",
-    color: "text-indigo-500",
+    color: "text-indigo-500 dark:text-indigo-400",
     bg: "bg-indigo-500/10",
   },
   {
@@ -77,7 +75,7 @@ const FEATURES = [
     title: "Media Library",
     description:
       "Upload, organise, and reuse media assets across all your domains. Full lifecycle management with analytics per asset.",
-    color: "text-rose-500",
+    color: "text-rose-500 dark:text-rose-400",
     bg: "bg-rose-500/10",
   },
   {
@@ -85,7 +83,7 @@ const FEATURES = [
     title: "Immutable Audit Log",
     description:
       "Every action is recorded in an append-only audit trail. Full compliance-ready event history with actor, timestamp, and diff.",
-    color: "text-slate-500",
+    color: "text-slate-500 dark:text-slate-400",
     bg: "bg-slate-500/10",
   },
   {
@@ -93,7 +91,7 @@ const FEATURES = [
     title: "Billing & Usage Quotas",
     description:
       "Stripe-powered subscriptions with per-org usage meters, monetisation decay signals, and plan enforcement at the API layer.",
-    color: "text-emerald-500",
+    color: "text-emerald-500 dark:text-emerald-400",
     bg: "bg-emerald-500/10",
   },
   {
@@ -101,7 +99,7 @@ const FEATURES = [
     title: "SmartDeploy",
     description:
       "One-click site deployment stub — SmartDeploy engine will be implemented via Replit Agent for full static site generation and CDN push.",
-    color: "text-yellow-500",
+    color: "text-yellow-500 dark:text-yellow-400",
     bg: "bg-yellow-500/10",
   },
   {
@@ -109,7 +107,7 @@ const FEATURES = [
     title: "Email Series Builder",
     description:
       "Drag-and-drop drip campaign builder with Resend automation. Multi-step sequences with per-step delay, subject, and HTML body.",
-    color: "text-teal-500",
+    color: "text-teal-500 dark:text-teal-400",
     bg: "bg-teal-500/10",
   },
 ];

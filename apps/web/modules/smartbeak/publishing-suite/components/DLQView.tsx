@@ -160,6 +160,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                         <input
                           type="checkbox"
                           className="rounded"
+                          aria-label="Select all failed jobs"
                           onChange={(e) => {
                             if (e.target.checked) {
                               setSelectedJobIds(new Set((dlqJobsQuery.data?.jobs ?? []).map((j: { id: string }) => j.id)));
@@ -182,6 +183,7 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                           <input
                             type="checkbox"
                             className="rounded"
+                            aria-label={`Select failed job ${job.target}`}
                             checked={selectedJobIds.has(job.id)}
                             onChange={() => toggleJobSelection(job.id)}
                           />

@@ -6,11 +6,8 @@ export function AnalyticsScript() {
 }
 
 export function useAnalytics() {
-	const trackEvent = (event: string, data: Record<string, unknown>) => {
+	const trackEvent = (_event: string, _data: Record<string, unknown>) => {
 		// call your analytics service to track a custom event here
-		if (process.env.NODE_ENV === "development") {
-			console.info("tracking event", event, data);
-		}
 	};
 
 	return {

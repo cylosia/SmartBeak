@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
@@ -170,13 +170,20 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		.update(bodyText)
 		.digest("hex");
 
-	if (computedSignature !== signature) {
+	const computedBuf = Buffer.from(computedSignature, "utf8");
+	const signatureBuf = Buffer.from(signature, "utf8");
+	if (computedBuf.length !== signatureBuf.length || !timingSafeEqual(computedBuf, signatureBuf)) {
 		return new Response("Invalid signature.", {
 			status: 400,
 		});
 	}
 
-	const payload = JSON.parse(bodyText);
+	let payload: Record<string, unknown>;
+	try {
+		payload = JSON.parse(bodyText);
+	} catch {
+		return new Response("Invalid JSON payload.", { status: 400 });
+	}
 
 	try {
 		switch (payload.eventType) {

@@ -106,6 +106,7 @@ export function PasskeysBlock() {
 								size="icon"
 								className="shrink-0"
 								onClick={() => deletePasskey(passkey.id)}
+								aria-label="Delete passkey"
 							>
 								<TrashIcon className="size-4" />
 							</Button>

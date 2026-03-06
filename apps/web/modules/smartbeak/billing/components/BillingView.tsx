@@ -180,7 +180,7 @@ export function BillingView({
                         {inv.stripeInvoiceId ?? inv.id.slice(0, 8)}
                       </TableCell>
                       <TableCell>
-                        ${(Number(inv.amountCents) / 100).toFixed(2)}
+                        ${((Number(inv.amountCents) || 0) / 100).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={inv.status ?? "pending"} />

@@ -14,7 +14,7 @@ export type GetSignedUploadUrlHandler = (
 	},
 ) => Promise<string>;
 
-export type GetSignedUrlHander = (
+export type GetSignedUrlHandler = (
 	path: string,
 	options: {
 		bucket: keyof typeof config.bucketNames;

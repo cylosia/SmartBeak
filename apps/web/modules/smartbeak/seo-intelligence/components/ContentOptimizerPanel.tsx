@@ -239,8 +239,8 @@ export function ContentOptimizerPanel({
               />
               {result && (
                 <p className="text-xs text-muted-foreground">
-                  {result.wordCount.toLocaleString()} words ·{" "}
-                  {result.estimatedReadTime} min read
+                  {(result.wordCount ?? 0).toLocaleString()} words ·{" "}
+                  {result.estimatedReadTime ?? 0} min read
                 </p>
               )}
             </div>

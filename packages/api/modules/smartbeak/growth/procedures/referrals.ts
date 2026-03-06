@@ -15,6 +15,7 @@ import { protectedProcedure, publicProcedure, adminProcedure } from "../../../..
 
 // ── get-my-referrals (auth) ───────────────────────────────────────────────────
 export const getMyReferralsProcedure = protectedProcedure
+  .route({ method: "GET", path: "/smartbeak/growth/referrals/mine", tags: ["SmartBeak - Growth"], summary: "Get my referrals" })
   .input(z.object({ email: z.string().email() }))
   .handler(async ({ input }) => {
     const entry = await getWaitlistEntryByEmail(input.email);
@@ -27,6 +28,7 @@ export const getMyReferralsProcedure = protectedProcedure
 
 // ── complete-referral (internal / webhook) ────────────────────────────────────
 export const completeReferralProcedure = adminProcedure
+  .route({ method: "POST", path: "/smartbeak/growth/referrals/complete", tags: ["SmartBeak - Growth"], summary: "Complete a referral (admin)" })
   .input(z.object({ referralCode: z.string().min(1), referredUserId: z.string().min(1) }))
   .handler(async ({ input }) => {
     const referral = await getReferralByCode(input.referralCode);
@@ -36,6 +38,7 @@ export const completeReferralProcedure = adminProcedure
 
 // ── grant-reward (admin) ──────────────────────────────────────────────────────
 export const grantRewardProcedure = adminProcedure
+  .route({ method: "POST", path: "/smartbeak/growth/referrals/reward", tags: ["SmartBeak - Growth"], summary: "Grant a referral reward (admin)" })
   .input(GrantRewardInputSchema)
   .handler(async ({ input }) => {
     return grantReferralReward(input.referralId, input.rewardType, input.rewardValue);
@@ -43,6 +46,7 @@ export const grantRewardProcedure = adminProcedure
 
 // ── get-referral-stats (public, by referral code) ─────────────────────────────
 export const getReferralStatsByCodeProcedure = publicProcedure
+  .route({ method: "GET", path: "/smartbeak/growth/referrals/stats", tags: ["SmartBeak - Growth"], summary: "Get referral stats by code" })
   .input(z.object({ referralCode: z.string().min(1) }))
   .handler(async ({ input }) => {
     const referrer = await getWaitlistEntryByReferralCode(input.referralCode);

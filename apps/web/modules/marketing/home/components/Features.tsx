@@ -1,5 +1,3 @@
-"use client";
-
 import { cn } from "@repo/ui";
 import {
 	CloudIcon,
@@ -9,13 +7,13 @@ import {
 	WandIcon,
 } from "lucide-react";
 import Image, { type StaticImageData } from "next/image";
-import type { JSXElementConstructor, ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import heroImage from "../../../../public/images/feature.svg";
 
 export const featureTabs: Array<{
 	id: string;
 	title: string;
-	icon: JSXElementConstructor<any>;
+	icon: ComponentType<{ className?: string }>;
 	subtitle?: string;
 	description?: ReactNode;
 	image?: StaticImageData;
@@ -23,12 +21,12 @@ export const featureTabs: Array<{
 	stack?: {
 		title: string;
 		href: string;
-		icon: JSXElementConstructor<any>;
+		icon: ComponentType<{ className?: string }>;
 	}[];
 	highlights?: {
 		title: string;
 		description: string;
-		icon: JSXElementConstructor<any>;
+		icon: ComponentType<{ className?: string; width?: string; height?: string }>;
 		demoLink?: string;
 		docsLink?: string;
 	}[];

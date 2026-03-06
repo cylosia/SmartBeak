@@ -10,20 +10,22 @@ import {
 } from "@repo/database";
 import { JoinWaitlistInputSchema, WaitlistStatusUpdateInputSchema } from "@repo/database";
 import { ORPCError } from "@orpc/server";
+import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { getBaseUrl } from "@repo/utils";
 import { publicProcedure, protectedProcedure, adminProcedure } from "../../../../orpc/procedures";
 
-// ── Helper: generate a unique referral code ───────────────────────────────────
 function generateReferralCode(email: string): string {
   const prefix = email.split("@")[0]!.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase();
-  const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+  const suffix = randomBytes(4).toString("hex").slice(0, 5).toUpperCase();
   return `${prefix}-${suffix}`;
 }
 
 // ── join-waitlist (public) ────────────────────────────────────────────────────
 export const joinWaitlistProcedure = publicProcedure
+  .route({ method: "POST", path: "/smartbeak/growth/waitlist/join", tags: ["SmartBeak - Growth"], summary: "Join the waitlist" })
   .input(JoinWaitlistInputSchema)
   .handler(async ({ input }) => {
     const { email, referredBy, firstName, lastName, company, useCase } = input;
@@ -98,8 +100,7 @@ export const joinWaitlistProcedure = publicProcedure
         text: `Welcome to SmartBeak! Your referral link: ${referralLink}`,
       });
     } catch (err) {
-      if (process.env.NODE_ENV !== "production")
-        console.warn("[waitlist]", err);
+      logger.warn("[waitlist] Failed to send confirmation email:", (err as Error).message);
     }
 
     return {
@@ -113,6 +114,7 @@ export const joinWaitlistProcedure = publicProcedure
 
 // ── get-waitlist-status (public, by email) ────────────────────────────────────
 export const getWaitlistStatusProcedure = publicProcedure
+  .route({ method: "GET", path: "/smartbeak/growth/waitlist/status", tags: ["SmartBeak - Growth"], summary: "Get waitlist status by email" })
   .input(z.object({ email: z.string().email() }))
   .handler(async ({ input }) => {
     const entry = await getWaitlistEntryByEmail(input.email);
@@ -129,6 +131,7 @@ export const getWaitlistStatusProcedure = publicProcedure
 
 // ── admin: list-waitlist ──────────────────────────────────────────────────────
 export const listWaitlistProcedure = adminProcedure
+  .route({ method: "GET", path: "/smartbeak/growth/waitlist", tags: ["SmartBeak - Growth"], summary: "List waitlist entries (admin)" })
   .input(
     z.object({
       status: z.enum(["pending", "approved", "rejected", "converted"]).optional(),
@@ -148,6 +151,7 @@ export const listWaitlistProcedure = adminProcedure
 
 // ── admin: update-waitlist-status ─────────────────────────────────────────────
 export const updateWaitlistStatusProcedure = adminProcedure
+  .route({ method: "PATCH", path: "/smartbeak/growth/waitlist/status", tags: ["SmartBeak - Growth"], summary: "Update waitlist entry status (admin)" })
   .input(WaitlistStatusUpdateInputSchema)
   .handler(async ({ input }) => {
     const entry = await updateWaitlistEntryStatus(input.id, input.status);
@@ -175,8 +179,7 @@ export const updateWaitlistStatusProcedure = adminProcedure
           text: `You've been approved! Sign up at: ${getBaseUrl()}/auth/signup`,
         });
       } catch (err) {
-        if (process.env.NODE_ENV !== "production")
-          console.warn("[waitlist]", err);
+        logger.warn("[waitlist] Failed to send approval email:", (err as Error).message);
       }
     }
 
@@ -185,6 +188,7 @@ export const updateWaitlistStatusProcedure = adminProcedure
 
 // ── get-waitlist-stats (admin) ────────────────────────────────────────────────
 export const getWaitlistStatsProcedure = adminProcedure
+  .route({ method: "GET", path: "/smartbeak/growth/waitlist/stats", tags: ["SmartBeak - Growth"], summary: "Get waitlist statistics (admin)" })
   .input(z.object({}))
   .handler(async () => {
     const stats = await getWaitlistStats();

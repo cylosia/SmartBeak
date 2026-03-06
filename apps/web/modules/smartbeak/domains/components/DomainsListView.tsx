@@ -1,6 +1,16 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+
+function isSafeUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Input } from "@repo/ui/components/input";
@@ -187,7 +197,7 @@ export function DomainsListView({
                       <StatusBadge status={domain.status ?? "pending"} />
                     </TableCell>
                     <TableCell>
-                      {domain.deployedUrl ? (
+                      {isSafeUrl(domain.deployedUrl) ? (
                         <a
                           href={domain.deployedUrl}
                           target="_blank"

@@ -1,6 +1,16 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+function isSafeUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { Button } from "@repo/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/components/card";
@@ -191,7 +201,7 @@ export function SmartDeployView({
                 </Button>
               </div>
 
-              {latest?.status === "deployed" && latest.deployedUrl && (
+              {latest?.status === "deployed" && isSafeUrl(latest.deployedUrl) && (
                 <div className="flex items-center gap-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3">
                   <GlobeIcon className="h-5 w-5 text-emerald-500 flex-shrink-0" />
                   <div className="text-left">
@@ -243,7 +253,7 @@ export function SmartDeployView({
                 Live Preview
               </CardTitle>
               <div className="flex items-center gap-2">
-                <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                <a href={isSafeUrl(previewUrl) ? previewUrl : "#"} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm">
                     <ExternalLinkIcon className="mr-2 h-3.5 w-3.5" />
                     Open
@@ -256,12 +266,14 @@ export function SmartDeployView({
             </CardHeader>
             <CardContent className="p-0">
               <div className="rounded-b-xl overflow-hidden border-t border-border">
-                <iframe
-                  src={previewUrl}
-                  title="Site preview"
-                  className="w-full h-[600px] bg-muted"
-                  sandbox="allow-scripts allow-same-origin"
-                />
+                {isSafeUrl(previewUrl) && (
+                  <iframe
+                    src={previewUrl}
+                    title="Site preview"
+                    className="w-full h-[600px] bg-muted"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -309,7 +321,7 @@ export function SmartDeployView({
                           <StatusBadge status={shard.status ?? "pending"} />
                         </TableCell>
                         <TableCell>
-                          {shard.deployedUrl ? (
+                          {isSafeUrl(shard.deployedUrl) ? (
                             <a
                               href={shard.deployedUrl}
                               target="_blank"

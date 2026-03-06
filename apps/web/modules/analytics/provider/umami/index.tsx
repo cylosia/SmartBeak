@@ -15,13 +15,19 @@ export function AnalyticsScript() {
 	);
 }
 
+declare global {
+	interface Window {
+		umami?: { track: (event: string, options?: { props?: Record<string, unknown> }) => void };
+	}
+}
+
 export function useAnalytics() {
 	const trackEvent = (event: string, data?: Record<string, unknown>) => {
-		if (typeof window === "undefined" || !(window as any).umami) {
+		if (typeof window === "undefined" || !window.umami) {
 			return;
 		}
 
-		(window as any).umami.track(event, {
+		window.umami.track(event, {
 			props: data,
 		});
 	};

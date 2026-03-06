@@ -64,10 +64,13 @@ export const executePublishingJobProcedure = protectedProcedure
       });
     }
 
-    // Decrypt config (stored as bytea; for now parse as JSON — real impl uses KMS/AES)
     let config: Record<string, unknown> = {};
     try {
-      config = JSON.parse(targetConfig.encryptedConfig.toString("utf8"));
+      const { decrypt } = await import("@repo/utils");
+      const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
+      if (!configSecret) throw new Error("Encryption key not configured");
+      const configJson = decrypt(targetConfig.encryptedConfig, configSecret);
+      config = JSON.parse(configJson);
     } catch {
       config = {};
     }

@@ -76,14 +76,15 @@ const ONBOARDING_SEQUENCE = [
 
 // ── trigger-onboarding-sequence (called on new user signup) ───────────────────
 export const triggerOnboardingSequenceProcedure = protectedProcedure
+  .route({ method: "POST", path: "/smartbeak/growth/onboarding/trigger", tags: ["SmartBeak - Growth"], summary: "Trigger onboarding email sequence" })
   .input(
     z.object({
-      email: z.string().email(),
       firstName: z.string().optional(),
     }),
   )
-  .handler(async ({ input }) => {
-    const { email, firstName = "" } = input;
+  .handler(async ({ context: { user }, input }) => {
+    const email = user.email;
+    const firstName = input.firstName ?? "";
     const results: { step: number; sent: boolean; error?: string }[] = [];
 
     // Step 1 is sent immediately; steps 2 and 3 are queued (in production,
@@ -114,6 +115,7 @@ export const triggerOnboardingSequenceProcedure = protectedProcedure
 
 // ── send-onboarding-step (admin / cron trigger) ───────────────────────────────
 export const sendOnboardingStepProcedure = adminProcedure
+  .route({ method: "POST", path: "/smartbeak/growth/onboarding/send-step", tags: ["SmartBeak - Growth"], summary: "Send a specific onboarding step (admin)" })
   .input(
     z.object({
       email: z.string().email(),

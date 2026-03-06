@@ -129,6 +129,7 @@ export function ContentSeoSidebar({
             value={targetKeyword}
             onChange={(e) => setTargetKeyword(e.target.value)}
             className="pl-8 h-8 text-sm"
+            aria-label="Target keyword"
           />
         </div>
 

@@ -88,7 +88,7 @@ async function getRedisClient(): Promise<RedisClient | null> {
 
   try {
     // Dynamic import to avoid hard dependency — Redis is optional.
-    // @ts-ignore — redis is an optional peer dependency; missing types are expected
+    // @ts-expect-error redis is an optional peer dependency; missing types are expected
     const { createClient } = await import("redis");
     const client = createClient({ url: redisUrl });
     client.on("error", (err: Error) => {
@@ -144,7 +144,8 @@ export const cache = {
       const raw = redis ? await redis.get(key) : memGet(key);
       if (!raw) return null;
       return JSON.parse(raw) as T;
-    } catch {
+    } catch (err) {
+      logger.warn("[SmartBeak Cache] Failed to parse cached value:", (err as Error).message);
       return null;
     }
   },

@@ -26,6 +26,7 @@ const Pagination = ({
 					size="icon"
 					disabled={currentPage === 1}
 					onClick={() => onChangeCurrentPage(currentPage - 1)}
+					aria-label="Previous page"
 				>
 					<ChevronLeftIcon />
 				</Button>
@@ -41,6 +42,7 @@ const Pagination = ({
 					size="icon"
 					disabled={currentPage === numberOfPages}
 					onClick={() => onChangeCurrentPage(currentPage + 1)}
+					aria-label="Next page"
 				>
 					<ChevronRightIcon />
 				</Button>

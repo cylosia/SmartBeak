@@ -28,5 +28,8 @@ export const getSellReadyScoreProc = protectedProcedure
     }
 
     const result = await getSellReadyScore(input.domainId);
+    if (!result) {
+      throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
+    }
     return result;
   });

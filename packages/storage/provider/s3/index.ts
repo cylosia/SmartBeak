@@ -8,7 +8,7 @@ import { logger } from "@repo/logs";
 import { config } from "../../config";
 import type {
 	GetSignedUploadUrlHandler,
-	GetSignedUrlHander,
+	GetSignedUrlHandler,
 } from "../../types";
 
 let s3Client: S3Client | null = null;
@@ -18,19 +18,19 @@ const getS3Client = () => {
 		return s3Client;
 	}
 
-	const s3Endpoint = process.env.S3_ENDPOINT as string;
+	const s3Endpoint = process.env.S3_ENDPOINT;
 	if (!s3Endpoint) {
 		throw new Error("Missing env variable S3_ENDPOINT");
 	}
 
-	const s3Region = (process.env.S3_REGION as string) || "auto";
+	const s3Region = process.env.S3_REGION || "auto";
 
-	const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID as string;
+	const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID;
 	if (!s3AccessKeyId) {
 		throw new Error("Missing env variable S3_ACCESS_KEY_ID");
 	}
 
-	const s3SecretAccessKey = process.env.S3_SECRET_ACCESS_KEY as string;
+	const s3SecretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
 	if (!s3SecretAccessKey) {
 		throw new Error("Missing env variable S3_SECRET_ACCESS_KEY");
 	}
@@ -48,12 +48,41 @@ const getS3Client = () => {
 	return s3Client;
 };
 
+const ALLOWED_CONTENT_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+	"image/gif",
+	"image/svg+xml",
+	"application/pdf",
+	"video/mp4",
+	"video/webm",
+	"audio/mpeg",
+	"audio/wav",
+]);
+
+function inferContentType(path: string): string {
+	const ext = path.split(".").pop()?.toLowerCase();
+	const map: Record<string, string> = {
+		jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+		webp: "image/webp", gif: "image/gif", svg: "image/svg+xml",
+		pdf: "application/pdf", mp4: "video/mp4", webm: "video/webm",
+		mp3: "audio/mpeg", wav: "audio/wav",
+	};
+	return map[ext ?? ""] ?? "application/octet-stream";
+}
+
 export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 	path,
 	{ bucket },
 ) => {
 	const bucketName =
 		config.bucketNames[bucket as keyof typeof config.bucketNames];
+
+	const contentType = inferContentType(path);
+	if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+		throw new Error(`File type not allowed: ${contentType}`);
+	}
 
 	const s3Client = getS3Client();
 	try {
@@ -62,7 +91,7 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 			new PutObjectCommand({
 				Bucket: bucketName,
 				Key: path,
-				ContentType: "image/jpeg",
+				ContentType: contentType,
 			}),
 			{
 				expiresIn: 60,
@@ -75,7 +104,7 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 	}
 };
 
-export const getSignedUrl: GetSignedUrlHander = async (
+export const getSignedUrl: GetSignedUrlHandler = async (
 	path,
 	{ bucket, expiresIn },
 ) => {

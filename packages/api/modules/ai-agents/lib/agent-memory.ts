@@ -77,8 +77,9 @@ Respond ONLY with valid JSON, no markdown.`;
     // Persist to database
     await updateAgentMemory(agentId, updatedMemory);
     return updatedMemory;
-  } catch {
-    // If memory compression fails, return existing memory unchanged
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production")
+      console.warn("[agent-memory] compression failed:", (err as Error).message);
     return existingMemory;
   }
 }

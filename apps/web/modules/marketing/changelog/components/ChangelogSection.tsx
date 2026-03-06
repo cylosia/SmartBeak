@@ -5,8 +5,8 @@ export function ChangelogSection({ items }: { items: ChangelogItem[] }) {
 	return (
 		<section id="changelog">
 			<div className="mx-auto grid w-full max-w-xl grid-cols-1 gap-4 text-left">
-				{items?.map((item, i) => (
-					<div key={i} className="rounded-3xl bg-muted p-6 lg:p-8">
+				{items?.map((item) => (
+					<div key={`${item.date}-${item.title}`} className="rounded-3xl bg-muted p-6 lg:p-8">
 						<div className="flex flex-col items-start gap-2 md:flex-row md:items-center md:justify-between">
 							<h2 className="text-xl font-semibold">
 								{item.title}
@@ -28,7 +28,7 @@ export function ChangelogSection({ items }: { items: ChangelogItem[] }) {
 							</small>
 						</div>
 						<ul className="mt-4 list-disc space-y-2 pl-6">
-							{item.changes.map((change, j) => (
+							{(item.changes ?? []).map((change, j) => (
 								<li key={j}>{change}</li>
 							))}
 						</ul>

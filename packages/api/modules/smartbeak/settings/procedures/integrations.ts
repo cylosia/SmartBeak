@@ -12,10 +12,10 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
-if (!process.env.BETTER_AUTH_SECRET) {
-  throw new Error("BETTER_AUTH_SECRET is required for encryption");
+const ENCRYPTION_SECRET = process.env.SMARTBEAK_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
+if (!ENCRYPTION_SECRET) {
+  throw new Error("SMARTBEAK_ENCRYPTION_KEY or BETTER_AUTH_SECRET is required for encryption");
 }
-const ENCRYPTION_SECRET = process.env.BETTER_AUTH_SECRET;
 
 const SUPPORTED_PROVIDERS = ["openai", "google_search_console", "ahrefs"] as const;
 
@@ -155,17 +155,21 @@ export const testIntegration = protectedProcedure
       });
     }
 
-    const configJson = decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
-    const config = JSON.parse(configJson) as { apiKey: string; siteUrl?: string };
+    let config: { apiKey: string; siteUrl?: string };
+    try {
+      const configJson = decrypt(integration.encryptedConfig, ENCRYPTION_SECRET);
+      config = JSON.parse(configJson) as { apiKey: string; siteUrl?: string };
+    } catch {
+      throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to decrypt integration config." });
+    }
 
     if (input.provider === "openai") {
       const res = await fetch("https://api.openai.com/v1/models", {
         headers: { Authorization: `Bearer ${config.apiKey}` },
       });
       if (!res.ok) {
-        const body = await res.text();
         throw new ORPCError("BAD_REQUEST", {
-          message: `OpenAI API key test failed: ${res.status} ${body.slice(0, 200)}`,
+          message: `OpenAI API key test failed (${res.status}). Please verify your API key.`,
         });
       }
       return { success: true, message: "OpenAI connection successful." };

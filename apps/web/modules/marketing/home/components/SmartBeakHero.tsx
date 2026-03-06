@@ -1,5 +1,3 @@
-"use client";
-
 import { Button } from "@repo/ui/components/button";
 import { Badge } from "@repo/ui/components/badge";
 import Link from "next/link";
@@ -116,9 +114,9 @@ export function SmartBeakHero() {
               <div className="col-span-3 space-y-4">
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "Total Domains", value: "24", color: "bg-blue-500/10 text-blue-600" },
-                    { label: "Avg SEO Score", value: "78", color: "bg-green-500/10 text-green-600" },
-                    { label: "Sell-Ready", value: "12", color: "bg-violet-500/10 text-violet-600" },
+                    { label: "Total Domains", value: "24", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
+                    { label: "Avg SEO Score", value: "78", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
+                    { label: "Sell-Ready", value: "12", color: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="rounded-xl border border-border/50 bg-card p-4">
                       <div className="text-xs text-foreground/50">{label}</div>
@@ -146,7 +144,7 @@ export function SmartBeakHero() {
                           <div className="h-full bg-primary/60 rounded-full" style={{ width: `${[78, 65, 92][i]!}%` }} />
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                          i === 2 ? "bg-green-500/10 text-green-600" : "bg-yellow-500/10 text-yellow-600"
+                          i === 2 ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
                         }`}>
                           {i === 2 ? "Active" : "Pending"}
                         </span>
