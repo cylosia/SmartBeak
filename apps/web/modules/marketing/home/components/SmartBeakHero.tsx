@@ -114,13 +114,13 @@ export function SmartBeakHero() {
               <div className="col-span-3 space-y-4">
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "Total Domains", value: "24", color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
-                    { label: "Avg SEO Score", value: "78", color: "bg-green-500/10 text-green-600 dark:text-green-400" },
-                    { label: "Sell-Ready", value: "12", color: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-                  ].map(({ label, value, color }) => (
+                    { label: "Total Domains", value: "24", textColor: "text-blue-600 dark:text-blue-400" },
+                    { label: "Avg SEO Score", value: "78", textColor: "text-green-600 dark:text-green-400" },
+                    { label: "Sell-Ready", value: "12", textColor: "text-violet-600 dark:text-violet-400" },
+                  ].map(({ label, value, textColor }) => (
                     <div key={label} className="rounded-xl border border-border/50 bg-card p-4">
                       <div className="text-xs text-foreground/50">{label}</div>
-                      <div className={`text-2xl font-bold mt-1 ${color.split(" ")[1]}`}>{value}</div>
+                      <div className={`text-2xl font-bold mt-1 ${textColor}`}>{value}</div>
                     </div>
                   ))}
                 </div>

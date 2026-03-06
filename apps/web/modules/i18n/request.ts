@@ -14,8 +14,15 @@ export default getRequestConfig(async ({ requestLocale }) => {
 		locale = routing.defaultLocale;
 	}
 
+	let messages: Awaited<ReturnType<typeof getMessagesForLocale>>;
+	try {
+		messages = await getMessagesForLocale(locale);
+	} catch {
+		messages = await getMessagesForLocale(routing.defaultLocale);
+	}
+
 	return {
 		locale,
-		messages: await getMessagesForLocale(locale),
+		messages,
 	};
 });
