@@ -189,11 +189,8 @@ export const auth = betterAuth({
 			{ user: { email, name }, url },
 			request,
 		) => {
-			// #region agent log
-			console.log('[SmartBeak-Debug] sendVerificationEmail called', { email, hasUrl: !!url });
-			// #endregion
 			const locale = getLocaleFromRequest(request);
-			const result = await sendEmail({
+			await sendEmail({
 				to: email,
 				templateId: "emailVerification",
 				context: {
@@ -202,9 +199,6 @@ export const auth = betterAuth({
 				},
 				locale,
 			});
-			// #region agent log
-			console.log('[SmartBeak-Debug] sendVerificationEmail result', { result });
-			// #endregion
 		},
 	},
 	socialProviders: {
