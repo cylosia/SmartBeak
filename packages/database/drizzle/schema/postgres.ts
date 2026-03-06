@@ -230,7 +230,10 @@ export const purchase = pgTable("purchase", {
 	status: text("status"),
 	createdAt: timestamp("createdAt").defaultNow().notNull(),
 	updatedAt: timestamp("updatedAt"),
-});
+}, (t) => [
+	index("purchase_organization_id_idx").on(t.organizationId),
+	index("purchase_user_id_idx").on(t.userId),
+]);
 
 export const sessionRelations = relations(session, ({ one }) => ({
 	user: one(user, {

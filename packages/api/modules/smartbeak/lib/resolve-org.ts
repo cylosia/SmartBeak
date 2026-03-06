@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { getOrganizationBySlug, upsertSmartBeakOrg } from "@repo/database";
+import { cachedGetOrgBySlug } from "../../../infrastructure/redis-cache";
 
 interface ResolvedOrg {
   id: string;
@@ -18,12 +19,16 @@ interface ResolvedOrg {
  * created automatically by syncing from the Supastarter org.
  *
  * Uses upsert to avoid TOCTOU race conditions between concurrent requests.
+ * Org lookup is cached to avoid hitting the database on every request.
  *
  * Returns both the SmartBeak org (UUID id for data tables) and the
  * Supastarter org id (cuid for Better Auth membership checks).
  */
 export async function resolveSmartBeakOrg(slug: string): Promise<ResolvedOrg> {
-  const supastarterOrg = await getOrganizationBySlug(slug);
+  const supastarterOrg = await cachedGetOrgBySlug(slug, () =>
+    getOrganizationBySlug(slug),
+  ) as Awaited<ReturnType<typeof getOrganizationBySlug>>;
+
   if (!supastarterOrg) {
     throw new ORPCError("NOT_FOUND", {
       message: "Organization not found.",

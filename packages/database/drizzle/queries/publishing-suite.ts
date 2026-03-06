@@ -20,6 +20,7 @@ export async function getPublishTargetsForDomain(domainId: string) {
   return db.query.publishTargets.findMany({
     where: eq(publishTargets.domainId, domainId),
     orderBy: [publishTargets.createdAt],
+    limit: 50,
   });
 }
 
@@ -135,6 +136,7 @@ export async function getScheduledJobsInRange(domainId: string, from: Date, to: 
       lte(publishingJobs.scheduledFor, to),
     ),
     orderBy: [publishingJobs.scheduledFor],
+    limit: 500,
   });
 }
 
@@ -144,6 +146,7 @@ export async function getPublishAttemptsForJobFull(jobId: string) {
   return db.query.publishAttempts.findMany({
     where: eq(publishAttempts.jobId, jobId),
     orderBy: [desc(publishAttempts.attemptedAt)],
+    limit: 50,
   });
 }
 
@@ -281,12 +284,14 @@ export async function getIntegrationsForOrg(orgId: string) {
   return db.query.integrations.findMany({
     where: eq(integrations.orgId, orgId),
     orderBy: [integrations.createdAt],
+    limit: 100,
   });
 }
 
 export async function getIntegrationsForDomain(domainId: string) {
   return db.query.integrations.findMany({
     where: eq(integrations.domainId, domainId),
+    limit: 50,
   });
 }
 

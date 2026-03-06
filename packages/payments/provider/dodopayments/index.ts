@@ -30,6 +30,10 @@ export function getDodoPaymentsClient() {
 		throw new Error("Missing env variable DODO_PAYMENTS_API_KEY");
 	}
 
+	if (!dodoPaymentsWebhookSecret) {
+		throw new Error("Missing env variable DODO_PAYMENTS_WEBHOOK_SECRET");
+	}
+
 	dodoPaymentsClient = new DodoPayments({
 		bearerToken: dodoPaymentsApiKey,
 		webhookKey: dodoPaymentsWebhookSecret,

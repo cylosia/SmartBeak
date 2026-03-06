@@ -111,6 +111,7 @@ export async function getDiligenceReport(domainId: string) {
   const checks = await db.query.diligenceChecks.findMany({
     where: eq(diligenceChecks.domainId, domainId),
     orderBy: [desc(diligenceChecks.completedAt)],
+    limit: 200,
   });
 
   const total = checks.length;
@@ -213,6 +214,7 @@ export async function getSellReadyScore(domainId: string) {
     }),
     db.query.buyerSessions.findMany({
       where: eq(buyerSessions.domainId, domainId),
+      limit: 1000,
     }),
     db.query.timelineEvents.findMany({
       where: eq(timelineEvents.domainId, domainId),
@@ -389,6 +391,7 @@ export async function getMonetizationDecayForOrg(orgId: string) {
   const allSignals = await db.query.monetizationDecaySignals.findMany({
     where: sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(domainIds.map((id) => sql`${id}::uuid`), sql`, `)}])`,
     orderBy: [desc(monetizationDecaySignals.recordedAt)],
+    limit: 5000,
   });
 
   const signalsByDomain = new Map<string, typeof allSignals>();

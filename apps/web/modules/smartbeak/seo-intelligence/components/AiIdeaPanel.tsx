@@ -37,7 +37,7 @@ import {
   SparklesIcon,
   TagIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 interface Props {
   organizationSlug: string;
@@ -85,12 +85,14 @@ function ScoreBadge({ score }: { score: number }) {
 
 function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const copyToClipboard = () => {
     const text = `# ${idea.title}\n\n${idea.metaDescription}\n\n## Outline\n${(idea.outline ?? []).map((h) => `- ${h}`).join("\n")}\n\nKeywords: ${(idea.targetKeywords ?? []).join(", ")}`;
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     }).catch(() => {
       toastError("Copy failed", "Could not copy to clipboard.");
     });

@@ -4,6 +4,8 @@
  * Credentials are decrypted from publish_targets.encrypted_config at call time.
  */
 
+import { fetchWithTimeout } from "@repo/utils";
+
 export interface PublishPayload {
   title: string;
   body: string;
@@ -50,7 +52,7 @@ export const linkedinAdapter: PublishAdapter = {
       },
       visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
     };
-    const res = await fetch("https://api.linkedin.com/v2/ugcPosts", {
+    const res = await fetchWithTimeout("https://api.linkedin.com/v2/ugcPosts", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -91,7 +93,7 @@ export const youtubeAdapter: PublishAdapter = {
       },
       status: { privacyStatus },
     };
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       "https://www.googleapis.com/youtube/v3/videos?part=snippet,status",
       {
         method: "POST",
@@ -120,7 +122,7 @@ export const tiktokAdapter: PublishAdapter = {
   name: "tiktok",
   async publish(config, payload) {
     const { accessToken, openId } = config as { accessToken: string; openId: string };
-    const res = await fetch("https://open.tiktokapis.com/v2/post/publish/text/check/", {
+    const res = await fetchWithTimeout("https://open.tiktokapis.com/v2/post/publish/text/check/", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -160,7 +162,7 @@ export const instagramAdapter: PublishAdapter = {
       return { success: false, error: "Instagram requires at least one media URL." };
     }
     // Step 1: create media container
-    const containerRes = await fetch(
+    const containerRes = await fetchWithTimeout(
       `https://graph.facebook.com/v19.0/${igUserId}/media`,
       {
         method: "POST",
@@ -178,7 +180,7 @@ export const instagramAdapter: PublishAdapter = {
     }
     const { id: creationId } = (await containerRes.json()) as { id: string };
     // Step 2: publish
-    const publishRes = await fetch(
+    const publishRes = await fetchWithTimeout(
       `https://graph.facebook.com/v19.0/${igUserId}/media_publish`,
       {
         method: "POST",
@@ -200,7 +202,7 @@ export const pinterestAdapter: PublishAdapter = {
   name: "pinterest",
   async publish(config, payload) {
     const { accessToken, boardId } = config as { accessToken: string; boardId: string };
-    const res = await fetch("https://api.pinterest.com/v5/pins", {
+    const res = await fetchWithTimeout("https://api.pinterest.com/v5/pins", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -236,7 +238,7 @@ export const vimeoAdapter: PublishAdapter = {
       accessToken: string;
       privacy?: string;
     };
-    const res = await fetch("https://api.vimeo.com/me/videos", {
+    const res = await fetchWithTimeout("https://api.vimeo.com/me/videos", {
       method: "POST",
       headers: {
         Authorization: `bearer ${accessToken}`,
@@ -274,7 +276,7 @@ export const emailAdapter: PublishAdapter = {
     };
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return { success: false, error: "RESEND_API_KEY not configured." };
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetchWithTimeout("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -315,7 +317,7 @@ export const facebookAdapter: PublishAdapter = {
   name: "facebook",
   async publish(config, payload) {
     const { accessToken, pageId } = config as { accessToken: string; pageId: string };
-    const res = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+    const res = await fetchWithTimeout(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -343,7 +345,7 @@ export const wordpressAdapter: PublishAdapter = {
       appPassword: string;
     };
     const credentials = Buffer.from(`${username}:${appPassword}`).toString("base64");
-    const res = await fetch(`${siteUrl}/wp-json/wp/v2/posts`, {
+    const res = await fetchWithTimeout(`${siteUrl}/wp-json/wp/v2/posts`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${credentials}`,
@@ -375,7 +377,7 @@ export const soundcloudAdapter: PublishAdapter = {
   name: "soundcloud",
   async publish(config, payload) {
     const { accessToken } = config as { accessToken: string };
-    const res = await fetch("https://api.soundcloud.com/tracks", {
+    const res = await fetchWithTimeout("https://api.soundcloud.com/tracks", {
       method: "POST",
       headers: {
         Authorization: `OAuth ${accessToken}`,

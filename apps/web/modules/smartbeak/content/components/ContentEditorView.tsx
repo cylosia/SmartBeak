@@ -46,11 +46,26 @@ import { AiIdeaCard, AiIdeaCardSkeleton } from "./AiIdeaCard";
 import { ContentSeoSidebar } from "./ContentSeoSidebar";
 
 import DOMPurify from "dompurify";
+import { z } from "zod";
 
 function sanitizeHtml(html: string): string {
-  if (typeof window === "undefined") return html;
+  if (typeof window === "undefined") return "";
   return DOMPurify.sanitize(html);
 }
+
+const AiIdeaSchema = z.object({
+  title: z.string(),
+  outline: z.string(),
+  keywords: z.array(z.string()),
+  contentType: z.string(),
+  estimatedReadTime: z.number(),
+  seoScore: z.number(),
+});
+
+const AiIdeasResponseSchema = z.object({
+  structured: z.array(AiIdeaSchema).optional(),
+  ideas: z.string().optional(),
+});
 
 export function ContentEditorView({
   organizationSlug,
@@ -171,25 +186,18 @@ export function ContentEditorView({
     setAiLoading(true);
     setAiIdeas([]);
     try {
-      const result = await orpcClient.smartbeak.aiIdeas.generateIdeas({
+      const raw = await orpcClient.smartbeak.aiIdeas.generateIdeas({
         organizationSlug,
         domainName: ideaInput,
         count: Number(ideaCount) || 5,
       });
-      const structured = (result as { structured?: Array<{
-        title: string;
-        outline: string;
-        keywords: string[];
-        contentType: string;
-        estimatedReadTime: number;
-        seoScore: number;
-      }> }).structured;
-      if (structured && structured.length > 0) {
-        setAiIdeas(structured);
-      } else if (typeof result.ideas === "string" && result.ideas.trim()) {
+      const result = AiIdeasResponseSchema.safeParse(raw);
+      if (result.success && result.data.structured && result.data.structured.length > 0) {
+        setAiIdeas(result.data.structured);
+      } else if (result.success && typeof result.data.ideas === "string" && result.data.ideas.trim()) {
         try {
-          const parsed = JSON.parse(result.ideas);
-          setAiIdeas(Array.isArray(parsed) ? parsed : []);
+          const parsed = z.array(AiIdeaSchema).parse(JSON.parse(result.data.ideas));
+          setAiIdeas(parsed);
         } catch {
           setAiIdeas([]);
           toastError("AI Error", "Could not parse AI response.");

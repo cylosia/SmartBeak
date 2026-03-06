@@ -6,6 +6,11 @@ import { deployToVercel } from "./deploy";
 import { getThemeConfigs, generateThemeHtml } from "./themes";
 import { z } from "zod";
 
+function log(message: string, source = "routes") {
+  const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+  console.log(`${timestamp} [${source}] ${message}`);
+}
+
 function requireApiKey(req: Request, res: Response, next: NextFunction): void {
   const apiKey = req.headers["x-api-key"] ?? req.query.apiKey;
   const expected = process.env.SERVER_API_KEY;
@@ -38,8 +43,9 @@ export async function registerRoutes(
         latestShard: shardMap.get(domain.id) ?? null,
       }));
       res.json(domainsWithShards);
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`GET /api/domains failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to fetch domains." });
     }
   });
 
@@ -52,8 +58,9 @@ export async function registerRoutes(
       const shards = await storage.getSiteShards(domain.id);
       const latestShard = shards[0] || null;
       res.json({ ...domain, shards, latestShard });
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`GET /api/domains/:id failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to fetch domain." });
     }
   });
 
@@ -68,8 +75,9 @@ export async function registerRoutes(
         details: { name: domain.name, theme: domain.theme },
       });
       res.status(201).json(domain);
-    } catch (err: unknown) {
-      res.status(400).json({ message: err instanceof Error ? err.message : "Bad request" });
+    } catch (err) {
+      log(`POST /api/domains failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(400).json({ message: "Invalid domain data." });
     }
   });
 
@@ -83,8 +91,9 @@ export async function registerRoutes(
       const parsed = updateSchema.parse(req.body);
       const updated = await storage.updateDomain(req.params.id, parsed);
       res.json(updated);
-    } catch (err: unknown) {
-      res.status(400).json({ message: err instanceof Error ? err.message : "Bad request" });
+    } catch (err) {
+      log(`PATCH /api/domains/:id failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(400).json({ message: "Invalid update data." });
     }
   });
 
@@ -98,8 +107,9 @@ export async function registerRoutes(
         details: {},
       });
       res.json({ ok: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`DELETE /api/domains/:id failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to delete domain." });
     }
   });
 
@@ -114,12 +124,17 @@ export async function registerRoutes(
         theme: z.enum(THEME_OPTIONS).optional(),
       });
       const { theme } = themeSchema.parse(req.body);
-      const selectedTheme = (theme || domain.theme) as ThemeOption;
+
+      const domainTheme = THEME_OPTIONS.includes(domain.theme as ThemeOption)
+        ? (domain.theme as ThemeOption)
+        : THEME_OPTIONS[0];
+      const selectedTheme = theme ?? domainTheme;
 
       const shard = await deployToVercel(domain.id, selectedTheme, domain.name);
       res.status(201).json(shard);
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`POST /api/domains/:id/deploy failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Deployment failed." });
     }
   });
 
@@ -130,8 +145,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Shard not found" });
       }
       res.json(shard);
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`GET /api/shards/:id failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to fetch shard." });
     }
   });
 
@@ -139,8 +155,9 @@ export async function registerRoutes(
     try {
       const versions = await storage.getDeploymentVersions(req.params.id);
       res.json(versions);
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`GET /api/shards/:id/versions failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to fetch versions." });
     }
   });
 
@@ -158,8 +175,9 @@ export async function registerRoutes(
       const html = generateThemeHtml(theme, domainName);
       res.setHeader("Content-Type", "text/html");
       res.send(html);
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`GET /api/themes/:theme/preview failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to generate preview." });
     }
   });
 
@@ -170,8 +188,9 @@ export async function registerRoutes(
         req.query.entityId as string
       );
       res.json(logs);
-    } catch (err: unknown) {
-      res.status(500).json({ message: err instanceof Error ? err.message : "Internal server error" });
+    } catch (err) {
+      log(`GET /api/audit-logs failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      res.status(500).json({ message: "Failed to fetch audit logs." });
     }
   });
 

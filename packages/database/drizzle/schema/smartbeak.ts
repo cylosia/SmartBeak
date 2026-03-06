@@ -294,6 +294,7 @@ export const integrations = pgTable('integrations', {
 }, (t) => [
   index('integrations_org_id_idx').on(t.orgId),
   index('integrations_org_provider_idx').on(t.orgId, t.provider),
+  index('integrations_domain_id_idx').on(t.domainId),
 ]);
 
 // 11. Remaining Tables

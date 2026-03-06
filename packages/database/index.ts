@@ -186,6 +186,7 @@ export {
 	getSessionsForOrg,
 	getSessionById,
 	getAgentAnalytics,
+	getAgentsByIds,
 } from "./drizzle/queries/ai-agents";
 export * from "./drizzle/zod-ai-agents";
 export * from "./drizzle/schema/ai-agents";

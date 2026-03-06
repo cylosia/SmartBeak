@@ -19,9 +19,14 @@ export default function Error({
 					An unexpected error occurred. Please try again.
 				</p>
 			</div>
-			<Button variant="outline" onClick={reset}>
-				Try Again
-			</Button>
+			<div className="flex gap-2">
+				<Button variant="outline" onClick={reset}>
+					Try Again
+				</Button>
+				<Button variant="ghost" onClick={() => (window.location.href = "/")}>
+					Go Home
+				</Button>
+			</div>
 		</div>
 	);
 }

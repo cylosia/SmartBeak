@@ -4,6 +4,7 @@ import {
   getDomainById,
   updateSeoAhrefsData,
 } from "@repo/database";
+import { logger } from "@repo/logs";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgEditor } from "../../lib/membership";
@@ -110,8 +111,9 @@ export const syncAhrefs = protectedProcedure
         input.limit,
       );
     } catch (err) {
+      logger.error("[sync-ahrefs] Ahrefs API error:", err);
       throw new ORPCError("BAD_GATEWAY", {
-        message: `Ahrefs API error: ${err instanceof Error ? err.message : String(err)}`,
+        message: "Ahrefs API returned an error. Please try again.",
       });
     }
 

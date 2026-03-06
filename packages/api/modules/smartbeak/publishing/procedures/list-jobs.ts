@@ -1,8 +1,8 @@
 import { ORPCError } from "@orpc/server";
 import {
+  countAttemptsByJobIds,
   countPublishingJobsForDomain,
   getDomainById,
-  getPublishAttemptsForJob,
   getPublishingJobsForDomain,
 } from "@repo/database";
 import z from "zod";
@@ -39,15 +39,11 @@ export const listPublishingJobs = protectedProcedure
       }),
       countPublishingJobsForDomain(input.domainId),
     ]);
-    const items = await Promise.all(
-      rawJobs.map(async (job) => {
-        const attempts = await getPublishAttemptsForJob(job.id);
-        return {
-          ...job,
-          attemptCount: attempts.length,
-          maxAttempts: 3,
-        };
-      }),
-    );
+    const attemptCounts = await countAttemptsByJobIds(rawJobs.map((j) => j.id));
+    const items = rawJobs.map((job) => ({
+      ...job,
+      attemptCount: attemptCounts.get(job.id) ?? 0,
+      maxAttempts: 3,
+    }));
     return { items, total };
   });

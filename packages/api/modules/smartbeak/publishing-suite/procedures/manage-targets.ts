@@ -57,7 +57,7 @@ export const upsertPlatformTargetProcedure = protectedProcedure
       organizationSlug: z.string().min(1),
       domainId: z.string().uuid(),
       target: z.enum(PUBLISH_TARGETS),
-      config: z.record(z.string(), z.unknown()),
+      config: z.record(z.string().max(100), z.unknown()).refine((v) => JSON.stringify(v).length <= 50_000, "Config too large"),
       enabled: z.boolean().default(true),
     }),
   )

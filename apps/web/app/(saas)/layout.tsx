@@ -45,7 +45,9 @@ export default async function SaaSLayout({ children }: PropsWithChildren) {
 					input: {},
 				}),
 			);
-		} catch {}
+		} catch {
+			// Prefetch failure is non-critical; data will be fetched client-side
+		}
 	}
 
 	return (

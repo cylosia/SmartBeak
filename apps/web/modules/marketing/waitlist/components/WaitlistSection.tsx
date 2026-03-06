@@ -7,7 +7,7 @@ import { Input } from "@repo/ui/components/input";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircleIcon, UsersIcon, ArrowRightIcon, GiftIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { orpc } from "@shared/lib/orpc-query-utils";
@@ -33,6 +33,7 @@ export function WaitlistSection() {
   const referredBy = searchParams.get("ref") ?? undefined;
   const [result, setResult] = useState<WaitlistResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const joinMutation = useMutation(
     orpc.smartbeak.growth.joinWaitlist.mutationOptions(),
@@ -56,7 +57,8 @@ export function WaitlistSection() {
     if (result?.referralLink) {
       navigator.clipboard.writeText(result.referralLink);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 

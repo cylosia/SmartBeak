@@ -38,7 +38,7 @@ export function ChangeEmailForm() {
 
 		toastSuccess(t("settings.account.changeEmail.notifications.success"));
 
-		reloadSession();
+		await reloadSession();
 	});
 
 	return (

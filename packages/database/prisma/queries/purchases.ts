@@ -13,6 +13,7 @@ export async function getPurchasesByOrganizationId(organizationId: string) {
 		where: {
 			organizationId,
 		},
+		take: 100,
 	});
 }
 
@@ -21,6 +22,7 @@ export async function getPurchasesByUserId(userId: string) {
 		where: {
 			userId,
 		},
+		take: 100,
 	});
 }
 
@@ -38,11 +40,9 @@ export async function createPurchase(
 		"id" | "createdAt" | "updatedAt"
 	>,
 ) {
-	const created = await db.purchase.create({
+	return db.purchase.create({
 		data: purchase,
 	});
-
-	return getPurchaseById(created.id);
 }
 
 export async function updatePurchase(
@@ -50,14 +50,12 @@ export async function updatePurchase(
 		Omit<z.infer<typeof PurchaseSchema>, "createdAt" | "updatedAt">
 	> & { id: string },
 ) {
-	const updated = await db.purchase.update({
+	return db.purchase.update({
 		where: {
 			id: purchase.id,
 		},
 		data: purchase,
 	});
-
-	return getPurchaseById(updated.id);
 }
 
 export async function deletePurchaseBySubscriptionId(subscriptionId: string) {

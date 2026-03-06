@@ -35,10 +35,10 @@ export async function GET(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // ── Validate session ID ─────────────────────────────────────────────────────
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const sessionId = request.nextUrl.searchParams.get("sessionId");
-  if (!sessionId) {
-    return new Response("Missing sessionId parameter", { status: 400 });
+  if (!sessionId || !UUID_RE.test(sessionId)) {
+    return new Response("Missing or invalid sessionId parameter", { status: 400 });
   }
 
   const agentSession = await getSessionById(sessionId);
@@ -110,9 +110,10 @@ export async function GET(request: NextRequest) {
           }
         }
       } catch (err) {
+        console.error("[workflow-stream] execution error:", err);
         send({
           type: "error",
-          error: err instanceof Error ? err.message : "Execution failed",
+          error: "Execution failed. Please try again.",
         });
       } finally {
         controller.close();

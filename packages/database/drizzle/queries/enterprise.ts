@@ -33,6 +33,7 @@ export async function getTeamsForOrg(orgId: string) {
       members: true,
     },
     orderBy: (t, { asc }) => [asc(t.name)],
+    limit: 100,
   });
 }
 
@@ -104,6 +105,7 @@ export async function getTeamMembers(teamId: string) {
   return db.query.enterpriseTeamMembers.findMany({
     where: (m, { eq }) => eq(m.teamId, teamId),
     orderBy: (m, { asc }) => [asc(m.createdAt)],
+    limit: 200,
   });
 }
 
@@ -207,6 +209,7 @@ export async function getSsoProvidersForOrg(orgId: string) {
   return db.query.enterpriseSsoProviders.findMany({
     where: (p, { eq }) => eq(p.orgId, orgId),
     orderBy: (p, { asc }) => [asc(p.createdAt)],
+    limit: 50,
   });
 }
 
@@ -291,6 +294,7 @@ export async function getScimTokensForOrg(orgId: string) {
   return db.query.enterpriseScimTokens.findMany({
     where: (t, { eq }) => eq(t.orgId, orgId),
     orderBy: (t, { desc }) => [desc(t.createdAt)],
+    limit: 50,
   });
 }
 
@@ -465,6 +469,7 @@ export async function getActiveBillingTiers() {
   return db.query.enterpriseBillingTiers.findMany({
     where: (t, { eq }) => eq(t.isActive, true),
     orderBy: (t, { asc }) => [asc(t.sortOrder)],
+    limit: 50,
   });
 }
 
@@ -551,6 +556,7 @@ export async function getOverageAlertsForOrg(
         eq(a.thresholdPercent, thresholdPercent),
         gte(a.sentAt, since),
       ),
+    limit: 100,
   });
 }
 

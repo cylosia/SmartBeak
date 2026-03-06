@@ -38,7 +38,7 @@ export function ChangeNameForm() {
 
 		toastSuccess(t("settings.account.changeName.notifications.success"));
 
-		reloadSession();
+		await reloadSession();
 
 		form.reset({
 			name,

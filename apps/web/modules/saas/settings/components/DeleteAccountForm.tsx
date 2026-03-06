@@ -22,11 +22,11 @@ export function DeleteAccountForm() {
 				throw error;
 			}
 		},
-		onSuccess: () => {
+		onSuccess: async () => {
 			toastSuccess(
 				t("settings.account.deleteAccount.notifications.success"),
 			);
-			reloadSession();
+			await reloadSession();
 		},
 		onError: () => {
 			toastError(t("settings.account.deleteAccount.notifications.error"));

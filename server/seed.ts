@@ -43,7 +43,7 @@ export async function seedDatabase() {
     ]);
 
     log("Seeded 5 example domains", "seed");
-  } catch (err: any) {
-    log(`Seed error: ${err.message}`, "seed");
+  } catch (err) {
+    log(`Seed error: ${err instanceof Error ? err.message : String(err)}`, "seed");
   }
 }

@@ -3,6 +3,7 @@ import {
 	validateEvent,
 	WebhookVerificationError,
 } from "@polar-sh/sdk/webhooks.js";
+import { logger } from "@repo/logs";
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
@@ -202,6 +203,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				status: 403,
 			});
 		}
-		throw error;
+		logger.error("[polar] Webhook processing failed:", error);
+		return new Response("Webhook processing failed.", {
+			status: 400,
+		});
 	}
 };

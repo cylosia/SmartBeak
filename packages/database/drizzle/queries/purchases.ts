@@ -8,12 +8,14 @@ export async function getPurchasesByOrganizationId(organizationId: string) {
 	return db.query.purchase.findMany({
 		where: (purchase, { eq }) =>
 			eq(purchase.organizationId, organizationId),
+		limit: 100,
 	});
 }
 
 export async function getPurchasesByUserId(userId: string) {
 	return db.query.purchase.findMany({
 		where: (purchase, { eq }) => eq(purchase.userId, userId),
+		limit: 100,
 	});
 }
 
@@ -33,23 +35,23 @@ export async function getPurchaseBySubscriptionId(subscriptionId: string) {
 export async function createPurchase(
 	insertedPurchase: z.infer<typeof PurchaseInsertSchema>,
 ) {
-	const [{ id }] = await db
+	const [newPurchase] = await db
 		.insert(purchase)
 		.values(insertedPurchase)
-		.returning({ id: purchase.id });
+		.returning();
 
-	return getPurchaseById(id);
+	return newPurchase;
 }
 
 export async function updatePurchase(
 	updatedPurchase: z.infer<typeof PurchaseUpdateSchema>,
 ) {
-	const [{ id }] = await db
+	const [updated] = await db
 		.update(purchase)
 		.set(updatedPurchase)
-		.returning({ id: purchase.id });
+		.returning();
 
-	return getPurchaseById(id);
+	return updated;
 }
 
 export async function deletePurchaseBySubscriptionId(subscriptionId: string) {

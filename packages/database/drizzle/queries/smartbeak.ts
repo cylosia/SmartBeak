@@ -3,7 +3,7 @@
  * All queries use the locked v9 schema from smartbeak.ts.
  * Do NOT modify table/column names here — they must match the schema exactly.
  */
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { db } from "../client";
 
 function escapeLikePattern(pattern: string): string {
@@ -76,6 +76,7 @@ export async function upsertSmartBeakOrg(data: {
 export async function getSmartBeakOrgMembers(orgId: string) {
   return db.query.organizationMembers.findMany({
     where: (m, { eq }) => eq(m.orgId, orgId),
+    limit: 200,
   });
 }
 
@@ -276,6 +277,7 @@ export async function getContentRevisions(contentId: string) {
   return db.query.contentRevisions.findMany({
     where: (r, { eq }) => eq(r.contentId, contentId),
     orderBy: (r, { desc }) => [desc(r.version)],
+    limit: 100,
   });
 }
 
@@ -360,6 +362,7 @@ export async function deleteMediaAsset(id: string) {
 export async function getPublishTargetsForDomain(domainId: string) {
   return db.query.publishTargets.findMany({
     where: (t, { eq }) => eq(t.domainId, domainId),
+    limit: 50,
   });
 }
 
@@ -473,7 +476,18 @@ export async function getPublishAttemptsForJob(jobId: string) {
   return db.query.publishAttempts.findMany({
     where: (a, { eq }) => eq(a.jobId, jobId),
     orderBy: (a, { desc }) => [desc(a.attemptedAt)],
+    limit: 50,
   });
+}
+
+export async function countAttemptsByJobIds(jobIds: string[]): Promise<Map<string, number>> {
+  if (jobIds.length === 0) return new Map();
+  const rows = await db
+    .select({ jobId: publishAttempts.jobId, n: count() })
+    .from(publishAttempts)
+    .where(inArray(publishAttempts.jobId, jobIds))
+    .groupBy(publishAttempts.jobId);
+  return new Map(rows.map((r) => [r.jobId, r.n]));
 }
 
 // ─── SEO Documents ────────────────────────────────────────────────────────────
@@ -520,6 +534,7 @@ export async function getKeywordsForDomain(domainId: string) {
   return db.query.keywordTracking.findMany({
     where: (k, { eq }) => eq(k.domainId, domainId),
     orderBy: (k, { desc }) => [desc(k.lastUpdated)],
+    limit: 500,
   });
 }
 
@@ -670,6 +685,7 @@ export async function getSiteShardsForDomain(domainId: string) {
   return db.query.siteShards.findMany({
     where: (s, { eq }) => eq(s.domainId, domainId),
     orderBy: (s, { desc }) => [desc(s.version)],
+    limit: 100,
   });
 }
 
@@ -699,6 +715,7 @@ export async function getDiligenceChecksForDomain(domainId: string) {
   return db.query.diligenceChecks.findMany({
     where: (d, { eq }) => eq(d.domainId, domainId),
     orderBy: (d, { desc }) => [desc(d.completedAt)],
+    limit: 100,
   });
 }
 
@@ -833,6 +850,7 @@ export async function markWebhookEventProcessed(id: string) {
 export async function getIntegrationsForOrg(orgId: string) {
   return db.query.integrations.findMany({
     where: (i, { eq }) => eq(i.orgId, orgId),
+    limit: 100,
   });
 }
 
@@ -909,6 +927,7 @@ export async function createTimelineEvent(data: {
 export async function getGuardrailsForOrg(orgId: string) {
   return db.query.guardrails.findMany({
     where: (g, { eq }) => eq(g.orgId, orgId),
+    limit: 100,
   });
 }
 
@@ -939,6 +958,7 @@ export async function upsertGuardrail(data: {
 export async function getFeatureFlagsForOrg(orgId: string) {
   return db.query.featureFlags.findMany({
     where: (f, { eq }) => eq(f.orgId, orgId),
+    limit: 200,
   });
 }
 
@@ -975,6 +995,7 @@ export async function upsertFeatureFlag(data: {
 export async function getOnboardingProgressForOrg(orgId: string) {
   return db.query.onboardingProgress.findMany({
     where: (o, { eq }) => eq(o.orgId, orgId),
+    limit: 100,
   });
 }
 

@@ -18,7 +18,7 @@ export async function getTemplate<T extends TemplateId>({
 	const template = mailTemplates[templateId];
 	const translations = await getMessagesForLocale(locale);
 
-	const email = (template as (...args: any[]) => any)({
+	const email = (template as (props: Record<string, unknown>) => JSX.Element)({
 		...context,
 		locale,
 		translations,

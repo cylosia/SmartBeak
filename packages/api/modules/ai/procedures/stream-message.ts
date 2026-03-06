@@ -18,7 +18,14 @@ export const streamMessage = protectedProcedure
 	})
 	.input(
 		z.object({
-			messages: z.array(z.custom<UIMessage>()),
+			messages: z.array(
+				z.object({
+					id: z.string(),
+					role: z.enum(["user", "assistant", "system"]),
+					content: z.string(),
+					parts: z.array(z.record(z.unknown())).optional(),
+				}).passthrough() as unknown as z.ZodType<UIMessage>,
+			),
 		}),
 	)
 	.handler(async ({ input }) => {

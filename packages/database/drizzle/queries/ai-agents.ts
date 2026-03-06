@@ -5,7 +5,7 @@
  * The locked v9 smartbeak.ts schema is not modified.
  */
 
-import { and, avg, count, desc, eq, gte, lte, sql, sum } from "drizzle-orm";
+import { and, avg, count, desc, eq, gte, inArray, lte, sql, sum } from "drizzle-orm";
 import { db } from "../client";
 import {
   aiAgentSessions,
@@ -20,6 +20,7 @@ export async function getAgentsForOrg(orgId: string) {
   return db.query.aiAgents.findMany({
     where: (a, { eq }) => eq(a.orgId, orgId),
     orderBy: (a, { asc }) => [asc(a.name)],
+    limit: 100,
   });
 }
 
@@ -27,12 +28,21 @@ export async function getActiveAgentsForOrg(orgId: string) {
   return db.query.aiAgents.findMany({
     where: (a, { and, eq }) => and(eq(a.orgId, orgId), eq(a.isActive, true)),
     orderBy: (a, { asc }) => [asc(a.name)],
+    limit: 100,
   });
 }
 
 export async function getAgentById(agentId: string) {
   return db.query.aiAgents.findFirst({
     where: (a, { eq }) => eq(a.id, agentId),
+  });
+}
+
+export async function getAgentsByIds(agentIds: string[]) {
+  if (agentIds.length === 0) return [];
+  return db.query.aiAgents.findMany({
+    where: (a) => inArray(a.id, agentIds),
+    limit: agentIds.length,
   });
 }
 
@@ -108,6 +118,7 @@ export async function getWorkflowsForOrg(orgId: string) {
   return db.query.aiWorkflows.findMany({
     where: (w, { eq }) => eq(w.orgId, orgId),
     orderBy: (w, { desc }) => [desc(w.updatedAt)],
+    limit: 100,
   });
 }
 

@@ -181,12 +181,13 @@ export async function deployToVercel(
       });
 
       log(`Deployment ready: https://${deployData.url}`, "deploy");
-    } catch (err: any) {
-      log(`Deployment error: ${err.message}`, "deploy");
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log(`Deployment error: ${errMsg}`, "deploy");
 
       await storage.updateSiteShard(shard.id, {
         status: "error",
-        errorMessage: err.message,
+        errorMessage: errMsg,
         progress: 0,
       });
 

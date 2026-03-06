@@ -103,7 +103,7 @@ export function TwoFactorBlock() {
 				),
 			);
 
-			reloadSession();
+			await reloadSession();
 		},
 
 		onError: () => {
@@ -132,7 +132,7 @@ export function TwoFactorBlock() {
 				),
 			);
 
-			reloadSession();
+			await reloadSession();
 			setDialogOpen(false);
 		},
 	});

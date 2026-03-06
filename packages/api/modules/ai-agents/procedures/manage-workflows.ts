@@ -12,6 +12,7 @@ import {
   deleteWorkflow,
   getActiveAgentsForOrg,
   getAgentById,
+  getAgentsByIds,
   getSessionById,
   getSessionsForOrg,
   getWorkflowById,
@@ -70,17 +71,19 @@ export const getWorkflow = protectedProcedure
       throw new ORPCError("NOT_FOUND", { message: "Workflow not found." });
     }
 
-    // Enrich nodes with agent names for the builder UI
     const graph = WorkflowGraphSchema.parse(workflow.stepsJson);
-    const enrichedNodes = await Promise.all(
-      graph.nodes.map(async (node) => {
-        if (node.type === "agent" && node.agentId) {
-          const agent = await getAgentById(node.agentId);
-          return { ...node, agentName: agent?.name, agentType: agent?.agentType };
-        }
-        return node;
-      }),
-    );
+    const agentIds = graph.nodes
+      .filter((n) => n.type === "agent" && n.agentId)
+      .map((n) => n.agentId as string);
+    const agents = agentIds.length > 0 ? await getAgentsByIds(agentIds) : [];
+    const agentMap = new Map(agents.map((a) => [a.id, a]));
+    const enrichedNodes = graph.nodes.map((node) => {
+      if (node.type === "agent" && node.agentId) {
+        const agent = agentMap.get(node.agentId);
+        return { ...node, agentName: agent?.name, agentType: agent?.agentType };
+      }
+      return node;
+    });
 
     return {
       workflow: {

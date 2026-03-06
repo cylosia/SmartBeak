@@ -9,13 +9,14 @@ import { Skeleton } from "@repo/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@repo/ui/components/table";
 import { useQuery } from "@tanstack/react-query";
 import { CopyIcon, GiftIcon, TrendingUpIcon, UsersIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useSession } from "@saas/auth/hooks/use-session";
 
 export function ReferralDashboard() {
   const { user } = useSession();
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { data, isLoading, error, refetch } = useQuery(
     orpc.smartbeak.growth.getMyReferrals.queryOptions({
@@ -28,7 +29,8 @@ export function ReferralDashboard() {
     if (data?.referralLink) {
       navigator.clipboard.writeText(data.referralLink);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 
