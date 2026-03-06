@@ -21,8 +21,7 @@ export const streamMessage = protectedProcedure
 			messages: z.array(
 				z
 					.object({
-					role: z.string().min(1),
-					content: z.string().min(1),
+					role: z.string(),
 					})
 					.passthrough(),
 			),
