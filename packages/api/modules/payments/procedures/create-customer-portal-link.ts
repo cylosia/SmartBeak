@@ -18,7 +18,7 @@ export const createCustomerPortalLink = protectedProcedure
 	})
 	.input(
 		z.object({
-			purchaseId: z.string().min(1),
+			purchaseId: z.string().min(1).max(64),
 			redirectUrl: z.string().url().optional(),
 		}),
 	)
@@ -39,10 +39,12 @@ export const createCustomerPortalLink = protectedProcedure
 				if (userOrganizationMembership?.role !== "owner") {
 					throw new ORPCError("FORBIDDEN");
 				}
-			}
-
-			if (purchase.userId && purchase.userId !== user.id) {
-				throw new ORPCError("FORBIDDEN");
+			} else if (purchase.userId) {
+				if (purchase.userId !== user.id) {
+					throw new ORPCError("FORBIDDEN");
+				}
+			} else {
+				throw new ORPCError("FORBIDDEN", { message: "Purchase has no owner." });
 			}
 
 			try {

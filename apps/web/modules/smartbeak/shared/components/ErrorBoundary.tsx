@@ -13,6 +13,22 @@ interface State {
   error?: Error;
 }
 
+function reportErrorToServer(error: Error, componentStack?: string | null) {
+  try {
+    void fetch("/api/client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack?.slice(0, 2000),
+        componentStack: componentStack?.slice(0, 2000),
+      }),
+    }).catch(() => {});
+  } catch {
+    // Silently fail — error reporting should never throw
+  }
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -24,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[ErrorBoundary]", error, errorInfo.componentStack);
+    reportErrorToServer(error, errorInfo.componentStack);
   }
 
   render() {
@@ -37,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           <h3 className="text-base font-semibold">Something went wrong</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            {this.state.error?.message ?? "An unexpected error occurred."}
+            An unexpected error occurred. Please try again.
           </p>
           <Button
             variant="outline"

@@ -18,6 +18,7 @@ import { generateText, streamText, openai, createAnthropic } from "@repo/ai";
 import { logger } from "@repo/logs";
 import {
   getAgentById,
+  getAgentsByIds,
   updateAgentMemory,
   updateSession,
 } from "@repo/database";
@@ -164,7 +165,10 @@ export async function* executeWorkflow(
       throw new ORPCError("BAD_REQUEST", { message: "Workflow has no agent nodes to execute." });
     }
 
-    // Build context string from prior agent outputs
+    const agentIds = [...new Set(agentNodes.map((n) => n.agentId!))];
+    const agentList = await getAgentsByIds(agentIds);
+    const agentMap = new Map(agentList.map((a) => [a.id, a]));
+
     let accumulatedContext = context ?? "";
 
     for (const node of agentNodes) {
@@ -172,8 +176,7 @@ export async function* executeWorkflow(
 
       yield { type: "node_start", nodeId: node.id, agentName: node.label };
 
-      // Load agent config from database
-      const agent = await getAgentById(node.agentId);
+      const agent = agentMap.get(node.agentId);
       if (!agent) {
         yield {
           type: "error",

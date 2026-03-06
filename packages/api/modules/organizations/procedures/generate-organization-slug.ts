@@ -26,21 +26,9 @@ export const generateOrganizationSlug = publicProcedure
 		});
 
 		let slug = baseSlug;
-		let hasAvailableSlug = false;
-
-		for (let i = 0; i < 3; i++) {
-			const existing = await getOrganizationBySlug(slug);
-
-			if (!existing) {
-				hasAvailableSlug = true;
-				break;
-			}
-
+		const existing = await getOrganizationBySlug(slug);
+		if (existing) {
 			slug = `${baseSlug}-${nanoid(5)}`;
-		}
-
-		if (!hasAvailableSlug) {
-			throw new ORPCError("INTERNAL_SERVER_ERROR");
 		}
 
 		return { slug };

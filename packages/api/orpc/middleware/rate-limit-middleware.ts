@@ -38,3 +38,27 @@ export function publicRateLimitMiddleware(
 		return next();
 	};
 }
+
+/**
+ * oRPC middleware that enforces user-based rate limiting on protected endpoints.
+ * Keyed by authenticated user ID for per-user fairness.
+ */
+export function protectedRateLimitMiddleware(
+	opts: RateLimitOptions = { limit: 30, windowMs: 60_000 },
+) {
+	return async ({
+		context,
+		next,
+	}: {
+		context: { user: { id: string } };
+		next: () => Promise<unknown>;
+	}) => {
+		const key = `user:${context.user.id}`;
+		await enforceRateLimit(key, {
+			limit: opts.limit,
+			windowSeconds: Math.ceil(opts.windowMs / 1000),
+		});
+
+		return next();
+	};
+}

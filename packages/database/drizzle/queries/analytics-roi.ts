@@ -93,17 +93,19 @@ export async function upsertPortfolioSummary(data: {
   totalValue: string;
   avgRoi: string;
 }) {
-  const existing = await db.query.portfolioSummaries.findFirst({
-    where: eq(portfolioSummaries.orgId, data.orgId),
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.portfolioSummaries.findFirst({
+      where: eq(portfolioSummaries.orgId, data.orgId),
+    });
+    if (existing) {
+      return tx
+        .update(portfolioSummaries)
+        .set({ ...data, lastUpdated: new Date() })
+        .where(eq(portfolioSummaries.id, existing.id))
+        .returning();
+    }
+    return tx.insert(portfolioSummaries).values(data).returning();
   });
-  if (existing) {
-    return db
-      .update(portfolioSummaries)
-      .set({ ...data, lastUpdated: new Date() })
-      .where(eq(portfolioSummaries.id, existing.id))
-      .returning();
-  }
-  return db.insert(portfolioSummaries).values(data).returning();
 }
 
 // ─── Diligence Engine ────────────────────────────────────────────────────────

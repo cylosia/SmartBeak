@@ -7,6 +7,7 @@ import {
 } from "@repo/ai";
 import z from "zod";
 import { protectedProcedure } from "../../../orpc/procedures";
+import { protectedRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
 
 export const streamMessage = protectedProcedure
 	.route({
@@ -23,11 +24,15 @@ export const streamMessage = protectedProcedure
 					id: z.string(),
 					role: z.enum(["user", "assistant", "system"]),
 					content: z.string().max(32_000),
-					parts: z.array(z.record(z.unknown())).optional(),
-				}).passthrough() as unknown as z.ZodType<UIMessage>,
+					parts: z.array(z.record(z.unknown()).refine(
+						(v) => JSON.stringify(v).length <= 10_000,
+						"Part payload too large",
+					)).max(20).optional(),
+				}) as unknown as z.ZodType<UIMessage>,
 			).max(100),
 		}),
 	)
+	.use(protectedRateLimitMiddleware({ limit: 20, windowMs: 60_000 }))
 	.handler(async ({ input }) => {
 		const { messages } = input;
 

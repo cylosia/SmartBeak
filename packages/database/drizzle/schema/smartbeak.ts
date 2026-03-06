@@ -172,6 +172,7 @@ export const keywordTracking = pgTable('keyword_tracking', {
   lastUpdated: timestamp('last_updated', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index('keyword_tracking_domain_id_idx').on(t.domainId),
+  index('keyword_tracking_domain_updated_idx').on(t.domainId, t.lastUpdated),
 ]);
 
 // 7. Billing & Usage
@@ -282,6 +283,7 @@ export const webhookEvents = pgTable('webhook_events', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index('webhook_events_processed_outbox_idx').on(t.processed, t.outboxStatus),
+  index('webhook_events_outbox_created_idx').on(t.outboxStatus, t.createdAt),
 ]);
 
 export const integrations = pgTable('integrations', {
