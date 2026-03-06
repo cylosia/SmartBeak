@@ -266,7 +266,6 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
                             disabled={replayWebhookMutation.isPending}
                             onClick={() =>
                               replayWebhookMutation.mutate({
-                                organizationSlug,
                                 eventId: event.id,
                               })
                             }
