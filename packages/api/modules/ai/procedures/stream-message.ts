@@ -18,13 +18,7 @@ export const streamMessage = protectedProcedure
 	})
 	.input(
 		z.object({
-			messages: z.array(
-				z
-					.object({
-					role: z.string(),
-					})
-					.passthrough(),
-			),
+			messages: z.array(z.custom<UIMessage>()),
 		}),
 	)
 	.handler(async ({ input }) => {
@@ -32,9 +26,7 @@ export const streamMessage = protectedProcedure
 
 		const response = streamText({
 			model: textModel,
-			messages: await convertToModelMessages(
-				messages as unknown as UIMessage[],
-			),
+			messages: await convertToModelMessages(messages),
 		});
 
 		return streamToEventIterator(response.toUIMessageStream());
