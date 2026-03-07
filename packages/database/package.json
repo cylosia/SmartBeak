@@ -27,6 +27,7 @@
 		"push": "dotenv -c -e ../../.env -- prisma db push",
 		"migrate": "dotenv -c -e ../../.env -- prisma migrate dev",
 		"studio": "dotenv -c -e ../../.env -- prisma studio",
+		"test": "vitest run",
 		"type-check": "tsc --noEmit"
 	},
 	"types": "./**/.tsx",

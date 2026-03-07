@@ -15,7 +15,7 @@ import {
 	type User,
 	users,
 } from "@shared/schema";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "./db";
 
 export interface IStorage {
@@ -115,7 +115,8 @@ export class DatabaseStorage implements IStorage {
 			.select()
 			.from(siteShards)
 			.where(eq(siteShards.domainId, domainId))
-			.orderBy(desc(siteShards.createdAt));
+			.orderBy(desc(siteShards.createdAt))
+			.limit(100);
 	}
 
 	async getSiteShard(id: string): Promise<SiteShard | undefined> {
@@ -142,16 +143,15 @@ export class DatabaseStorage implements IStorage {
 		if (domainIds.length === 0) {
 			return new Map();
 		}
-		const allShards = await db
-			.select()
-			.from(siteShards)
-			.where(inArray(siteShards.domainId, domainIds))
-			.orderBy(desc(siteShards.version));
+		const rows = await db.execute<SiteShard>(
+			sql`SELECT DISTINCT ON (domain_id) *
+				FROM site_shards
+				WHERE domain_id = ANY(${domainIds}::uuid[])
+				ORDER BY domain_id, version DESC`,
+		);
 		const map = new Map<string, SiteShard>();
-		for (const shard of allShards) {
-			if (!map.has(shard.domainId)) {
-				map.set(shard.domainId, shard);
-			}
+		for (const row of rows) {
+			map.set(row.domainId, row);
 		}
 		return map;
 	}
@@ -178,7 +178,8 @@ export class DatabaseStorage implements IStorage {
 			.select()
 			.from(deploymentVersions)
 			.where(eq(deploymentVersions.shardId, shardId))
-			.orderBy(desc(deploymentVersions.version));
+			.orderBy(desc(deploymentVersions.version))
+			.limit(50);
 	}
 
 	async createDeploymentVersion(

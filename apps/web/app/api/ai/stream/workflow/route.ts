@@ -124,6 +124,7 @@ export async function GET(request: NextRequest) {
 					graph.data,
 					prompt,
 					context,
+					agentSession.orgId,
 				)) {
 					if (abortController.signal.aborted) {
 						logger.info(

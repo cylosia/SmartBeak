@@ -27,6 +27,10 @@ import {
 	updateSession,
 } from "@repo/database";
 import { logger } from "@repo/logs";
+import {
+	checkAiBudget,
+	recordAiSpend,
+} from "../../../infrastructure/ai-budget";
 import { formatMemoryForPrompt } from "./agent-memory";
 import { getEnabledTools } from "./agent-tools";
 
@@ -98,9 +102,14 @@ Return the improved version with a brief summary of changes made.`,
 	custom: "You are a helpful AI assistant. Complete the task provided to the best of your ability.",
 };
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+export const MAX_AGENTS_PER_WORKFLOW = 10;
+const MAX_SESSION_COST_CENTS = 500; // $5.00 hard ceiling per workflow session
+
 // ─── Topological Sort ─────────────────────────────────────────────────────────
 
-function topologicalSort(graph: WorkflowGraph): WorkflowNode[] {
+export function topologicalSort(graph: WorkflowGraph): WorkflowNode[] {
 	const { nodes, edges } = graph;
 	const inDegree = new Map<string, number>();
 	const adjacency = new Map<string, string[]>();
@@ -153,12 +162,14 @@ function topologicalSort(graph: WorkflowGraph): WorkflowNode[] {
  * @param graph - The workflow graph to execute.
  * @param userPrompt - The user's input prompt.
  * @param context - Optional additional context.
+ * @param orgId - Optional org ID for AI budget enforcement.
  */
 export async function* executeWorkflow(
 	sessionId: string,
 	graph: WorkflowGraph,
 	userPrompt: string,
 	context?: string,
+	orgId?: string,
 ): AsyncGenerator<AgentExecutionEvent> {
 	const startTime = Date.now();
 	const tokenUsage: TokenUsageEntry[] = [];
@@ -182,12 +193,22 @@ export async function* executeWorkflow(
 			});
 		}
 
+		if (agentNodes.length > MAX_AGENTS_PER_WORKFLOW) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: `Workflow exceeds the maximum of ${MAX_AGENTS_PER_WORKFLOW} agent nodes.`,
+			});
+		}
+
 		// biome-ignore lint/style/noNonNullAssertion: agentNodes is pre-filtered to only nodes with agentId
 		const agentIds = [...new Set(agentNodes.map((n) => n.agentId!))];
 		const agentList = await getAgentsByIds(agentIds);
 		const agentMap = new Map(agentList.map((a) => [a.id, a]));
 
 		let accumulatedContext = context ?? "";
+
+		if (orgId) {
+			await checkAiBudget(orgId);
+		}
 
 		for (const node of agentNodes) {
 			if (!node.agentId) {
@@ -229,6 +250,15 @@ export async function* executeWorkflow(
 				accumulatedContext.length > 0
 					? `## Prior Agent Context\n${accumulatedContext}\n\n## Your Task\n${userPrompt}`
 					: userPrompt;
+
+			if (totalCostCents >= MAX_SESSION_COST_CENTS) {
+				yield {
+					type: "error",
+					nodeId: node.id,
+					error: "Workflow execution stopped: session cost ceiling reached.",
+				};
+				break;
+			}
 
 			const model = getModel(config.model ?? "gpt-4o-mini");
 			const tools = getEnabledTools(config.tools ?? []);
@@ -288,6 +318,15 @@ export async function* executeWorkflow(
 				outputTokens,
 			);
 			totalCostCents += costCents;
+
+			if (orgId) {
+				recordAiSpend(orgId, costCents).catch((err) => {
+					logger.warn(
+						"[agent-executor] Failed to record AI spend:",
+						err,
+					);
+				});
+			}
 
 			tokenUsage.push({
 				agentId: agent.id,

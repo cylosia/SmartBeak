@@ -180,7 +180,8 @@ export const webhookHandler: WebhookHandler = async (req) => {
 						expand: ["line_items"],
 					});
 
-				const productId = checkoutSession.line_items?.data[0].price?.id;
+				const productId =
+					checkoutSession.line_items?.data[0]?.price?.id;
 
 				if (!productId) {
 					return new Response("Missing product ID.", {
@@ -214,7 +215,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			case "customer.subscription.created": {
 				const { metadata, customer, items, id } = event.data.object;
 
-				const productId = items?.data[0].price?.id;
+				const productId = items?.data[0]?.price?.id;
 
 				if (!productId) {
 					return new Response("Missing product ID.", {

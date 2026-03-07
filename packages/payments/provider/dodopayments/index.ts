@@ -174,7 +174,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 						product_cart,
 					} = event.data;
 
-					const productId = product_cart?.[0].product_id;
+					const productId = product_cart?.[0]?.product_id;
 
 					if (!productId) {
 						return new Response("Missing product ID.", {

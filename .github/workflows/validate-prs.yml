@@ -19,6 +19,21 @@ jobs:
           version: 2.3.13
       - name: Run Biome
         run: biome ci .
+  safety-checks:
+    name: Safety pattern checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for unsafe indexed property access
+        run: |
+          # Detect patterns like ?.[0]. (optional chain into index, then bare property access)
+          # Safe pattern is ?.[0]?. — the second ?. is required.
+          if rg --type ts --glob '!node_modules' '\?\.\[[0-9]+\]\.' --count packages apps server; then
+            echo "::error::Found unsafe ?.[N]. access patterns — use ?.[N]?. instead"
+            rg --type ts --glob '!node_modules' '\?\.\[[0-9]+\]\.' packages apps server
+            exit 1
+          fi
+          echo "No unsafe indexed property access patterns found."
   e2e:
     name: Run e2e tests
     timeout-minutes: 60

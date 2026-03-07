@@ -35,6 +35,7 @@
 	"name": "@repo/api",
 	"scripts": {
 		"clean": "git clean -xdf .cache .turbo dist node_modules",
+		"test": "vitest run",
 		"type-check": "tsc --noEmit"
 	},
 	"version": "0.0.0"

@@ -14,6 +14,7 @@ import {
 	portfolioSummaries,
 	timelineEvents,
 } from "../schema";
+import { inUuidArray } from "./helpers";
 
 function extractHealthScore(health: unknown, fallback = 0): number {
 	if (typeof health === "number") {
@@ -46,6 +47,16 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 		limit: 500,
 	});
 
+	if (domainList.length === 0) {
+		return {
+			summary,
+			domains: [],
+			totalValue: 0,
+			avgRoi: 0,
+			totalDomains: 0,
+		};
+	}
+
 	const decayRows = await db
 		.select({
 			domainId: monetizationDecaySignals.domainId,
@@ -54,12 +65,9 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 		})
 		.from(monetizationDecaySignals)
 		.where(
-			eq(
+			inUuidArray(
 				monetizationDecaySignals.domainId,
-				sql`ANY(ARRAY[${sql.join(
-					domainList.map((d) => sql`${d.id}::uuid`),
-					sql`, `,
-				)}])`,
+				domainList.map((d) => d.id),
 			),
 		)
 		.groupBy(monetizationDecaySignals.domainId);
@@ -406,10 +414,7 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 
 	const domainIds = orgDomains.map((d) => d.id);
 	const allSessions = await db.query.buyerSessions.findMany({
-		where: sql`${buyerSessions.domainId} = ANY(ARRAY[${sql.join(
-			domainIds.map((id) => sql`${id}::uuid`),
-			sql`, `,
-		)}])`,
+		where: inUuidArray(buyerSessions.domainId, domainIds),
 		orderBy: [desc(buyerSessions.createdAt)],
 		limit: 10000,
 	});
@@ -486,10 +491,7 @@ export async function getMonetizationDecayForOrg(orgId: string) {
 
 	const domainIds = orgDomains.map((d) => d.id);
 	const allSignals = await db.query.monetizationDecaySignals.findMany({
-		where: sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(
-			domainIds.map((id) => sql`${id}::uuid`),
-			sql`, `,
-		)}])`,
+		where: inUuidArray(monetizationDecaySignals.domainId, domainIds),
 		orderBy: [desc(monetizationDecaySignals.recordedAt)],
 		limit: 5000,
 	});
@@ -534,10 +536,7 @@ export async function getPortfolioTrend(orgId: string, days = 30) {
 
 	const signals = await db.query.monetizationDecaySignals.findMany({
 		where: and(
-			sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(
-				domainIds.map((id) => sql`${id}::uuid`),
-				sql`, `,
-			)}])`,
+			inUuidArray(monetizationDecaySignals.domainId, domainIds),
 			gte(monetizationDecaySignals.recordedAt, since),
 		),
 		orderBy: [desc(monetizationDecaySignals.recordedAt)],

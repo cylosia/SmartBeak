@@ -32,13 +32,28 @@ export function encodeCursor(createdAt: Date, id: string): string {
 
 /**
  * Decodes a cursor back into its component parts.
+ * Throws if the cursor is malformed.
  */
 export function decodeCursor(cursor: string): { createdAt: Date; id: string } {
-	const decoded = Buffer.from(cursor, "base64url").toString("utf8");
-	const colonIdx = decoded.indexOf(":");
+	let decoded: string;
+	try {
+		decoded = Buffer.from(cursor, "base64url").toString("utf8");
+	} catch {
+		throw new Error("Invalid cursor: not valid base64url");
+	}
+	// ISO dates contain colons in the time portion, so we split on the
+	// `Z:` boundary which marks the end of the ISO date and start of the ID.
+	const separatorIdx = decoded.indexOf("Z:");
+	if (separatorIdx <= 0) {
+		throw new Error("Invalid cursor: missing separator");
+	}
+	const createdAt = new Date(decoded.slice(0, separatorIdx + 1));
+	if (Number.isNaN(createdAt.getTime())) {
+		throw new Error("Invalid cursor: malformed date");
+	}
 	return {
-		createdAt: new Date(decoded.slice(0, colonIdx)),
-		id: decoded.slice(colonIdx + 1),
+		createdAt,
+		id: decoded.slice(separatorIdx + 2),
 	};
 }
 
@@ -142,7 +157,7 @@ export async function checkDatabaseHealth(): Promise<{
 }> {
 	const start = performance.now();
 	try {
-		await db.$queryRawUnsafe("SELECT 1");
+		await db.$queryRaw`SELECT 1`;
 		return {
 			healthy: true,
 			latencyMs: Math.round(performance.now() - start),

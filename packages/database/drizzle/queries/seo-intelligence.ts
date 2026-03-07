@@ -238,7 +238,8 @@ export async function getOrgSeoOverview(orgId: string) {
 		.leftJoin(keywordTracking, eq(keywordTracking.domainId, domains.id))
 		.where(eq(domains.orgId, orgId))
 		.groupBy(domains.id, domains.name, seoDocuments.score)
-		.orderBy(desc(seoDocuments.score));
+		.orderBy(desc(seoDocuments.score))
+		.limit(200);
 }
 
 // ─── Materialized View SQL ────────────────────────────────────────────────────

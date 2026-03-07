@@ -15,6 +15,7 @@ export {
 } from "./analytics-roi";
 export * from "./enterprise";
 export * from "./growth";
+export { inUuidArray } from "./helpers";
 export * from "./organizations";
 export * from "./publishing-suite";
 export * from "./purchases";

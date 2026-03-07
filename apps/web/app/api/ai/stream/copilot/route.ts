@@ -18,8 +18,13 @@
  */
 
 import { createOpenAI, streamText } from "@repo/ai";
+import {
+	checkAiBudget,
+	recordAiSpend,
+} from "@repo/api/infrastructure/ai-budget";
 import { enforceRateLimit } from "@repo/api/infrastructure/rate-limit-redis";
 import { auth } from "@repo/auth";
+import { logger } from "@repo/logs";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -140,6 +145,20 @@ export async function POST(request: NextRequest) {
 		});
 	}
 
+	// ── AI budget enforcement ──────────────────────────────────────────────────
+	const orgId = (session.session as { activeOrganizationId?: string })
+		.activeOrganizationId;
+	if (orgId) {
+		try {
+			await checkAiBudget(orgId);
+		} catch {
+			return Response.json(
+				{ error: "AI spend limit reached for this billing period." },
+				{ status: 402 },
+			);
+		}
+	}
+
 	// ── Stream AI response ──────────────────────────────────────────────────────
 	const openai = createOpenAI({});
 	const model = openai("gpt-4o-mini");
@@ -159,6 +178,13 @@ export async function POST(request: NextRequest) {
 			maxOutputTokens: 2048,
 			temperature: action === "fact_check" ? 0.2 : 0.7,
 		});
+
+		if (orgId) {
+			const ESTIMATED_COST_CENTS = 2;
+			recordAiSpend(orgId, ESTIMATED_COST_CENTS).catch((err) => {
+				logger.warn("[copilot] Failed to record AI spend:", err);
+			});
+		}
 
 		return result.toTextStreamResponse();
 	} catch (_error) {

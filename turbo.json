@@ -8,6 +8,7 @@
 			"dependsOn": ["^generate", "^build"],
 			"outputs": ["dist/**", ".next/**", "!.next/cache/**"]
 		},
+		"test": {},
 		"type-check": {},
 		"clean": {
 			"cache": false
