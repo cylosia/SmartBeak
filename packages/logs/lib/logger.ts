@@ -1,13 +1,15 @@
 import { type ConsolaReporter, createConsola, type LogObject } from "consola";
+import { redactSensitive } from "./redact";
 
 const jsonReporter: ConsolaReporter = {
 	log(logObj: LogObject) {
+		const rawMessage = logObj.args
+			.map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+			.join(" ");
 		const entry = {
 			level: logObj.type,
 			timestamp: new Date().toISOString(),
-			message: logObj.args
-				.map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-				.join(" "),
+			message: redactSensitive(rawMessage),
 			...(logObj.tag ? { tag: logObj.tag } : {}),
 		};
 		const stream = logObj.level >= 2 ? process.stdout : process.stderr;

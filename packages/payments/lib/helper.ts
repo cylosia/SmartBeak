@@ -16,7 +16,9 @@ const INACTIVE_STATUSES = new Set([
 	"expired",
 	"unpaid",
 	"past_due",
+	"incomplete",
 	"incomplete_expired",
+	"paused",
 ]);
 
 function getActivePlanFromPurchases(purchases?: PurchaseWithoutTimestamps[]) {

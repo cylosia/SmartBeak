@@ -1,11 +1,11 @@
 import {
-	createPurchase,
+	createPurchaseWithCustomer,
 	deletePurchaseBySubscriptionId,
 	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { endSpan, logger, startSpan } from "@repo/logs";
 import Stripe from "stripe";
-import { setCustomerIdToEntity } from "../../lib/customer";
+import { requireEnv } from "../../lib/env";
 import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
@@ -22,11 +22,7 @@ export function getStripeClient() {
 		return stripeClient;
 	}
 
-	const stripeSecretKey = process.env.STRIPE_SECRET_KEY as string;
-
-	if (!stripeSecretKey) {
-		throw new Error("Missing env variable STRIPE_SECRET_KEY");
-	}
+	const stripeSecretKey = requireEnv("STRIPE_SECRET_KEY");
 
 	stripeClient = new Stripe(stripeSecretKey);
 
@@ -166,7 +162,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		});
 	}
 
-	if (isWebhookDuplicate("stripe", event.id)) {
+	if (await isWebhookDuplicate("stripe", event.id)) {
 		return new Response(null, { status: 204 });
 	}
 
@@ -198,22 +194,21 @@ export const webhookHandler: WebhookHandler = async (req) => {
 					});
 				}
 
-				await createPurchase({
-					organizationId: metadata?.organization_id || null,
-					userId: metadata?.user_id || null,
-					customerId:
-						typeof customer === "string"
-							? customer
-							: (customer?.id ?? null),
-					type: "ONE_TIME",
-					productId,
-				});
-
-				await setCustomerIdToEntity(
+				const custIdOneTime =
 					typeof customer === "string"
 						? customer
-						: (customer?.id ?? ""),
+						: (customer?.id ?? "");
+
+				await createPurchaseWithCustomer(
 					{
+						organizationId: metadata?.organization_id || null,
+						userId: metadata?.user_id || null,
+						customerId: custIdOneTime || null,
+						type: "ONE_TIME",
+						productId,
+					},
+					{
+						customerId: custIdOneTime,
 						organizationId: metadata?.organization_id,
 						userId: metadata?.user_id,
 					},
@@ -237,20 +232,22 @@ export const webhookHandler: WebhookHandler = async (req) => {
 						? customer
 						: (customer?.id ?? null);
 
-				await createPurchase({
-					subscriptionId: id,
-					organizationId: metadata?.organization_id || null,
-					userId: metadata?.user_id || null,
-					customerId: custId,
-					type: "SUBSCRIPTION",
-					productId,
-					status: event.data.object.status,
-				});
-
-				await setCustomerIdToEntity(custId ?? "", {
-					organizationId: metadata?.organization_id,
-					userId: metadata?.user_id,
-				});
+				await createPurchaseWithCustomer(
+					{
+						subscriptionId: id,
+						organizationId: metadata?.organization_id || null,
+						userId: metadata?.user_id || null,
+						customerId: custId,
+						type: "SUBSCRIPTION",
+						productId,
+						status: event.data.object.status,
+					},
+					{
+						customerId: custId ?? "",
+						organizationId: metadata?.organization_id,
+						userId: metadata?.user_id,
+					},
+				);
 
 				break;
 			}

@@ -6,6 +6,7 @@ import {
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { joinURL } from "ufo";
+import { requireEnv } from "../../lib/env";
 import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
@@ -16,11 +17,7 @@ import type {
 } from "../../types";
 
 export function creemFetch(path: string, init: Parameters<typeof fetch>[1]) {
-	const creemApiKey = process.env.CREEM_API_KEY as string;
-
-	if (!creemApiKey) {
-		throw new Error("Missing env variable CREEM_API_KEY");
-	}
+	const creemApiKey = requireEnv("CREEM_API_KEY");
 
 	const baseUrl =
 		process.env.NODE_ENV === "production"
@@ -164,12 +161,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		});
 	}
 
-	const secret = process.env.CREEM_WEBHOOK_SECRET as string;
-
+	const secret = process.env.CREEM_WEBHOOK_SECRET;
 	if (!secret) {
-		return new Response("Internal server error.", {
-			status: 500,
-		});
+		logger.error("[creem] CREEM_WEBHOOK_SECRET is not configured");
+		return new Response("Internal server error.", { status: 500 });
 	}
 
 	const bodyText = await req.text();
@@ -203,7 +198,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 	const creemEventId =
 		(payload.id as string) ??
 		`${payload.eventType}:${(payload.object as Record<string, unknown>)?.id ?? Date.now()}`;
-	if (isWebhookDuplicate("creem", creemEventId)) {
+	if (await isWebhookDuplicate("creem", creemEventId)) {
 		return new Response(null, { status: 204 });
 	}
 

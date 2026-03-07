@@ -465,7 +465,7 @@ export function WorkflowBuilder({
 						size="sm"
 						className="w-full border-dashed"
 						onClick={() =>
-							(window.location.href = `/${organizationSlug}/ai-agents`)
+							(window.location.href = `/app/${organizationSlug}/ai-agents`)
 						}
 					>
 						<PlusIcon className="mr-2 h-4 w-4" />

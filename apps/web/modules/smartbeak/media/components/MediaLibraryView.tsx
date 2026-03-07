@@ -77,9 +77,27 @@ export function MediaLibraryView({
 		}),
 	);
 
+	const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+	const ALLOWED_TYPES =
+		/^(image|video|audio)\/.+|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$/;
+
 	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) {
+			return;
+		}
+		if (file.size > MAX_FILE_SIZE) {
+			toastError(
+				"File too large",
+				`Maximum file size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`,
+			);
+			return;
+		}
+		if (!ALLOWED_TYPES.test(file.type)) {
+			toastError(
+				"Unsupported file type",
+				"Please upload an image, video, audio, PDF, or Word document.",
+			);
 			return;
 		}
 		setUploading(true);

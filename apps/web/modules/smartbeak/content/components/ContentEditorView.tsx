@@ -32,7 +32,7 @@ import { orpcClient } from "@shared/lib/orpc-client";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import DOMPurify from "dompurify";
+import DOMPurify from "isomorphic-dompurify";
 import {
 	ArrowLeftIcon,
 	BarChart3Icon,
@@ -53,9 +53,6 @@ import { ContentSeoSidebar } from "./ContentSeoSidebar";
 import { TiptapEditor } from "./TiptapEditor";
 
 function sanitizeHtml(html: string): string {
-	if (typeof window === "undefined") {
-		return html;
-	}
 	return DOMPurify.sanitize(html);
 }
 

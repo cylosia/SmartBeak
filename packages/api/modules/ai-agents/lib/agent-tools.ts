@@ -125,10 +125,10 @@ export const readUrlTool = tool({
 				.slice(0, 8000);
 
 			return { url, content: text, fetchedAt: new Date().toISOString() };
-		} catch (err) {
+		} catch (_err) {
 			return {
 				url,
-				error: err instanceof Error ? err.message : "Fetch failed",
+				error: "Fetch failed",
 				content: null,
 			};
 		} finally {

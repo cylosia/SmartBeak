@@ -6,14 +6,14 @@ import { resolveTextModel } from "../../lib/resolve-ai";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 const ideaSchema = z.object({
-	title: z.string(),
-	outline: z.string(),
-	keywords: z.array(z.string()),
-	contentType: z.string(),
+	title: z.string().max(200),
+	outline: z.string().max(1000),
+	keywords: z.array(z.string().max(100)).max(10),
+	contentType: z.string().max(50),
 	estimatedReadTime: z.number(),
 	seoScore: z.number(),
 });
-const ideasArraySchema = z.array(ideaSchema);
+const ideasArraySchema = z.array(ideaSchema).max(25);
 
 const SYSTEM_PROMPT = `You are a premium content strategist.
 Return ONLY a JSON array (no markdown fences) where each object has:

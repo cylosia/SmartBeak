@@ -76,7 +76,7 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 		if (sessionLoaded && user) {
 			router.replace(redirectPath);
 		}
-	}, [user, sessionLoaded]);
+	}, [user, sessionLoaded, router, redirectPath]);
 
 	const onSubmit = form.handleSubmit(async ({ email, password, name }) => {
 		try {

@@ -8,12 +8,11 @@ import {
 	updateSubscriptionItem,
 } from "@lemonsqueezy/lemonsqueezy.js";
 import {
-	createPurchase,
+	createPurchaseWithCustomer,
 	deletePurchaseBySubscriptionId,
 	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
-import { setCustomerIdToEntity } from "../../lib/customer";
 import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
@@ -40,20 +39,30 @@ export const createCheckoutLink: CreateCheckoutLink = async (options) => {
 	if (!process.env.LEMONSQUEEZY_STORE_ID) {
 		throw new Error("Missing LEMONSQUEEZY_STORE_ID environment variable");
 	}
+
+	const numericProductId = Number.parseInt(productId, 10);
+	if (
+		Number.isNaN(numericProductId) ||
+		numericProductId > Number.MAX_SAFE_INTEGER ||
+		numericProductId < 1
+	) {
+		throw new Error(`Invalid LemonSqueezy product ID: ${productId}`);
+	}
+
 	const response = await createCheckout(
 		process.env.LEMONSQUEEZY_STORE_ID,
 		productId,
 		{
 			productOptions: {
 				redirectUrl,
-				enabledVariants: [Number.parseInt(productId, 10)],
+				enabledVariants: [numericProductId],
 			},
 			checkoutData: {
 				email,
 				name,
 				variantQuantities: [
 					{
-						variantId: Number.parseInt(productId, 10),
+						variantId: numericProductId,
 						quantity: seats ?? 1,
 					},
 				],
@@ -179,25 +188,24 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 
 		const id = String(data.id);
 
-		if (isWebhookDuplicate("lemonsqueezy", `${eventName}:${id}`)) {
+		if (await isWebhookDuplicate("lemonsqueezy", `${eventName}:${id}`)) {
 			return new Response(null, { status: 204 });
 		}
 
 		switch (eventName) {
 			case "subscription_created": {
-				await createPurchase({
-					organizationId: customData.organization_id,
-					userId: customData.user_id,
-					subscriptionId: id,
-					customerId: String(data.attributes.customer_id),
-					productId: String(data.attributes.variant_id),
-					status: data.attributes.status,
-					type: "SUBSCRIPTION",
-				});
-
-				await setCustomerIdToEntity(
-					String(data.attributes.customer_id),
+				await createPurchaseWithCustomer(
 					{
+						organizationId: customData.organization_id,
+						userId: customData.user_id,
+						subscriptionId: id,
+						customerId: String(data.attributes.customer_id),
+						productId: String(data.attributes.variant_id),
+						status: data.attributes.status,
+						type: "SUBSCRIPTION",
+					},
+					{
+						customerId: String(data.attributes.customer_id),
 						organizationId: customData.organization_id,
 						userId: customData.user_id,
 					},
@@ -236,17 +244,16 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 				break;
 			}
 			case "order_created": {
-				await createPurchase({
-					organizationId: customData.organization_id,
-					userId: customData.user_id,
-					customerId: String(data.attributes.customer_id),
-					productId: String(data.attributes.product_id),
-					type: "ONE_TIME",
-				});
-
-				await setCustomerIdToEntity(
-					String(data.attributes.customer_id),
+				await createPurchaseWithCustomer(
 					{
+						organizationId: customData.organization_id,
+						userId: customData.user_id,
+						customerId: String(data.attributes.customer_id),
+						productId: String(data.attributes.product_id),
+						type: "ONE_TIME",
+					},
+					{
+						customerId: String(data.attributes.customer_id),
 						organizationId: customData.organization_id,
 						userId: customData.user_id,
 					},

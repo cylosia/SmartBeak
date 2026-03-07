@@ -1,11 +1,15 @@
 /**
  * Phase 3B — Workflow Streaming API Route
  *
- * GET /api/ai/stream/workflow?sessionId=<uuid>
+ * POST /api/ai/stream/workflow
+ * Body: { sessionId: string }
  *
  * Executes a workflow session and streams progress events back to the client
- * as Server-Sent Events (SSE). The session must have been created first via
- * the `initiateWorkflowRun` orpc procedure.
+ * as Server-Sent Events (SSE). Uses POST to ensure state-changing operations
+ * are not triggered by cross-origin GET requests (CSRF resistance).
+ *
+ * The session must have been created first via the `initiateWorkflowRun`
+ * orpc procedure.
  *
  * Event types:
  * - session_start: Workflow execution has begun.
@@ -31,7 +35,7 @@ import type { NextRequest } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
 	// ── Authentication ──────────────────────────────────────────────────────────
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session) {
@@ -40,9 +44,17 @@ export async function GET(request: NextRequest) {
 
 	const UUID_RE =
 		/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-	const sessionId = request.nextUrl.searchParams.get("sessionId");
+
+	let sessionId: string | null = null;
+	try {
+		const body = (await request.json()) as { sessionId?: string };
+		sessionId = body.sessionId ?? null;
+	} catch {
+		return new Response("Invalid JSON body", { status: 400 });
+	}
+
 	if (!sessionId || !UUID_RE.test(sessionId)) {
-		return new Response("Missing or invalid sessionId parameter", {
+		return new Response("Missing or invalid sessionId", {
 			status: 400,
 		});
 	}
@@ -150,13 +162,30 @@ export async function GET(request: NextRequest) {
 					status: "failed",
 					errorMessage:
 						err instanceof Error ? err.message : "Execution failed",
-				}).catch(() => {});
+				}).catch((e) => {
+					logger.error(
+						"[workflow-stream] Failed to persist session failure",
+						{
+							sessionId,
+							error: e instanceof Error ? e.message : String(e),
+						},
+					);
+				});
 			} finally {
 				if (abortController.signal.aborted) {
 					await updateSession(sessionId, {
 						status: "failed",
 						errorMessage: "Client disconnected",
-					}).catch(() => {});
+					}).catch((e) => {
+						logger.error(
+							"[workflow-stream] Failed to persist abort status",
+							{
+								sessionId,
+								error:
+									e instanceof Error ? e.message : String(e),
+							},
+						);
+					});
 				}
 				controller.close();
 			}

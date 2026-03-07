@@ -1,7 +1,7 @@
 /**
  * Phase 3B — useAgentStream Hook
  *
- * Consumes the Server-Sent Events stream from /api/ai/stream/workflow.
+ * Consumes the Server-Sent Events stream from POST /api/ai/stream/workflow.
  * Provides real-time updates on workflow execution progress, per-agent
  * outputs, and final cost/token metrics.
  */
@@ -79,13 +79,16 @@ export function useAgentStream(): UseAgentStreamReturn {
 			const controller = new AbortController();
 			abortRef.current = controller;
 
-			const url = `/api/ai/stream/workflow?sessionId=${encodeURIComponent(sessionId)}`;
-
 			(async () => {
 				try {
-					const response = await fetch(url, {
+					const response = await fetch("/api/ai/stream/workflow", {
+						method: "POST",
 						signal: controller.signal,
-						headers: { Accept: "text/event-stream" },
+						headers: {
+							Accept: "text/event-stream",
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({ sessionId }),
 					});
 
 					if (!response.ok) {

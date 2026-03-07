@@ -57,7 +57,7 @@ async function main() {
 	});
 
 	logger.success("User created successfully!");
-	logger.info(`Here is the password for the new user: ${adminPassword}`);
+	process.stdout.write(`Password: ${adminPassword}\n`);
 }
 
 main();

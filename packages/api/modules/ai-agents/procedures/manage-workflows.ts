@@ -190,7 +190,7 @@ export const deleteWorkflowProcedure = protectedProcedure
 
 /**
  * Creates a session record and returns the session ID.
- * The actual streaming execution is handled by the /api/ai/stream/workflow route.
+ * The actual streaming execution is handled by POST /api/ai/stream/workflow.
  */
 export const initiateWorkflowRun = protectedProcedure
 	.route({
@@ -237,7 +237,7 @@ export const initiateWorkflowRun = protectedProcedure
 
 		return {
 			sessionId: session.id,
-			streamUrl: `/api/ai/stream/workflow?sessionId=${session.id}`,
+			streamUrl: "/api/ai/stream/workflow",
 		};
 	});
 

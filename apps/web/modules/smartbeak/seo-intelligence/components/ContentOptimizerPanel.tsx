@@ -196,8 +196,11 @@ export function ContentOptimizerPanel({
 					{/* Input side */}
 					<div className="space-y-4">
 						<div className="space-y-1.5">
-							<Label className="text-xs">Title</Label>
+							<Label htmlFor="seo-title" className="text-xs">
+								Title
+							</Label>
 							<Input
+								id="seo-title"
 								placeholder="Your article title..."
 								value={title}
 								onChange={(
@@ -214,8 +217,11 @@ export function ContentOptimizerPanel({
 						</div>
 
 						<div className="space-y-1.5">
-							<Label className="text-xs">Meta Description</Label>
+							<Label htmlFor="seo-meta-desc" className="text-xs">
+								Meta Description
+							</Label>
 							<Input
+								id="seo-meta-desc"
 								placeholder="Brief description for search engines..."
 								value={metaDescription}
 								onChange={(
@@ -232,11 +238,15 @@ export function ContentOptimizerPanel({
 						</div>
 
 						<div className="space-y-1.5">
-							<Label className="text-xs flex items-center gap-1">
+							<Label
+								htmlFor="seo-keywords"
+								className="text-xs flex items-center gap-1"
+							>
 								<TagIcon className="h-3.5 w-3.5" />
 								Target Keywords (comma-separated)
 							</Label>
 							<Input
+								id="seo-keywords"
 								placeholder="e.g. crm software, best crm, sales tools"
 								value={keywordsInput}
 								onChange={(
@@ -246,8 +256,11 @@ export function ContentOptimizerPanel({
 						</div>
 
 						<div className="space-y-1.5">
-							<Label className="text-xs">Body Content</Label>
+							<Label htmlFor="seo-body" className="text-xs">
+								Body Content
+							</Label>
 							<Textarea
+								id="seo-body"
 								placeholder="Paste or type your article content here..."
 								value={body}
 								onChange={(

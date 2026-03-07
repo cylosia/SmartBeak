@@ -4,12 +4,12 @@ import {
 	WebhookVerificationError,
 } from "@polar-sh/sdk/webhooks.js";
 import {
-	createPurchase,
+	createPurchaseWithCustomer,
 	deletePurchaseBySubscriptionId,
 	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
-import { setCustomerIdToEntity } from "../../lib/customer";
+import { requireEnv } from "../../lib/env";
 import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
@@ -26,11 +26,7 @@ function getPolarClient() {
 		return polarClient;
 	}
 
-	const polarAccessToken = process.env.POLAR_ACCESS_TOKEN as string;
-
-	if (!polarAccessToken) {
-		throw new Error("Missing env variable POLAR_ACCESS_TOKEN");
-	}
+	const polarAccessToken = requireEnv("POLAR_ACCESS_TOKEN");
 
 	polarClient = new Polar({
 		accessToken: polarAccessToken,
@@ -92,12 +88,10 @@ export const cancelSubscription: CancelSubscription = async (id) => {
 };
 
 export const webhookHandler: WebhookHandler = async (req) => {
-	const polarWebhookSecret = process.env.POLAR_WEBHOOK_SECRET as string;
-
+	const polarWebhookSecret = process.env.POLAR_WEBHOOK_SECRET;
 	if (!polarWebhookSecret) {
-		return new Response("Internal server error.", {
-			status: 500,
-		});
+		logger.error("[polar] POLAR_WEBHOOK_SECRET is not configured");
+		return new Response("Internal server error.", { status: 500 });
 	}
 
 	try {
@@ -116,7 +110,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 
 		const polarEventId =
 			req.headers.get("webhook-id") ?? `${event.type}:${Date.now()}`;
-		if (isWebhookDuplicate("polar", polarEventId)) {
+		if (await isWebhookDuplicate("polar", polarEventId)) {
 			return new Response(null, { status: 204 });
 		}
 
@@ -135,19 +129,21 @@ export const webhookHandler: WebhookHandler = async (req) => {
 					});
 				}
 
-				await createPurchase({
-					organizationId:
-						(metadata?.organization_id as string) || null,
-					userId: (metadata?.user_id as string) || null,
-					customerId,
-					type: "ONE_TIME",
-					productId,
-				});
-
-				await setCustomerIdToEntity(customerId, {
-					organizationId: metadata?.organization_id as string,
-					userId: metadata?.user_id as string,
-				});
+				await createPurchaseWithCustomer(
+					{
+						organizationId:
+							(metadata?.organization_id as string) || null,
+						userId: (metadata?.user_id as string) || null,
+						customerId,
+						type: "ONE_TIME",
+						productId,
+					},
+					{
+						customerId,
+						organizationId: metadata?.organization_id as string,
+						userId: metadata?.user_id as string,
+					},
+				);
 
 				break;
 			}
@@ -155,20 +151,22 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				const { metadata, customerId, productId, id, status } =
 					event.data;
 
-				await createPurchase({
-					subscriptionId: id,
-					organizationId: metadata?.organization_id as string,
-					userId: metadata?.user_id as string,
-					customerId,
-					type: "SUBSCRIPTION",
-					productId,
-					status,
-				});
-
-				await setCustomerIdToEntity(customerId, {
-					organizationId: metadata?.organization_id as string,
-					userId: metadata?.user_id as string,
-				});
+				await createPurchaseWithCustomer(
+					{
+						subscriptionId: id,
+						organizationId: metadata?.organization_id as string,
+						userId: metadata?.user_id as string,
+						customerId,
+						type: "SUBSCRIPTION",
+						productId,
+						status,
+					},
+					{
+						customerId,
+						organizationId: metadata?.organization_id as string,
+						userId: metadata?.user_id as string,
+					},
+				);
 
 				break;
 			}

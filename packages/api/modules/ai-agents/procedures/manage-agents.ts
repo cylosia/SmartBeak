@@ -107,7 +107,10 @@ export const updateAgentProcedure = protectedProcedure
 			name: input.name,
 			description: input.description,
 			config: input.config
-				? { ...(existing.config as object), ...input.config }
+				? AiAgentConfigSchema.parse({
+						...(existing.config as object),
+						...input.config,
+					})
 				: undefined,
 			isActive: input.isActive,
 		});

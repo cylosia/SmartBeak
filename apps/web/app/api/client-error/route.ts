@@ -6,11 +6,15 @@ const MAX_BODY_BYTES = 8_192;
 const ipBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 10;
 const WINDOW_MS = 60_000;
+const MAX_BUCKETS = 10_000;
 
 function isRateLimited(ip: string): boolean {
 	const now = Date.now();
 	const bucket = ipBuckets.get(ip);
 	if (!bucket || now >= bucket.resetAt) {
+		if (ipBuckets.size >= MAX_BUCKETS && !ipBuckets.has(ip)) {
+			return true;
+		}
 		ipBuckets.set(ip, { count: 1, resetAt: now + WINDOW_MS });
 		return false;
 	}

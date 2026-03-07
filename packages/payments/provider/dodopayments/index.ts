@@ -1,11 +1,11 @@
 import {
-	createPurchase,
+	createPurchaseWithCustomer,
 	deletePurchaseBySubscriptionId,
 	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import DodoPayments from "dodopayments";
-import { setCustomerIdToEntity } from "../../lib/customer";
+import { requireEnv } from "../../lib/env";
 import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
@@ -22,17 +22,10 @@ export function getDodoPaymentsClient() {
 		return dodoPaymentsClient;
 	}
 
-	const dodoPaymentsApiKey = process.env.DODO_PAYMENTS_API_KEY as string;
-	const dodoPaymentsWebhookSecret = process.env
-		.DODO_PAYMENTS_WEBHOOK_SECRET as string;
-
-	if (!dodoPaymentsApiKey) {
-		throw new Error("Missing env variable DODO_PAYMENTS_API_KEY");
-	}
-
-	if (!dodoPaymentsWebhookSecret) {
-		throw new Error("Missing env variable DODO_PAYMENTS_WEBHOOK_SECRET");
-	}
+	const dodoPaymentsApiKey = requireEnv("DODO_PAYMENTS_API_KEY");
+	const dodoPaymentsWebhookSecret = requireEnv(
+		"DODO_PAYMENTS_WEBHOOK_SECRET",
+	);
 
 	dodoPaymentsClient = new DodoPayments({
 		bearerToken: dodoPaymentsApiKey,
@@ -164,7 +157,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			},
 		});
 
-		if (isWebhookDuplicate("dodopayments", webhookId)) {
+		if (await isWebhookDuplicate("dodopayments", webhookId)) {
 			return new Response(null, { status: 204 });
 		}
 
@@ -187,37 +180,41 @@ export const webhookHandler: WebhookHandler = async (req) => {
 					}
 
 					if (subscription_id) {
-						await createPurchase({
-							subscriptionId: subscription_id,
-							organizationId: metadata?.organization_id || null,
-							userId: metadata?.user_id || null,
-							customerId:
-								customer?.customer_id || customer?.email,
-							type: "SUBSCRIPTION",
-							productId,
-							status: "active",
-						});
+						const dodoCustId =
+							customer?.customer_id || customer?.email;
 
-						await setCustomerIdToEntity(
-							customer?.customer_id || customer?.email,
+						await createPurchaseWithCustomer(
 							{
+								subscriptionId: subscription_id,
+								organizationId:
+									metadata?.organization_id || null,
+								userId: metadata?.user_id || null,
+								customerId: dodoCustId,
+								type: "SUBSCRIPTION",
+								productId,
+								status: "active",
+							},
+							{
+								customerId: dodoCustId,
 								organizationId: metadata?.organization_id,
 								userId: metadata?.user_id,
 							},
 						);
 					} else {
-						await createPurchase({
-							organizationId: metadata?.organization_id || null,
-							userId: metadata?.user_id || null,
-							customerId:
-								customer?.customer_id || customer?.email,
-							type: "ONE_TIME",
-							productId: productId,
-						});
+						const dodoCustId =
+							customer?.customer_id || customer?.email;
 
-						await setCustomerIdToEntity(
-							customer?.customer_id || customer?.email,
+						await createPurchaseWithCustomer(
 							{
+								organizationId:
+									metadata?.organization_id || null,
+								userId: metadata?.user_id || null,
+								customerId: dodoCustId,
+								type: "ONE_TIME",
+								productId,
+							},
+							{
+								customerId: dodoCustId,
 								organizationId: metadata?.organization_id,
 								userId: metadata?.user_id,
 							},
@@ -235,19 +232,21 @@ export const webhookHandler: WebhookHandler = async (req) => {
 						status,
 					} = event.data;
 
-					await createPurchase({
-						subscriptionId: subscription_id,
-						organizationId: metadata?.organization_id || null,
-						userId: metadata?.user_id || null,
-						customerId: customer?.customer_id || customer?.email,
-						type: "SUBSCRIPTION",
-						productId: product_id,
-						status: status || "active",
-					});
+					const dodoSubCustId =
+						customer?.customer_id || customer?.email;
 
-					await setCustomerIdToEntity(
-						customer?.customer_id || customer?.email,
+					await createPurchaseWithCustomer(
 						{
+							subscriptionId: subscription_id,
+							organizationId: metadata?.organization_id || null,
+							userId: metadata?.user_id || null,
+							customerId: dodoSubCustId,
+							type: "SUBSCRIPTION",
+							productId: product_id,
+							status: status || "active",
+						},
+						{
+							customerId: dodoSubCustId,
 							organizationId: metadata?.organization_id,
 							userId: metadata?.user_id,
 						},

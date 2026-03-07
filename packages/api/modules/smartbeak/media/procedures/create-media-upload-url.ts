@@ -72,6 +72,7 @@ export const createMediaUploadUrl = protectedProcedure
 		}
 
 		const safeFileName = input.fileName
+			.replace(/\0/g, "")
 			.replace(/[/\\]/g, "_")
 			.replace(/\.\./g, "_");
 		const path = `${org.id}/${input.domainId}/${Date.now()}-${safeFileName}`;

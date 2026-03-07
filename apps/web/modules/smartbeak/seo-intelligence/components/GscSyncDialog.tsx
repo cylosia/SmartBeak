@@ -76,10 +76,11 @@ export function GscSyncDialog({
 
 				<div className="space-y-4 py-2">
 					<div className="space-y-1.5">
-						<Label className="text-xs">
+						<Label htmlFor="gsc-site-url" className="text-xs">
 							Site URL (GSC property)
 						</Label>
 						<Input
+							id="gsc-site-url"
 							placeholder="https://yourdomain.com"
 							value={siteUrl}
 							onChange={(
@@ -88,9 +89,13 @@ export function GscSyncDialog({
 						/>
 					</div>
 					<div className="space-y-1.5">
-						<Label className="text-xs">OAuth2 Access Token</Label>
+						<Label htmlFor="gsc-access-token" className="text-xs">
+							OAuth2 Access Token
+						</Label>
 						<Input
+							id="gsc-access-token"
 							type="password"
+							autoComplete="off"
 							placeholder="ya29...."
 							value={accessToken}
 							onChange={(
@@ -116,8 +121,11 @@ export function GscSyncDialog({
 					</div>
 					<div className="grid grid-cols-2 gap-3">
 						<div className="space-y-1.5">
-							<Label className="text-xs">Start Date</Label>
+							<Label htmlFor="gsc-start-date" className="text-xs">
+								Start Date
+							</Label>
 							<Input
+								id="gsc-start-date"
 								type="date"
 								value={startDate}
 								onChange={(
@@ -126,8 +134,11 @@ export function GscSyncDialog({
 							/>
 						</div>
 						<div className="space-y-1.5">
-							<Label className="text-xs">End Date</Label>
+							<Label htmlFor="gsc-end-date" className="text-xs">
+								End Date
+							</Label>
 							<Input
+								id="gsc-end-date"
 								type="date"
 								value={endDate}
 								onChange={(
