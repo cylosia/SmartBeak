@@ -29,9 +29,9 @@ export const createDomainProcedure = protectedProcedure
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
 
-		let domain: Awaited<ReturnType<typeof createDomain>>[number];
+		let rows: Awaited<ReturnType<typeof createDomain>>;
 		try {
-			[domain] = await createDomain({
+			rows = await createDomain({
 				orgId: org.id,
 				name: input.name,
 				slug: input.slug,
@@ -43,7 +43,16 @@ export const createDomainProcedure = protectedProcedure
 					message: "A domain with this slug already exists.",
 				});
 			}
-			throw err;
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create domain.",
+			});
+		}
+
+		const domain = rows[0];
+		if (!domain) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create domain.",
+			});
 		}
 
 		await audit({

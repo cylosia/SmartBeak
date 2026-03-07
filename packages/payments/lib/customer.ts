@@ -9,6 +9,10 @@ export async function setCustomerIdToEntity(
 	customerId: string,
 	{ organizationId, userId }: { organizationId?: string; userId?: string },
 ) {
+	if (!customerId) {
+		return;
+	}
+
 	if (organizationId) {
 		await updateOrganization({
 			id: organizationId,

@@ -13,6 +13,7 @@ import {
 	randomBytes,
 } from "node:crypto";
 import { ORPCError } from "@orpc/server";
+import { logger } from "@repo/logs";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96-bit IV for GCM
@@ -59,6 +60,13 @@ export function encryptConfig(data: Record<string, unknown>): Buffer {
  * Returns the original JSON-serializable object.
  */
 export function decryptConfig(data: Buffer): Record<string, unknown> {
+	const minLength = IV_LENGTH + TAG_LENGTH;
+	if (!data || data.length < minLength) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: "Failed to decrypt configuration.",
+		});
+	}
+
 	const key = getEncryptionKey();
 	const iv = data.subarray(0, IV_LENGTH);
 	const tag = data.subarray(data.length - TAG_LENGTH);
@@ -74,7 +82,11 @@ export function decryptConfig(data: Buffer): Record<string, unknown> {
 			string,
 			unknown
 		>;
-	} catch {
+	} catch (err) {
+		if (err instanceof ORPCError) {
+			throw err;
+		}
+		logger.error("[crypto] decryptConfig failed:", err);
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: "Failed to decrypt configuration.",
 		});

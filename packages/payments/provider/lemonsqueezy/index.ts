@@ -10,8 +10,7 @@ import {
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
-	getPurchaseBySubscriptionId,
-	updatePurchase,
+	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { setCustomerIdToEntity } from "../../lib/customer";
@@ -24,8 +23,11 @@ import type {
 } from "../../types";
 
 function initLemonsqueezyApi() {
+	if (!process.env.LEMONSQUEEZY_API_KEY) {
+		throw new Error("Missing LEMONSQUEEZY_API_KEY environment variable");
+	}
 	lemonSqueezySetup({
-		apiKey: process.env.LEMONSQUEEZY_API_KEY as string,
+		apiKey: process.env.LEMONSQUEEZY_API_KEY,
 	});
 }
 
@@ -34,8 +36,11 @@ export const createCheckoutLink: CreateCheckoutLink = async (options) => {
 
 	const { seats, productId, redirectUrl, email, name } = options;
 
+	if (!process.env.LEMONSQUEEZY_STORE_ID) {
+		throw new Error("Missing LEMONSQUEEZY_STORE_ID environment variable");
+	}
 	const response = await createCheckout(
-		String(process.env.LEMONSQUEEZY_STORE_ID),
+		process.env.LEMONSQUEEZY_STORE_ID,
 		productId,
 		{
 			productOptions: {
@@ -196,15 +201,9 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 			case "subscription_resumed": {
 				const subscriptionId = String(data.id);
 
-				const existingPurchase =
-					await getPurchaseBySubscriptionId(subscriptionId);
-
-				if (existingPurchase) {
-					await updatePurchase({
-						id: existingPurchase.id,
-						status: data.attributes.status,
-					});
-				}
+				await updatePurchaseBySubscriptionId(subscriptionId, {
+					status: data.attributes.status,
+				});
 
 				break;
 			}

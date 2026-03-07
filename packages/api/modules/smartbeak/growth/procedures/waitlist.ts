@@ -49,8 +49,8 @@ export const joinWaitlistProcedure = publicProcedure
 			return {
 				success: true,
 				alreadyJoined: true,
-				referralCode: existing.referralCode,
-				referralLink: `${getBaseUrl()}/waitlist?ref=${existing.referralCode}`,
+				referralCode: null,
+				referralLink: null,
 				position: null,
 			};
 		}
@@ -154,18 +154,15 @@ export const getWaitlistStatusProcedure = publicProcedure
 		summary: "Get waitlist status by email",
 	})
 	.input(z.object({ email: z.string().email() }))
-	.use(publicRateLimitMiddleware({ limit: 10, windowMs: 60_000 }))
+	.use(publicRateLimitMiddleware({ limit: 3, windowMs: 60_000 }))
 	.handler(async ({ input }) => {
 		const entry = await getWaitlistEntryByEmail(input.email);
 		if (!entry) {
 			return null;
 		}
-		const referralLink = `${getBaseUrl()}/waitlist?ref=${entry.referralCode}`;
 		return {
 			id: entry.id,
 			status: entry.status,
-			referralCode: entry.referralCode,
-			referralLink,
 			joinedAt: entry.joinedAt,
 		};
 	});

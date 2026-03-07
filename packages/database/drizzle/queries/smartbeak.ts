@@ -165,18 +165,23 @@ export async function updateDomain(
 	id: string,
 	data: Partial<{
 		name: string;
-		status: "active" | "pending" | "suspended" | "deployed";
+		status: "active" | "pending" | "suspended" | "deployed" | "error";
 		themeId: string;
 		deployedUrl: string | null;
 		registryData: Record<string, unknown> | null;
 		health: Record<string, unknown> | null;
 		lifecycle: Record<string, unknown> | null;
 	}>,
+	expectedStatus?: string,
 ) {
+	const conditions = [eq(domains.id, id)];
+	if (expectedStatus) {
+		conditions.push(eq(domains.status, expectedStatus));
+	}
 	return db
 		.update(domains)
 		.set({ ...data, updatedAt: new Date() })
-		.where(eq(domains.id, id))
+		.where(and(...conditions))
 		.returning();
 }
 

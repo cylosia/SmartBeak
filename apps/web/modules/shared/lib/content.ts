@@ -154,7 +154,8 @@ export function getLocalizedDocumentWithFallback<
 		.sort(
 			(a, b) =>
 				(a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1),
-		)[0];
+		)
+		.at(0);
 }
 
 export function slugifyHeadline(headline: string) {

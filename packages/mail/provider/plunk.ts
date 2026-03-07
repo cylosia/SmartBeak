@@ -13,7 +13,10 @@ export const send: SendEmailHandler = async ({
 	if (!process.env.PLUNK_API_KEY) {
 		throw new Error("Missing PLUNK_API_KEY environment variable");
 	}
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), 15_000);
 	const response = await fetch("https://api.useplunk.com/v1/send", {
+		signal: controller.signal,
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -29,6 +32,8 @@ export const send: SendEmailHandler = async ({
 			text,
 		}),
 	});
+
+	clearTimeout(timer);
 
 	if (!response.ok) {
 		const errorBody = await response.text();

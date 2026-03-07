@@ -111,7 +111,7 @@ export const getReferralStatsByCodeProcedure = publicProcedure
 		summary: "Get referral stats by code",
 	})
 	.input(z.object({ referralCode: z.string().min(1).max(64) }))
-	.use(publicRateLimitMiddleware({ limit: 15, windowMs: 60_000 }))
+	.use(publicRateLimitMiddleware({ limit: 3, windowMs: 60_000 }))
 	.handler(async ({ input }) => {
 		const referrer = await getWaitlistEntryByReferralCode(
 			input.referralCode,

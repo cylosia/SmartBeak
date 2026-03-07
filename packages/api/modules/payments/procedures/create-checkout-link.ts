@@ -54,6 +54,11 @@ export const createCheckoutLink = protectedProcedure
 						message: "You are not a member of this organization.",
 					});
 				}
+				if (membership.role !== "owner") {
+					throw new ORPCError("FORBIDDEN", {
+						message: "Only organization owners can manage billing.",
+					});
+				}
 			}
 
 			const customerId = await getCustomerIdFromEntity(

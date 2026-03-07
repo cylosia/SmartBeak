@@ -56,8 +56,11 @@ export const createEmailSeriesProcedure = protectedProcedure
 		// Send first step immediately via Resend if no delay
 		const firstStep = input.steps[0];
 		if (firstStep && firstStep.delayDays === 0) {
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), 15_000);
 			const res = await fetch(`${RESEND_API}/emails`, {
 				method: "POST",
+				signal: controller.signal,
 				headers: {
 					Authorization: `Bearer ${apiKey}`,
 					"Content-Type": "application/json",
@@ -70,6 +73,7 @@ export const createEmailSeriesProcedure = protectedProcedure
 					html: firstStep.htmlBody,
 				}),
 			});
+			clearTimeout(timer);
 			if (!res.ok) {
 				const errBody = await res.text().catch(() => "");
 				logger.error(

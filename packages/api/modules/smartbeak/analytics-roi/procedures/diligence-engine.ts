@@ -121,5 +121,11 @@ export const updateDiligenceCheck = protectedProcedure
 			details: { type: input.type, status: input.status },
 		});
 
-		return { check: updated[0] };
+		const check = updated[0];
+		if (!check) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to upsert diligence check.",
+			});
+		}
+		return { check };
 	});

@@ -84,5 +84,11 @@ export const trackBuyerSession = protectedProcedure
 			intent: input.intent,
 		});
 
-		return { session: session[0] };
+		const created = session[0];
+		if (!created) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create buyer session.",
+			});
+		}
+		return { session: created };
 	});

@@ -32,7 +32,7 @@ export const createContentItemProcedure = protectedProcedure
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
 		}
-		const [item] = await createContentItem({
+		const rows = await createContentItem({
 			domainId: input.domainId,
 			title: input.title,
 			body: input.body,
@@ -42,12 +42,18 @@ export const createContentItemProcedure = protectedProcedure
 				: undefined,
 			createdBy: user.id,
 		});
+		const item = rows[0];
+		if (!item) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create content item.",
+			});
+		}
 		await audit({
 			orgId: org.id,
 			actorId: user.id,
 			action: "content.created",
 			entityType: "content_item",
-			entityId: item?.id,
+			entityId: item.id,
 			details: { title: input.title, domainId: input.domainId },
 		});
 		return { item };

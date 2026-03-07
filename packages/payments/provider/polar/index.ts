@@ -6,8 +6,7 @@ import {
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
-	getPurchaseBySubscriptionId,
-	updatePurchase,
+	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { setCustomerIdToEntity } from "../../lib/customer";
@@ -168,15 +167,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			case "subscription.updated": {
 				const { id, status, productId } = event.data;
 
-				const existingPurchase = await getPurchaseBySubscriptionId(id);
-
-				if (existingPurchase) {
-					await updatePurchase({
-						id: existingPurchase.id,
-						status,
-						productId,
-					});
-				}
+				await updatePurchaseBySubscriptionId(id, {
+					status,
+					productId,
+				});
 
 				break;
 			}

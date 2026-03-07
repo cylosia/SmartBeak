@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import {
 	getFeatureFlagsForOrg,
 	getGuardrailsForOrg,
@@ -55,12 +56,18 @@ export const upsertFlag = protectedProcedure
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
-		const [flag] = await upsertFeatureFlag({
+		const rows = await upsertFeatureFlag({
 			orgId: org.id,
 			key: input.key,
 			enabled: input.enabled,
 			config: input.config,
 		});
+		const flag = rows[0];
+		if (!flag) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to upsert feature flag.",
+			});
+		}
 		return { flag };
 	});
 
@@ -82,11 +89,17 @@ export const upsertGuardrailProcedure = protectedProcedure
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
-		const [guardrail] = await upsertGuardrail({
+		const rows = await upsertGuardrail({
 			orgId: org.id,
 			rule: input.rule,
 			value: input.value,
 			enabled: input.enabled,
 		});
+		const guardrail = rows[0];
+		if (!guardrail) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to upsert guardrail.",
+			});
+		}
 		return { guardrail };
 	});

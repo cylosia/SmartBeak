@@ -1,8 +1,7 @@
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
-	getPurchaseBySubscriptionId,
-	updatePurchase,
+	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import Stripe from "stripe";
@@ -247,17 +246,15 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			}
 			case "customer.subscription.updated": {
 				const subscriptionId = event.data.object.id;
+				const updatedProductId =
+					event.data.object.items?.data[0]?.price?.id;
 
-				const existingPurchase =
-					await getPurchaseBySubscriptionId(subscriptionId);
-
-				if (existingPurchase) {
-					await updatePurchase({
-						id: existingPurchase.id,
-						status: event.data.object.status,
-						productId: event.data.object.items?.data[0]?.price?.id,
-					});
-				}
+				await updatePurchaseBySubscriptionId(subscriptionId, {
+					status: event.data.object.status,
+					...(updatedProductId
+						? { productId: updatedProductId }
+						: {}),
+				});
 
 				break;
 			}

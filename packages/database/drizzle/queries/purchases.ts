@@ -58,6 +58,19 @@ export async function updatePurchase(
 	return updated;
 }
 
+export async function updatePurchaseBySubscriptionId(
+	subscriptionId: string,
+	data: Omit<z.infer<typeof PurchaseUpdateSchema>, "id">,
+) {
+	const [updated] = await db
+		.update(purchase)
+		.set(data)
+		.where(eq(purchase.subscriptionId, subscriptionId))
+		.returning();
+
+	return updated ?? null;
+}
+
 export async function deletePurchaseBySubscriptionId(subscriptionId: string) {
 	await db
 		.delete(purchase)

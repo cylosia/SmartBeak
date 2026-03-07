@@ -58,6 +58,18 @@ export async function updatePurchase(
 	});
 }
 
+export async function updatePurchaseBySubscriptionId(
+	subscriptionId: string,
+	data: Partial<
+		Omit<z.infer<typeof PurchaseSchema>, "createdAt" | "updatedAt" | "id">
+	>,
+) {
+	return db.purchase.updateMany({
+		where: { subscriptionId },
+		data,
+	});
+}
+
 export async function deletePurchaseBySubscriptionId(subscriptionId: string) {
 	await db.purchase.delete({
 		where: {

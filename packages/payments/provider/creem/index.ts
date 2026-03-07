@@ -2,8 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
-	getPurchaseBySubscriptionId,
-	updatePurchase,
+	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { joinURL } from "ufo";
@@ -28,14 +27,17 @@ export function creemFetch(path: string, init: Parameters<typeof fetch>[1]) {
 			: "https://test-api.creem.io/v1";
 
 	const requestUrl = joinURL(baseUrl, path);
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), 15_000);
 
 	return fetch(requestUrl, {
 		...init,
+		signal: controller.signal,
 		headers: {
 			"x-api-key": creemApiKey,
 			"Content-Type": "application/json",
 		},
-	});
+	}).finally(() => clearTimeout(timer));
 }
 
 export const createCheckoutLink: CreateCheckoutLink = async (options) => {
@@ -110,12 +112,17 @@ export const setSubscriptionSeats: SetSubscriptionSeats = async ({
 
 	const { items } = (await response.json()) as { items: { id: string }[] };
 
+	const firstItem = items[0];
+	if (!firstItem) {
+		throw new Error("Subscription has no line items");
+	}
+
 	const updateResponse = await creemFetch(`/subscriptions/${id}`, {
 		method: "POST",
 		body: JSON.stringify({
 			items: [
 				{
-					id: items[0].id,
+					id: firstItem.id,
 					quantity: seats,
 				},
 			],
@@ -214,25 +221,22 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			}
 			case "subscription.active": {
 				const { id, customer, product, metadata } = payload.object;
-				const existingPurchase = await getPurchaseBySubscriptionId(id);
 
-				if (existingPurchase) {
-					await updatePurchase({
-						id: existingPurchase.id,
-						status: product.status,
-						productId: product.id,
-					});
-					break;
-				}
-
-				await createPurchase({
-					subscriptionId: id,
-					customerId: customer.id,
-					type: "SUBSCRIPTION",
+				const updated = await updatePurchaseBySubscriptionId(id, {
+					status: product.status,
 					productId: product.id,
-					organizationId: metadata?.organization_id || null,
-					userId: metadata?.user_id || null,
 				});
+
+				if (!updated) {
+					await createPurchase({
+						subscriptionId: id,
+						customerId: customer.id,
+						type: "SUBSCRIPTION",
+						productId: product.id,
+						organizationId: metadata?.organization_id || null,
+						userId: metadata?.user_id || null,
+					});
+				}
 
 				break;
 			}

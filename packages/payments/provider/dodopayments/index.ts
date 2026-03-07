@@ -1,8 +1,7 @@
 import {
 	createPurchase,
 	deletePurchaseBySubscriptionId,
-	getPurchaseBySubscriptionId,
-	updatePurchase,
+	updatePurchaseBySubscriptionId,
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import DodoPayments from "dodopayments";
@@ -255,16 +254,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				case "subscription.plan_changed": {
 					const { subscription_id, status, product_id } = event.data;
 
-					const existingPurchase =
-						await getPurchaseBySubscriptionId(subscription_id);
-
-					if (existingPurchase) {
-						await updatePurchase({
-							id: existingPurchase.id,
-							status: status,
-							productId: product_id,
-						});
-					}
+					await updatePurchaseBySubscriptionId(subscription_id, {
+						status: status,
+						productId: product_id,
+					});
 					break;
 				}
 

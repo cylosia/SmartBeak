@@ -110,7 +110,10 @@ export async function getOrganizationWithPurchasesAndMembersCount(
 			id: organizationId,
 		},
 		include: {
-			purchases: true,
+			purchases: {
+				orderBy: { createdAt: "desc" },
+				take: 100,
+			},
 			_count: {
 				select: {
 					members: true,

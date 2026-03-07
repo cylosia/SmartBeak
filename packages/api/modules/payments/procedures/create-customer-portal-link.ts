@@ -75,6 +75,9 @@ export const createCustomerPortalLink = protectedProcedure
 
 				return { customerPortalLink };
 			} catch (e) {
+				if (e instanceof ORPCError) {
+					throw e;
+				}
 				logger.error("Could not create customer portal link", e);
 				throw new ORPCError("INTERNAL_SERVER_ERROR");
 			}

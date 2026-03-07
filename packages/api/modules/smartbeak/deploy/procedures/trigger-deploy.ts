@@ -66,6 +66,18 @@ export const triggerDeploy = protectedProcedure
 		}
 
 		const themeId = input.themeId ?? domain.themeId ?? "landing-leadgen";
+
+		const [claimed] = await updateDomain(
+			domain.id,
+			{ status: "pending" },
+			domain.status,
+		);
+		if (!claimed) {
+			throw new ORPCError("CONFLICT", {
+				message: "A deployment is already in progress for this domain.",
+			});
+		}
+
 		const existingShards = await getSiteShardsForDomain(domain.id);
 		const nextVersion =
 			existingShards.length > 0
@@ -79,12 +91,11 @@ export const triggerDeploy = protectedProcedure
 		});
 
 		if (!shard) {
+			await updateDomain(domain.id, { status: "error" });
 			throw new ORPCError("INTERNAL_SERVER_ERROR", {
 				message: "Failed to create deployment shard.",
 			});
 		}
-
-		await updateDomain(domain.id, { status: "pending" });
 
 		await audit({
 			orgId: org.id,
@@ -251,6 +262,7 @@ export const triggerDeploy = protectedProcedure
 						? err.message
 						: "Unknown deployment error";
 				await updateSiteShard(shard.id, { status: "error" });
+				await updateDomain(domain.id, { status: "error" });
 				await audit({
 					orgId: org.id,
 					actorId: user.id,

@@ -1,9 +1,12 @@
 import { ORPCError, os } from "@orpc/server";
 import { auth } from "@repo/auth";
+import { errorHandlerMiddleware } from "./middleware/error-handler-middleware";
 
-export const publicProcedure = os.$context<{
-	headers: Headers;
-}>();
+export const publicProcedure = os
+	.$context<{
+		headers: Headers;
+	}>()
+	.use(errorHandlerMiddleware);
 
 export const protectedProcedure = publicProcedure.use(
 	async ({ context, next }) => {
