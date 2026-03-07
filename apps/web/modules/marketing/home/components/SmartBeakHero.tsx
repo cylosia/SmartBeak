@@ -212,7 +212,7 @@ export function SmartBeakHero() {
 													<div
 														className="h-full bg-primary/60 rounded-full"
 														style={{
-															width: `${[78, 65, 92][i]!}%`,
+															width: `${[78, 65, 92][i] ?? 78}%`,
 														}}
 													/>
 												</div>

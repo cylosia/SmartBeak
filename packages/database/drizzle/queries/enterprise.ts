@@ -5,6 +5,7 @@
  * The locked v9 smartbeak.ts schema is not modified.
  */
 
+import { logger } from "@repo/logs";
 import { and, desc, eq, gte, ilike, lte, sql } from "drizzle-orm";
 import { db } from "../client";
 
@@ -70,6 +71,7 @@ export async function createTeam(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 
@@ -139,6 +141,7 @@ export async function addTeamMember(data: {
 			set: { role: data.role },
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 
@@ -203,7 +206,7 @@ export async function createTeamActivity(data: {
 			details: data.details ?? null,
 		});
 	} catch (err) {
-		console.error("[createTeamActivity] Failed to log activity:", err);
+		logger.error("[createTeamActivity] Failed to log activity:", err);
 	}
 }
 
@@ -257,6 +260,7 @@ export async function upsertSsoProvider(data: {
 				})
 				.where(eq(enterpriseSsoProviders.id, existing.id))
 				.returning();
+			// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 			return rows[0]!;
 		}
 
@@ -272,6 +276,7 @@ export async function upsertSsoProvider(data: {
 				createdBy: data.createdBy,
 			})
 			.returning();
+		// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 		return rows[0]!;
 	});
 }
@@ -323,6 +328,7 @@ export async function createScimToken(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 
@@ -373,6 +379,7 @@ export async function upsertAuditRetention(data: {
 				})
 				.where(eq(enterpriseAuditRetention.id, existing.id))
 				.returning();
+			// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 			return rows[0]!;
 		}
 
@@ -387,6 +394,7 @@ export async function upsertAuditRetention(data: {
 				updatedBy: data.updatedBy,
 			})
 			.returning();
+		// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 		return rows[0]!;
 	});
 }
@@ -529,6 +537,7 @@ export async function upsertOrgTier(data: {
 				})
 				.where(eq(enterpriseOrgTier.id, existing.id))
 				.returning();
+			// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 			return rows[0]!;
 		}
 
@@ -543,6 +552,7 @@ export async function upsertOrgTier(data: {
 				periodEnd: data.periodEnd ?? null,
 			})
 			.returning();
+		// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 		return rows[0]!;
 	});
 }
@@ -587,6 +597,7 @@ export async function createOverageAlert(data: {
 		.insert(enterpriseOverageAlerts)
 		.values(data)
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 

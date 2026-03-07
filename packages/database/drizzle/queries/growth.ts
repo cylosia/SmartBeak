@@ -58,6 +58,7 @@ export async function createWaitlistEntry(data: {
 			status: "pending",
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 
@@ -154,6 +155,7 @@ export async function createReferral(data: {
 			expiresAt: data.expiresAt ?? null,
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 

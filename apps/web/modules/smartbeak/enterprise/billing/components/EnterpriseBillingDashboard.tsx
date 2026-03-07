@@ -688,14 +688,17 @@ export function EnterpriseBillingDashboard({
 									seats < 1 ||
 									setTierMutation.isPending
 								}
-								onClick={() =>
+								onClick={() => {
+									if (!selectedTierId) {
+										return;
+									}
 									setTierMutation.mutate({
 										organizationSlug,
-										tierId: selectedTierId!,
+										tierId: selectedTierId,
 										seats,
 										overageEnabled,
-									})
-								}
+									});
+								}}
 							>
 								{setTierMutation.isPending
 									? "Updating…"

@@ -119,6 +119,7 @@ function topologicalSort(graph: WorkflowGraph): WorkflowNode[] {
 	const sorted: WorkflowNode[] = [];
 
 	while (queue.length > 0) {
+		// biome-ignore lint/style/noNonNullAssertion: guarded by queue.length > 0
 		const node = queue.shift()!;
 		sorted.push(node);
 		for (const neighborId of adjacency.get(node.id) ?? []) {
@@ -181,6 +182,7 @@ export async function* executeWorkflow(
 			});
 		}
 
+		// biome-ignore lint/style/noNonNullAssertion: agentNodes is pre-filtered to only nodes with agentId
 		const agentIds = [...new Set(agentNodes.map((n) => n.agentId!))];
 		const agentList = await getAgentsByIds(agentIds);
 		const agentMap = new Map(agentList.map((a) => [a.id, a]));

@@ -149,7 +149,7 @@ export function getRateLimitConfig(
 ): RateLimitConfig {
 	const tierConfig =
 		RATE_LIMITS[tierName.toLowerCase()] ??
-		RATE_LIMITS["starter"] ??
-		RATE_LIMITS["growth"];
+		RATE_LIMITS.starter ??
+		RATE_LIMITS.growth;
 	return tierConfig?.[operation] ?? { limit: 100, windowSeconds: 3600 };
 }

@@ -64,7 +64,7 @@ function getActionColor(action: string): string {
 			return cls;
 		}
 	}
-	return ACTION_COLORS.default!;
+	return ACTION_COLORS.default ?? "text-gray-600 bg-gray-50";
 }
 
 const ENTITY_TYPES = [

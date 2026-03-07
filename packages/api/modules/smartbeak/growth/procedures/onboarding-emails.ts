@@ -98,6 +98,7 @@ export const triggerOnboardingSequenceProcedure = protectedProcedure
 		// Step 1 is sent immediately; steps 2 and 3 are queued (in production,
 		// use a job queue like Inngest or Trigger.dev — here we send step 1 only
 		// and return the full sequence plan for the queue to handle).
+		// biome-ignore lint/style/noNonNullAssertion: ONBOARDING_SEQUENCE is a non-empty static constant
 		const step1 = ONBOARDING_SEQUENCE[0]!;
 		try {
 			await sendEmail({

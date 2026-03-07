@@ -84,6 +84,7 @@ export async function createAgent(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 
@@ -165,6 +166,7 @@ export async function createWorkflow(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 
@@ -222,6 +224,7 @@ export async function createSession(data: {
 			startedAt: new Date(),
 		})
 		.returning();
+	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
 	return rows[0]!;
 }
 

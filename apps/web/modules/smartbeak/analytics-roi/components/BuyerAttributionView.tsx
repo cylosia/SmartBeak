@@ -60,7 +60,7 @@ export function BuyerAttributionView({
 
 	const domainQuery = useQuery(
 		orpc.smartbeak.analyticsRoi.getBuyerAttributionDomain.queryOptions({
-			input: { organizationSlug, domainId: domainId! },
+			input: { organizationSlug, domainId: domainId ?? "" },
 			enabled: isDomainLevel,
 		}),
 	);

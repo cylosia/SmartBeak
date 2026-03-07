@@ -30,10 +30,11 @@ export function GscSyncDialog({
 	onClose,
 	onSuccess,
 }: Props) {
-	const today = new Date().toISOString().split("T")[0]!;
-	const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-		.toISOString()
-		.split("T")[0]!;
+	const today = new Date().toISOString().split("T")[0] ?? "";
+	const thirtyDaysAgo =
+		new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+			.toISOString()
+			.split("T")[0] ?? "";
 
 	const [siteUrl, setSiteUrl] = useState("https://");
 	const [accessToken, setAccessToken] = useState("");

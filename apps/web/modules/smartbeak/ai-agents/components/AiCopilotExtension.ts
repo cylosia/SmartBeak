@@ -122,8 +122,8 @@ export const AiCopilotExtension = Extension.create<AiCopilotOptions>({
 
 			insertCopilotResult:
 				(text: string) =>
-				({ state, dispatch, editor }) => {
-					const { from, to, empty } = state.selection;
+				({ state, dispatch, editor: _editor }) => {
+					const { from, empty } = state.selection;
 					if (dispatch) {
 						const tr = empty
 							? state.tr.insertText(text, from)
@@ -215,7 +215,7 @@ export const AiCopilotExtension = Extension.create<AiCopilotOptions>({
 								span.className =
 									"ai-copilot-suggestion text-muted-foreground/50 italic pointer-events-none select-none";
 								span.setAttribute("data-suggestion", "true");
-								span.textContent = pluginState.suggestion!;
+								span.textContent = pluginState.suggestion ?? "";
 								return span;
 							},
 							{ side: 1 },
