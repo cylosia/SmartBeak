@@ -2,7 +2,7 @@ import { cn } from "@repo/ui";
 import { ClientProviders } from "@shared/components/ClientProviders";
 import { ConsentProvider } from "@shared/components/ConsentProvider";
 import { Inter, Libre_Baskerville } from "next/font/google";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import type { PropsWithChildren } from "react";
 
@@ -24,6 +24,8 @@ export async function Document({
 }: PropsWithChildren<{ locale: string }>) {
 	const cookieStore = await cookies();
 	const consentCookie = cookieStore.get("consent");
+	const headerStore = await headers();
+	const nonce = headerStore.get("x-nonce") ?? undefined;
 
 	return (
 		<html
@@ -31,6 +33,8 @@ export async function Document({
 			suppressHydrationWarning
 			className={cn(sansFont.variable, serifFont.variable)}
 		>
+			{/* biome-ignore lint/style/noHeadElement: App Router root shell requires raw head for CSP nonce */}
+			<head>{nonce && <meta name="csp-nonce" content={nonce} />}</head>
 			<body
 				className={cn(
 					"min-h-screen bg-background text-foreground antialiased",

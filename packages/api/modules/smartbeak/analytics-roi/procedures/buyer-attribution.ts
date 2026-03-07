@@ -19,7 +19,7 @@ export const getBuyerAttributionDomain = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 		}),
 	)
@@ -61,7 +61,7 @@ export const trackBuyerSession = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			sessionId: z.string().min(1),
 			buyerEmail: z.string().email().optional(),

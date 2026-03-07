@@ -19,7 +19,7 @@ export const updateKeyword = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			id: z.string().uuid(),
 			position: z.number().int().min(1).nullable().optional(),
 			volume: z.number().int().min(0).nullable().optional(),

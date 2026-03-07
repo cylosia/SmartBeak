@@ -106,6 +106,7 @@ Return the improved version with a brief summary of changes made.`,
 
 export const MAX_AGENTS_PER_WORKFLOW = 10;
 const MAX_SESSION_COST_CENTS = 500; // $5.00 hard ceiling per workflow session
+const MAX_WORKFLOW_DURATION_MS = 5 * 60 * 1000; // 5-minute hard ceiling per workflow
 
 // ─── Topological Sort ─────────────────────────────────────────────────────────
 
@@ -213,6 +214,16 @@ export async function* executeWorkflow(
 		for (const node of agentNodes) {
 			if (!node.agentId) {
 				continue;
+			}
+
+			const elapsed = Date.now() - startTime;
+			if (elapsed >= MAX_WORKFLOW_DURATION_MS) {
+				yield {
+					type: "error",
+					nodeId: node.id,
+					error: `Workflow execution stopped: exceeded ${MAX_WORKFLOW_DURATION_MS / 1000}s time limit.`,
+				};
+				break;
 			}
 
 			yield {

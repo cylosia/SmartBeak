@@ -8,3 +8,18 @@ export function inUuidArray(column: AnyColumn, ids: string[]): SQL {
 		sql`, `,
 	)}])`;
 }
+
+/**
+ * Extracts the first row from an INSERT...RETURNING result.
+ * Throws if the array is empty, which should never happen for a
+ * successful INSERT but guards against driver edge cases.
+ */
+export function firstOrThrow<T>(rows: T[], label = "row"): T {
+	const first = rows[0];
+	if (!first) {
+		throw new Error(
+			`Expected at least one ${label} from INSERT...RETURNING`,
+		);
+	}
+	return first;
+}

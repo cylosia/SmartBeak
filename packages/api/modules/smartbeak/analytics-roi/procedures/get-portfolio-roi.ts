@@ -35,8 +35,11 @@ export const getPortfolioRoi = protectedProcedure
 				totalValue: live.totalValue.toFixed(2),
 				avgRoi: live.avgRoi.toFixed(2),
 			}).catch((err) => {
-				logger.warn("[portfolio-roi] Failed to upsert summary", err);
-				return null;
+				logger.error("[portfolio-roi] Failed to upsert summary", {
+					error: err instanceof Error ? err.message : String(err),
+					orgId: org.id,
+					totalDomains: live.totalDomains,
+				});
 			});
 		}
 
@@ -52,7 +55,7 @@ export const getPortfolioTrendData = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			days: z.coerce.number().int().min(7).max(365).default(30),
 		}),
 	)

@@ -20,6 +20,10 @@ export default async function OrganizationFormPage({
 }) {
 	const { id } = await params;
 	const { backTo } = await searchParams;
+	const safeBackTo =
+		backTo?.startsWith("/") && !backTo.startsWith("//")
+			? backTo
+			: undefined;
 
 	const t = await getTranslations();
 	const queryClient = getServerQueryClient();
@@ -44,7 +48,9 @@ export default async function OrganizationFormPage({
 			<div>
 				<div className="mb-2 flex justify-start">
 					<Button variant="link" size="sm" asChild className="px-0">
-						<Link href={backTo ?? getAdminPath("/organizations")}>
+						<Link
+							href={safeBackTo ?? getAdminPath("/organizations")}
+						>
 							<ArrowLeftIcon className="mr-1.5 size-4" />
 							{t("admin.organizations.backToList")}
 						</Link>

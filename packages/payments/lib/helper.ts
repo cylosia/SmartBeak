@@ -10,9 +10,20 @@ type PurchaseWithoutTimestamps = Omit<
 
 const planEntries = Object.entries(config.plans);
 
+const INACTIVE_STATUSES = new Set([
+	"canceled",
+	"cancelled",
+	"expired",
+	"unpaid",
+	"past_due",
+	"incomplete_expired",
+]);
+
 function getActivePlanFromPurchases(purchases?: PurchaseWithoutTimestamps[]) {
 	const subscriptionPurchase = purchases?.find(
-		(purchase) => purchase.type === "SUBSCRIPTION",
+		(purchase) =>
+			purchase.type === "SUBSCRIPTION" &&
+			!INACTIVE_STATUSES.has(purchase.status ?? ""),
 	);
 
 	if (subscriptionPurchase) {

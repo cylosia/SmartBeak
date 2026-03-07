@@ -33,7 +33,7 @@ export const createPublishingJobProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			contentId: z.string().uuid().optional(),
 			target: z.enum(PUBLISH_TARGETS),

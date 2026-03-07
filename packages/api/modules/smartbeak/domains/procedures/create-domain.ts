@@ -15,7 +15,7 @@ export const createDomainProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			name: z.string().min(1).max(255),
 			slug: z
 				.string()

@@ -15,7 +15,7 @@ export const getDomain = protectedProcedure
 	.input(
 		z.object({
 			id: z.string().uuid(),
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 		}),
 	)
 	.handler(async ({ context: { user }, input }) => {

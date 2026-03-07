@@ -19,7 +19,7 @@ export const deleteMediaProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			id: z.string().uuid(),
 		}),
 	)

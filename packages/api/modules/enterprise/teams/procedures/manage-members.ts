@@ -30,7 +30,7 @@ export const listTeamMembers = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 		}),
 	)
@@ -57,7 +57,7 @@ export const addTeamMemberProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 			userId: z.string().min(1),
 			role: z.enum(["admin", "member"]).default("member"),
@@ -112,7 +112,7 @@ export const removeTeamMemberProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 			userId: z.string().min(1),
 		}),
@@ -165,7 +165,7 @@ export const updateTeamMemberRoleProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 			userId: z.string().min(1),
 			role: z.enum(["admin", "member"]),
@@ -223,7 +223,7 @@ export const listTeamActivityProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 			limit: z.number().int().min(1).max(100).default(50),
 			offset: z.number().int().min(0).default(0),

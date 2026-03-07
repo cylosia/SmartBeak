@@ -92,7 +92,7 @@ export const syncAhrefs = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			apiKey: z.string().min(1),
 			target: z.string().min(1),

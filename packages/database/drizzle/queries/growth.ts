@@ -6,6 +6,7 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "../client";
 import { referrals, waitlistEntries } from "../schema/growth";
+import { firstOrThrow } from "./helpers";
 
 // ─── Waitlist ─────────────────────────────────────────────────────────────────
 
@@ -58,8 +59,7 @@ export async function createWaitlistEntry(data: {
 			status: "pending",
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows, "waitlist entry");
 }
 
 export async function updateWaitlistEntryStatus(
@@ -155,8 +155,7 @@ export async function createReferral(data: {
 			expiresAt: data.expiresAt ?? null,
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows, "referral");
 }
 
 export async function getReferralsByReferrer(referrerId: string) {

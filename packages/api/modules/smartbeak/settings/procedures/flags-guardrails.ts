@@ -37,7 +37,7 @@ export const upsertFlag = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			key: z.string().min(1).max(100),
 			enabled: z.boolean().optional(),
 			config: z
@@ -80,7 +80,7 @@ export const upsertGuardrailProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			rule: z.string().min(1).max(100),
 			value: z.number().int().min(0),
 			enabled: z.boolean().optional(),

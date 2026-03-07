@@ -64,10 +64,10 @@ export const upsertIntegration = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			provider: z.enum(SUPPORTED_PROVIDERS),
 			config: z.object({
-				apiKey: z.string().min(1),
+				apiKey: z.string().min(1).max(2048),
 				siteUrl: z.string().url().optional(),
 			}),
 			enabled: z.boolean().default(true),
@@ -126,7 +126,7 @@ export const removeIntegration = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			provider: z.enum(SUPPORTED_PROVIDERS),
 		}),
 	)
@@ -154,7 +154,7 @@ export const testIntegration = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			provider: z.enum(SUPPORTED_PROVIDERS),
 		}),
 	)

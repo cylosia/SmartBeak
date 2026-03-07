@@ -50,7 +50,7 @@ export const generateAiIdeas = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			niche: z.string().max(255).optional(),
 			targetKeywords: z.array(z.string().max(100)).max(10).optional(),

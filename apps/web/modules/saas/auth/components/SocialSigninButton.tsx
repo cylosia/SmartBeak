@@ -33,6 +33,7 @@ export function SocialSigninButton({
 			onClick={() => onSignin()}
 			variant="secondary"
 			type="button"
+			aria-label={`Sign in with ${providerData.name}`}
 			className={className}
 		>
 			{providerData.icon && (

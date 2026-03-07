@@ -1,5 +1,11 @@
 import { ORPCError } from "@orpc/server";
-import { createMediaAsset, getDomainById } from "@repo/database";
+import {
+	createMediaAsset,
+	getDomainById,
+	getOrgTier,
+	getStorageUsageBytesForOrg,
+} from "@repo/database";
+import { logger } from "@repo/logs";
 import { getSignedUploadUrl } from "@repo/storage";
 import { getBaseUrl } from "@repo/utils";
 import z from "zod";
@@ -7,6 +13,8 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
+
+const DEFAULT_STORAGE_LIMIT_GB = 10;
 
 export const createMediaUploadUrl = protectedProcedure
 	.route({
@@ -40,6 +48,29 @@ export const createMediaUploadUrl = protectedProcedure
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
 		}
+
+		const [usageBytes, orgTier] = await Promise.all([
+			getStorageUsageBytesForOrg(org.id),
+			getOrgTier(org.id).catch(() => null),
+		]);
+		const limits = (orgTier?.tier as { limits?: { storageGb?: number } })
+			?.limits;
+		const storageGbLimit = limits?.storageGb ?? DEFAULT_STORAGE_LIMIT_GB;
+		if (storageGbLimit !== -1) {
+			const limitBytes = storageGbLimit * 1024 * 1024 * 1024;
+			const uploadSize = input.size ?? 0;
+			if (usageBytes + uploadSize > limitBytes) {
+				logger.warn("[media] Storage quota exceeded", {
+					orgId: org.id,
+					usageBytes,
+					limitBytes,
+				});
+				throw new ORPCError("PAYLOAD_TOO_LARGE", {
+					message: `Storage quota exceeded. Used ${(usageBytes / (1024 * 1024 * 1024)).toFixed(2)} GB of ${storageGbLimit} GB.`,
+				});
+			}
+		}
+
 		const safeFileName = input.fileName
 			.replace(/[/\\]/g, "_")
 			.replace(/\.\./g, "_");

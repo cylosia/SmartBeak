@@ -385,6 +385,7 @@ export const siteShards = pgTable(
 		version: integer("version").notNull(),
 		deployedUrl: text("deployed_url"),
 		status: text("status").default("deployed"),
+		errorMessage: text("error_message"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

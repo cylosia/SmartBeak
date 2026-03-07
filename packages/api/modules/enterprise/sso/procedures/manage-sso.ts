@@ -54,7 +54,7 @@ export const upsertSsoProviderProcedure = protectedProcedure
 	.input(
 		z.discriminatedUnion("type", [
 			z.object({
-				organizationSlug: z.string().min(1),
+				organizationSlug: z.string().min(1).max(255),
 				type: z.literal("saml"),
 				domain: z
 					.string()
@@ -75,7 +75,7 @@ export const upsertSsoProviderProcedure = protectedProcedure
 				}),
 			}),
 			z.object({
-				organizationSlug: z.string().min(1),
+				organizationSlug: z.string().min(1).max(255),
 				type: z.literal("oidc"),
 				domain: z
 					.string()
@@ -156,7 +156,7 @@ export const updateSsoStatusProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			providerId: z.string().uuid(),
 			status: z.enum(["active", "inactive", "testing"]),
 		}),
@@ -205,7 +205,7 @@ export const deleteSsoProviderProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			providerId: z.string().uuid(),
 		}),
 	)

@@ -6,6 +6,7 @@ import {
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { joinURL } from "ufo";
+import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
 	CreateCheckoutLink,
@@ -172,6 +173,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 	}
 
 	const bodyText = await req.text();
+	const MAX_WEBHOOK_BODY = 256 * 1024;
+	if (bodyText.length > MAX_WEBHOOK_BODY) {
+		return new Response("Payload too large.", { status: 413 });
+	}
 
 	const computedSignature = createHmac("sha256", secret)
 		.update(bodyText)
@@ -193,6 +198,13 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		payload = JSON.parse(bodyText);
 	} catch {
 		return new Response("Invalid JSON payload.", { status: 400 });
+	}
+
+	const creemEventId =
+		(payload.id as string) ??
+		`${payload.eventType}:${(payload.object as Record<string, unknown>)?.id ?? Date.now()}`;
+	if (isWebhookDuplicate("creem", creemEventId)) {
+		return new Response(null, { status: 204 });
 	}
 
 	try {
@@ -223,7 +235,7 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				const { id, customer, product, metadata } = payload.object;
 
 				const updated = await updatePurchaseBySubscriptionId(id, {
-					status: product.status,
+					status: "active",
 					productId: product.id,
 				});
 
@@ -243,6 +255,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			case "subscription.canceled":
 			case "subscription.expired": {
 				const { id } = payload.object;
+				logger.info("[creem] Subscription status transition", {
+					subscriptionId: id,
+					eventType: payload.eventType,
+				});
 				await deletePurchaseBySubscriptionId(id);
 				break;
 			}

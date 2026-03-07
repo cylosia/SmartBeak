@@ -39,13 +39,25 @@ export async function resolveSmartBeakOrg(slug: string): Promise<ResolvedOrg> {
 	}
 
 	const smartBeakOrg = (await cachedGetSmartBeakOrgBySlug(slug, async () => {
-		const [org] = await upsertSmartBeakOrg({
+		const rows = await upsertSmartBeakOrg({
 			id: crypto.randomUUID(),
 			name: supastarterOrg.name,
 			slug,
 		});
+		const org = rows[0];
+		if (!org) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to upsert SmartBeak organization.",
+			});
+		}
 		return org;
 	})) as Awaited<ReturnType<typeof upsertSmartBeakOrg>>[0];
+
+	if (!smartBeakOrg) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: "Failed to resolve SmartBeak organization.",
+		});
+	}
 
 	return { ...smartBeakOrg, supastarterOrgId: supastarterOrg.id };
 }

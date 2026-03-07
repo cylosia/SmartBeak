@@ -1,0 +1,44 @@
+{
+	"$schema": "https://unpkg.com/knip@5/schema.json",
+	"workspaces": {
+		".": {
+			"entry": ["server/index.ts"],
+			"ignoreDependencies": [
+				"@biomejs/biome",
+				"dotenv-cli",
+				"turbo",
+				"@repo/tsconfig"
+			]
+		},
+		"apps/web": {
+			"entry": [
+				"app/**/*.{ts,tsx}",
+				"modules/**/*.{ts,tsx}",
+				"instrumentation.ts",
+				"next.config.ts"
+			],
+			"ignoreDependencies": ["sharp"]
+		},
+		"apps/docs": {
+			"entry": [
+				"app/**/*.{ts,tsx}",
+				"lib/**/*.ts",
+				"components/**/*.tsx",
+				"source.config.ts"
+			]
+		},
+		"packages/*": {
+			"entry": ["index.ts", "**/*.ts", "**/*.tsx"],
+			"ignore": ["**/node_modules/**"]
+		}
+	},
+	"ignore": [
+		"**/*.test.ts",
+		"**/*.spec.ts",
+		"**/__tests__/**",
+		"**/dist/**",
+		"**/.next/**",
+		"**/build/**"
+	],
+	"ignoreDependencies": ["@repo/*"]
+}

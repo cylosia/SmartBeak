@@ -3,9 +3,10 @@ import {
 	deletePurchaseBySubscriptionId,
 	updatePurchaseBySubscriptionId,
 } from "@repo/database";
-import { logger } from "@repo/logs";
+import { endSpan, logger, startSpan } from "@repo/logs";
 import Stripe from "stripe";
 import { setCustomerIdToEntity } from "../../lib/customer";
+import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
 	CreateCheckoutLink,
@@ -165,6 +166,15 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		});
 	}
 
+	if (isWebhookDuplicate("stripe", event.id)) {
+		return new Response(null, { status: 204 });
+	}
+
+	const span = startSpan("stripe.webhook", {
+		eventType: event.type,
+		eventId: event.id,
+	});
+
 	try {
 		switch (event.type) {
 			case "checkout.session.completed": {
@@ -248,9 +258,16 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				const subscriptionId = event.data.object.id;
 				const updatedProductId =
 					event.data.object.items?.data[0]?.price?.id;
+				const newStatus = event.data.object.status;
+
+				logger.info("[stripe] Subscription status transition", {
+					subscriptionId,
+					status: newStatus,
+					eventType: event.type,
+				});
 
 				await updatePurchaseBySubscriptionId(subscriptionId, {
-					status: event.data.object.status,
+					status: newStatus,
 					...(updatedProductId
 						? { productId: updatedProductId }
 						: {}),
@@ -259,6 +276,11 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				break;
 			}
 			case "customer.subscription.deleted": {
+				logger.info("[stripe] Subscription deleted", {
+					subscriptionId: event.data.object.id,
+					eventType: event.type,
+				});
+
 				await deletePurchaseBySubscriptionId(event.data.object.id);
 
 				break;
@@ -270,8 +292,13 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				});
 		}
 
+		endSpan(span, "ok");
 		return new Response(null, { status: 204 });
 	} catch (error) {
+		endSpan(span, "error", {
+			errorMessage:
+				error instanceof Error ? error.message : String(error),
+		});
 		logger.error("[stripe] Webhook processing failed:", error);
 		return new Response("Webhook processing failed.", {
 			status: 400,

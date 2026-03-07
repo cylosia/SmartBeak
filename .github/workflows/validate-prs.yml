@@ -34,6 +34,19 @@ jobs:
             exit 1
           fi
           echo "No unsafe indexed property access patterns found."
+  dead-code:
+    name: Detect unused exports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: pnpm/action-setup@v4
+      - name: Install dependencies
+        run: pnpm install && pnpm --filter database generate
+      - name: Run knip
+        run: pnpm knip
   e2e:
     name: Run e2e tests
     timeout-minutes: 60

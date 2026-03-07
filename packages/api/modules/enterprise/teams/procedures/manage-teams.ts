@@ -45,7 +45,7 @@ export const createTeamProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			name: z.string().min(1, "Team name is required").max(100),
 			description: z.string().max(500).optional(),
 		}),
@@ -97,7 +97,7 @@ export const updateTeamProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 			name: z.string().min(1).max(100).optional(),
 			description: z.string().max(500).nullable().optional(),
@@ -156,7 +156,7 @@ export const deleteTeamProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			teamId: z.string().uuid(),
 		}),
 	)

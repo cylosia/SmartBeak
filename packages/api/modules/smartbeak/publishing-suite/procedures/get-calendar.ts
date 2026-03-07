@@ -15,7 +15,7 @@ export const getCalendarProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			from: z.string().datetime(),
 			to: z.string().datetime(),

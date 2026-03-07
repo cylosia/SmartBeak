@@ -126,7 +126,7 @@ export const deleteAgentProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			agentId: z.string().uuid(),
 		}),
 	)
@@ -153,10 +153,10 @@ export const seedDefaultAgents = protectedProcedure
 		summary:
 			"Seed the three default agents (Research, Writer, Editor) for an org",
 	})
-	.input(z.object({ organizationSlug: z.string().min(1) }))
+	.input(z.object({ organizationSlug: z.string().min(1).max(255) }))
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgEditor(org.supastarterOrgId, user.id);
 
 		const existing = await getActiveAgentsForOrg(org.id);
 		if (existing.length > 0) {

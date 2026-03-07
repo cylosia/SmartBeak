@@ -6,6 +6,7 @@ import {
 import { logger } from "@repo/logs";
 import DodoPayments from "dodopayments";
 import { setCustomerIdToEntity } from "../../lib/customer";
+import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
 	CreateCheckoutLink,
@@ -163,6 +164,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			},
 		});
 
+		if (isWebhookDuplicate("dodopayments", webhookId)) {
+			return new Response(null, { status: 204 });
+		}
+
 		try {
 			switch (event.type) {
 				case "payment.succeeded": {
@@ -254,6 +259,15 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				case "subscription.plan_changed": {
 					const { subscription_id, status, product_id } = event.data;
 
+					logger.info(
+						"[dodopayments] Subscription status transition",
+						{
+							subscriptionId: subscription_id,
+							status,
+							eventType: event.type,
+						},
+					);
+
 					await updatePurchaseBySubscriptionId(subscription_id, {
 						status: status,
 						productId: product_id,
@@ -262,6 +276,11 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				}
 
 				case "subscription.expired": {
+					logger.info("[dodopayments] Subscription expired", {
+						subscriptionId: event.data.subscription_id,
+						eventType: event.type,
+					});
+
 					await deletePurchaseBySubscriptionId(
 						event.data.subscription_id,
 					);

@@ -6,7 +6,7 @@ import {
 	updateDomain,
 	updateSiteShard,
 } from "@repo/database";
-import { logger } from "@repo/logs";
+import { endSpan, logger, startSpan } from "@repo/logs";
 import { fetchWithTimeout } from "@repo/utils";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
@@ -35,12 +35,16 @@ export const triggerDeploy = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			themeId: z.enum(THEME_IDS).optional(),
 		}),
 	)
 	.handler(async ({ context: { user }, input }) => {
+		const span = startSpan("deploy.trigger", {
+			domainId: input.domainId,
+			userId: user.id,
+		});
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
 
@@ -261,7 +265,10 @@ export const triggerDeploy = protectedProcedure
 					err instanceof Error
 						? err.message
 						: "Unknown deployment error";
-				await updateSiteShard(shard.id, { status: "error" });
+				await updateSiteShard(shard.id, {
+					status: "error",
+					errorMessage: message,
+				});
 				await updateDomain(domain.id, { status: "error" });
 				await audit({
 					orgId: org.id,
@@ -276,5 +283,6 @@ export const triggerDeploy = protectedProcedure
 			logger.error("[trigger-deploy] unhandled deploy failure:", fatal);
 		});
 
+		endSpan(span, "ok", { shardId: shard.id });
 		return { shard };
 	});

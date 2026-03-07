@@ -15,7 +15,7 @@ export const createContentItemProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			title: z.string().min(1).max(500),
 			body: z.string().max(500000).optional(),

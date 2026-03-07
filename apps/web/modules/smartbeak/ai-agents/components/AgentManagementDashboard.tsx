@@ -7,6 +7,7 @@
  * editing configurations, and seeding the three default agents.
  */
 
+import type { ListAgentsResponse } from "@repo/api/modules/ai-agents/types";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -182,26 +183,8 @@ export function AgentManagementDashboard({
 		onError: () => toastError("Error", "Failed to delete agent."),
 	});
 
-	const agents =
-		(
-			agentsQuery.data as unknown as
-				| {
-						agents: Array<{
-							id: string;
-							name: string;
-							description: string | null;
-							agentType: string;
-							isActive: boolean;
-							config: {
-								model?: string;
-								temperature?: number;
-								maxTokens?: number;
-							};
-							createdAt: Date | string;
-						}>;
-				  }
-				| undefined
-		)?.agents ?? [];
+	const agentsData = agentsQuery.data as ListAgentsResponse | undefined;
+	const agents = agentsData?.agents ?? [];
 
 	const handleCreate = () => {
 		createMutation.mutate({

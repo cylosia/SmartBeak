@@ -10,7 +10,8 @@
 		"lint": "biome lint",
 		"check": "biome check --write",
 		"clean": "turbo clean",
-		"format": "biome format --write"
+		"format": "biome format --write",
+		"knip": "knip"
 	},
 	"engines": {
 		"node": ">=20"
@@ -21,6 +22,7 @@
 		"@repo/tsconfig": "workspace:*",
 		"@types/node": "^25.3.5",
 		"dotenv-cli": "^11.0.0",
+		"knip": "^5.85.0",
 		"turbo": "^2.8.13",
 		"typescript": "5.9.3",
 		"vitest": "^4.0.18"

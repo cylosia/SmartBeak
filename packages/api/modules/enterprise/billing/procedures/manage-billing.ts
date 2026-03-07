@@ -74,7 +74,7 @@ export const setOrgTierProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			tierId: z.string().uuid(),
 			seats: z.number().int().min(1, "At least 1 seat is required"),
 			overageEnabled: z.boolean().default(false),
@@ -125,7 +125,7 @@ export const updateSeatsProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			seats: z.number().int().min(1, "At least 1 seat is required"),
 		}),
 	)

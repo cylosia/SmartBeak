@@ -24,7 +24,7 @@ export const listDlqJobsProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			limit: z.number().int().min(1).max(100).default(50),
 			offset: z.number().int().min(0).default(0),
 		}),
@@ -48,7 +48,7 @@ export const retryDlqJobProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			jobId: z.string().uuid(),
 		}),
 	)
@@ -82,7 +82,7 @@ export const bulkRetryDlqProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			jobIds: z.array(z.string().uuid()).min(1).max(50),
 		}),
 	)

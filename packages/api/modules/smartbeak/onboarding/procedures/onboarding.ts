@@ -31,7 +31,7 @@ export const completeOnboardingStep = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			step: z.string().min(1).max(100),
 		}),
 	)

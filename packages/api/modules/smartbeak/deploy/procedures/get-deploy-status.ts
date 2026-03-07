@@ -14,7 +14,7 @@ export const getDeployStatus = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 		}),
 	)
@@ -31,6 +31,8 @@ export const getDeployStatus = protectedProcedure
 
 		const shards = await getSiteShardsForDomain(domain.id);
 		const latest = shards[0] ?? null;
+		const isInProgress =
+			domain.status === "pending" || domain.status === "building";
 
 		return {
 			domain: {
@@ -42,5 +44,7 @@ export const getDeployStatus = protectedProcedure
 			},
 			latest,
 			shards,
+			isInProgress,
+			lastError: latest?.status === "error" ? latest.errorMessage : null,
 		};
 	});

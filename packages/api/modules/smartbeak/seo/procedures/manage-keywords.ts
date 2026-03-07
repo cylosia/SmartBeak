@@ -20,7 +20,7 @@ export const addKeyword = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			keyword: z.string().min(1).max(255),
 			volume: z.number().int().min(0).optional(),
@@ -54,7 +54,7 @@ export const removeKeyword = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			id: z.string().uuid(),
 		}),
 	)

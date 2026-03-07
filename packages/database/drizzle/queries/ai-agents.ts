@@ -24,6 +24,7 @@ import type {
 	AiMemoryContext,
 	WorkflowGraph,
 } from "../zod-ai-agents";
+import { firstOrThrow } from "./helpers";
 
 // ─── Agents ───────────────────────────────────────────────────────────────────
 
@@ -84,8 +85,7 @@ export async function createAgent(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows, "agent");
 }
 
 export async function updateAgent(
@@ -166,8 +166,7 @@ export async function createWorkflow(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows, "workflow");
 }
 
 export async function updateWorkflow(
@@ -224,8 +223,7 @@ export async function createSession(data: {
 			startedAt: new Date(),
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows, "session");
 }
 
 export async function updateSession(

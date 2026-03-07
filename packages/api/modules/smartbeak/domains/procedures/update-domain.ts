@@ -15,7 +15,7 @@ export const updateDomainProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			id: z.string().uuid(),
 			name: z.string().min(1).max(255).optional(),
 			status: z

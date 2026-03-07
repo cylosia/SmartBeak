@@ -115,7 +115,7 @@ export const syncGsc = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			siteUrl: z.string().url(),
 			accessToken: z.string().min(1),

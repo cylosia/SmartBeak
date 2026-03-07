@@ -10,6 +10,7 @@ import {
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { setCustomerIdToEntity } from "../../lib/customer";
+import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
 	CreateCheckoutLink,
@@ -106,11 +107,18 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			});
 		}
 
+		const rawBody = await req.text();
 		const event = validateEvent(
-			await req.text(),
+			rawBody,
 			Object.fromEntries(req.headers.entries()),
 			polarWebhookSecret,
 		);
+
+		const polarEventId =
+			req.headers.get("webhook-id") ?? `${event.type}:${Date.now()}`;
+		if (isWebhookDuplicate("polar", polarEventId)) {
+			return new Response(null, { status: 204 });
+		}
 
 		switch (event.type) {
 			case "order.created": {
@@ -167,6 +175,12 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			case "subscription.updated": {
 				const { id, status, productId } = event.data;
 
+				logger.info("[polar] Subscription status transition", {
+					subscriptionId: id,
+					status,
+					eventType: event.type,
+				});
+
 				await updatePurchaseBySubscriptionId(id, {
 					status,
 					productId,
@@ -176,6 +190,11 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			}
 			case "subscription.canceled": {
 				const { id } = event.data;
+
+				logger.info("[polar] Subscription canceled", {
+					subscriptionId: id,
+					eventType: event.type,
+				});
 
 				await deletePurchaseBySubscriptionId(id);
 

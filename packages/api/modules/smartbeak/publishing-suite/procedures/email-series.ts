@@ -80,6 +80,9 @@ export const createEmailSeriesProcedure = protectedProcedure
 					`[email-series] Failed to send first step via Resend (${res.status}):`,
 					errBody,
 				);
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to send first email in the series.",
+				});
 			}
 		}
 

@@ -34,6 +34,19 @@ export const GET = async (
 		return new Response("Invalid path", { status: 400 });
 	}
 
+	if (fileSegments.length >= 3) {
+		const orgId = fileSegments[0];
+		const orgs = await auth.api.listOrganizations({
+			headers: req.headers,
+		});
+		const isMember = (orgs as Array<{ id: string }>).some(
+			(o) => o.id === orgId,
+		);
+		if (!isMember) {
+			return new Response("Forbidden", { status: 403 });
+		}
+	}
+
 	const signedUrl = await getSignedUrl(filePath, {
 		bucket,
 		expiresIn: 60 * 60,

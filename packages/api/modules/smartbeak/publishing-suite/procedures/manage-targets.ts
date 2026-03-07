@@ -36,7 +36,7 @@ export const listPlatformTargetsProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 		}),
 	)
@@ -69,7 +69,7 @@ export const upsertPlatformTargetProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			target: z.enum(PUBLISH_TARGETS),
 			config: z
@@ -131,7 +131,7 @@ export const togglePlatformTargetProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			targetId: z.string().uuid(),
 			enabled: z.boolean(),
 		}),
@@ -188,7 +188,7 @@ export const deletePlatformTargetProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			targetId: z.string().uuid(),
 		}),
 	)

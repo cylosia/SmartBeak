@@ -8,6 +8,7 @@
 import { logger } from "@repo/logs";
 import { and, desc, eq, gte, ilike, lte, sql } from "drizzle-orm";
 import { db } from "../client";
+import { firstOrThrow } from "./helpers";
 
 function escapeLikePattern(pattern: string): string {
 	return pattern.replace(/[%_\\]/g, "\\$&");
@@ -71,8 +72,7 @@ export async function createTeam(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows);
 }
 
 export async function updateTeam(
@@ -141,8 +141,7 @@ export async function addTeamMember(data: {
 			set: { role: data.role },
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows);
 }
 
 export async function removeTeamMember(teamId: string, userId: string) {
@@ -260,8 +259,7 @@ export async function upsertSsoProvider(data: {
 				})
 				.where(eq(enterpriseSsoProviders.id, existing.id))
 				.returning();
-			// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-			return rows[0]!;
+			return firstOrThrow(rows);
 		}
 
 		const rows = await tx
@@ -276,8 +274,7 @@ export async function upsertSsoProvider(data: {
 				createdBy: data.createdBy,
 			})
 			.returning();
-		// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-		return rows[0]!;
+		return firstOrThrow(rows);
 	});
 }
 
@@ -328,8 +325,7 @@ export async function createScimToken(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows);
 }
 
 export async function deleteScimToken(tokenId: string) {
@@ -379,8 +375,7 @@ export async function upsertAuditRetention(data: {
 				})
 				.where(eq(enterpriseAuditRetention.id, existing.id))
 				.returning();
-			// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-			return rows[0]!;
+			return firstOrThrow(rows);
 		}
 
 		const rows = await tx
@@ -394,8 +389,7 @@ export async function upsertAuditRetention(data: {
 				updatedBy: data.updatedBy,
 			})
 			.returning();
-		// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-		return rows[0]!;
+		return firstOrThrow(rows);
 	});
 }
 
@@ -537,8 +531,7 @@ export async function upsertOrgTier(data: {
 				})
 				.where(eq(enterpriseOrgTier.id, existing.id))
 				.returning();
-			// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-			return rows[0]!;
+			return firstOrThrow(rows);
 		}
 
 		const rows = await tx
@@ -552,8 +545,7 @@ export async function upsertOrgTier(data: {
 				periodEnd: data.periodEnd ?? null,
 			})
 			.returning();
-		// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-		return rows[0]!;
+		return firstOrThrow(rows);
 	});
 }
 
@@ -597,8 +589,7 @@ export async function createOverageAlert(data: {
 		.insert(enterpriseOverageAlerts)
 		.values(data)
 		.returning();
-	// biome-ignore lint/style/noNonNullAssertion: INSERT...RETURNING always returns the row
-	return rows[0]!;
+	return firstOrThrow(rows);
 }
 
 // ─── Seed helpers (admin only) ────────────────────────────────────────────────

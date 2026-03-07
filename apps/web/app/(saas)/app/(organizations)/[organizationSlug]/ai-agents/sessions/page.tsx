@@ -1,5 +1,6 @@
 "use client";
 
+import type { ListSessionsResponse } from "@repo/api/modules/ai-agents/types";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -59,25 +60,8 @@ export default function SessionsPage({ params }: SessionsPageProps) {
 		}),
 	);
 
-	const sessions =
-		(
-			sessionsQuery.data as unknown as
-				| {
-						sessions: Array<{
-							id: string;
-							status: string;
-							costCents: number | null;
-							durationMs: number | null;
-							totalInputTokens: number | null;
-							totalOutputTokens: number | null;
-							createdAt: Date | string;
-							completedAt: Date | string | null;
-							errorMessage: string | null;
-							workflow: { name: string } | null;
-						}>;
-				  }
-				| undefined
-		)?.sessions ?? [];
+	const sessionsData = sessionsQuery.data as ListSessionsResponse | undefined;
+	const sessions = sessionsData?.sessions ?? [];
 
 	return (
 		<div className="space-y-6">

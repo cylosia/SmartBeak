@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Server } from "node:http";
 import {
 	insertDomainSchema,
@@ -23,11 +23,12 @@ function requireApiKey(req: Request, res: Response, next: NextFunction): void {
 		res.status(503).json({ message: "Server API key not configured" });
 		return;
 	}
-	if (typeof apiKey !== "string" || apiKey.length !== expected.length) {
+	if (typeof apiKey !== "string") {
 		res.status(401).json({ message: "Unauthorized" });
 		return;
 	}
-	const isValid = timingSafeEqual(Buffer.from(apiKey), Buffer.from(expected));
+	const hash = (v: string) => createHash("sha256").update(v).digest();
+	const isValid = timingSafeEqual(hash(apiKey), hash(expected));
 	if (!isValid) {
 		res.status(401).json({ message: "Unauthorized" });
 		return;

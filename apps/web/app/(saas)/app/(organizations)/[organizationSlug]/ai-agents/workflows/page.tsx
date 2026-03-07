@@ -1,5 +1,6 @@
 "use client";
 
+import type { ListWorkflowsResponse } from "@repo/api/modules/ai-agents/types";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -89,21 +90,10 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
 		onError: () => toastError("Error", "Failed to delete workflow."),
 	});
 
-	const workflows =
-		(
-			workflowsQuery.data as unknown as
-				| {
-						workflows: Array<{
-							id: string;
-							name: string;
-							description: string | null;
-							status: string;
-							createdAt: Date | string;
-							stepsJson: { nodes: unknown[] };
-						}>;
-				  }
-				| undefined
-		)?.workflows ?? [];
+	const workflowsData = workflowsQuery.data as
+		| ListWorkflowsResponse
+		| undefined;
+	const workflows = workflowsData?.workflows ?? [];
 
 	return (
 		<div className="space-y-6">

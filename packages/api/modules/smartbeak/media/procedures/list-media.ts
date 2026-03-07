@@ -18,7 +18,7 @@ export const listMedia = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			type: z.string().optional(),
 			limit: z.number().int().min(1).max(100).default(50),

@@ -29,7 +29,7 @@ export const getPortfolioTrendView = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			days: z.coerce.number().int().min(7).max(365).default(30),
 		}),
 	)

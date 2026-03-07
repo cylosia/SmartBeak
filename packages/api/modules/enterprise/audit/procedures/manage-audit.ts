@@ -37,7 +37,7 @@ export const searchAuditLogsProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			query: z.string().max(200).optional(),
 			entityType: z.string().max(100).optional(),
 			actorId: z.string().max(100).optional(),
@@ -76,7 +76,7 @@ export const exportAuditLogsProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			format: z.enum(["csv", "json"]).default("csv"),
 			startDate: z.string().datetime().optional(),
 			endDate: z.string().datetime().optional(),
@@ -189,7 +189,7 @@ export const setAuditRetentionProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			retentionDays: z
 				.number()
 				.int()

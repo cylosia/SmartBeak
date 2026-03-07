@@ -2,7 +2,7 @@ import { ORPCError } from "@orpc/server";
 import {
 	bulkCreatePublishingJobs,
 	bulkScheduleInputSchema,
-	getContentItemById,
+	getContentItemsByIds,
 	getDomainById,
 } from "@repo/database";
 import { protectedProcedure } from "../../../../orpc/procedures";
@@ -32,12 +32,19 @@ export const bulkScheduleProcedure = protectedProcedure
 				input.jobs.map((j) => j.contentId).filter(Boolean) as string[],
 			),
 		];
-		for (const cid of contentIds) {
-			const content = await getContentItemById(cid);
-			if (!content || content.domainId !== input.domainId) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: `Content item ${cid} does not belong to this domain.`,
-				});
+		if (contentIds.length > 0) {
+			const items = await getContentItemsByIds(contentIds);
+			const validIds = new Set(
+				items
+					.filter((c) => c.domainId === input.domainId)
+					.map((c) => c.id),
+			);
+			for (const cid of contentIds) {
+				if (!validIds.has(cid)) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: `Content item ${cid} does not belong to this domain.`,
+					});
+				}
 			}
 		}
 

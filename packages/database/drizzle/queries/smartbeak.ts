@@ -252,6 +252,16 @@ export async function getContentItemById(id: string) {
 	});
 }
 
+export async function getContentItemsByIds(ids: string[]) {
+	if (ids.length === 0) {
+		return [];
+	}
+	return db.query.contentItems.findMany({
+		where: (c, { and, isNull }) =>
+			and(inArray(c.id, ids), isNull(c.deletedAt)),
+	});
+}
+
 export async function createContentItem(data: {
 	domainId: string;
 	title: string;
@@ -316,6 +326,15 @@ export async function createContentRevision(data: {
 }
 
 // ─── Media Assets ─────────────────────────────────────────────────────────────
+
+export async function getStorageUsageBytesForOrg(orgId: string) {
+	const result = await db
+		.select({ total: sql<string>`coalesce(sum(${mediaAssets.size}), 0)` })
+		.from(mediaAssets)
+		.innerJoin(domains, eq(mediaAssets.domainId, domains.id))
+		.where(eq(domains.orgId, orgId));
+	return Number(result[0]?.total ?? 0);
+}
 
 export async function getMediaAssetsForDomain(
 	domainId: string,
@@ -731,7 +750,11 @@ export async function createSiteShard(data: {
 
 export async function updateSiteShard(
 	id: string,
-	data: Partial<{ deployedUrl: string; status: string }>,
+	data: Partial<{
+		deployedUrl: string;
+		status: string;
+		errorMessage: string | null;
+	}>,
 ) {
 	return db
 		.update(siteShards)

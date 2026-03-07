@@ -20,7 +20,7 @@ export const getKeywordDashboard = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			minVolume: z.number().int().min(0).optional(),
 			maxDifficulty: z.number().int().min(0).max(100).optional(),

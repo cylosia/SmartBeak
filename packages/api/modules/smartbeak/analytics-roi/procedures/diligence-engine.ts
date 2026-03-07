@@ -12,7 +12,7 @@ import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 const domainInput = z.object({
-	organizationSlug: z.string().min(1),
+	organizationSlug: z.string().min(1).max(255),
 	domainId: z.string().uuid(),
 });
 
@@ -82,7 +82,7 @@ export const updateDiligenceCheck = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			domainId: z.string().uuid(),
 			type: z.string().min(1),
 			status: z.enum(["pending", "passed", "failed", "skipped"]),

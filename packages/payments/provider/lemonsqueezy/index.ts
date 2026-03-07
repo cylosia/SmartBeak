@@ -14,6 +14,7 @@ import {
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { setCustomerIdToEntity } from "../../lib/customer";
+import { isWebhookDuplicate } from "../../lib/webhook-idempotency";
 import type {
 	CancelSubscription,
 	CreateCheckoutLink,
@@ -116,6 +117,10 @@ export const cancelSubscription: CancelSubscription = async (id) => {
 export const webhookHandler: WebhookHandler = async (req: Request) => {
 	try {
 		const text = await req.text();
+		const MAX_WEBHOOK_BODY = 256 * 1024;
+		if (text.length > MAX_WEBHOOK_BODY) {
+			return new Response("Payload too large.", { status: 413 });
+		}
 		const webhookSecret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
 		if (!webhookSecret) {
 			return new Response("Internal server error.", { status: 500 });
@@ -174,6 +179,10 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 
 		const id = String(data.id);
 
+		if (isWebhookDuplicate("lemonsqueezy", `${eventName}:${id}`)) {
+			return new Response(null, { status: 204 });
+		}
+
 		switch (eventName) {
 			case "subscription_created": {
 				await createPurchase({
@@ -201,6 +210,12 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 			case "subscription_resumed": {
 				const subscriptionId = String(data.id);
 
+				logger.info("[lemonsqueezy] Subscription status transition", {
+					subscriptionId,
+					status: data.attributes.status,
+					eventName,
+				});
+
 				await updatePurchaseBySubscriptionId(subscriptionId, {
 					status: data.attributes.status,
 				});
@@ -210,6 +225,11 @@ export const webhookHandler: WebhookHandler = async (req: Request) => {
 
 			case "subscription_expired": {
 				const subscriptionId = String(data.id);
+
+				logger.info("[lemonsqueezy] Subscription expired", {
+					subscriptionId,
+					eventName,
+				});
 
 				await deletePurchaseBySubscriptionId(subscriptionId);
 

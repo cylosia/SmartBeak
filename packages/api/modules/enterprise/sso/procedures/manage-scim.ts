@@ -12,12 +12,12 @@ import {
 	getScimTokensForOrg,
 } from "@repo/database";
 import z from "zod";
+import { enforceRateLimit } from "../../../../infrastructure/rate-limit-redis";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { generateScimToken, hashToken } from "../../lib/crypto";
 import { requireEnterpriseFeature } from "../../lib/feature-gate";
 import { requireOrgAdmin } from "../../lib/membership";
-import { checkRateLimit } from "../../lib/rate-limit";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const listScimTokens = protectedProcedure
@@ -48,7 +48,7 @@ export const createScimTokenProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			description: z.string().max(200).optional(),
 			expiresInDays: z.number().int().min(1).max(365).optional(),
 		}),
@@ -58,18 +58,10 @@ export const createScimTokenProcedure = protectedProcedure
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
 		await requireEnterpriseFeature(org.id, "scim");
 
-		// Rate limit: max 5 token creations per org per hour.
-		const rl = checkRateLimit(
-			`org:${org.id}:scim-token-create`,
-			5,
-			60 * 60 * 1000,
-		);
-		if (!rl.allowed) {
-			throw new ORPCError("TOO_MANY_REQUESTS", {
-				message:
-					"Too many token creation requests. Please try again later.",
-			});
-		}
+		await enforceRateLimit(`org:${org.id}:scim-token-create`, {
+			limit: 5,
+			windowSeconds: 3600,
+		});
 
 		const rawToken = generateScimToken();
 		const tokenHash = hashToken(rawToken);
@@ -115,7 +107,7 @@ export const deleteScimTokenProcedure = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			tokenId: z.string().uuid(),
 		}),
 	)

@@ -33,7 +33,7 @@ export const WaitlistEntrySchema = z.object({
 
 export const JoinWaitlistInputSchema = z.object({
 	email: z.string().email("Please enter a valid email address"),
-	referredBy: z.string().optional(),
+	referredBy: z.string().max(64).optional(),
 	firstName: z.string().max(100).optional(),
 	lastName: z.string().max(100).optional(),
 	company: z.string().max(200).optional(),

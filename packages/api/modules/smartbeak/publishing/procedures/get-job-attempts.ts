@@ -18,7 +18,7 @@ export const getJobAttempts = protectedProcedure
 	})
 	.input(
 		z.object({
-			organizationSlug: z.string().min(1),
+			organizationSlug: z.string().min(1).max(255),
 			jobId: z.string().uuid(),
 		}),
 	)
