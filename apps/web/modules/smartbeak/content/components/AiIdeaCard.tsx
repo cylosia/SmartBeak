@@ -35,12 +35,13 @@ function SeoScoreGauge({ score }: { score: number }) {
 	return (
 		<div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
 			<svg
-				aria-hidden="true"
 				className="-rotate-90"
 				width="64"
 				height="64"
 				viewBox="0 0 64 64"
+				aria-hidden="true"
 			>
+				<title>Score ring</title>
 				<circle
 					cx="32"
 					cy="32"

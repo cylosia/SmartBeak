@@ -236,7 +236,7 @@ export default function DomainDetailPage() {
 								data-testid="button-visit-site"
 								onClick={() =>
 									window.open(
-										latestShard.deployedUrl ?? "",
+										latestShard.deployedUrl!,
 										"_blank",
 									)
 								}
@@ -389,7 +389,7 @@ export default function DomainDetailPage() {
 											data-testid="button-open-external"
 											onClick={() =>
 												window.open(
-													latestShard.deployedUrl ?? "",
+													latestShard.deployedUrl!,
 													"_blank",
 												)
 											}
@@ -550,7 +550,7 @@ export default function DomainDetailPage() {
 															data-testid={`button-open-shard-${shard.id}`}
 															onClick={() =>
 																window.open(
-																	shard.deployedUrl ?? "",
+																	shard.deployedUrl!,
 																	"_blank",
 																)
 															}

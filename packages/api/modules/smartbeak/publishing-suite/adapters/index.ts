@@ -173,7 +173,7 @@ export const youtubeAdapter: PublishAdapter = {
 export const tiktokAdapter: PublishAdapter = {
 	name: "tiktok",
 	async publish(config, payload) {
-		const { accessToken } = config as {
+		const { accessToken, openId } = config as {
 			accessToken: string;
 			openId: string;
 		};

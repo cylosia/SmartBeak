@@ -14,19 +14,10 @@ import {
 } from "@repo/database";
 import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
-import { getBaseUrl } from "@repo/utils";
+import { escapeHtml, getBaseUrl } from "@repo/utils";
 import { z } from "zod";
 import { publicRateLimitMiddleware } from "../../../../orpc/middleware/rate-limit-middleware";
 import { adminProcedure, publicProcedure } from "../../../../orpc/procedures";
-
-function escapeHtml(unsafe: string): string {
-	return unsafe
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#039;");
-}
 
 function generateReferralCode(email: string): string {
 	const prefix = email
@@ -71,8 +62,9 @@ export const joinWaitlistProcedure = publicProcedure
 		}
 
 		const referralCode = generateReferralCode(email);
+		let _entry: Awaited<ReturnType<typeof createWaitlistEntry>>;
 		try {
-			await createWaitlistEntry({
+			_entry = await createWaitlistEntry({
 				email,
 				referralCode,
 				referredBy: referrerEntry ? referredBy : undefined,
@@ -98,11 +90,11 @@ export const joinWaitlistProcedure = publicProcedure
 		}
 
 		// Create a referral record for the referrer
-		if (referrerEntry) {
+		if (referrerEntry && referredBy) {
 			await createReferral({
 				referrerId: referrerEntry.id,
 				referredEmail: email,
-				referralCode: referredBy ?? "",
+				referralCode: referredBy,
 				expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
 			});
 		}

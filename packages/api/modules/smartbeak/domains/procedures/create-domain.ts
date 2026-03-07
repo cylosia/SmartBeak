@@ -29,7 +29,7 @@ export const createDomainProcedure = protectedProcedure
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
 
-		let domain: Awaited<ReturnType<typeof createDomain>>[number] | undefined;
+		let domain: Awaited<ReturnType<typeof createDomain>>[number];
 		try {
 			[domain] = await createDomain({
 				orgId: org.id,
@@ -51,7 +51,7 @@ export const createDomainProcedure = protectedProcedure
 			actorId: user.id,
 			action: "domain.created",
 			entityType: "domain",
-			entityId: domain?.id,
+			entityId: domain.id,
 			details: { name: input.name, slug: input.slug },
 		});
 		return { domain };

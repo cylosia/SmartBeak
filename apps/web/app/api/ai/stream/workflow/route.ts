@@ -17,7 +17,6 @@
  */
 
 import { executeWorkflow } from "@repo/api/modules/ai-agents/lib/agent-executor";
-import { enforceRateLimit } from "@repo/api/infrastructure/rate-limit-redis";
 import { auth } from "@repo/auth";
 import {
 	claimSession,
@@ -37,16 +36,6 @@ export async function GET(request: NextRequest) {
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session) {
 		return new Response("Unauthorized", { status: 401 });
-	}
-
-	// ── Rate limiting ──────────────────────────────────────────────────────────
-	try {
-		await enforceRateLimit(`workflow:${session.user.id}`, {
-			limit: 10,
-			windowSeconds: 60,
-		});
-	} catch {
-		return new Response("Too many requests", { status: 429 });
 	}
 
 	const UUID_RE =

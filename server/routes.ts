@@ -35,24 +35,6 @@ function requireApiKey(req: Request, res: Response, next: NextFunction): void {
 	next();
 }
 
-const deployRateLimit = new Map<string, { count: number; resetAt: number }>();
-const DEPLOY_LIMIT = 5;
-const DEPLOY_WINDOW_MS = 60 * 60 * 1000;
-
-function checkDeployRateLimit(domainId: string): boolean {
-	const now = Date.now();
-	const entry = deployRateLimit.get(domainId);
-	if (!entry || now >= entry.resetAt) {
-		deployRateLimit.set(domainId, { count: 1, resetAt: now + DEPLOY_WINDOW_MS });
-		return true;
-	}
-	if (entry.count >= DEPLOY_LIMIT) {
-		return false;
-	}
-	entry.count++;
-	return true;
-}
-
 export async function registerRoutes(
 	httpServer: Server,
 	app: Express,
@@ -157,10 +139,6 @@ export async function registerRoutes(
 
 	app.post("/api/domains/:id/deploy", async (req, res) => {
 		try {
-			if (!checkDeployRateLimit(req.params.id)) {
-				return res.status(429).json({ message: "Deploy rate limit exceeded. Max 5 per domain per hour." });
-			}
-
 			const domain = await storage.getDomain(req.params.id);
 			if (!domain) {
 				return res.status(404).json({ message: "Domain not found" });

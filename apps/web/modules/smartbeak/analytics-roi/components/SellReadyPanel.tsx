@@ -66,11 +66,12 @@ function ScoreRing({ score }: { score: number }) {
 	return (
 		<div className="relative flex h-36 w-36 items-center justify-center">
 			<svg
-				aria-hidden="true"
 				className="absolute -rotate-90"
 				width="144"
 				height="144"
+				aria-hidden="true"
 			>
+				<title>Score ring</title>
 				<circle
 					cx="72"
 					cy="72"

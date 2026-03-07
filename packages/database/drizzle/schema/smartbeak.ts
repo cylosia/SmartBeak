@@ -445,7 +445,6 @@ export const auditEvents = pgTable(
 	(t) => [
 		index("audit_events_org_id_idx").on(t.orgId),
 		index("audit_events_org_created_idx").on(t.orgId, t.createdAt),
-		index("audit_events_actor_id_idx").on(t.actorId),
 	],
 );
 

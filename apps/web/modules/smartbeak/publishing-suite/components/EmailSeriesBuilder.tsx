@@ -93,7 +93,12 @@ export function EmailSeriesBuilder({
 			if (target < 0 || target >= next.length) {
 				return s;
 			}
-			[next[i], next[target]] = [next[target] ?? next[i], next[i] ?? next[target]];
+			const a = next[i];
+			const b = next[target];
+			if (a !== undefined && b !== undefined) {
+				next[i] = b;
+				next[target] = a;
+			}
 			return next;
 		});
 	};
@@ -132,55 +137,70 @@ export function EmailSeriesBuilder({
 					{/* Series metadata */}
 					<div className="grid grid-cols-2 gap-3">
 						<div className="col-span-2">
-							<label htmlFor="email-series-name" className="mb-1 block text-xs font-medium text-muted-foreground">
+							<label
+								htmlFor="series-name"
+								className="mb-1 block text-xs font-medium text-muted-foreground"
+							>
 								Series Name
 							</label>
 							<Input
-								id="email-series-name"
+								id="series-name"
 								placeholder="e.g. Welcome Sequence"
 								value={seriesName}
 								onChange={(e) => setSeriesName(e.target.value)}
 							/>
 						</div>
 						<div>
-							<label htmlFor="email-series-from-name" className="mb-1 block text-xs font-medium text-muted-foreground">
+							<label
+								htmlFor="from-name"
+								className="mb-1 block text-xs font-medium text-muted-foreground"
+							>
 								From Name
 							</label>
 							<Input
-								id="email-series-from-name"
+								id="from-name"
 								placeholder="Your Name"
 								value={fromName}
 								onChange={(e) => setFromName(e.target.value)}
 							/>
 						</div>
 						<div>
-							<label htmlFor="email-series-from-email" className="mb-1 block text-xs font-medium text-muted-foreground">
+							<label
+								htmlFor="from-email"
+								className="mb-1 block text-xs font-medium text-muted-foreground"
+							>
 								From Email
 							</label>
 							<Input
-								id="email-series-from-email"
+								id="from-email"
 								placeholder="you@domain.com"
 								value={fromEmail}
 								onChange={(e) => setFromEmail(e.target.value)}
 							/>
 						</div>
 						<div>
-							<label htmlFor="email-series-reply-to" className="mb-1 block text-xs font-medium text-muted-foreground">
+							<label
+								htmlFor="reply-to"
+								className="mb-1 block text-xs font-medium text-muted-foreground"
+							>
 								Reply-To (optional)
 							</label>
 							<Input
-								id="email-series-reply-to"
+								id="reply-to"
 								placeholder="reply@domain.com"
 								value={replyTo}
 								onChange={(e) => setReplyTo(e.target.value)}
 							/>
 						</div>
 						<div>
-							<label htmlFor="email-series-start-date" className="mb-1 block text-xs font-medium text-muted-foreground">
+							<label
+								htmlFor="start-at"
+								className="mb-1 block text-xs font-medium text-muted-foreground"
+							>
 								Start Date (optional)
 							</label>
 							<Input
-								id="email-series-start-date"
+								id="start-at"
 								type="datetime-local"
 								value={startAt}
 								onChange={(e) => setStartAt(e.target.value)}
@@ -210,26 +230,14 @@ export function EmailSeriesBuilder({
 								className="rounded-lg border border-border bg-background"
 							>
 								{/* Step header */}
-								<div
-									role="button"
-									tabIndex={0}
-									className="flex cursor-pointer items-center gap-2 px-3 py-2"
+								<button
+									type="button"
+									className="flex w-full cursor-pointer items-center gap-2 px-3 py-2"
 									onClick={() =>
 										setExpandedStep(
 											expandedStep === i ? -1 : i,
 										)
 									}
-									onKeyDown={(e) => {
-										if (
-											e.key === "Enter" ||
-											e.key === " "
-										) {
-											e.preventDefault();
-											setExpandedStep(
-												expandedStep === i ? -1 : i,
-											);
-										}
-									}}
 								>
 									<GripVerticalIcon className="h-4 w-4 text-muted-foreground" />
 									<span className="flex-1 text-sm font-medium">
@@ -282,18 +290,21 @@ export function EmailSeriesBuilder({
 											<Trash2Icon className="h-3 w-3" />
 										</Button>
 									</div>
-								</div>
+								</button>
 
 								{/* Step body */}
 								{expandedStep === i && (
 									<div className="space-y-3 border-t border-border px-3 pb-3 pt-2">
 										<div className="grid grid-cols-2 gap-3">
 											<div>
-												<label htmlFor={`step-${i}-subject`} className="mb-1 block text-xs font-medium text-muted-foreground">
+												<label
+													htmlFor={`step-subject-${i}`}
+													className="mb-1 block text-xs font-medium text-muted-foreground"
+												>
 													Subject
 												</label>
 												<Input
-													id={`step-${i}-subject`}
+													id={`step-subject-${i}`}
 													placeholder="Email subject line"
 													value={step.subject}
 													onChange={(e) =>
@@ -305,11 +316,14 @@ export function EmailSeriesBuilder({
 												/>
 											</div>
 											<div>
-												<label htmlFor={`step-${i}-delay`} className="mb-1 block text-xs font-medium text-muted-foreground">
+												<label
+													htmlFor={`step-delay-${i}`}
+													className="mb-1 block text-xs font-medium text-muted-foreground"
+												>
 													Send after (days)
 												</label>
 												<Input
-													id={`step-${i}-delay`}
+													id={`step-delay-${i}`}
 													type="number"
 													min={0}
 													max={365}
@@ -329,11 +343,14 @@ export function EmailSeriesBuilder({
 											</div>
 										</div>
 										<div>
-											<label htmlFor={`step-${i}-body`} className="mb-1 block text-xs font-medium text-muted-foreground">
+											<label
+												htmlFor={`step-body-${i}`}
+												className="mb-1 block text-xs font-medium text-muted-foreground"
+											>
 												HTML Body
 											</label>
 											<Textarea
-												id={`step-${i}-body`}
+												id={`step-body-${i}`}
 												rows={5}
 												placeholder="<p>Your email content here...</p>"
 												value={step.htmlBody}

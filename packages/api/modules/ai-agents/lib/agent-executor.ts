@@ -119,7 +119,7 @@ function topologicalSort(graph: WorkflowGraph): WorkflowNode[] {
 	const sorted: WorkflowNode[] = [];
 
 	while (queue.length > 0) {
-		const node = queue.shift() as typeof queue[number];
+		const node = queue.shift()!;
 		sorted.push(node);
 		for (const neighborId of adjacency.get(node.id) ?? []) {
 			const newDegree = (inDegree.get(neighborId) ?? 1) - 1;
@@ -181,7 +181,7 @@ export async function* executeWorkflow(
 			});
 		}
 
-		const agentIds = [...new Set(agentNodes.map((n) => n.agentId ?? "").filter(Boolean))];
+		const agentIds = [...new Set(agentNodes.map((n) => n.agentId!))];
 		const agentList = await getAgentsByIds(agentIds);
 		const agentMap = new Map(agentList.map((a) => [a.id, a]));
 

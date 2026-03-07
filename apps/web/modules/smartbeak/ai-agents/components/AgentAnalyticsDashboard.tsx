@@ -55,7 +55,7 @@ function MetricCard({
 	value,
 	sub,
 	icon,
-	trend: _trend,
+	trend,
 }: {
 	title: string;
 	value: string | number;

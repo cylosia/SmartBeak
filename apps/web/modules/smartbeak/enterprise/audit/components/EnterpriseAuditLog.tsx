@@ -64,7 +64,7 @@ function getActionColor(action: string): string {
 			return cls;
 		}
 	}
-	return ACTION_COLORS.default ?? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
+	return ACTION_COLORS.default!;
 }
 
 const ENTITY_TYPES = [
@@ -429,10 +429,7 @@ export function EnterpriseAuditLog({
 													</TableCell>
 													<TableCell className="text-sm text-muted-foreground font-mono">
 														{event.actorId
-															? `${event.actorId.slice(
-																	0,
-																	8,
-																)}…`
+															? `${event.actorId.slice(0, 8)}…`
 															: "system"}
 													</TableCell>
 													<TableCell>

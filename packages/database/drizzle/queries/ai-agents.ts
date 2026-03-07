@@ -84,7 +84,7 @@ export async function createAgent(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function updateAgent(
@@ -165,7 +165,7 @@ export async function createWorkflow(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function updateWorkflow(
@@ -222,7 +222,7 @@ export async function createSession(data: {
 			startedAt: new Date(),
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function updateSession(

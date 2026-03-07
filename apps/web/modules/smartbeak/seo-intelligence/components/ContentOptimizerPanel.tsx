@@ -107,8 +107,8 @@ function ScoreBar({
 }
 
 export function ContentOptimizerPanel({
-	organizationSlug: _organizationSlug,
-	domainId: _domainId,
+	organizationSlug,
+	domainId,
 	onClose,
 }: Props) {
 	const [title, setTitle] = useState("");

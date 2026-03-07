@@ -311,24 +311,18 @@ export default function DomainsPage() {
 									<div className="flex items-start justify-between gap-2 mb-3">
 										<div className="flex items-center gap-2 min-w-0">
 											<Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-											<span
-												role="button"
-												tabIndex={0}
-												className="font-semibold truncate cursor-pointer"
+											<button
+												type="button"
+												className="font-semibold truncate cursor-pointer bg-transparent border-0 p-0 text-left"
 												data-testid={`link-domain-${domain.id}`}
 												onClick={() =>
 													setLocation(
 														`/domains/${domain.id}`,
 													)
 												}
-												onKeyDown={(e) => {
-													if (e.key === "Enter" || e.key === " ") {
-														setLocation(`/domains/${domain.id}`);
-													}
-												}}
 											>
 												{domain.name}
-											</span>
+											</button>
 										</div>
 										<Button
 											size="icon"
@@ -429,11 +423,15 @@ export default function DomainsPage() {
 												data-testid={`button-visit-${domain.id}`}
 												onClick={(e) => {
 													e.stopPropagation();
-												window.open(
-													domain.latestShard
-														?.deployedUrl ?? "",
-													"_blank",
-												);
+													const url =
+														domain.latestShard
+															?.deployedUrl;
+													if (url) {
+														window.open(
+															url,
+															"_blank",
+														);
+													}
 												}}
 											>
 												<ExternalLink className="w-4 h-4" />

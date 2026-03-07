@@ -14,7 +14,7 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
-import { getAdapter } from "../adapters";
+import { getAdapter, type PublishResult } from "../adapters";
 
 const MAX_ATTEMPTS = 3;
 
@@ -145,7 +145,7 @@ export const executePublishingJobProcedure = protectedProcedure
 		await updatePublishingJobStatus(input.jobId, "running");
 
 		// Execute
-		let result: Awaited<ReturnType<typeof adapter.publish>>;
+		let result: PublishResult;
 		try {
 			result = await adapter.publish(config, payload);
 		} catch (err) {

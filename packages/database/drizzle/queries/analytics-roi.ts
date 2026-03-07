@@ -232,31 +232,29 @@ export async function runDiligenceChecksForDomain(domainId: string) {
 // ─── Sell-Ready Score ────────────────────────────────────────────────────────
 
 export async function getSellReadyScore(domainId: string) {
-	const [domain, diligence, decay, sessionCountResult, timeline] =
-		await Promise.all([
-			db.query.domains.findFirst({ where: eq(domains.id, domainId) }),
-			getDiligenceReport(domainId),
-			db.query.monetizationDecaySignals.findMany({
-				where: eq(monetizationDecaySignals.domainId, domainId),
-				orderBy: [desc(monetizationDecaySignals.recordedAt)],
-				limit: 10,
-			}),
-			db
-				.select({ count: sql<number>`count(*)::int` })
-				.from(buyerSessions)
-				.where(eq(buyerSessions.domainId, domainId)),
-			db.query.timelineEvents.findMany({
-				where: eq(timelineEvents.domainId, domainId),
-				orderBy: [desc(timelineEvents.createdAt)],
-				limit: 20,
-			}),
-		]);
+	const [domain, diligence, decay, buyerSess, timeline] = await Promise.all([
+		db.query.domains.findFirst({ where: eq(domains.id, domainId) }),
+		getDiligenceReport(domainId),
+		db.query.monetizationDecaySignals.findMany({
+			where: eq(monetizationDecaySignals.domainId, domainId),
+			orderBy: [desc(monetizationDecaySignals.recordedAt)],
+			limit: 10,
+		}),
+		db.query.buyerSessions.findMany({
+			where: eq(buyerSessions.domainId, domainId),
+			limit: 1000,
+		}),
+		db.query.timelineEvents.findMany({
+			where: eq(timelineEvents.domainId, domainId),
+			orderBy: [desc(timelineEvents.createdAt)],
+			limit: 20,
+		}),
+	]);
 
 	if (!domain) {
 		return null;
 	}
 
-	const buyerSessionCount = sessionCountResult[0]?.count ?? 0;
 	const healthScore = extractHealthScore(domain.health);
 	const diligenceScore = Number.isFinite(diligence.score)
 		? diligence.score
@@ -268,7 +266,7 @@ export async function getSellReadyScore(domainId: string) {
 					return sum + (Number.isFinite(val) ? val : 0);
 				}, 0) / decay.length
 			: 1;
-	const buyerInterest = Math.min(buyerSessionCount * 5, 30);
+	const buyerInterest = Math.min(buyerSess.length * 5, 30);
 	const timelineActivity = Math.min(timeline.length * 2, 20);
 
 	const rawScore =
@@ -308,7 +306,7 @@ export async function getSellReadyScore(domainId: string) {
 			priority: "high",
 		});
 	}
-	if (buyerSessionCount < 5) {
+	if (buyerSess.length < 5) {
 		recommendations.push({
 			area: "Buyer Interest",
 			message:
@@ -338,74 +336,55 @@ export async function getSellReadyScore(domainId: string) {
 		domain,
 		diligence,
 		avgDecay,
-		buyerSessionCount,
+		buyerSessionCount: buyerSess.length,
 	};
 }
 
 // ─── Buyer Attribution ───────────────────────────────────────────────────────
 
 export async function getBuyerAttributionForDomain(domainId: string) {
-	const domainFilter = eq(buyerSessions.domainId, domainId);
+	const sessions = await db.query.buyerSessions.findMany({
+		where: eq(buyerSessions.domainId, domainId),
+		orderBy: [desc(buyerSessions.createdAt)],
+		limit: 5000,
+	});
 
-	const [
-		intentBreakdown,
-		conversionResult,
-		dailyTrend,
-		sessions,
-	] = await Promise.all([
-		db
-			.select({
-				intent: sql<string>`COALESCE(${buyerSessions.intent}, 'unknown')`,
-				count: sql<number>`count(*)::int`,
-			})
-			.from(buyerSessions)
-			.where(domainFilter)
-			.groupBy(buyerSessions.intent),
+	// Attribution breakdown by intent
+	const intentMap = sessions.reduce<Record<string, number>>((acc, s) => {
+		const intent = s.intent ?? "unknown";
+		acc[intent] = (acc[intent] ?? 0) + 1;
+		return acc;
+	}, {});
 
-		db
-			.select({
-				total: sql<number>`count(*)::int`,
-				converted: sql<number>`count(*) FILTER (WHERE ${buyerSessions.buyerEmail} IS NOT NULL)::int`,
-			})
-			.from(buyerSessions)
-			.where(domainFilter),
-
-		db
-			.select({
-				date: sql<string>`DATE(${buyerSessions.createdAt})`,
-				count: sql<number>`count(*)::int`,
-			})
-			.from(buyerSessions)
-			.where(domainFilter)
-			.groupBy(sql`DATE(${buyerSessions.createdAt})`)
-			.orderBy(sql`DATE(${buyerSessions.createdAt})`)
-			.limit(30),
-
-		db.query.buyerSessions.findMany({
-			where: domainFilter,
-			orderBy: [desc(buyerSessions.createdAt)],
-			limit: 100,
-		}),
-	]);
-
-	const total = conversionResult[0]?.total ?? 0;
-	const converted = conversionResult[0]?.converted ?? 0;
+	// Conversion path: sessions with buyer email = converted
+	const converted = sessions.filter((s) => s.buyerEmail).length;
 	const conversionRate =
-		total > 0 ? Math.round((converted / total) * 100) : 0;
+		sessions.length > 0
+			? Math.round((converted / sessions.length) * 100)
+			: 0;
+
+	// Timeline: group by day
+	const byDay = sessions.reduce<Record<string, number>>((acc, s) => {
+		const day = s.createdAt.toISOString().split("T")[0];
+		acc[day] = (acc[day] ?? 0) + 1;
+		return acc;
+	}, {});
+
+	const dailyTrend = Object.entries(byDay)
+		.sort(([a], [b]) => a.localeCompare(b))
+		.slice(-30)
+		.map(([date, count]) => ({ date, count }));
 
 	return {
 		sessions,
-		total,
+		total: sessions.length,
 		converted,
 		conversionRate,
-		intentBreakdown: intentBreakdown.map((r) => ({
-			intent: r.intent,
-			count: r.count,
+		intentBreakdown: Object.entries(intentMap).map(([intent, count]) => ({
+			intent,
+			count,
 		})),
-		dailyTrend: dailyTrend.map((r) => ({
-			date: String(r.date),
-			count: r.count,
-		})),
+		dailyTrend,
 	};
 }
 
@@ -426,101 +405,54 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 	}
 
 	const domainIds = orgDomains.map((d) => d.id);
-	const domainArrayFilter = sql`${buyerSessions.domainId} = ANY(ARRAY[${sql.join(
-		domainIds.map((id) => sql`${id}::uuid`),
-		sql`, `,
-	)}])`;
+	const allSessions = await db.query.buyerSessions.findMany({
+		where: sql`${buyerSessions.domainId} = ANY(ARRAY[${sql.join(
+			domainIds.map((id) => sql`${id}::uuid`),
+			sql`, `,
+		)}])`,
+		orderBy: [desc(buyerSessions.createdAt)],
+		limit: 10000,
+	});
 
-	const [domainStats, intentRows, dailyRows, recentSessions] =
-		await Promise.all([
-			db
-				.select({
-					domainId: buyerSessions.domainId,
-					total: sql<number>`count(*)::int`,
-					converted: sql<number>`count(*) FILTER (WHERE ${buyerSessions.buyerEmail} IS NOT NULL)::int`,
-				})
-				.from(buyerSessions)
-				.where(domainArrayFilter)
-				.groupBy(buyerSessions.domainId),
-
-			db
-				.select({
-					domainId: buyerSessions.domainId,
-					intent: sql<string>`COALESCE(${buyerSessions.intent}, 'unknown')`,
-					count: sql<number>`count(*)::int`,
-				})
-				.from(buyerSessions)
-				.where(domainArrayFilter)
-				.groupBy(buyerSessions.domainId, buyerSessions.intent),
-
-			db
-				.select({
-					domainId: buyerSessions.domainId,
-					date: sql<string>`DATE(${buyerSessions.createdAt})`,
-					count: sql<number>`count(*)::int`,
-				})
-				.from(buyerSessions)
-				.where(domainArrayFilter)
-				.groupBy(
-					buyerSessions.domainId,
-					sql`DATE(${buyerSessions.createdAt})`,
-				)
-				.orderBy(
-					buyerSessions.domainId,
-					sql`DATE(${buyerSessions.createdAt})`,
-				),
-
-			db.query.buyerSessions.findMany({
-				where: domainArrayFilter,
-				orderBy: [desc(buyerSessions.createdAt)],
-				limit: 100,
-			}),
-		]);
-
-	const statsMap = new Map(domainStats.map((r) => [r.domainId, r]));
-
-	const intentMap = new Map<
-		string,
-		Array<{ intent: string; count: number }>
-	>();
-	for (const r of intentRows) {
-		const list = intentMap.get(r.domainId) ?? [];
-		list.push({ intent: r.intent, count: r.count });
-		intentMap.set(r.domainId, list);
-	}
-
-	const dailyMap = new Map<
-		string,
-		Array<{ date: string; count: number }>
-	>();
-	for (const r of dailyRows) {
-		const list = dailyMap.get(r.domainId) ?? [];
-		list.push({ date: String(r.date), count: r.count });
-		dailyMap.set(r.domainId, list);
-	}
-
-	const sessionsByDomain = new Map<string, typeof recentSessions>();
-	for (const s of recentSessions) {
+	const sessionsByDomain = new Map<string, typeof allSessions>();
+	for (const s of allSessions) {
 		const list = sessionsByDomain.get(s.domainId) ?? [];
 		list.push(s);
 		sessionsByDomain.set(s.domainId, list);
 	}
 
 	const results = orgDomains.map((d) => {
-		const stats = statsMap.get(d.id);
-		const total = stats?.total ?? 0;
-		const converted = stats?.converted ?? 0;
+		const sessions = sessionsByDomain.get(d.id) ?? [];
+		const converted = sessions.filter((s) => s.buyerEmail).length;
 		const conversionRate =
-			total > 0 ? Math.round((converted / total) * 100) : 0;
+			sessions.length > 0
+				? Math.round((converted / sessions.length) * 100)
+				: 0;
+		const intentMap = sessions.reduce<Record<string, number>>((acc, s) => {
+			const intent = s.intent ?? "unknown";
+			acc[intent] = (acc[intent] ?? 0) + 1;
+			return acc;
+		}, {});
+		const byDay = sessions.reduce<Record<string, number>>((acc, s) => {
+			const day = s.createdAt.toISOString().split("T")[0];
+			acc[day] = (acc[day] ?? 0) + 1;
+			return acc;
+		}, {});
+		const dailyTrend = Object.entries(byDay)
+			.sort(([a], [b]) => a.localeCompare(b))
+			.slice(-30)
+			.map(([date, count]) => ({ date, count }));
 
 		return {
 			domain: d,
-			sessions: sessionsByDomain.get(d.id) ?? [],
-			total,
+			sessions,
+			total: sessions.length,
 			converted,
 			conversionRate,
-			intentBreakdown: intentMap.get(d.id) ?? [],
-			dailyTrend: (dailyMap.get(d.id) ?? []).slice(-30),
+			intentBreakdown: Object.entries(intentMap).map(
+				([intent, count]) => ({ intent, count }),
+			),
+			dailyTrend,
 		};
 	});
 
@@ -553,37 +485,34 @@ export async function getMonetizationDecayForOrg(orgId: string) {
 	}
 
 	const domainIds = orgDomains.map((d) => d.id);
-	const domainArrayFilter = sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(
-		domainIds.map((id) => sql`${id}::uuid`),
-		sql`, `,
-	)}])`;
+	const allSignals = await db.query.monetizationDecaySignals.findMany({
+		where: sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(
+			domainIds.map((id) => sql`${id}::uuid`),
+			sql`, `,
+		)}])`,
+		orderBy: [desc(monetizationDecaySignals.recordedAt)],
+		limit: 5000,
+	});
 
-	const domainDecay = await db
-		.select({
-			domainId: monetizationDecaySignals.domainId,
-			avgDecay: sql<number>`avg(${monetizationDecaySignals.decayFactor})::float`,
-			signalCount: sql<number>`count(*)::int`,
-		})
-		.from(monetizationDecaySignals)
-		.where(domainArrayFilter)
-		.groupBy(monetizationDecaySignals.domainId);
-
-	const decayMap = new Map(
-		domainDecay.map((r) => [
-			r.domainId,
-			{
-				avgDecay: r.avgDecay ?? 1,
-				signalCount: r.signalCount,
-			},
-		]),
-	);
+	const signalsByDomain = new Map<string, typeof allSignals>();
+	for (const s of allSignals) {
+		const list = signalsByDomain.get(s.domainId) ?? [];
+		if (list.length < 30) {
+			list.push(s);
+		}
+		signalsByDomain.set(s.domainId, list);
+	}
 
 	return orgDomains.map((d) => {
-		const decay = decayMap.get(d.id);
-		const avgDecay = decay?.avgDecay ?? 1;
+		const signals = signalsByDomain.get(d.id) ?? [];
+		const avgDecay =
+			signals.length > 0
+				? signals.reduce((sum, s) => sum + Number(s.decayFactor), 0) /
+					signals.length
+				: 1;
 		return {
 			domain: d,
-			signals: [],
+			signals,
 			avgDecay: Math.round(avgDecay * 10000) / 10000,
 		};
 	});
@@ -603,28 +532,36 @@ export async function getPortfolioTrend(orgId: string, days = 30) {
 		return [];
 	}
 
-	const dailyTrend = await db
-		.select({
-			date: sql<string>`DATE(${monetizationDecaySignals.recordedAt})`,
-			avgDecay: sql<number>`avg(${monetizationDecaySignals.decayFactor})::float`,
-		})
-		.from(monetizationDecaySignals)
-		.where(
-			and(
-				sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(
-					domainIds.map((id) => sql`${id}::uuid`),
-					sql`, `,
-				)}])`,
-				gte(monetizationDecaySignals.recordedAt, since),
-			),
-		)
-		.groupBy(sql`DATE(${monetizationDecaySignals.recordedAt})`)
-		.orderBy(sql`DATE(${monetizationDecaySignals.recordedAt})`);
+	const signals = await db.query.monetizationDecaySignals.findMany({
+		where: and(
+			sql`${monetizationDecaySignals.domainId} = ANY(ARRAY[${sql.join(
+				domainIds.map((id) => sql`${id}::uuid`),
+				sql`, `,
+			)}])`,
+			gte(monetizationDecaySignals.recordedAt, since),
+		),
+		orderBy: [desc(monetizationDecaySignals.recordedAt)],
+		limit: 5000,
+	});
 
-	return dailyTrend.map((r) => ({
-		date: String(r.date),
-		avgDecay: Math.round((r.avgDecay ?? 0) * 10000) / 10000,
-	}));
+	const byDay = signals.reduce<
+		Record<string, { sum: number; count: number }>
+	>((acc, s) => {
+		const day = s.recordedAt.toISOString().split("T")[0];
+		if (!acc[day]) {
+			acc[day] = { sum: 0, count: 0 };
+		}
+		acc[day].sum += Number(s.decayFactor);
+		acc[day].count += 1;
+		return acc;
+	}, {});
+
+	return Object.entries(byDay)
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([date, { sum, count }]) => ({
+			date,
+			avgDecay: Math.round((sum / count) * 10000) / 10000,
+		}));
 }
 
 // ─── Materialized View SQL ────────────────────────────────────────────────────

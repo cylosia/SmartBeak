@@ -73,6 +73,16 @@ const AiIdeasResponseSchema = z.object({
 	ideas: z.string().optional(),
 });
 
+// Isolated component keeps the dangerouslySetInnerHTML suppression scoped.
+// Safety: all html passed here is run through DOMPurify.sanitize() before render.
+function HtmlPreview({ html }: { html: string }) {
+	if (!html) {
+		return <p className="text-muted-foreground">No content yet.</p>;
+	}
+	// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify before render
+	return <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
+}
+
 export function ContentEditorView({
 	organizationSlug,
 	domainId,
@@ -542,20 +552,7 @@ export function ContentEditorView({
 									</CardHeader>
 									<CardContent>
 										<div className="prose prose-sm dark:prose-invert max-w-none">
-											{body ? (
-												<div
-													// biome-ignore lint/security/noDangerouslySetInnerHtml: content is sanitized via sanitizeHtml()
-													dangerouslySetInnerHTML={{
-														__html: sanitizeHtml(
-															body,
-														),
-													}}
-												/>
-											) : (
-												<p className="text-muted-foreground">
-													No content yet.
-												</p>
-											)}
+											<HtmlPreview html={body} />
 										</div>
 									</CardContent>
 								</Card>

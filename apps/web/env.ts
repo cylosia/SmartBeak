@@ -16,6 +16,22 @@ const optionalSchema = z.object({
 	VERCEL_TOKEN: z.string().optional(),
 });
 
+/**
+ * Returns the value of an environment variable that is required for a specific
+ * feature but not globally required at startup. Throws a descriptive error at
+ * call-time rather than silently returning undefined.
+ */
+export function requireEnv(name: string): string {
+	const value = process.env[name];
+	if (!value) {
+		throw new Error(
+			`Missing required environment variable: ${name}\n` +
+				`Check your .env.local file and ensure "${name}" is set.`,
+		);
+	}
+	return value;
+}
+
 let validated = false;
 
 export function validateEnv() {

@@ -43,7 +43,9 @@ export const RATE_LIMITS: Record<string, Record<string, RateLimitConfig>> = {
 	},
 };
 
-// ─── Redis Lua script for atomic sliding window ───────────────────────────────
+// ─── Redis Lua script for atomic fixed window rate limiter ───────────────────
+// Note: Uses a fixed window (INCR + EXPIRE on first request) rather than a
+// true sliding window. Simple and atomic across multi-instance deployments.
 
 const SLIDING_WINDOW_LUA = `
 local key = KEYS[1]
@@ -146,6 +148,8 @@ export function getRateLimitConfig(
 	operation: string,
 ): RateLimitConfig {
 	const tierConfig =
-		RATE_LIMITS[tierName.toLowerCase()] ?? RATE_LIMITS.starter;
-	return tierConfig[operation] ?? { limit: 100, windowSeconds: 3600 };
+		RATE_LIMITS[tierName.toLowerCase()] ??
+		RATE_LIMITS["starter"] ??
+		RATE_LIMITS["growth"];
+	return tierConfig?.[operation] ?? { limit: 100, windowSeconds: 3600 };
 }

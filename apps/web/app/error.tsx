@@ -3,7 +3,7 @@
 import { Button } from "@repo/ui/components/button";
 import { AlertTriangleIcon } from "lucide-react";
 
-export default function ErrorPage({
+export default function ErrorBoundary({
 	error: _error,
 	reset,
 }: {

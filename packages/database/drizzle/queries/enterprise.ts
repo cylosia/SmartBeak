@@ -31,7 +31,7 @@ export async function getTeamsForOrg(orgId: string) {
 	return db.query.enterpriseTeams.findMany({
 		where: (t, { eq }) => eq(t.orgId, orgId),
 		with: {
-			members: { limit: 50 },
+			members: true,
 		},
 		orderBy: (t, { asc }) => [asc(t.name)],
 		limit: 100,
@@ -70,7 +70,7 @@ export async function createTeam(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function updateTeam(
@@ -139,7 +139,7 @@ export async function addTeamMember(data: {
 			set: { role: data.role },
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function removeTeamMember(teamId: string, userId: string) {
@@ -257,7 +257,7 @@ export async function upsertSsoProvider(data: {
 				})
 				.where(eq(enterpriseSsoProviders.id, existing.id))
 				.returning();
-			return rows[0] as (typeof rows)[number];
+			return rows[0]!;
 		}
 
 		const rows = await tx
@@ -272,7 +272,7 @@ export async function upsertSsoProvider(data: {
 				createdBy: data.createdBy,
 			})
 			.returning();
-		return rows[0] as (typeof rows)[number];
+		return rows[0]!;
 	});
 }
 
@@ -323,7 +323,7 @@ export async function createScimToken(data: {
 			createdBy: data.createdBy,
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function deleteScimToken(tokenId: string) {
@@ -373,7 +373,7 @@ export async function upsertAuditRetention(data: {
 				})
 				.where(eq(enterpriseAuditRetention.id, existing.id))
 				.returning();
-			return rows[0] as (typeof rows)[number];
+			return rows[0]!;
 		}
 
 		const rows = await tx
@@ -387,7 +387,7 @@ export async function upsertAuditRetention(data: {
 				updatedBy: data.updatedBy,
 			})
 			.returning();
-		return rows[0] as (typeof rows)[number];
+		return rows[0]!;
 	});
 }
 
@@ -529,7 +529,7 @@ export async function upsertOrgTier(data: {
 				})
 				.where(eq(enterpriseOrgTier.id, existing.id))
 				.returning();
-			return rows[0] as (typeof rows)[number];
+			return rows[0]!;
 		}
 
 		const rows = await tx
@@ -543,7 +543,7 @@ export async function upsertOrgTier(data: {
 				periodEnd: data.periodEnd ?? null,
 			})
 			.returning();
-		return rows[0] as (typeof rows)[number];
+		return rows[0]!;
 	});
 }
 
@@ -587,7 +587,7 @@ export async function createOverageAlert(data: {
 		.insert(enterpriseOverageAlerts)
 		.values(data)
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 // ─── Seed helpers (admin only) ────────────────────────────────────────────────

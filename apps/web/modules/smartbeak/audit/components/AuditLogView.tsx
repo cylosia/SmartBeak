@@ -182,8 +182,7 @@ export function AuditLogView({
 										</TableCell>
 										<TableCell className="text-sm text-muted-foreground font-mono">
 											{event.actorId
-												? event.actorId.slice(0, 8) +
-													"…"
+												? `${event.actorId.slice(0, 8)}…`
 												: "system"}
 										</TableCell>
 										<TableCell>

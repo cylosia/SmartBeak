@@ -1,5 +1,6 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Image from "next/image";
 import { useRef, useState } from "react";
 
 function isSafeImageUrl(url: string | null | undefined): boolean {
@@ -187,14 +188,15 @@ export function MediaLibraryView({
 								key={asset.id}
 								className="group relative rounded-xl border border-border overflow-hidden bg-muted/30 hover:border-primary/50 transition-colors"
 							>
-								<div className="aspect-square flex items-center justify-center bg-muted">
+								<div className="relative aspect-square flex items-center justify-center bg-muted">
 									{asset.type?.startsWith("image/") &&
 									isSafeImageUrl(asset.url) ? (
-										// biome-ignore lint/performance/noImgElement: user-uploaded URLs from S3 cannot use next/image
-										<img
+										<Image
 											src={asset.url}
 											alt={asset.fileName}
-											className="h-full w-full object-cover"
+											fill
+											className="object-cover"
+											unoptimized
 										/>
 									) : (
 										<ImageIcon className="h-10 w-10 text-muted-foreground" />

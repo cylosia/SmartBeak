@@ -58,7 +58,7 @@ export async function createWaitlistEntry(data: {
 			status: "pending",
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function updateWaitlistEntryStatus(
@@ -154,7 +154,7 @@ export async function createReferral(data: {
 			expiresAt: data.expiresAt ?? null,
 		})
 		.returning();
-	return rows[0] as (typeof rows)[number];
+	return rows[0]!;
 }
 
 export async function getReferralsByReferrer(referrerId: string) {

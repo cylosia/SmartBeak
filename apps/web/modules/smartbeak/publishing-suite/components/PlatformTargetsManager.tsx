@@ -366,11 +366,14 @@ export function PlatformTargetsManager({
 						<div className="space-y-3">
 							{configDialog.fields.map((field) => (
 								<div key={field.key}>
-									<label htmlFor={`platform-config-${field.key}`} className="mb-1 block text-xs font-medium text-muted-foreground">
+									<label
+										htmlFor={`config-field-${field.key}`}
+										className="mb-1 block text-xs font-medium text-muted-foreground"
+									>
 										{field.label}
 									</label>
 									<Input
-										id={`platform-config-${field.key}`}
+										id={`config-field-${field.key}`}
 										type={
 											field.key
 												.toLowerCase()

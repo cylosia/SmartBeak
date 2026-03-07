@@ -208,14 +208,17 @@ export function PublishingView({
 						</DialogHeader>
 						<div className="space-y-4">
 							<div>
-								<label htmlFor="publishing-content-item" className="text-sm font-medium">
+								<label
+									htmlFor="content-item-select"
+									className="text-sm font-medium"
+								>
 									Content Item
 								</label>
 								<Select
 									value={selectedContentId}
 									onValueChange={setSelectedContentId}
 								>
-									<SelectTrigger id="publishing-content-item" className="mt-1">
+									<SelectTrigger className="mt-1">
 										<SelectValue placeholder="Select content to publish" />
 									</SelectTrigger>
 									<SelectContent>
@@ -233,14 +236,17 @@ export function PublishingView({
 								</Select>
 							</div>
 							<div>
-								<label htmlFor="publishing-target" className="text-sm font-medium">
+								<label
+									htmlFor="publish-target-select"
+									className="text-sm font-medium"
+								>
 									Publish Target
 								</label>
 								<Select
 									value={target}
 									onValueChange={setTarget}
 								>
-									<SelectTrigger id="publishing-target" className="mt-1">
+									<SelectTrigger className="mt-1">
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>

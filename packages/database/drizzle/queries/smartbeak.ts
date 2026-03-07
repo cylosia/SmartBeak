@@ -116,7 +116,7 @@ export async function getDomainsForOrg(
 	opts?: { query?: string; limit?: number; offset?: number },
 ) {
 	return db.query.domains.findMany({
-		where: (d, { eq, and, ilike }) =>
+		where: (d, { eq, and, ilike, or }) =>
 			opts?.query
 				? and(
 						eq(d.orgId, orgId),

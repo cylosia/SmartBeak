@@ -98,10 +98,11 @@ function ScoreRing({ score }: { score: number }) {
 	return (
 		<div className="relative flex items-center justify-center w-20 h-20">
 			<svg
-				aria-hidden="true"
 				className="absolute inset-0 w-full h-full -rotate-90"
 				viewBox="0 0 80 80"
+				aria-hidden="true"
 			>
+				<title>SEO score ring</title>
 				<circle
 					cx="40"
 					cy="40"

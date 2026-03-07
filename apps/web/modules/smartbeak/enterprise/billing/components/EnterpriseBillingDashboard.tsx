@@ -691,7 +691,7 @@ export function EnterpriseBillingDashboard({
 								onClick={() =>
 									setTierMutation.mutate({
 										organizationSlug,
-										tierId: selectedTierId ?? "",
+										tierId: selectedTierId!,
 										seats,
 										overageEnabled,
 									})

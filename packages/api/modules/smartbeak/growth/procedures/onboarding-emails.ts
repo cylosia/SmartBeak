@@ -98,12 +98,7 @@ export const triggerOnboardingSequenceProcedure = protectedProcedure
 		// Step 1 is sent immediately; steps 2 and 3 are queued (in production,
 		// use a job queue like Inngest or Trigger.dev — here we send step 1 only
 		// and return the full sequence plan for the queue to handle).
-		const step1 = ONBOARDING_SEQUENCE.at(0);
-		if (!step1) {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", {
-				message: "Onboarding sequence is empty.",
-			});
-		}
+		const step1 = ONBOARDING_SEQUENCE[0]!;
 		try {
 			await sendEmail({
 				to: email,
