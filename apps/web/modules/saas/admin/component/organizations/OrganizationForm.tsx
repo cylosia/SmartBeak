@@ -31,6 +31,7 @@ import { useRouter } from "@shared/hooks/router";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -59,6 +60,14 @@ export function OrganizationForm({
 		},
 	});
 
+	useEffect(() => {
+		if (organization) {
+			form.reset({
+				name: organization.name,
+			});
+		}
+	}, [form, organization]);
+
 	const onSubmit = form.handleSubmit(async ({ name }) => {
 		try {
 			const newOrganization = organization
@@ -76,7 +85,7 @@ export function OrganizationForm({
 			}
 
 			queryClient.setQueryData(
-				fullOrganizationQueryKey(organizationId),
+				fullOrganizationQueryKey(newOrganization.id),
 				newOrganization,
 			);
 

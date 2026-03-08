@@ -9,11 +9,8 @@ export function Footer() {
 				<div>
 					<Logo className="opacity-70 grayscale" />
 					<p className="mt-3 text-sm opacity-70">
-						© {new Date().getFullYear()} {config.appName}.{" "}
-						<a href="https://supastarter.dev">
-							Built with supastarter
-						</a>
-						.
+						© {new Date().getFullYear()} {config.appName}. Domain portfolio
+						publishing and analytics.
 					</p>
 				</div>
 
@@ -22,13 +19,13 @@ export function Footer() {
 						Blog
 					</LocaleLink>
 
-					<a href="#features" className="block">
+					<LocaleLink href="/#features" className="block">
 						Features
-					</a>
+					</LocaleLink>
 
-					<a href="/#pricing" className="block">
+					<LocaleLink href="/#pricing" className="block">
 						Pricing
-					</a>
+					</LocaleLink>
 				</div>
 
 				<div className="flex flex-col gap-2">

@@ -88,9 +88,7 @@ export default async function BlogPostPage(props: { params: Promise<Params> }) {
 
 						<div className="mr-0">
 							<p className="text-sm opacity-30">
-								{Intl.DateTimeFormat("en-US").format(
-									new Date(date),
-								)}
+								{Intl.DateTimeFormat(locale).format(new Date(date))}
 							</p>
 						</div>
 

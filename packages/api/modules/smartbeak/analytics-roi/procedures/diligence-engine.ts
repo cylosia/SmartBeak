@@ -2,7 +2,6 @@ import { ORPCError } from "@orpc/server";
 import {
 	getDiligenceReport,
 	getDomainById,
-	runDiligenceChecksForDomain,
 	upsertDiligenceCheck,
 } from "@repo/database";
 import z from "zod";
@@ -42,7 +41,7 @@ export const runDiligenceEngine = protectedProcedure
 		method: "POST",
 		path: "/smartbeak/analytics/diligence/run",
 		tags: ["SmartBeak - Analytics"],
-		summary: "Run automated diligence checks for a domain",
+		summary: "Run diligence checks for a domain (planned)",
 	})
 	.input(domainInput)
 	.handler(async ({ context: { user }, input }) => {
@@ -53,24 +52,10 @@ export const runDiligenceEngine = protectedProcedure
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
 		}
-
-		const results = await runDiligenceChecksForDomain(input.domainId);
-		const report = await getDiligenceReport(input.domainId);
-
-		await audit({
-			orgId: org.id,
-			actorId: user.id,
-			action: "diligence.run",
-			entityType: "domain",
-			entityId: input.domainId,
-			details: {
-				score: report.score,
-				passed: report.passed,
-				failed: report.failed,
-			},
+		throw new ORPCError("PRECONDITION_FAILED", {
+			message:
+				"Automated diligence is not available yet. The current engine only derives synthetic statuses from a domain health score instead of running real ownership, legal, financial, traffic, content, technical, brand, or monetization checks.",
 		});
-
-		return { results, report };
 	});
 
 export const updateDiligenceCheck = protectedProcedure

@@ -249,6 +249,7 @@ export const triggerDeploy = protectedProcedure
 				await updateDomain(domain.id, {
 					deployedUrl,
 					status: "deployed",
+					themeId,
 				});
 
 				await audit({

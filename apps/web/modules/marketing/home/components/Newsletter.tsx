@@ -9,6 +9,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircleIcon, KeyIcon } from "lucide-react";
 
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -18,6 +19,7 @@ const formSchema = z.object({
 
 export function Newsletter() {
 	const t = useTranslations();
+	const [submittedSuccessfully, setSubmittedSuccessfully] = useState(false);
 	const newsletterSignupMutation = useMutation(
 		orpc.newsletter.subscribe.mutationOptions(),
 	);
@@ -27,8 +29,12 @@ export function Newsletter() {
 	});
 
 	const onSubmit = form.handleSubmit(async ({ email }) => {
+		setSubmittedSuccessfully(false);
+		form.clearErrors("email");
+
 		try {
 			await newsletterSignupMutation.mutateAsync({ email });
+			setSubmittedSuccessfully(true);
 		} catch {
 			form.setError("email", {
 				message: t("newsletter.hints.error.message"),
@@ -51,7 +57,7 @@ export function Newsletter() {
 					</div>
 
 					<div className="mx-auto max-w-lg">
-						{form.formState.isSubmitSuccessful ? (
+						{submittedSuccessfully ? (
 							<Alert variant="success">
 								<CheckCircleIcon />
 								<AlertTitle>

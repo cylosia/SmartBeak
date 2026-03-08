@@ -45,6 +45,13 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
 export function AdvancedAnalyticsOverview({
 	organizationSlug,
 }: {
@@ -88,37 +95,42 @@ export function AdvancedAnalyticsOverview({
 		return null;
 	}
 
-	const roi = overview.roi ?? { avgRoi: 0, totalValue: 0, totalDomains: 0 };
+	const roi = overview.roi ?? { avgRoi: 0, totalScore: 0, totalDomains: 0 };
 	const attribution = overview.attribution ?? {
 		totalSessions: 0,
-		overallConversionRate: 0,
+		overallIdentifiedBuyerRate: 0,
 	};
 	const decayDomains = decayQuery.data?.domains ?? [];
+	const avgDecayPercent = clampPercent(
+		Math.round(
+			(decayDomains.reduce((s, d) => s + d.avgDecay, 0) /
+				Math.max(decayDomains.length, 1)) *
+				100,
+		),
+	);
 
 	const radarData = [
-		{ subject: "Health", value: Math.round(roi.avgRoi) },
-		{ subject: "Diligence", value: 0 },
+		{ subject: "Health", value: clampPercent(Math.round(roi.avgRoi)) },
 		{
 			subject: "Buyer Interest",
-			value: Math.min(attribution.totalSessions * 2, 100),
+			value: clampPercent(attribution.totalSessions * 2),
 		},
-		{ subject: "Conversion", value: attribution.overallConversionRate },
+		{
+			subject: "Identification",
+			value: clampPercent(attribution.overallIdentifiedBuyerRate),
+		},
 		{
 			subject: "Monetization",
-			value: Math.round(
-				(decayDomains.reduce((s, d) => s + d.avgDecay, 0) /
-					Math.max(decayDomains.length, 1)) *
-					100,
-			),
+			value: avgDecayPercent,
 		},
 		{
 			subject: "Portfolio Size",
-			value: Math.min(roi.totalDomains * 10, 100),
+			value: clampPercent(roi.totalDomains * 10),
 		},
 	];
 
 	// Decay bar chart
-	const decayBarData = decayDomains
+	const decayBarData = [...decayDomains]
 		.sort((a, b) => a.avgDecay - b.avgDecay)
 		.slice(0, 10)
 		.map((d) => ({
@@ -142,14 +154,14 @@ export function AdvancedAnalyticsOverview({
 						subtitle="Composite health score"
 					/>
 					<MetricCard
-						title="Total Portfolio Value"
-						value={`$${(roi.totalValue / 1000).toFixed(1)}K`}
+						title="Total Portfolio Score"
+						value={roi.totalScore.toFixed(1)}
 						icon={TrendingUpIcon}
-						subtitle="Risk-adjusted estimate"
+						subtitle="Aggregate risk-adjusted score"
 					/>
 					<MetricCard
 						title="Avg Monetization Decay"
-						value={`${Math.round((decayDomains.reduce((s, d) => s + d.avgDecay, 0) / Math.max(decayDomains.length, 1)) * 100)}%`}
+						value={`${avgDecayPercent}%`}
 						icon={TrendingDownIcon}
 						subtitle="Lower = more decay risk"
 					/>
@@ -157,7 +169,7 @@ export function AdvancedAnalyticsOverview({
 						title="Buyer Sessions"
 						value={String(attribution.totalSessions)}
 						icon={ActivityIcon}
-						subtitle={`${attribution.overallConversionRate}% conversion rate`}
+						subtitle={`${attribution.overallIdentifiedBuyerRate}% identified buyer rate`}
 					/>
 				</div>
 
@@ -170,7 +182,8 @@ export function AdvancedAnalyticsOverview({
 								Portfolio Health Radar
 							</CardTitle>
 							<CardDescription>
-								Multi-dimensional portfolio assessment
+								Portfolio assessment from available portfolio,
+								buyer-session, and monetization data
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
@@ -314,8 +327,18 @@ export function AdvancedAnalyticsOverview({
 							</TableHeader>
 							<TableBody>
 								{decayDomains.map((d) => {
-									const decayPct = Math.round(
-										d.avgDecay * 100,
+									const decayPct = clampPercent(
+										Math.round(d.avgDecay * 100),
+									);
+									const healthScore = clampPercent(
+										Number(
+											(
+												d.domain.health as Record<
+													string,
+													unknown
+												> | null
+											)?.score ?? 0,
+										),
 									);
 									const riskLabel =
 										decayPct >= 70
@@ -337,27 +360,11 @@ export function AdvancedAnalyticsOverview({
 											<TableCell>
 												<div className="flex items-center gap-2">
 													<Progress
-														value={Number(
-															(
-																d.domain
-																	.health as Record<
-																	string,
-																	unknown
-																> | null
-															)?.score ?? 0,
-														)}
+														value={healthScore}
 														className="h-1.5 w-16"
 													/>
 													<span className="text-xs text-muted-foreground">
-														{Number(
-															(
-																d.domain
-																	.health as Record<
-																	string,
-																	unknown
-																> | null
-															)?.score ?? 0,
-														)}
+														{healthScore}
 													</span>
 												</div>
 											</TableCell>

@@ -50,6 +50,19 @@ interface AgentAnalyticsDashboardProps {
 	organizationSlug: string;
 }
 
+function parseAnalyticsDate(date: string) {
+	const [year, month, day] = date.split("-").map(Number);
+	if (
+		Number.isFinite(year) &&
+		Number.isFinite(month) &&
+		Number.isFinite(day)
+	) {
+		return new Date(Date.UTC(year, month - 1, day));
+	}
+
+	return new Date(date);
+}
+
 function MetricCard({
 	title,
 	value,
@@ -265,7 +278,7 @@ export function AgentAnalyticsDashboard({
 									tickLine={false}
 									axisLine={false}
 									tickFormatter={(v: string) =>
-										new Date(v).toLocaleDateString(
+										parseAnalyticsDate(v).toLocaleDateString(
 											"en-US",
 											{
 												month: "short",
@@ -288,7 +301,7 @@ export function AgentAnalyticsDashboard({
 										"Cost",
 									]}
 									labelFormatter={(label) =>
-										new Date(
+										parseAnalyticsDate(
 											String(label),
 										).toLocaleDateString()
 									}
@@ -332,8 +345,13 @@ export function AgentAnalyticsDashboard({
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{workflowBreakdown.map((w) => (
-									<TableRow key={w.workflowId ?? "adhoc"}>
+								{workflowBreakdown.map((w, index) => (
+									<TableRow
+										key={
+											w.workflowId ??
+											`${w.workflowName}-${index}`
+										}
+									>
 										<TableCell className="font-medium">
 											<div className="flex items-center gap-2">
 												<BotIcon className="h-4 w-4 text-muted-foreground" />

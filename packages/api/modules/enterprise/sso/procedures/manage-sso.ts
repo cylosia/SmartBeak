@@ -28,7 +28,7 @@ export const listSsoProviders = protectedProcedure
 		method: "GET",
 		path: "/enterprise/sso",
 		tags: ["Enterprise - SSO"],
-		summary: "List SSO providers for an organization",
+		summary: "List saved SSO provider settings for an organization",
 	})
 	.input(z.object({ organizationSlug: z.string().min(1) }))
 	.handler(async ({ context: { user }, input }) => {
@@ -49,7 +49,7 @@ export const upsertSsoProviderProcedure = protectedProcedure
 		method: "PUT",
 		path: "/enterprise/sso",
 		tags: ["Enterprise - SSO"],
-		summary: "Create or update a SAML or OIDC SSO provider",
+		summary: "Create or update saved SAML or OIDC provider settings",
 	})
 	.input(
 		z.discriminatedUnion("type", [

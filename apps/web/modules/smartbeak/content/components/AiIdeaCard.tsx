@@ -18,17 +18,18 @@ interface AiIdea {
 function SeoScoreGauge({ score }: { score: number }) {
 	const radius = 28;
 	const circumference = 2 * Math.PI * radius;
-	const progress = (score / 100) * circumference;
+	const normalizedScore = Math.min(100, Math.max(0, score));
+	const progress = (normalizedScore / 100) * circumference;
 	const color =
-		score >= 70
+		normalizedScore >= 70
 			? "text-emerald-500 dark:text-emerald-400"
-			: score >= 40
+			: normalizedScore >= 40
 				? "text-amber-500 dark:text-amber-400"
 				: "text-red-500 dark:text-red-400";
 	const strokeColor =
-		score >= 70
+		normalizedScore >= 70
 			? "stroke-emerald-500 dark:stroke-emerald-400"
-			: score >= 40
+			: normalizedScore >= 40
 				? "stroke-amber-500 dark:stroke-amber-400"
 				: "stroke-red-500 dark:stroke-red-400";
 
@@ -66,7 +67,7 @@ function SeoScoreGauge({ score }: { score: number }) {
 			<span
 				className={`absolute text-sm font-bold tabular-nums ${color}`}
 			>
-				{score}
+				{normalizedScore}
 			</span>
 		</div>
 	);
@@ -114,9 +115,9 @@ export function AiIdeaCard({
 					</div>
 
 					<div className="flex flex-wrap gap-1">
-						{(idea.keywords ?? []).slice(0, 3).map((kw) => (
+						{(idea.keywords ?? []).slice(0, 3).map((kw, index) => (
 							<span
-								key={kw}
+								key={`${kw}-${index}`}
 								className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
 							>
 								{kw}

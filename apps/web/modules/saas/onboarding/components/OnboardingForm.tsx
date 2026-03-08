@@ -16,9 +16,6 @@ export function OnboardingForm() {
 
 	const stepSearchParam = searchParams.get("step");
 	const redirectTo = searchParams.get("redirectTo");
-	const onboardingStep = stepSearchParam
-		? Number.parseInt(stepSearchParam, 10)
-		: 1;
 
 	// biome-ignore lint/correctness/noUnusedVariables: Will be used with more steps
 	const setStep = (step: number) => {
@@ -31,9 +28,12 @@ export function OnboardingForm() {
 	};
 
 	const onCompleted = async () => {
-		await authClient.updateUser({
+		const { error } = await authClient.updateUser({
 			onboardingComplete: true,
 		} as Record<string, unknown>);
+		if (error) {
+			throw error;
+		}
 
 		await clearCache();
 		router.replace(safeRedirectPath(redirectTo, "/app"));
@@ -44,6 +44,13 @@ export function OnboardingForm() {
 			component: <OnboardingStep1 onCompleted={() => onCompleted()} />,
 		},
 	];
+	const parsedStep = stepSearchParam
+		? Number.parseInt(stepSearchParam, 10)
+		: 1;
+	const onboardingStep =
+		Number.isFinite(parsedStep) && parsedStep >= 1
+			? Math.min(parsedStep, steps.length)
+			: 1;
 
 	return (
 		<div>

@@ -32,24 +32,27 @@ export const send: SendEmailHandler = async ({
 
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), 15_000);
-	const response = await fetch(
-		`https://api.mailgun.net/v3/${mailgunDomain}/messages`,
-		{
-			method: "POST",
-			signal: controller.signal,
-			headers: {
-				Authorization: `Basic ${Buffer.from(
-					`api:${mailgunApiKey}`,
-				).toString("base64")}`,
+	try {
+		const response = await fetch(
+			`https://api.mailgun.net/v3/${mailgunDomain}/messages`,
+			{
+				method: "POST",
+				signal: controller.signal,
+				headers: {
+					Authorization: `Basic ${Buffer.from(
+						`api:${mailgunApiKey}`,
+					).toString("base64")}`,
+				},
+				body,
 			},
-			body,
-		},
-	);
-	clearTimeout(timer);
+		);
 
-	if (!response.ok) {
-		logger.error(await response.text());
+		if (!response.ok) {
+			logger.error(await response.text());
 
-		throw new Error("Could not send email");
+			throw new Error("Could not send email");
+		}
+	} finally {
+		clearTimeout(timer);
 	}
 };

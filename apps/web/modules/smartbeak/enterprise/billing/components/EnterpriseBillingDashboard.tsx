@@ -43,18 +43,27 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 
 const FEATURE_LABELS: Record<string, string> = {
-	sso: "Single Sign-On (SSO)",
-	scim: "SCIM Provisioning",
+	sso: "SSO Configuration",
+	scim: "SCIM Tokens",
 	advancedAudit: "Advanced Audit Log",
 	customRoles: "Custom Roles",
-	prioritySupport: "Priority Support",
-	sla: "SLA Guarantee",
-	dedicatedCsm: "Dedicated CSM",
+	prioritySupport: "Support Priority Flag",
+	sla: "Custom Service Terms",
+	dedicatedCsm: "Assigned Account Contact",
 	customContracts: "Custom Contracts",
 };
 
 interface EnterpriseBillingDashboardProps {
 	organizationSlug: string;
+}
+
+function formatCalendarDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : format(parsed, "MMM d, yyyy");
 }
 
 export function EnterpriseBillingDashboard({
@@ -98,7 +107,7 @@ export function EnterpriseBillingDashboard({
 					}),
 				});
 				setChangePlanOpen(false);
-				toastSuccess("Billing plan updated.");
+				toastSuccess("Billing tier settings saved.");
 			},
 			onError: (err) =>
 				toastError(
@@ -119,7 +128,7 @@ export function EnterpriseBillingDashboard({
 					}),
 				});
 				setUpdateSeatsOpen(false);
-				toastSuccess("Seat count updated.");
+				toastSuccess("Seat settings saved.");
 			},
 			onError: (err) =>
 				toastError(
@@ -142,6 +151,22 @@ export function EnterpriseBillingDashboard({
 	const nearLimitItems = (usageQuery.data?.usageWithLimits ?? []).filter(
 		(u) => u.isNearLimit,
 	);
+	const orgTierState = orgTierQuery.data?.orgTier as
+		| { overageEnabled?: boolean }
+		| undefined;
+
+	const handleChangePlanOpenChange = (open: boolean) => {
+		setChangePlanOpen(open);
+		if (open) {
+			setSelectedTierId(currentTier?.id ?? null);
+			setSeats(currentSeats);
+			setOverageEnabled(orgTierState?.overageEnabled ?? false);
+			return;
+		}
+		setSelectedTierId(null);
+		setSeats(1);
+		setOverageEnabled(false);
+	};
 
 	return (
 		<ErrorBoundary>
@@ -156,8 +181,8 @@ export function EnterpriseBillingDashboard({
 							</p>
 							<p className="text-xs text-red-700 dark:text-red-300 mt-1">
 								{overageItems.map((i) => i.label).join(", ")}{" "}
-								exceeded your plan limits. Upgrade or enable
-								overage billing to continue.
+								exceeded the configured tier limits. Review
+								your plan settings or overage preferences.
 							</p>
 						</AlertDescription>
 					</Alert>
@@ -191,7 +216,7 @@ export function EnterpriseBillingDashboard({
 								<div>
 									<CardTitle>Current Plan</CardTitle>
 									<CardDescription>
-										Your organization's active billing tier
+										Your organization's configured billing tier
 										and seat allocation.
 									</CardDescription>
 								</div>
@@ -220,8 +245,8 @@ export function EnterpriseBillingDashboard({
 												Update Seat Count
 											</DialogTitle>
 											<DialogDescription>
-												Adjust the number of licensed
-												seats for your organization.
+												Adjust the configured seat count
+												for your organization.
 											</DialogDescription>
 										</DialogHeader>
 										<div className="space-y-4">
@@ -384,15 +409,9 @@ export function EnterpriseBillingDashboard({
 										Period End
 									</p>
 									<p className="text-xl font-bold">
-										{orgTierQuery.data?.orgTier?.periodEnd
-											? format(
-													new Date(
-														orgTierQuery.data
-															.orgTier.periodEnd,
-													),
-													"MMM d, yyyy",
-												)
-											: "—"}
+										{formatCalendarDate(
+											orgTierQuery.data?.orgTier?.periodEnd,
+										) ?? "—"}
 									</p>
 								</div>
 							</div>
@@ -438,7 +457,7 @@ export function EnterpriseBillingDashboard({
 							<div>
 								<CardTitle>Usage</CardTitle>
 								<CardDescription>
-									Current usage against your plan limits.
+									Current recorded usage against configured tier limits.
 								</CardDescription>
 							</div>
 						</div>
@@ -519,7 +538,10 @@ export function EnterpriseBillingDashboard({
 				</Card>
 
 				{/* Change Plan Dialog */}
-				<Dialog open={changePlanOpen} onOpenChange={setChangePlanOpen}>
+				<Dialog
+					open={changePlanOpen}
+					onOpenChange={handleChangePlanOpenChange}
+				>
 					<DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
 						<DialogHeader>
 							<DialogTitle>Choose a Plan</DialogTitle>

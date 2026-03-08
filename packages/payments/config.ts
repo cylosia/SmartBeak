@@ -1,3 +1,14 @@
+function requirePublicEnv(name: string, value: string | undefined): string {
+	if (!value) {
+		throw new Error(
+			`Missing required environment variable: ${name}. ` +
+				"Ensure it is set in your .env file or hosting provider.",
+		);
+	}
+
+	return value;
+}
+
 export const config = {
 	billingAttachedTo: "user" as "user" | "organization", // 'users' or 'organizations'
 	plans: {
@@ -10,8 +21,10 @@ export const config = {
 			prices: [
 				{
 					type: "recurring",
-					productId: process.env
-						.NEXT_PUBLIC_PRICE_ID_PRO_MONTHLY as string,
+					productId: requirePublicEnv(
+						"NEXT_PUBLIC_PRICE_ID_PRO_MONTHLY",
+						process.env.NEXT_PUBLIC_PRICE_ID_PRO_MONTHLY,
+					),
 					interval: "month",
 					amount: 29,
 					currency: "USD",
@@ -20,8 +33,10 @@ export const config = {
 				},
 				{
 					type: "recurring",
-					productId: process.env
-						.NEXT_PUBLIC_PRICE_ID_PRO_YEARLY as string,
+					productId: requirePublicEnv(
+						"NEXT_PUBLIC_PRICE_ID_PRO_YEARLY",
+						process.env.NEXT_PUBLIC_PRICE_ID_PRO_YEARLY,
+					),
 					interval: "year",
 					amount: 290,
 					currency: "USD",
@@ -34,8 +49,10 @@ export const config = {
 			prices: [
 				{
 					type: "one-time",
-					productId: process.env
-						.NEXT_PUBLIC_PRICE_ID_LIFETIME as string,
+					productId: requirePublicEnv(
+						"NEXT_PUBLIC_PRICE_ID_LIFETIME",
+						process.env.NEXT_PUBLIC_PRICE_ID_LIFETIME,
+					),
 					amount: 799,
 					currency: "USD",
 				},

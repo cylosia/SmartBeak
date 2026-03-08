@@ -168,9 +168,9 @@ export function SeoView({
 		lastUpdated: string | Date;
 	}>;
 
-	function handleBulkDelete(ids: string[]) {
+	async function handleBulkDelete(ids: string[]) {
 		for (const id of ids) {
-			removeKeywordMutation.mutate({ organizationSlug, id });
+			await removeKeywordMutation.mutateAsync({ organizationSlug, id });
 		}
 	}
 

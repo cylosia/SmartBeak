@@ -8,14 +8,14 @@ import { SessionContext } from "../lib/session-context";
 export function SessionProvider({ children }: { children: ReactNode }) {
 	const queryClient = useQueryClient();
 
-	const { data: session } = useSessionQuery();
-	const [loaded, setLoaded] = useState(!!session);
+	const { data: session, isFetched } = useSessionQuery();
+	const [loaded, setLoaded] = useState(isFetched);
 
 	useEffect(() => {
-		if (session && !loaded) {
+		if (isFetched && !loaded) {
 			setLoaded(true);
 		}
-	}, [session]);
+	}, [isFetched, loaded]);
 
 	return (
 		<SessionContext.Provider

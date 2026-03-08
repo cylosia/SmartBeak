@@ -48,6 +48,25 @@ const METRIC_LABELS: Record<string, string> = {
 	publishing_jobs: "Publishing Jobs",
 };
 
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatCalendarDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? format(parsed, "MMM d, yyyy") : null;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
+}
+
 export function BillingView({
 	organizationSlug,
 }: {
@@ -106,17 +125,14 @@ export function BillingView({
 							title="Billing Period"
 							value={
 								subscription?.currentPeriodEnd
-									? format(
-											new Date(
-												subscription.currentPeriodEnd,
-											),
-											"MMM d, yyyy",
-										)
+									? formatCalendarDate(
+											subscription.currentPeriodEnd,
+										) ?? "—"
 									: "—"
 							}
 							subtitle={
 								subscription?.currentPeriodEnd
-									? `Renews ${formatDistanceToNow(new Date(subscription.currentPeriodEnd), { addSuffix: true })}`
+									? `Renews ${formatRelativeDate(subscription.currentPeriodEnd) ?? "soon"}`
 									: "No active subscription"
 							}
 							icon={CalendarIcon}
@@ -145,7 +161,12 @@ export function BillingView({
 					<CardContent className="space-y-4">
 						{usageQuotas.map((quota) => {
 							const ratio =
-								quota.limit > 0 ? quota.used / quota.limit : 0;
+								quota.limit > 0
+									? Math.min(
+											1,
+											Math.max(0, quota.used / quota.limit),
+										)
+									: 0;
 							return (
 								<div key={quota.label}>
 									<div className="flex items-center justify-between mb-1">
@@ -226,14 +247,9 @@ export function BillingView({
 												/>
 											</TableCell>
 											<TableCell className="text-muted-foreground text-sm">
-												{inv.createdAt
-													? format(
-															new Date(
-																inv.createdAt,
-															),
-															"MMM d, yyyy",
-														)
-													: "—"}
+												{formatCalendarDate(
+													inv.createdAt,
+												) ?? "—"}
 											</TableCell>
 										</TableRow>
 									))}

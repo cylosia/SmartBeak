@@ -63,12 +63,17 @@ export function AiChat() {
 		},
 	});
 
+	const isSending = status === "submitted" || status === "streaming";
+
 	const handleSubmit = async (
 		e:
 			| React.FormEvent<HTMLFormElement>
 			| React.KeyboardEvent<HTMLTextAreaElement>,
 	) => {
 		e.preventDefault();
+		if (isSending) {
+			return;
+		}
 
 		const text = input.trim();
 		if (!text) {
@@ -120,7 +125,7 @@ export function AiChat() {
 												);
 											}
 										}}
-										disabled={status === "streaming"}
+										disabled={isSending}
 										className="group h-auto gap-2 rounded-xl p-4 text-center"
 									>
 										<Icon className="size-6 text-primary" />
@@ -196,7 +201,7 @@ export function AiChat() {
 					size="icon"
 					variant="primary"
 					className="absolute right-3 bottom-3"
-					disabled={!input.trim() || status === "streaming"}
+					disabled={!input.trim() || isSending}
 					aria-label="Send message"
 				>
 					<ArrowUpIcon className="size-4" />

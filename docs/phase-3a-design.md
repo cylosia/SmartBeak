@@ -4,14 +4,14 @@ This document outlines the architecture, database schema extensions, API design,
 
 ## 1. Guiding Principles
 
-- **Additive Changes**: All new schema and functionality will be created in new files to avoid modifying the locked `v9` core schema (`smartbeak.ts`). This follows the pattern established by `growth.ts`.
+- **Additive Changes**: Enterprise schema and functionality live in additive files so the locked `v9` core schema (`smartbeak.ts`) remains unchanged. This follows the pattern established by `growth.ts`.
 - **Leverage Existing Patterns**: The implementation will follow the established conventions for API (`orpc`), database (`drizzle`), and frontend (Next.js App Router, `shadcn/ui`) development found in the existing codebase.
 - **Security First**: All new entities and endpoints will be protected by robust, role-based access control (RBAC), leveraging and extending the existing `membership.ts` library.
-- **Production Grade**: All features will be built with performance, scalability, and user experience in mind, including proper loading states, error handling, and a polished UI.
+- **Operationally Focused**: Enterprise surfaces should prefer accurate status reporting, clear configuration boundaries, and dependable loading and error states.
 
 ## 2. Database Schema (`packages/database/drizzle/schema/enterprise.ts`)
 
-A new file will be created to house all enterprise-related tables. All tables will be prefixed with `enterprise_` to ensure clear namespacing.
+Enterprise-related tables live in `packages/database/drizzle/schema/enterprise.ts`. All tables are prefixed with `enterprise_` for clear namespacing.
 
 | Table Name                  | Columns                                                                                                                              | Description                                                                                                                                 |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,34 +25,32 @@ A new file will be created to house all enterprise-related tables. All tables wi
 
 ## 3. Backend API (`packages/api`)
 
-A new `enterprise` module will be created following the existing structure.
+The `enterprise` module follows the existing structure.
 
 - **`packages/api/modules/enterprise/router.ts`**: The main router for the enterprise module, combining the sub-routers below.
-- **`packages/api/modules/enterprise/teams/`**: Procedures for CRUD operations on teams and team members (`createTeam`, `listTeams`, `updateTeam`, `deleteTeam`, `inviteMember`, `removeMember`, `updateMemberRole`).
-- **`packages/api/modules/enterprise/sso/`**: Procedures for managing SSO/SCIM (`getSsoProvider`, `upsertSsoProvider`, `deleteSsoProvider`, `createScimToken`, `listScimTokens`, `deleteScimToken`).
+- **`packages/api/modules/enterprise/teams/`**: Procedures for CRUD operations on teams and team members (`createTeam`, `listTeams`, `updateTeam`, `deleteTeam`, `addTeamMember`, `removeTeamMember`, `updateTeamMemberRole`).
+- **`packages/api/modules/enterprise/sso/`**: Procedures for managing saved SSO provider settings and SCIM tokens (`listSsoProviders`, `upsertSsoProvider`, `deleteSsoProvider`, `createScimToken`, `listScimTokens`, `deleteScimToken`).
 - **`packages/api/modules/enterprise/audit/`**: Procedures to enhance audit logs (`searchAuditLogs`, `exportAuditLogs`, `getAuditRetention`, `setAuditRetention`).
 - **`packages/api/modules/enterprise/billing/`**: Procedures for advanced billing (`listBillingTiers`, `getOrgTier`, `setOrgTier`, `updateSeats`).
 
 ## 4. Frontend UI (`apps/web`)
 
-New pages and components will be added under the organization settings and a new top-level section.
+Enterprise pages and components live under the organization enterprise section.
 
-- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/settings/teams/page.tsx`**: New page to host the team management dashboard.
-- **`apps/web/modules/enterprise/teams/`**: Components for the team dashboard: `TeamList`, `CreateTeamForm`, `TeamMemberTable`, `InviteMemberDialog`.
-- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/settings/sso/page.tsx`**: New page for SSO/SCIM configuration.
-- **`apps/web/modules/enterprise/sso/`**: Components for SSO setup: `SamlConfigForm`, `OidcConfigForm`, `ScimTokenManager`.
-- **`apps/web/modules/smartbeak/audit/components/AuditLogView.tsx` (Modified)**: Enhance the existing view with search/filter controls and an export button.
-- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/settings/audit/page.tsx`**: New page for audit log retention settings.
-- **`apps/web/modules/enterprise/audit/`**: Component for `AuditRetentionForm`.
-- **`apps/web/modules/smartbeak/billing/components/BillingView.tsx` (Modified)**: Enhance the existing view to show usage against new tiered limits and manage seats.
-- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/settings/plan/page.tsx`**: New page for viewing and changing billing tiers.
-- **`apps/web/modules/enterprise/billing/`**: Components for `BillingTierSelector` and `SeatManager`.
+- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/enterprise/teams/page.tsx`**: Page hosting the team management dashboard.
+- **`apps/web/modules/smartbeak/enterprise/teams/`**: Team management dashboard components.
+- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/enterprise/sso/page.tsx`**: Page for saved SSO/SCIM configuration.
+- **`apps/web/modules/smartbeak/enterprise/sso/`**: Components for SSO settings and SCIM token management.
+- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/enterprise/audit/page.tsx`**: Page for enterprise audit search, retention, and export settings.
+- **`apps/web/modules/smartbeak/enterprise/audit/`**: Enterprise audit log components.
+- **`apps/web/app/(saas)/app/(organizations)/[organizationSlug]/enterprise/billing/page.tsx`**: Page for configured billing tiers, seat settings, and usage tracking.
+- **`apps/web/modules/smartbeak/enterprise/billing/`**: Enterprise billing dashboard components.
 
 ## 5. Infrastructure & Scaling
 
-- **Redis Caching**: A new Redis client will be integrated into `packages/database/drizzle/client.ts`. Caching logic will be added to high-read database queries (e.g., `getOrganizationBySlug`, `getSmartBeakOrgBySlug`, `getSubscriptionForOrg`) to reduce database load.
-- **Rate Limiting**: A rate-limiting middleware will be added in `packages/api/orpc/procedures.ts` using a library like `unstorage` with a Redis driver to protect critical API endpoints.
+- **Redis Caching**: Redis-backed caching is used by selected enterprise queries to reduce repeated database work.
+- **Rate Limiting**: Rate limiting is applied to selected enterprise endpoints such as SCIM token creation.
 
 ## 6. Documentation
 
-- **`README.md` (Modified)**: A new "Phase 3A: Enterprise Features" section will be added, detailing the new capabilities.
+- **`README.phase-3a.md`**: Describes the current enterprise feature set and implementation notes.

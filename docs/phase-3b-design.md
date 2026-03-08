@@ -18,7 +18,7 @@ A new `ai-agents` module will be created to house all backend logic.
 
 -   **Agent Execution Engine**: A core service that interprets workflow graphs, manages agent state, and orchestrates the execution of agent steps (e.g., calling the Research Agent, then the Writer Agent).
 -   **Streaming API Routes**: New Next.js API routes (`/api/ai/stream/workflow` and `/api/ai/stream/copilot`) will handle real-time communication with the frontend using the Vercel AI SDK.
--   **orpc Routers**: New tRPC procedures for managing agents, workflows, and sessions, and for fetching analytics data.
+-   **oRPC Routers**: New oRPC procedures for managing agents, workflows, and sessions, and for fetching analytics data.
 
 ### 4. Frontend (`apps/web`)
 

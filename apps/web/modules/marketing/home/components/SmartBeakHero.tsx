@@ -1,3 +1,4 @@
+import { LocaleLink } from "@i18n/routing";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import {
@@ -7,20 +8,19 @@ import {
 	TrendingUpIcon,
 	ZapIcon,
 } from "lucide-react";
-import Link from "next/link";
 
 const STATS = [
 	{ value: "26", label: "Schema tables" },
-	{ value: "11", label: "Platform adapters" },
+	{ value: "5", label: "Supported publishing targets" },
 	{ value: "8+", label: "AI modules" },
 	{ value: "∞", label: "Domains supported" },
 ];
 
 const TRUST_BADGES = [
-	{ icon: ShieldCheckIcon, label: "SOC 2 Ready" },
-	{ icon: ZapIcon, label: "< 200ms API" },
-	{ icon: TrendingUpIcon, label: "99.9% uptime" },
-	{ icon: SparklesIcon, label: "AI-native" },
+	{ icon: ShieldCheckIcon, label: "Multi-tenant RBAC" },
+	{ icon: ZapIcon, label: "Waitlist beta" },
+	{ icon: TrendingUpIcon, label: "Portfolio analytics" },
+	{ icon: SparklesIcon, label: "AI-assisted workflows" },
 ];
 
 export function SmartBeakHero() {
@@ -40,21 +40,21 @@ export function SmartBeakHero() {
 						className="gap-1.5 border border-primary/30"
 					>
 						<SparklesIcon className="size-3" />
-						AI-Powered Content Publishing Platform
+						AI-Assisted Portfolio Operations
 					</Badge>
 				</div>
 
 				{/* Headline */}
 				<div className="text-center max-w-4xl mx-auto">
 					<h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.1]">
-						Turn your domain portfolio into a{" "}
-						<span className="text-primary">revenue engine</span>
+						Run your domain portfolio from{" "}
+						<span className="text-primary">one workspace</span>
 					</h1>
 					<p className="mt-6 text-lg text-foreground/60 sm:text-xl max-w-2xl mx-auto leading-relaxed">
-						SmartBeak is the premium multi-tenant SaaS for serious
-						domain portfolio owners. Publish AI-generated content
-						across 11 platforms, track SEO decay signals, and
-						maximise your sell-ready score — all from one dashboard.
+						SmartBeak is a multi-tenant workspace for domain
+						portfolio owners. Create AI-assisted content, publish
+						to supported platforms, track SEO decay signals, and
+						review sell-readiness estimates from one dashboard.
 					</p>
 				</div>
 
@@ -65,10 +65,10 @@ export function SmartBeakHero() {
 						asChild
 						className="gap-2 px-8 h-12 text-base"
 					>
-						<Link href="/waitlist">
+						<LocaleLink href="/waitlist">
 							Join the Waitlist
 							<ArrowRightIcon className="size-4" />
-						</Link>
+						</LocaleLink>
 					</Button>
 					<Button
 						size="lg"
@@ -76,7 +76,7 @@ export function SmartBeakHero() {
 						asChild
 						className="gap-2 px-8 h-12 text-base"
 					>
-						<Link href="#features">See Features</Link>
+						<a href="#features">See Features</a>
 					</Button>
 				</div>
 
@@ -109,6 +109,9 @@ export function SmartBeakHero() {
 
 				{/* Dashboard preview mockup */}
 				<div className="mt-16 relative mx-auto max-w-5xl">
+					<p className="mb-3 text-center text-xs uppercase tracking-[0.2em] text-foreground/40">
+						Illustrative product preview using sample data
+					</p>
 					<div className="rounded-2xl border border-border/50 bg-card shadow-2xl overflow-hidden">
 						{/* Window chrome */}
 						<div className="flex items-center gap-2 px-4 py-3 border-b border-border/50 bg-muted/30">
@@ -159,7 +162,7 @@ export function SmartBeakHero() {
 												"text-green-600 dark:text-green-400",
 										},
 										{
-											label: "Sell-Ready",
+											label: "Readiness",
 											value: "12",
 											textColor:
 												"text-violet-600 dark:text-violet-400",

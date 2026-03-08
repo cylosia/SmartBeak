@@ -18,7 +18,7 @@ export default async function DomainDetailPage({
 		<div>
 			<PageHeader
 				title="Domain Overview"
-				subtitle="DNS health, registry status, transfer readiness, and quick links."
+				subtitle="Recorded domain metadata, health snapshots, and quick links."
 			/>
 			<DomainDetailView
 				organizationSlug={organizationSlug}

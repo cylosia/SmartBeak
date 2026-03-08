@@ -67,7 +67,8 @@ const PROVIDERS: ProviderDefinition[] = [
 	{
 		id: "google_search_console",
 		name: "Google Search Console",
-		description: "Sync impressions, clicks, CTR, and position data.",
+		description:
+			"Store credentials for administrative GSC workflows. This screen does not validate or run sync jobs.",
 		icon: <SearchIcon className="h-5 w-5 text-primary" />,
 		fields: [
 			{
@@ -89,7 +90,8 @@ const PROVIDERS: ProviderDefinition[] = [
 	{
 		id: "ahrefs",
 		name: "Ahrefs",
-		description: "Domain rating, backlinks, and organic keyword data.",
+		description:
+			"Store credentials for manual Ahrefs imports. This screen does not validate or run sync jobs.",
 		icon: <LinkIcon className="h-5 w-5 text-primary" />,
 		fields: [
 			{
@@ -110,6 +112,8 @@ const PROVIDERS: ProviderDefinition[] = [
 	},
 ];
 
+const LIVE_TESTABLE_PROVIDERS = new Set<ProviderDefinition["id"]>(["openai"]);
+
 interface IntegrationState {
 	id: string;
 	provider: string;
@@ -122,14 +126,17 @@ function ProviderCard({
 	provider,
 	integration,
 	organizationSlug,
+	encryptionConfigured,
 	onMutationSuccess,
 }: {
 	provider: ProviderDefinition;
 	integration: IntegrationState | undefined;
 	organizationSlug: string;
+	encryptionConfigured: boolean;
 	onMutationSuccess: () => void;
 }) {
-	const isConnected = integration?.hasKey ?? false;
+	const hasSavedKey = integration?.hasKey ?? false;
+	const supportsLiveTest = LIVE_TESTABLE_PROVIDERS.has(provider.id);
 
 	const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 	const [isSaving, setIsSaving] = useState(false);
@@ -140,8 +147,10 @@ function ProviderCard({
 		orpc.smartbeak.settings.integrations.upsert.mutationOptions({
 			onSuccess: () => {
 				toastSuccess(
-					"Integration saved",
-					`${provider.name} key has been saved and encrypted.`,
+					"Credential saved",
+					supportsLiveTest
+						? `${provider.name} credentials were saved and encrypted.`
+						: `${provider.name} credentials were stored encrypted for this organization.`,
 				);
 				setFieldValues({});
 				onMutationSuccess();
@@ -174,8 +183,8 @@ function ProviderCard({
 		orpc.smartbeak.settings.integrations.delete.mutationOptions({
 			onSuccess: () => {
 				toastSuccess(
-					"Integration removed",
-					`${provider.name} has been disconnected.`,
+					"Credential removed",
+					`${provider.name} stored credentials were removed.`,
 				);
 				setFieldValues({});
 				onMutationSuccess();
@@ -239,21 +248,30 @@ function ProviderCard({
 							</CardDescription>
 						</div>
 					</div>
-					{isConnected ? (
+					{hasSavedKey ? (
 						<Badge className="gap-1 text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
 							<CheckCircle2Icon className="h-3 w-3" />
-							Connected
+							Credential Saved
 						</Badge>
 					) : (
 						<Badge className="gap-1 text-xs bg-muted text-muted-foreground">
 							<CircleDotIcon className="h-3 w-3" />
-							Not Connected
+							Not Configured
 						</Badge>
 					)}
 				</div>
 			</CardHeader>
 
 			<CardContent className="space-y-4">
+				{!encryptionConfigured ? (
+					<p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+						Encrypted key storage is not configured in this
+						environment yet. Saving and testing integrations is
+						unavailable until an administrator sets
+						`SMARTBEAK_ENCRYPTION_KEY`.
+					</p>
+				) : null}
+
 				{provider.fields.map((field) => (
 					<div key={field.key} className="space-y-1.5">
 						<Label
@@ -266,7 +284,7 @@ function ProviderCard({
 							id={`${provider.id}-${field.key}`}
 							type={field.type}
 							placeholder={
-								isConnected && field.key === "apiKey"
+								hasSavedKey && field.key === "apiKey"
 									? "••••••••••••••••"
 									: field.placeholder
 							}
@@ -287,21 +305,33 @@ function ProviderCard({
 					<Button
 						size="sm"
 						onClick={handleSave}
-						disabled={isSaving || !fieldValues.apiKey}
+						disabled={
+							isSaving ||
+							!fieldValues.apiKey ||
+							!encryptionConfigured
+						}
 					>
 						{isSaving ? (
 							<Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
 						) : null}
-						{isConnected ? "Update Key" : "Save Key"}
+						{!encryptionConfigured
+							? "Unavailable"
+							: hasSavedKey
+								? "Update Key"
+								: "Save Key"}
 					</Button>
 
-					{isConnected && (
+					{hasSavedKey && (
 						<>
 							<Button
 								variant="outline"
 								size="sm"
 								onClick={handleTest}
-								disabled={isTesting}
+								disabled={
+									isTesting ||
+									!supportsLiveTest ||
+									!encryptionConfigured
+								}
 							>
 								{isTesting ? (
 									<Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -328,6 +358,14 @@ function ProviderCard({
 						</>
 					)}
 				</div>
+
+				{hasSavedKey && !supportsLiveTest ? (
+					<p className="text-xs text-muted-foreground">
+						Live credential verification is not available for this
+						provider. Saving the key stores it securely, but the app
+						does not validate or automatically use it from this screen.
+					</p>
+				) : null}
 			</CardContent>
 		</Card>
 	);
@@ -346,6 +384,8 @@ export function IntegrationsSettingsForm() {
 	);
 
 	const integrations = integrationsQuery.data?.integrations ?? [];
+	const encryptionConfigured =
+		integrationsQuery.data?.encryptionConfigured ?? true;
 
 	function handleMutationSuccess() {
 		queryClient.invalidateQueries({
@@ -358,7 +398,7 @@ export function IntegrationsSettingsForm() {
 	return (
 		<SettingsItem
 			title="API Integrations"
-			description="Connect third-party services by adding your API keys. Keys are encrypted at rest using AES-256-GCM."
+			description="Store third-party provider credentials for SmartBeak. When encryption is configured, credentials are stored encrypted at rest; only supported providers can be validated from this screen."
 		>
 			{integrationsQuery.isLoading ? (
 				<div className="space-y-4">
@@ -388,6 +428,14 @@ export function IntegrationsSettingsForm() {
 				</div>
 			) : (
 				<div className="space-y-4">
+					{!encryptionConfigured ? (
+						<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+							Integration key storage is unavailable in this
+							environment because `SMARTBEAK_ENCRYPTION_KEY` is not
+							configured.
+						</div>
+					) : null}
+
 					{PROVIDERS.map((provider) => {
 						const integration = integrations.find(
 							(i) => i.provider === provider.id,
@@ -400,6 +448,7 @@ export function IntegrationsSettingsForm() {
 									integration as IntegrationState | undefined
 								}
 								organizationSlug={organizationSlug}
+								encryptionConfigured={encryptionConfigured}
 								onMutationSuccess={handleMutationSuccess}
 							/>
 						);

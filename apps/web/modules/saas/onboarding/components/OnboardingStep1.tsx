@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { authClient } from "@repo/auth/client";
+import { Alert, AlertTitle } from "@repo/ui/components/alert";
 import { Button } from "@repo/ui/components/button";
 import {
 	Form,
@@ -15,7 +16,7 @@ import {
 import { Input } from "@repo/ui/components/input";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { UserAvatarUpload } from "@saas/settings/components/UserAvatarUpload";
-import { ArrowRightIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowRightIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -25,7 +26,11 @@ const formSchema = z.object({
 	name: z.string().min(1),
 });
 
-export function OnboardingStep1({ onCompleted }: { onCompleted: () => void }) {
+export function OnboardingStep1({
+	onCompleted,
+}: {
+	onCompleted: () => Promise<void>;
+}) {
 	const t = useTranslations();
 	const { user } = useSession();
 	const form = useForm({
@@ -45,11 +50,15 @@ export function OnboardingStep1({ onCompleted }: { onCompleted: () => void }) {
 		form.clearErrors("root");
 
 		try {
-			await authClient.updateUser({
-				name,
+			const trimmedName = name.trim();
+			const { error } = await authClient.updateUser({
+				name: trimmedName,
 			});
+			if (error) {
+				throw error;
+			}
 
-			onCompleted();
+			await onCompleted();
 		} catch {
 			form.setError("root", {
 				type: "server",
@@ -65,6 +74,15 @@ export function OnboardingStep1({ onCompleted }: { onCompleted: () => void }) {
 					className="flex flex-col items-stretch gap-8"
 					onSubmit={onSubmit}
 				>
+					{form.formState.errors.root?.message && (
+						<Alert variant="error">
+							<AlertTriangleIcon />
+							<AlertTitle>
+								{form.formState.errors.root.message}
+							</AlertTitle>
+						</Alert>
+					)}
+
 					<FormField
 						control={form.control}
 						name="name"

@@ -52,6 +52,7 @@ export function OrganizationLogoForm() {
 			const { signedUploadUrl, path } =
 				await getSignedUploadUrlMutation.mutateAsync({
 					organizationId: activeOrganization.id,
+					size: croppedImageData.size,
 				});
 
 			const response = await fetch(signedUploadUrl, {

@@ -92,7 +92,7 @@ const AGENT_TYPE_META: Record<
 	custom: {
 		label: "Custom",
 		icon: <BotIcon className="h-4 w-4" />,
-		description: "A fully customizable agent for any task.",
+		description: "A configurable agent for organization-specific workflows.",
 		color: "bg-orange-500/10 border-orange-500/30 dark:bg-orange-950/40 dark:border-orange-800",
 	},
 };
@@ -106,6 +106,15 @@ const AVAILABLE_MODELS = [
 	},
 	{ value: "claude-3-haiku-20240307", label: "Claude 3 Haiku (fast)" },
 ];
+
+function clampNumber(value: string, fallback: number, min: number, max: number) {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) {
+		return fallback;
+	}
+
+	return Math.min(max, Math.max(min, parsed));
+}
 
 export function AgentManagementDashboard({
 	organizationSlug,
@@ -187,10 +196,19 @@ export function AgentManagementDashboard({
 	const agents = agentsData?.agents ?? [];
 
 	const handleCreate = () => {
+		const trimmedName = form.name.trim();
+		if (!trimmedName) {
+			toastError("Error", "Agent name is required.");
+			return;
+		}
+
+		const trimmedDescription = form.description.trim();
+		const trimmedSystemPrompt = form.systemPrompt.trim();
+
 		createMutation.mutate({
 			organizationSlug,
-			name: form.name,
-			description: form.description || undefined,
+			name: trimmedName,
+			description: trimmedDescription || undefined,
 			agentType: form.agentType as
 				| "research"
 				| "writer"
@@ -198,9 +216,11 @@ export function AgentManagementDashboard({
 				| "custom",
 			config: {
 				model: form.model,
-				temperature: Number(form.temperature) || 0.7,
-				maxTokens: Number(form.maxTokens) || 4096,
-				systemPrompt: form.systemPrompt || undefined,
+				temperature: clampNumber(form.temperature, 0.7, 0, 2),
+				maxTokens: Math.round(
+					clampNumber(form.maxTokens, 4096, 256, 32768),
+				),
+				systemPrompt: trimmedSystemPrompt || undefined,
 				tools:
 					form.agentType === "research"
 						? ["web_search", "read_url", "fact_check"]
@@ -559,7 +579,7 @@ export function AgentManagementDashboard({
 						</Button>
 						<Button
 							onClick={handleCreate}
-							disabled={!form.name || createMutation.isPending}
+							disabled={!form.name.trim() || createMutation.isPending}
 						>
 							{createMutation.isPending && (
 								<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />

@@ -45,6 +45,7 @@ export function NavBar() {
 		debouncedScrollHandler();
 		return () => {
 			window.removeEventListener("scroll", debouncedScrollHandler);
+			debouncedScrollHandler.cancel();
 		};
 	}, [debouncedScrollHandler]);
 
@@ -55,6 +56,7 @@ export function NavBar() {
 	const menuItems: {
 		label: string;
 		href: string;
+		external?: boolean;
 	}[] = [
 		{
 			label: t("common.menu.pricing"),
@@ -81,12 +83,14 @@ export function NavBar() {
 					{
 						label: t("common.menu.docs"),
 						href: config.docsLink,
+						external: true,
 					},
 				]
 			: []),
 	];
 
-	const isMenuItemActive = (href: string) => localePathname.startsWith(href);
+	const isMenuItemActive = (href: string, external?: boolean) =>
+		!external && localePathname.startsWith(href);
 
 	return (
 		<nav
@@ -113,21 +117,38 @@ export function NavBar() {
 					</div>
 
 					<div className="hidden flex-1 items-center justify-center lg:flex">
-						{menuItems.map((menuItem) => (
-							<LocaleLink
-								key={menuItem.href}
-								href={menuItem.href}
-								className={cn(
-									"block px-3 py-2 font-medium text-foreground/80 text-sm",
-									isMenuItemActive(menuItem.href)
-										? "font-bold text-foreground"
-										: "",
-								)}
-								prefetch
-							>
-								{menuItem.label}
-							</LocaleLink>
-						))}
+						{menuItems.map((menuItem) =>
+							menuItem.external ? (
+								<a
+									key={menuItem.href}
+									href={menuItem.href}
+									target="_blank"
+									rel="noreferrer"
+									className={cn(
+										"block px-3 py-2 font-medium text-foreground/80 text-sm",
+									)}
+								>
+									{menuItem.label}
+								</a>
+							) : (
+								<LocaleLink
+									key={menuItem.href}
+									href={menuItem.href}
+									className={cn(
+										"block px-3 py-2 font-medium text-foreground/80 text-sm",
+										isMenuItemActive(
+											menuItem.href,
+											menuItem.external,
+										)
+											? "font-bold text-foreground"
+											: "",
+									)}
+									prefetch
+								>
+									{menuItem.label}
+								</LocaleLink>
+							),
+						)}
 					</div>
 
 					<div className="flex flex-1 items-center justify-end gap-3">
@@ -153,22 +174,38 @@ export function NavBar() {
 							<SheetContent className="w-[280px]" side="right">
 								<SheetTitle />
 								<div className="flex flex-col items-start justify-center">
-									{menuItems.map((menuItem) => (
-										<LocaleLink
-											key={menuItem.href}
-											href={menuItem.href}
-											onClick={handleMobileMenuClose}
-											className={cn(
-												"block px-3 py-2 font-medium text-base text-foreground/80",
-												isMenuItemActive(menuItem.href)
-													? "font-bold text-foreground"
-													: "",
-											)}
-											prefetch
-										>
-											{menuItem.label}
-										</LocaleLink>
-									))}
+									{menuItems.map((menuItem) =>
+										menuItem.external ? (
+											<a
+												key={menuItem.href}
+												href={menuItem.href}
+												target="_blank"
+												rel="noreferrer"
+												onClick={handleMobileMenuClose}
+												className="block px-3 py-2 font-medium text-base text-foreground/80"
+											>
+												{menuItem.label}
+											</a>
+										) : (
+											<LocaleLink
+												key={menuItem.href}
+												href={menuItem.href}
+												onClick={handleMobileMenuClose}
+												className={cn(
+													"block px-3 py-2 font-medium text-base text-foreground/80",
+													isMenuItemActive(
+														menuItem.href,
+														menuItem.external,
+													)
+														? "font-bold text-foreground"
+														: "",
+												)}
+												prefetch
+											>
+												{menuItem.label}
+											</LocaleLink>
+										),
+									)}
 
 									<NextLink
 										key={user ? "start" : "login"}

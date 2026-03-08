@@ -49,8 +49,8 @@ export default function DomainPublishingSuitePage() {
 						Publishing Suite
 					</h1>
 					<p className="mt-1 text-sm text-muted-foreground">
-						Schedule, publish, and track content across all
-						connected platforms.
+						Schedule content, review job status, and manage
+						configured publishing targets.
 					</p>
 				</div>
 				<div className="flex gap-2">
@@ -107,7 +107,7 @@ export default function DomainPublishingSuitePage() {
 				<TabsContent value="platforms" className="mt-6">
 					<div className="mb-4">
 						<h3 className="text-sm font-semibold">
-							Connected Platforms
+							Publishing Targets
 						</h3>
 						<p className="text-xs text-muted-foreground mt-0.5">
 							Configure API credentials for each publishing

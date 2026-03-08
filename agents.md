@@ -1,6 +1,6 @@
 # Coding Agent Guidelines
 
-> Comprehensive guide for AI coding agents working with this supastarter Next.js codebase.
+> Comprehensive guide for AI coding agents working with the SmartBeak codebase.
 
 ## Purpose
 
@@ -678,4 +678,4 @@ Avoid `"use client"` for:
 - Inspect neighboring files for patterns before writing new code
 - Ask for clarification on product requirements rather than guessing
 - Prefer incremental, well-scoped changes over sweeping rewrites
-- Follow the official documentation at [supastarter.dev/docs/nextjs](https://supastarter.dev/docs/nextjs)
+- Follow the official framework documentation at [supastarter.dev/docs/nextjs](https://supastarter.dev/docs/nextjs) when working on shared starter foundations

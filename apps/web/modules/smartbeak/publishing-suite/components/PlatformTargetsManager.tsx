@@ -34,6 +34,9 @@ const PLATFORMS = [
 		label: "Web",
 		icon: GlobeIcon,
 		fields: [{ key: "siteUrl", label: "Site URL" }],
+		supported: false,
+		helpText:
+			"SmartDeploy web publishing is not implemented in this publishing suite yet.",
 	},
 	{
 		id: "email",
@@ -43,6 +46,9 @@ const PLATFORMS = [
 			{ key: "apiKey", label: "Resend API Key" },
 			{ key: "audienceId", label: "Audience ID" },
 		],
+		supported: false,
+		helpText:
+			"Email publishing is not available yet because the current queue does not safely model recipients or per-message content.",
 	},
 	{
 		id: "linkedin",
@@ -50,8 +56,9 @@ const PLATFORMS = [
 		icon: LinkedinIcon,
 		fields: [
 			{ key: "accessToken", label: "Access Token" },
-			{ key: "organizationId", label: "Organization ID" },
+			{ key: "organizationUrn", label: "Organization URN (optional)" },
 		],
+		supported: true,
 	},
 	{
 		id: "youtube",
@@ -59,8 +66,12 @@ const PLATFORMS = [
 		icon: YoutubeIcon,
 		fields: [
 			{ key: "accessToken", label: "OAuth Access Token" },
+			{ key: "refreshToken", label: "OAuth Refresh Token" },
 			{ key: "channelId", label: "Channel ID" },
 		],
+		supported: false,
+		helpText:
+			"YouTube publishing is not available yet because the current queue cannot upload required video assets.",
 	},
 	{
 		id: "instagram",
@@ -68,14 +79,23 @@ const PLATFORMS = [
 		icon: InstagramIcon,
 		fields: [
 			{ key: "accessToken", label: "Access Token" },
-			{ key: "pageId", label: "Page ID" },
+			{ key: "igUserId", label: "Instagram User ID" },
 		],
+		supported: false,
+		helpText:
+			"Instagram publishing is not available yet because the current queue cannot attach required media assets.",
 	},
 	{
 		id: "tiktok",
 		label: "TikTok",
 		icon: GlobeIcon,
-		fields: [{ key: "accessToken", label: "Access Token" }],
+		fields: [
+			{ key: "accessToken", label: "Access Token" },
+			{ key: "openId", label: "Open ID" },
+		],
+		supported: false,
+		helpText:
+			"TikTok publishing is not available yet because the current queue cannot attach required video assets.",
 	},
 	{
 		id: "pinterest",
@@ -85,12 +105,16 @@ const PLATFORMS = [
 			{ key: "accessToken", label: "Access Token" },
 			{ key: "boardId", label: "Board ID" },
 		],
+		supported: true,
 	},
 	{
 		id: "vimeo",
 		label: "Vimeo",
 		icon: GlobeIcon,
 		fields: [{ key: "accessToken", label: "Access Token" }],
+		supported: false,
+		helpText:
+			"Vimeo publishing is not available yet because the current queue cannot attach required video assets.",
 	},
 	{
 		id: "facebook",
@@ -100,6 +124,7 @@ const PLATFORMS = [
 			{ key: "accessToken", label: "Access Token" },
 			{ key: "pageId", label: "Page ID" },
 		],
+		supported: true,
 	},
 	{
 		id: "wordpress",
@@ -110,12 +135,14 @@ const PLATFORMS = [
 			{ key: "username", label: "Username" },
 			{ key: "appPassword", label: "App Password" },
 		],
+		supported: true,
 	},
 	{
 		id: "soundcloud",
 		label: "SoundCloud",
 		icon: GlobeIcon,
 		fields: [{ key: "accessToken", label: "Access Token" }],
+		supported: true,
 	},
 ] as const;
 
@@ -135,6 +162,11 @@ export function PlatformTargetsManager({
 		{},
 	);
 
+	const closeConfigDialog = () => {
+		setConfigDialog(null);
+		setConfigValues({});
+	};
+
 	const targetsQuery = useQuery(
 		orpc.smartbeak.publishingSuite.targets.list.queryOptions({
 			input: { organizationSlug, domainId },
@@ -144,12 +176,14 @@ export function PlatformTargetsManager({
 	const upsertMutation = useMutation(
 		orpc.smartbeak.publishingSuite.targets.upsert.mutationOptions({
 			onSuccess: () => {
-				toastSuccess("Platform configured", "Target saved securely.");
+				toastSuccess(
+					"Platform settings saved",
+					"Target configuration was stored for this domain.",
+				);
 				queryClient.invalidateQueries({
 					queryKey: ["smartbeak", "publishingSuite", "targets"],
 				});
-				setConfigDialog(null);
-				setConfigValues({});
+				closeConfigDialog();
 			},
 			onError: (err: unknown) =>
 				toastError(
@@ -205,11 +239,26 @@ export function PlatformTargetsManager({
 		if (!configDialog) {
 			return;
 		}
+
+		const normalizedConfig = Object.fromEntries(
+			Object.entries(configValues).map(([key, value]) => [key, value.trim()]),
+		);
+		const missingField = configDialog.fields.find(
+			(field) => !normalizedConfig[field.key],
+		);
+		if (missingField) {
+			toastError(
+				"Incomplete configuration",
+				`Enter a value for ${missingField.label} before saving.`,
+			);
+			return;
+		}
+
 		upsertMutation.mutate({
 			organizationSlug,
 			domainId,
 			target: configDialog.platformId as PublishingSuiteTarget,
-			config: configValues,
+			config: normalizedConfig,
 			enabled: true,
 		});
 	};
@@ -248,6 +297,7 @@ export function PlatformTargetsManager({
 				{PLATFORMS.map((platform) => {
 					const configured = configuredTargets.get(platform.id);
 					const Icon = platform.icon;
+					const canConfigure = platform.supported;
 
 					return (
 						<div
@@ -268,15 +318,17 @@ export function PlatformTargetsManager({
 											{platform.label}
 										</p>
 										<p className="text-xs text-muted-foreground">
-											{configured
+											{!canConfigure
+												? "Unavailable"
+												: configured
 												? configured.enabled
-													? "Active"
+												? "Enabled"
 													: "Disabled"
 												: "Not configured"}
 										</p>
 									</div>
 								</div>
-								{configured && (
+								{configured && canConfigure && (
 									<button
 										type="button"
 										aria-label={
@@ -292,6 +344,7 @@ export function PlatformTargetsManager({
 											})
 										}
 										className="text-muted-foreground hover:text-foreground"
+										disabled={toggleMutation.isPending}
 									>
 										{configured.enabled ? (
 											<ToggleRightIcon className="h-5 w-5 text-primary" />
@@ -307,23 +360,33 @@ export function PlatformTargetsManager({
 									size="sm"
 									variant={configured ? "outline" : "primary"}
 									className="h-7 flex-1 gap-1 text-xs"
-									onClick={() => {
-										setConfigValues({});
-										setConfigDialog({
-											platformId: platform.id,
-											fields: [...platform.fields],
-										});
-									}}
+									onClick={
+										canConfigure
+											? () => {
+													setConfigValues({});
+													setConfigDialog({
+														platformId: platform.id,
+														fields: [...platform.fields],
+													});
+												}
+											: undefined
+									}
+									disabled={
+										!canConfigure ||
+										upsertMutation.isPending ||
+										toggleMutation.isPending ||
+										deleteMutation.isPending
+									}
 								>
 									{configured ? (
 										<>
 											<SettingsIcon className="h-3 w-3" />{" "}
-											Reconfigure
+											Edit Settings
 										</>
 									) : (
 										<>
 											<PlusIcon className="h-3 w-3" />{" "}
-											Connect
+											Add Settings
 										</>
 									)}
 								</Button>
@@ -339,11 +402,17 @@ export function PlatformTargetsManager({
 											})
 										}
 										aria-label="Delete target"
+										disabled={deleteMutation.isPending}
 									>
 										<Trash2Icon className="h-3.5 w-3.5" />
 									</Button>
 								)}
 							</div>
+							{platform.helpText ? (
+								<p className="mt-2 text-xs text-muted-foreground">
+									{platform.helpText}
+								</p>
+							) : null}
 						</div>
 					);
 				})}
@@ -351,7 +420,7 @@ export function PlatformTargetsManager({
 
 			{/* Config dialog */}
 			{configDialog && (
-				<Dialog open onOpenChange={(v) => !v && setConfigDialog(null)}>
+				<Dialog open onOpenChange={(v) => !v && closeConfigDialog()}>
 					<DialogContent className="max-w-md">
 						<DialogHeader>
 							<DialogTitle>
@@ -406,13 +475,19 @@ export function PlatformTargetsManager({
 						<DialogFooter>
 							<Button
 								variant="outline"
-								onClick={() => setConfigDialog(null)}
+								onClick={closeConfigDialog}
 							>
 								Cancel
 							</Button>
 							<Button
 								onClick={handleSaveConfig}
-								disabled={upsertMutation.isPending}
+								disabled={
+									upsertMutation.isPending ||
+									configDialog.fields.some(
+										(field) =>
+											!(configValues[field.key] ?? "").trim(),
+									)
+								}
 							>
 								{upsertMutation.isPending
 									? "Saving…"

@@ -7,10 +7,14 @@ import Image from "next/image";
 export const mdxComponents = {
 	a: (props) => {
 		const { href, children, ref: _ref, ...rest } = props;
-		const isInternalLink =
-			href && (href.startsWith("/") || href.startsWith("#"));
+		const isHashLink = href?.startsWith("#");
+		const isInternalLink = href?.startsWith("/");
 
-		return isInternalLink ? (
+		return isHashLink ? (
+			<a href={href} {...rest}>
+				{children}
+			</a>
+		) : isInternalLink ? (
 			<LocaleLink href={href} {...rest}>
 				{children}
 			</LocaleLink>

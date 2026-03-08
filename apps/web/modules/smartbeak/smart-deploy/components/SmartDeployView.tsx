@@ -1,6 +1,15 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import {
+	ExternalLinkIcon,
+	EyeIcon,
+	GlobeIcon,
+	Loader2Icon,
+	RocketIcon,
+	ZapIcon,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 function isSafeUrl(url: string | null | undefined): url is string {
 	if (!url) {
@@ -12,6 +21,19 @@ function isSafeUrl(url: string | null | undefined): url is string {
 	} catch {
 		return false;
 	}
+}
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
 }
 
 import { Badge } from "@repo/ui/components/badge";
@@ -39,15 +61,6 @@ import {
 } from "@repo/ui/components/table";
 import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { orpc } from "@shared/lib/orpc-query-utils";
-import { formatDistanceToNow } from "date-fns";
-import {
-	ExternalLinkIcon,
-	EyeIcon,
-	GlobeIcon,
-	Loader2Icon,
-	RocketIcon,
-	ZapIcon,
-} from "lucide-react";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
@@ -130,8 +143,24 @@ export function SmartDeployView({
 
 	const latest = deployStatusQuery.data?.latest;
 	const shards = deployStatusQuery.data?.shards ?? [];
+	const deploymentConfigured =
+		deployStatusQuery.data?.deploymentConfigured ?? true;
 	const isDeploying =
 		latest?.status === "building" || latest?.status === "deploying";
+
+	useEffect(() => {
+		setPreviewUrl(null);
+	}, [selectedDomainId]);
+
+	useEffect(() => {
+		const themeIds = (themesQuery.data?.themes ?? []).map((theme) => theme.id);
+		if (themeIds.length === 0) {
+			return;
+		}
+		if (!themeIds.includes(selectedThemeId)) {
+			setSelectedThemeId(themeIds[0] ?? "landing-leadgen");
+		}
+	}, [selectedThemeId, themesQuery.data?.themes]);
 
 	return (
 		<ErrorBoundary>
@@ -148,11 +177,26 @@ export function SmartDeployView({
 									SmartDeploy
 								</h2>
 								<p className="mt-1 text-muted-foreground max-w-md">
-									Deploy your site to Vercel's global edge
-									network. Select a domain and theme, then
-									deploy.
+									Deploy supported theme builds to Vercel
+									when SmartDeploy is configured for this
+									environment. Select a domain and theme to
+									start a deployment.
 								</p>
 							</div>
+
+							<p className="max-w-md text-xs text-muted-foreground">
+								If deployment credentials are unavailable, this
+								screen will explain that deployment is not
+								configured instead of publishing a site.
+							</p>
+
+							{selectedDomainId && !deploymentConfigured && (
+								<div className="w-full max-w-md rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+									SmartDeploy is not configured in this
+									environment yet. Add deployment credentials
+									before starting a site deployment.
+								</div>
+							)}
 
 							<div className="flex flex-col gap-4 w-full max-w-md">
 								{(domainsQuery.isError ||
@@ -244,7 +288,8 @@ export function SmartDeployView({
 									disabled={
 										deployMutation.isPending ||
 										isDeploying ||
-										!selectedDomainId
+										!selectedDomainId ||
+										!deploymentConfigured
 									}
 									className="w-full"
 								>
@@ -258,7 +303,9 @@ export function SmartDeployView({
 									) : (
 										<>
 											<RocketIcon className="mr-2 h-5 w-5" />
-											Deploy Site
+											{deploymentConfigured
+												? "Deploy Site"
+												: "Unavailable"}
 										</>
 									)}
 								</Button>
@@ -270,7 +317,7 @@ export function SmartDeployView({
 										<GlobeIcon className="h-5 w-5 text-emerald-500 flex-shrink-0" />
 										<div className="text-left">
 											<p className="text-sm font-medium text-emerald-800 dark:text-emerald-400">
-												Live at{" "}
+												Deployed at{" "}
 												<a
 													href={latest.deployedUrl}
 													target="_blank"
@@ -283,14 +330,9 @@ export function SmartDeployView({
 											<p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">
 												Version {latest.version} &bull;
 												Deployed{" "}
-												{latest.createdAt
-													? formatDistanceToNow(
-															new Date(
-																latest.createdAt,
-															),
-															{ addSuffix: true },
-														)
-													: "recently"}
+												{formatRelativeDate(
+													latest.createdAt,
+												) ?? "recently"}
 											</p>
 										</div>
 										<Button
@@ -318,13 +360,13 @@ export function SmartDeployView({
 					</CardContent>
 				</Card>
 
-				{/* Live Preview */}
+				{/* Deployed Preview */}
 				{previewUrl && (
 					<Card>
 						<CardHeader className="flex flex-row items-center justify-between">
 							<CardTitle className="text-sm font-medium flex items-center gap-2">
 								<EyeIcon className="h-4 w-4" />
-								Live Preview
+								Deployed Preview
 							</CardTitle>
 							<div className="flex items-center gap-2">
 								<a
@@ -450,16 +492,9 @@ export function SmartDeployView({
 													)}
 												</TableCell>
 												<TableCell className="text-muted-foreground text-sm">
-													{shard.createdAt
-														? formatDistanceToNow(
-																new Date(
-																	shard.createdAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)
-														: "—"}
+													{formatRelativeDate(
+														shard.createdAt,
+													) ?? "—"}
 												</TableCell>
 											</TableRow>
 										))}

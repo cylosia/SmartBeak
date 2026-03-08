@@ -43,6 +43,17 @@ export async function resolveTextModel(orgId: string): Promise<LanguageModel> {
 		return globalTextModel;
 	}
 
+	if (
+		typeof config.apiKey !== "string" ||
+		config.apiKey.trim().length === 0
+	) {
+		const { logger } = await import("@repo/logs");
+		logger.warn(
+			"[resolveTextModel] OpenAI integration is missing an API key, using global model.",
+		);
+		return globalTextModel;
+	}
+
 	const provider = createOpenAI({ apiKey: config.apiKey });
 	return provider("gpt-4o-mini");
 }

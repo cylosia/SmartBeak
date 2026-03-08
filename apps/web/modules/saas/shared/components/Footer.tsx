@@ -9,7 +9,7 @@ export function Footer() {
 			)}
 		>
 			<span>
-				<a href="https://supastarter.dev">Built with supastarter</a>
+				SmartBeak
 			</span>
 			<span className="opacity-50"> | </span>
 			<LocaleLink href="/legal/privacy-policy">Privacy policy</LocaleLink>

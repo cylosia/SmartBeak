@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 export function SubscriptionStatusBadge({
 	status,
+	className,
 }: {
 	status: string;
 	className?: string;
@@ -34,5 +35,9 @@ export function SubscriptionStatusBadge({
 		unpaid: "error",
 	};
 
-	return <Badge status={badgeColors[status]}>{badgeLabels[status]}</Badge>;
+	return (
+		<Badge status={badgeColors[status] ?? "info"} className={className}>
+			{badgeLabels[status] ?? status.replaceAll("_", " ")}
+		</Badge>
+	);
 }

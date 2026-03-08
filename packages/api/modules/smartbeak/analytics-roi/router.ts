@@ -29,7 +29,7 @@ export const analyticsRoiRouter = {
 	runDiligence: runDiligenceEngine,
 	updateDiligenceCheck,
 
-	// Sell-Ready Score
+	// Sell-Readiness Estimate
 	getSellReadyScore: getSellReadyScoreProc,
 
 	// Buyer Attribution

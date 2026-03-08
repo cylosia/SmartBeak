@@ -10,6 +10,23 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
+function normalizeDomainTarget(value: string): string {
+	const trimmed = value.trim().toLowerCase();
+	if (!trimmed) {
+		return "";
+	}
+
+	const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+		? trimmed
+		: `https://${trimmed}`;
+
+	try {
+		return new URL(candidate).hostname.replace(/^www\./, "");
+	} catch {
+		return trimmed.replace(/^www\./, "").replace(/\/.*$/, "");
+	}
+}
+
 /**
  * Ahrefs Keywords Explorer adapter.
  *
@@ -107,6 +124,14 @@ export const syncAhrefs = protectedProcedure
 		const domain = await getDomainById(input.domainId);
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
+		}
+
+		const expectedTarget = normalizeDomainTarget(domain.name);
+		const actualTarget = normalizeDomainTarget(input.target);
+		if (!expectedTarget || expectedTarget !== actualTarget) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "Ahrefs target must match the selected domain.",
+			});
 		}
 
 		let rows: Awaited<ReturnType<typeof fetchAhrefsKeywords>>;

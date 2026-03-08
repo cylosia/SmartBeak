@@ -23,6 +23,6 @@
 		"migrate": "dotenv -e ../../.env.local -- pnpm dlx @better-auth/cli@latest generate --config ./auth.ts --output ../database/prisma/schema.prisma",
 		"type-check": "tsc --noEmit"
 	},
-	"types": "./**/.tsx",
+	"types": "./index.ts",
 	"version": "0.0.0"
 }

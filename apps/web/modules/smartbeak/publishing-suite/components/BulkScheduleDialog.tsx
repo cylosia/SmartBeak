@@ -23,15 +23,9 @@ import { CalendarIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 const PLATFORMS = [
-	"web",
-	"email",
 	"linkedin",
 	"facebook",
-	"instagram",
-	"youtube",
-	"tiktok",
 	"pinterest",
-	"vimeo",
 	"soundcloud",
 	"wordpress",
 ] as const;
@@ -41,6 +35,12 @@ interface ScheduleRow {
 	target: string;
 	scheduledFor: string;
 }
+
+const DEFAULT_ROW: ScheduleRow = {
+	contentId: "",
+	target: "linkedin",
+	scheduledFor: "",
+};
 
 export function BulkScheduleDialog({
 	organizationSlug,
@@ -54,9 +54,11 @@ export function BulkScheduleDialog({
 	onClose: () => void;
 }) {
 	const queryClient = useQueryClient();
-	const [rows, setRows] = useState<ScheduleRow[]>([
-		{ contentId: "", target: "web", scheduledFor: "" },
-	]);
+	const [rows, setRows] = useState<ScheduleRow[]>([{ ...DEFAULT_ROW }]);
+
+	const resetForm = () => {
+		setRows([{ ...DEFAULT_ROW }]);
+	};
 
 	const bulkMutation = useMutation(
 		orpc.smartbeak.publishingSuite.bulkSchedule.mutationOptions({
@@ -68,6 +70,7 @@ export function BulkScheduleDialog({
 				queryClient.invalidateQueries({
 					queryKey: ["smartbeak", "publishingSuite"],
 				});
+				resetForm();
 				onClose();
 			},
 			onError: (err: unknown) =>
@@ -79,10 +82,7 @@ export function BulkScheduleDialog({
 	);
 
 	const addRow = () =>
-		setRows((r) => [
-			...r,
-			{ contentId: "", target: "web", scheduledFor: "" },
-		]);
+		setRows((r) => [...r, { ...DEFAULT_ROW }]);
 	const removeRow = (i: number) =>
 		setRows((r) => r.filter((_, idx) => idx !== i));
 	const updateRow = (i: number, patch: Partial<ScheduleRow>) =>
@@ -91,20 +91,37 @@ export function BulkScheduleDialog({
 		);
 
 	const handleSubmit = () => {
-		const valid = rows.filter(
-			(r) => r.contentId && r.target && r.scheduledFor,
-		);
-		if (valid.length === 0) {
+		if (rows.length === 0) {
 			toastError(
 				"No valid rows",
 				"Fill in content ID, platform, and date for each row.",
 			);
 			return;
 		}
+
+		const normalizedRows = rows.map((row) => ({
+			contentId: row.contentId.trim(),
+			target: row.target,
+			scheduledFor: row.scheduledFor,
+		}));
+		const invalidRowIndex = normalizedRows.findIndex((row) => {
+			if (!row.contentId || !row.target || !row.scheduledFor) {
+				return true;
+			}
+			return Number.isNaN(new Date(row.scheduledFor).getTime());
+		});
+		if (invalidRowIndex !== -1) {
+			toastError(
+				"Invalid row",
+				`Row ${invalidRowIndex + 1} must include a valid content ID, platform, and schedule time.`,
+			);
+			return;
+		}
+
 		bulkMutation.mutate({
 			organizationSlug,
 			domainId,
-			jobs: valid.map((r) => ({
+			jobs: normalizedRows.map((r) => ({
 				contentId: r.contentId,
 				target: r.target as PublishingSuiteTarget,
 				scheduledFor: new Date(r.scheduledFor).toISOString(),
@@ -112,8 +129,15 @@ export function BulkScheduleDialog({
 		});
 	};
 
+	const handleOpenChange = (nextOpen: boolean) => {
+		if (!nextOpen) {
+			resetForm();
+			onClose();
+		}
+	};
+
 	return (
-		<Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="max-w-2xl">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
@@ -198,7 +222,13 @@ export function BulkScheduleDialog({
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={onClose}>
+					<Button
+						variant="outline"
+						onClick={() => {
+							resetForm();
+							onClose();
+						}}
+					>
 						Cancel
 					</Button>
 					<Button

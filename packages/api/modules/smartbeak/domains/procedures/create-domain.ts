@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { createDomain } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
+import { THEME_IDS } from "../../deploy/lib/themes";
 import { audit } from "../../lib/audit";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
@@ -22,7 +23,7 @@ export const createDomainProcedure = protectedProcedure
 				.min(1)
 				.max(255)
 				.regex(/^[a-z0-9-]+$/),
-			themeId: z.string().min(1).optional(),
+			themeId: z.enum(THEME_IDS).optional(),
 		}),
 	)
 	.handler(async ({ context: { user }, input }) => {

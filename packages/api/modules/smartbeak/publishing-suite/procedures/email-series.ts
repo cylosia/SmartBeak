@@ -1,23 +1,15 @@
 import { ORPCError } from "@orpc/server";
-import {
-	bulkCreatePublishingJobs,
-	emailSeriesInputSchema,
-	getDomainById,
-} from "@repo/database";
-import { logger } from "@repo/logs";
+import { emailSeriesInputSchema, getDomainById } from "@repo/database";
 import { protectedProcedure } from "../../../../orpc/procedures";
-import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
-
-const RESEND_API = "https://api.resend.com";
 
 export const createEmailSeriesProcedure = protectedProcedure
 	.route({
 		method: "POST",
 		path: "/smartbeak/publishing-suite/email-series",
 		tags: ["SmartBeak - Publishing Suite"],
-		summary: "Create a drip email series using Resend automation",
+		summary: "Create a drip email series (planned)",
 	})
 	.input(emailSeriesInputSchema)
 	.handler(async ({ context: { user }, input }) => {
@@ -28,80 +20,8 @@ export const createEmailSeriesProcedure = protectedProcedure
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
 		}
-
-		const apiKey = process.env.RESEND_API_KEY;
-		if (!apiKey) {
-			throw new ORPCError("BAD_REQUEST", {
-				message: "RESEND_API_KEY not configured.",
-			});
-		}
-
-		// Create Resend broadcast/audience if needed (stub — real impl uses Resend Audiences API)
-		const startDate = input.startAt ? new Date(input.startAt) : new Date();
-
-		// Schedule one publishing job per step (target: email)
-		const jobs = input.steps.map((step, _i) => {
-			const scheduledFor = new Date(startDate);
-			scheduledFor.setDate(scheduledFor.getDate() + step.delayDays);
-			return {
-				domainId: input.domainId,
-				contentId: step.contentId,
-				target: "email" as const,
-				scheduledFor,
-			};
+		throw new ORPCError("PRECONDITION_FAILED", {
+			message:
+				"Email series automation is not available yet. The current publishing queue cannot safely persist per-step email bodies, subjects, or recipients.",
 		});
-
-		const created = await bulkCreatePublishingJobs(jobs);
-
-		// Send first step immediately via Resend if no delay
-		const firstStep = input.steps[0];
-		if (firstStep && firstStep.delayDays === 0) {
-			const controller = new AbortController();
-			const timer = setTimeout(() => controller.abort(), 15_000);
-			const res = await fetch(`${RESEND_API}/emails`, {
-				method: "POST",
-				signal: controller.signal,
-				headers: {
-					Authorization: `Bearer ${apiKey}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					from: `${input.fromName} <${input.fromEmail}>`,
-					to: ["audience"],
-					reply_to: input.replyTo,
-					subject: firstStep.subject,
-					html: firstStep.htmlBody,
-				}),
-			});
-			clearTimeout(timer);
-			if (!res.ok) {
-				const errBody = await res.text().catch(() => "");
-				logger.error(
-					`[email-series] Failed to send first step via Resend (${res.status}):`,
-					errBody,
-				);
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Failed to send first email in the series.",
-				});
-			}
-		}
-
-		await audit({
-			orgId: org.id,
-			actorId: user.id,
-			action: "publishing.email_series_created",
-			entityType: "publishing_job",
-			entityId: undefined,
-			details: {
-				seriesName: input.seriesName,
-				stepCount: input.steps.length,
-				domainId: input.domainId,
-			},
-		});
-
-		return {
-			created,
-			stepCount: created.length,
-			seriesName: input.seriesName,
-		};
 	});

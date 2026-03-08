@@ -1,3 +1,4 @@
+import { getActiveOrganization, getSession } from "@saas/auth/lib/server";
 import {
 	Tabs,
 	TabsContent,
@@ -5,6 +6,7 @@ import {
 	TabsTrigger,
 } from "@repo/ui/components/tabs";
 import { ActivityIcon, AlertTriangleIcon } from "lucide-react";
+import { notFound } from "next/navigation";
 import { DLQView } from "@/modules/smartbeak/publishing-suite/components/DLQView";
 import { UnifiedPublishingDashboard } from "@/modules/smartbeak/publishing-suite/components/UnifiedPublishingDashboard";
 
@@ -15,7 +17,20 @@ export default async function PublishingSuitePage({
 }: {
 	params: Promise<{ organizationSlug: string }>;
 }) {
+	const session = await getSession();
 	const { organizationSlug } = await params;
+	const organization = await getActiveOrganization(organizationSlug);
+	const userOrganizationRole = organization?.members.find(
+		(member) => member.userId === session?.user.id,
+	)?.role;
+
+	if (
+		!organization ||
+		!["owner", "admin", "editor"].includes(userOrganizationRole ?? "") &&
+			session?.user.role !== "admin"
+	) {
+		return notFound();
+	}
 
 	return (
 		<div className="space-y-6 p-6">

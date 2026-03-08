@@ -9,6 +9,15 @@ const locales = Object.keys(i18nConfig.locales);
 
 const staticMarketingPages = ["", "/changelog"];
 
+function parseLastModified(value: string | undefined): Date | undefined {
+	if (!value) {
+		return undefined;
+	}
+
+	const parsed = new Date(value);
+	return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const posts = await getAllPosts();
 
@@ -16,16 +25,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		...staticMarketingPages.flatMap((page) =>
 			locales.map((locale) => ({
 				url: new URL(`/${locale}${page}`, baseUrl).href,
-				lastModified: new Date(),
 			})),
 		),
 		...posts.map((post) => ({
 			url: new URL(`/${post.locale}/blog/${post.path}`, baseUrl).href,
-			lastModified: new Date(),
+			lastModified: parseLastModified(post.date),
 		})),
 		...allLegalPages.map((page) => ({
 			url: new URL(`/${page.locale}/legal/${page.path}`, baseUrl).href,
-			lastModified: new Date(),
 		})),
 	];
 }

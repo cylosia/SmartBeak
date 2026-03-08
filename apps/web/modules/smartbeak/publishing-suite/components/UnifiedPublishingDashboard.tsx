@@ -52,6 +52,33 @@ const STATUS_COLORS: Record<string, string> = {
 	cancelled: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400",
 };
 
+const UNSUPPORTED_TARGET_MESSAGES: Partial<Record<string, string>> = {
+	web: "Use SmartDeploy directly instead of the publishing queue.",
+	email:
+		"Email publishing is unavailable because the queue does not safely model recipients or per-message content.",
+	youtube:
+		"YouTube publishing is unavailable because the queue cannot upload required video assets.",
+	instagram:
+		"Instagram publishing is unavailable because the queue cannot attach required media assets.",
+	tiktok:
+		"TikTok publishing is unavailable because the queue cannot attach required video assets.",
+	vimeo:
+		"Vimeo publishing is unavailable because the queue cannot attach required video assets.",
+};
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
+}
+
 export function UnifiedPublishingDashboard({
 	organizationSlug,
 }: {
@@ -59,6 +86,7 @@ export function UnifiedPublishingDashboard({
 }) {
 	const [statusFilter, setStatusFilter] = useState<string>("all");
 	const [targetFilter, setTargetFilter] = useState<string>("all");
+	const [pendingJobId, setPendingJobId] = useState<string | null>(null);
 	const queryClient = useQueryClient();
 
 	const dashboardQuery = useQuery(
@@ -75,11 +103,31 @@ export function UnifiedPublishingDashboard({
 
 	const executeMutation = useMutation(
 		orpc.smartbeak.publishingSuite.executeJob.mutationOptions({
-			onSuccess: () => {
-				toastSuccess(
-					"Job executed",
-					"Publishing job dispatched successfully.",
-				);
+			onMutate: ({ jobId }) => {
+				setPendingJobId(jobId);
+			},
+			onSuccess: (data) => {
+				const result = data as {
+					success?: boolean;
+					result?: { alreadyPublished?: boolean; error?: string };
+				};
+				if (result.result?.alreadyPublished) {
+					toastSuccess(
+						"Job already published",
+						"No new publish attempt was needed.",
+					);
+				} else if (result.success) {
+					toastSuccess(
+						"Job published",
+						"The publishing adapter confirmed the publish attempt.",
+					);
+				} else {
+					toastError(
+						"Execution failed",
+						result.result?.error ??
+							"The adapter did not confirm publication. Check job details for more information.",
+					);
+				}
 				queryClient.invalidateQueries({
 					queryKey: ["smartbeak", "publishingSuite"],
 				});
@@ -89,6 +137,9 @@ export function UnifiedPublishingDashboard({
 					"Execution failed",
 					err instanceof Error ? err.message : "Unknown error",
 				),
+			onSettled: () => {
+				setPendingJobId(null);
+			},
 		}),
 	);
 
@@ -269,7 +320,7 @@ export function UnifiedPublishingDashboard({
 						<EmptyState
 							icon={SendIcon}
 							title="No publishing jobs"
-							description="Schedule content to publish across your connected platforms."
+							description="Schedule content to publish across your supported platforms."
 						/>
 					) : (
 						<Table>
@@ -298,6 +349,11 @@ export function UnifiedPublishingDashboard({
 										const Icon =
 											PLATFORM_ICONS[job.target] ??
 											ActivityIcon;
+										const unsupportedMessage =
+											UNSUPPORTED_TARGET_MESSAGES[job.target];
+										const isPendingJob =
+											pendingJobId === job.id &&
+											executeMutation.isPending;
 										return (
 											<TableRow key={job.id}>
 												<TableCell>
@@ -316,31 +372,17 @@ export function UnifiedPublishingDashboard({
 													</span>
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{job.scheduledFor
-														? formatDistanceToNow(
-																new Date(
-																	job.scheduledFor,
-																),
-																{
-																	addSuffix: true,
-																},
-															)
-														: "—"}
+													{formatRelativeDate(
+														job.scheduledFor,
+													) ?? "—"}
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{job.executedAt
-														? formatDistanceToNow(
-																new Date(
-																	job.executedAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)
-														: "—"}
+													{formatRelativeDate(
+														job.executedAt,
+													) ?? "—"}
 												</TableCell>
 												<TableCell className="max-w-[200px] truncate text-xs text-red-500 dark:text-red-400">
-													{job.error ?? "—"}
+													{job.error ?? unsupportedMessage ?? "—"}
 												</TableCell>
 												<TableCell className="text-right">
 													{(job.status ===
@@ -352,6 +394,9 @@ export function UnifiedPublishingDashboard({
 															variant="outline"
 															className="h-7 text-xs"
 															disabled={
+																Boolean(
+																	unsupportedMessage,
+																) ||
 																executeMutation.isPending
 															}
 															onClick={() =>
@@ -363,8 +408,14 @@ export function UnifiedPublishingDashboard({
 																)
 															}
 														>
-															<SendIcon className="mr-1 h-3 w-3" />
-															Execute
+															<SendIcon
+																className={`mr-1 h-3 w-3 ${isPendingJob ? "animate-pulse" : ""}`}
+															/>
+															{unsupportedMessage
+																? "Unsupported"
+																: isPendingJob
+																? "Executing…"
+																: "Execute"}
 														</Button>
 													)}
 												</TableCell>

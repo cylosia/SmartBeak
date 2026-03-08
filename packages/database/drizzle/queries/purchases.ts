@@ -8,6 +8,7 @@ export async function getPurchasesByOrganizationId(organizationId: string) {
 	return db.query.purchase.findMany({
 		where: (purchase, { eq }) =>
 			eq(purchase.organizationId, organizationId),
+		orderBy: (purchase, { desc }) => [desc(purchase.createdAt)],
 		limit: 100,
 	});
 }
@@ -15,6 +16,7 @@ export async function getPurchasesByOrganizationId(organizationId: string) {
 export async function getPurchasesByUserId(userId: string) {
 	return db.query.purchase.findMany({
 		where: (purchase, { eq }) => eq(purchase.userId, userId),
+		orderBy: (purchase, { desc }) => [desc(purchase.createdAt)],
 		limit: 100,
 	});
 }
@@ -29,6 +31,7 @@ export async function getPurchaseBySubscriptionId(subscriptionId: string) {
 	return db.query.purchase.findFirst({
 		where: (purchase, { eq }) =>
 			eq(purchase.subscriptionId, subscriptionId),
+		orderBy: (purchase, { desc }) => [desc(purchase.createdAt)],
 	});
 }
 

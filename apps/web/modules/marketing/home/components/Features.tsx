@@ -37,61 +37,62 @@ export const featureTabs: Array<{
 }> = [
 	{
 		id: "feature1",
-		title: "Feature 1",
+		title: "Portfolio operations",
 		icon: StarIcon,
-		subtitle: "Do more with our amazing SaaS.",
+		subtitle: "Run domain workflows from one workspace.",
 		description:
-			"This is a brilliant feature. And below you can see some reasons why. This is basically just a dummy text.",
+			"SmartBeak brings domain inventory, content, publishing status, SEO tracking, and readiness review into a single operator-facing workspace.",
 		stack: [],
 		image: heroImage,
 		imageBorder: false,
 		highlights: [
 			{
-				title: "Benefit 1",
+				title: "Shared portfolio visibility",
 				description:
-					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
+					"See domains, content, analytics, and workflow state in one place instead of juggling disconnected tools.",
 				icon: WandIcon,
 			},
 			{
-				title: "Benefit 2",
+				title: "Role-based access",
 				description:
-					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
+					"Use multi-tenant organization controls so teams can collaborate without exposing unrelated client or portfolio data.",
 				icon: ComputerIcon,
 			},
 			{
-				title: "Benefit 3",
+				title: "Review-first diligence",
 				description:
-					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
+					"Track diligence categories and readiness signals with explicit operator review instead of relying on fabricated automation.",
 				icon: SmartphoneIcon,
 			},
 		],
 	},
 	{
 		id: "feature2",
-		title: "Feature 2",
+		title: "Content and publishing",
 		icon: CloudIcon,
-		subtitle: "Your SaaS can also do this.",
-		description: "Another dummy text for another feature.",
+		subtitle: "Create faster, publish carefully.",
+		description:
+			"Draft AI-assisted content, apply SEO guidance, and send work to the currently supported publishing targets while unsupported workflows stay clearly gated.",
 		stack: [],
 		image: heroImage,
 		imageBorder: false,
 		highlights: [
 			{
-				title: "Benefit 1",
+				title: "AI-assisted drafting",
 				description:
-					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
+					"Generate ideas, outlines, and editing suggestions to speed up content creation without overstating what the system can publish automatically.",
 				icon: WandIcon,
 			},
 			{
-				title: "Benefit 2",
+				title: "SEO guidance",
 				description:
-					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
+					"Track keywords, decay signals, and imported Search Console data while keeping limited provider support explicit.",
 				icon: ComputerIcon,
 			},
 			{
-				title: "Benefit 3",
+				title: "Supported target controls",
 				description:
-					"This is an awesome benefit. And below you can see some reasons why. This is basically just a dummy text.",
+					"Schedule and monitor jobs for supported targets, with retry controls and clear messaging where media or recipient workflows are not implemented.",
 				icon: SmartphoneIcon,
 			},
 		],
@@ -104,15 +105,16 @@ export function Features() {
 			<div className="container">
 				<div className="mb-6 lg:mb-0 max-w-3xl">
 					<small className="font-medium text-xs uppercase tracking-wider text-primary mb-4 block">
-						Incredible features
+						Platform overview
 					</small>
 					<h2 className="text-3xl lg:text-4xl xl:text-5xl font-medium">
-						Features your clients will love
+						What SmartBeak is built to help with
 					</h2>
 					<p className="mt-2 text-base lg:text-lg text-foreground/60">
-						In this section you can showcase all the features of
-						your SaaS provides and how they can benefit your
-						clients.
+						This fallback marketing section now reflects real
+						SmartBeak workflows instead of starter-template filler,
+						so it can be safely reused if it is wired back into the
+						site later.
 					</p>
 				</div>
 			</div>

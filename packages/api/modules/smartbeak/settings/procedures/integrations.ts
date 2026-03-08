@@ -29,12 +29,20 @@ const SUPPORTED_PROVIDERS = [
 	"ahrefs",
 ] as const;
 
+const LIVE_TESTABLE_PROVIDERS = ["openai"] as const;
+
+function supportsLiveCredentialTest(
+	provider: (typeof SUPPORTED_PROVIDERS)[number],
+): provider is (typeof LIVE_TESTABLE_PROVIDERS)[number] {
+	return (LIVE_TESTABLE_PROVIDERS as readonly string[]).includes(provider);
+}
+
 export const listIntegrations = protectedProcedure
 	.route({
 		method: "GET",
 		path: "/smartbeak/settings/integrations",
 		tags: ["SmartBeak - Settings"],
-		summary: "List all integrations for an organization",
+		summary: "List stored provider credentials for an organization",
 	})
 	.input(z.object({ organizationSlug: z.string().min(1) }))
 	.handler(async ({ context: { user }, input }) => {
@@ -44,6 +52,7 @@ export const listIntegrations = protectedProcedure
 		const integrations = await getIntegrationsForOrg(org.id);
 
 		return {
+			encryptionConfigured: Boolean(process.env.SMARTBEAK_ENCRYPTION_KEY),
 			integrations: integrations.map((i) => ({
 				id: i.id,
 				provider: i.provider,
@@ -60,7 +69,7 @@ export const upsertIntegration = protectedProcedure
 		method: "POST",
 		path: "/smartbeak/settings/integrations",
 		tags: ["SmartBeak - Settings"],
-		summary: "Create or update an integration",
+		summary: "Create or update a stored provider credential",
 	})
 	.input(
 		z.object({
@@ -90,6 +99,11 @@ export const upsertIntegration = protectedProcedure
 				encryptedConfig,
 				enabled: input.enabled,
 			});
+			if (!updated) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to update integration.",
+				});
+			}
 			return {
 				integration: {
 					id: updated.id,
@@ -106,6 +120,11 @@ export const upsertIntegration = protectedProcedure
 			encryptedConfig,
 			enabled: input.enabled,
 		});
+		if (!created) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create integration.",
+			});
+		}
 
 		return {
 			integration: {
@@ -122,7 +141,7 @@ export const removeIntegration = protectedProcedure
 		method: "POST",
 		path: "/smartbeak/settings/integrations/delete",
 		tags: ["SmartBeak - Settings"],
-		summary: "Delete an integration",
+		summary: "Delete a stored provider credential",
 	})
 	.input(
 		z.object({
@@ -141,7 +160,12 @@ export const removeIntegration = protectedProcedure
 			});
 		}
 
-		await dbDeleteIntegration(existing.id);
+		const [deleted] = await dbDeleteIntegration(existing.id);
+		if (!deleted) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to delete integration.",
+			});
+		}
 		return { success: true };
 	});
 
@@ -150,7 +174,7 @@ export const testIntegration = protectedProcedure
 		method: "POST",
 		path: "/smartbeak/settings/integrations/test",
 		tags: ["SmartBeak - Settings"],
-		summary: "Test an integration connection",
+		summary: "Test a stored provider credential when live verification is supported",
 	})
 	.input(
 		z.object({
@@ -187,6 +211,20 @@ export const testIntegration = protectedProcedure
 				message: "Failed to decrypt integration config.",
 			});
 		}
+		if (
+			typeof config.apiKey !== "string" ||
+			config.apiKey.trim().length === 0
+		) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Integration config is missing a valid API key.",
+			});
+		}
+
+		if (!supportsLiveCredentialTest(input.provider)) {
+			throw new ORPCError("PRECONDITION_FAILED", {
+				message: `${input.provider === "google_search_console" ? "Google Search Console" : "Ahrefs"} credential verification is not implemented yet. The key may be saved, but this test cannot validate it.`,
+			});
+		}
 
 		if (input.provider === "openai") {
 			const controller = new AbortController();
@@ -208,20 +246,6 @@ export const testIntegration = protectedProcedure
 			} finally {
 				clearTimeout(timeout);
 			}
-		}
-
-		if (input.provider === "google_search_console") {
-			return {
-				success: true,
-				message: "GSC key saved. Live verification coming soon.",
-			};
-		}
-
-		if (input.provider === "ahrefs") {
-			return {
-				success: true,
-				message: "Ahrefs key saved. Live verification coming soon.",
-			};
 		}
 
 		return { success: true, message: "Key saved." };

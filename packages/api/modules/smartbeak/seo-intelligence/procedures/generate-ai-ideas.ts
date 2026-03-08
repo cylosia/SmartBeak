@@ -3,6 +3,10 @@ import { generateObject, textModel } from "@repo/ai";
 import { getDomainById, getKeywordsForDomain } from "@repo/database";
 import { logger } from "@repo/logs";
 import z from "zod";
+import {
+	checkAiBudget,
+	recordAiSpend,
+} from "../../../../infrastructure/ai-budget";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
@@ -39,6 +43,7 @@ const IdeaSchema = z.object({
 const IdeasResponseSchema = z.object({
 	ideas: z.array(IdeaSchema),
 });
+const ESTIMATED_SEO_IDEA_COST_CENTS = 2;
 
 export const generateAiIdeas = protectedProcedure
 	.route({
@@ -70,6 +75,7 @@ export const generateAiIdeas = protectedProcedure
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await checkAiBudget(org.id, ESTIMATED_SEO_IDEA_COST_CENTS);
 
 		const domain = await getDomainById(input.domainId);
 		if (!domain || domain.orgId !== org.id) {
@@ -124,6 +130,9 @@ Focus on topics with high commercial intent, clear search demand, and realistic 
 			});
 			result = object;
 		} catch (err) {
+			recordAiSpend(org.id, ESTIMATED_SEO_IDEA_COST_CENTS).catch(
+				() => {},
+			);
 			logger.error("[generate-ai-ideas] AI generation failed:", err);
 			throw new ORPCError("INTERNAL_SERVER_ERROR", {
 				message:
@@ -131,6 +140,7 @@ Focus on topics with high commercial intent, clear search demand, and realistic 
 			});
 		}
 
+		recordAiSpend(org.id, ESTIMATED_SEO_IDEA_COST_CENTS).catch(() => {});
 		return {
 			ideas: result.ideas,
 			domainName: domain.name,

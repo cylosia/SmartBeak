@@ -18,7 +18,7 @@ export default async function PublishingPage({
 		<div>
 			<PageHeader
 				title="Publishing"
-				subtitle="Orchestrate multi-channel publishing with retry logic and live status."
+				subtitle="Orchestrate multi-channel publishing with retry logic and current job status."
 			/>
 			<PublishingView
 				organizationSlug={organizationSlug}

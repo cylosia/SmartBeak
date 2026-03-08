@@ -4,7 +4,7 @@ import {
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
-import { requireOrgMembership } from "../../lib/membership";
+import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getUnifiedDashboardProcedure = protectedProcedure
@@ -25,7 +25,7 @@ export const getUnifiedDashboardProcedure = protectedProcedure
 	)
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgEditor(org.supastarterOrgId, user.id);
 
 		const [jobs, statusSummary] = await Promise.all([
 			getPublishingJobsForOrg(org.id, {

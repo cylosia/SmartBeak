@@ -16,7 +16,7 @@ import {
 	subMonths,
 } from "date-fns";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -32,6 +32,19 @@ const PLATFORM_COLORS: Record<string, string> = {
 	soundcloud: "bg-orange-500",
 	wordpress: "bg-blue-700",
 };
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getLocalDateKey(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? format(parsed, "yyyy-MM-dd") : null;
+}
 
 export function PublishingCalendar({
 	organizationSlug,
@@ -56,7 +69,25 @@ export function PublishingCalendar({
 		}),
 	);
 
-	const byDate = calendarQuery.data?.byDate ?? {};
+	const byDate = useMemo(() => {
+		const grouped: Record<
+			string,
+			Array<{ id: string; target: string; status: string }>
+		> = {};
+		for (const job of calendarQuery.data?.jobs ?? []) {
+			const key = getLocalDateKey(
+				(job as { scheduledFor?: Date | string | null }).scheduledFor,
+			);
+			if (!key) {
+				continue;
+			}
+			if (!grouped[key]) {
+				grouped[key] = [];
+			}
+			grouped[key].push(job);
+		}
+		return grouped;
+	}, [calendarQuery.data?.jobs]);
 	const days = eachDayOfInterval({ start: from, end: to });
 
 	if (calendarQuery.isLoading) {

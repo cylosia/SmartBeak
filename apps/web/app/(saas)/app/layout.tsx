@@ -47,9 +47,12 @@ export default async function Layout({ children }: PropsWithChildren) {
 			paymentsConfig.billingAttachedTo === "user") &&
 		!hasFreePlan
 	) {
-		const organizationId = authConfig.organizations.enable
-			? session?.session.activeOrganizationId || organizations?.at(0)?.id
-			: undefined;
+		const organizationId =
+			authConfig.organizations.enable &&
+			paymentsConfig.billingAttachedTo === "organization"
+				? session?.session.activeOrganizationId ||
+					organizations?.at(0)?.id
+				: undefined;
 
 		const [error, data] = await attemptAsync(() =>
 			orpcClient.payments.listPurchases({

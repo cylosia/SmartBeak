@@ -24,6 +24,22 @@ const PUBLISH_TARGETS = [
 	"soundcloud",
 ] as const;
 
+const UNSUPPORTED_TARGET_MESSAGES: Partial<
+	Record<(typeof PUBLISH_TARGETS)[number], string>
+> = {
+	web: "Web publishing jobs are not supported yet. Use SmartDeploy directly instead of the publishing queue.",
+	email:
+		"Email publishing jobs are not supported yet. The current email adapter cannot safely model recipients or per-message content.",
+	youtube:
+		"YouTube publishing jobs are not supported yet. The current publishing queue cannot upload the required video assets.",
+	instagram:
+		"Instagram publishing jobs are not supported yet. The current publishing queue cannot attach the required media assets.",
+	tiktok:
+		"TikTok publishing jobs are not supported yet. The current publishing queue cannot attach the required video assets.",
+	vimeo:
+		"Vimeo publishing jobs are not supported yet. The current publishing queue cannot attach the required video assets.",
+};
+
 export const createPublishingJobProcedure = protectedProcedure
 	.route({
 		method: "POST",
@@ -47,6 +63,12 @@ export const createPublishingJobProcedure = protectedProcedure
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
 		}
+		const unsupportedMessage = UNSUPPORTED_TARGET_MESSAGES[input.target];
+		if (unsupportedMessage) {
+			throw new ORPCError("PRECONDITION_FAILED", {
+				message: unsupportedMessage,
+			});
+		}
 		if (input.contentId) {
 			const content = await getContentItemById(input.contentId);
 			if (!content || content.domainId !== input.domainId) {
@@ -63,12 +85,17 @@ export const createPublishingJobProcedure = protectedProcedure
 				? new Date(input.scheduledFor)
 				: undefined,
 		});
+		if (!job) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create publishing job.",
+			});
+		}
 		await audit({
 			orgId: org.id,
 			actorId: user.id,
 			action: "publishing.job_created",
 			entityType: "publishing_job",
-			entityId: job?.id,
+			entityId: job.id,
 			details: { target: input.target, domainId: input.domainId },
 		});
 		return { job };

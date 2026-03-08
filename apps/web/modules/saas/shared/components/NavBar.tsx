@@ -81,12 +81,18 @@ export function NavBar() {
 						icon: RocketIcon,
 						isActive: pathname.startsWith(`${basePath}/portfolio`),
 					},
-					{
-						label: "Billing",
-						href: `${basePath}/billing`,
-						icon: ReceiptIcon,
-						isActive: pathname.startsWith(`${basePath}/billing`),
-					},
+					...(isOrganizationAdmin
+						? [
+								{
+									label: "Billing",
+									href: `${basePath}/billing`,
+									icon: ReceiptIcon,
+									isActive: pathname.startsWith(
+										`${basePath}/billing`,
+									),
+								},
+							]
+						: []),
 					{
 						label: "SmartDeploy",
 						href: `${basePath}/smart-deploy`,

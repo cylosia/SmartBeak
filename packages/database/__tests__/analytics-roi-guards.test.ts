@@ -27,7 +27,7 @@ describe("getPortfolioRoiForOrg — empty domain guard", () => {
 		expect(result).toEqual({
 			summary: null,
 			domains: [],
-			totalValue: 0,
+			totalScore: 0,
 			avgRoi: 0,
 			totalDomains: 0,
 		});

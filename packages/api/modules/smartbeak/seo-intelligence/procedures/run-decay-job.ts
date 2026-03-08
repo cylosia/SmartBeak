@@ -65,6 +65,9 @@ export const runDecayJob = adminProcedure
 					),
 				);
 				for (const [updated] of results) {
+					if (!updated) {
+						continue;
+					}
 					const decay = Number.parseFloat(updated.decayFactor ?? "1");
 					if (decay < 0.3) {
 						criticalAlerts.push({

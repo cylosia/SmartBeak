@@ -145,16 +145,15 @@ export const joinWaitlistProcedure = publicProcedure
 		};
 	});
 
-// ── get-waitlist-status (public, by email) ────────────────────────────────────
-export const getWaitlistStatusProcedure = publicProcedure
+// ── get-waitlist-status (admin, by email) ─────────────────────────────────────
+export const getWaitlistStatusProcedure = adminProcedure
 	.route({
 		method: "GET",
 		path: "/smartbeak/growth/waitlist/status",
 		tags: ["SmartBeak - Growth"],
-		summary: "Get waitlist status by email",
+		summary: "Get waitlist status by email (admin)",
 	})
 	.input(z.object({ email: z.string().email() }))
-	.use(publicRateLimitMiddleware({ limit: 3, windowMs: 60_000 }))
 	.handler(async ({ input }) => {
 		const entry = await getWaitlistEntryByEmail(input.email);
 		if (!entry) {
@@ -222,7 +221,7 @@ export const updateWaitlistStatusProcedure = adminProcedure
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
               <h1 style="font-size: 24px; font-weight: 700; color: #0f172a;">You're in${entry.firstName ? `, ${escapeHtml(entry.firstName)}` : ""}!</h1>
               <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-                Great news — you've been approved for early access to SmartBeak. Your account is ready.
+                Great news — you've been approved for SmartBeak early access. You can now create your account.
               </p>
               <a href="${getBaseUrl()}/auth/signup"
                  style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">

@@ -25,7 +25,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@repo/ui/components/tabs";
-import { toastError, toastInfo, toastSuccess } from "@repo/ui/components/toast";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import {
 	Tooltip,
 	TooltipContent,
@@ -62,8 +62,31 @@ interface Props {
 	domainId: string;
 }
 
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
+function clampRatio(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(1, Math.max(0, value));
+}
+
+function formatCalendarDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString();
+}
+
 function DecayBadge({ factor }: { factor: string | null }) {
-	const val = Number.parseFloat(factor ?? "1");
+	const val = clampRatio(Number.parseFloat(factor ?? "1"));
 	if (val >= 0.7) {
 		return (
 			<Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs">
@@ -89,10 +112,11 @@ function DecayBadge({ factor }: { factor: string | null }) {
 }
 
 function ScoreRing({ score }: { score: number }) {
+	const normalizedScore = clampPercent(score);
 	const color =
-		score >= 70
+		normalizedScore >= 70
 			? "text-emerald-500 dark:text-emerald-400"
-			: score >= 40
+			: normalizedScore >= 40
 				? "text-amber-500 dark:text-amber-400"
 				: "text-red-500 dark:text-red-400";
 	return (
@@ -119,12 +143,14 @@ function ScoreRing({ score }: { score: number }) {
 					fill="none"
 					stroke="currentColor"
 					strokeWidth="6"
-					strokeDasharray={`${(score / 100) * 213.6} 213.6`}
+					strokeDasharray={`${(normalizedScore / 100) * 213.6} 213.6`}
 					strokeLinecap="round"
 					className={color}
 				/>
 			</svg>
-			<span className={`text-xl font-bold ${color}`}>{score}</span>
+			<span className={`text-xl font-bold ${color}`}>
+				{normalizedScore}
+			</span>
 		</div>
 	);
 }
@@ -227,19 +253,26 @@ export function SeoIntelligenceDashboard({
 							<ExternalLinkIcon className="mr-2 h-4 w-4" />
 							Sync GSC
 						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() =>
-								toastInfo(
-									"Ahrefs sync",
-									"Configure your Ahrefs API key in settings to enable this.",
-								)
-							}
-						>
-							<RefreshCwIcon className="mr-2 h-4 w-4" />
-							Sync Ahrefs
-						</Button>
+						<TooltipProvider>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button
+										variant="outline"
+										size="sm"
+										disabled
+									>
+										<RefreshCwIcon className="mr-2 h-4 w-4" />
+										Sync Ahrefs
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent>
+									<p>
+										Dedicated Ahrefs sync is not available from
+										this screen yet.
+									</p>
+								</TooltipContent>
+							</Tooltip>
+						</TooltipProvider>
 					</div>
 					<div className="flex items-center gap-2">
 						<Button
@@ -385,20 +418,20 @@ export function SeoIntelligenceDashboard({
 						</CardHeader>
 						<CardContent className="px-4 pb-4 space-y-1">
 							<div className="flex items-center gap-1.5">
-								{summary?.gscConnected ? (
+								{summary?.gscImported ? (
 									<CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
 								) : (
 									<XCircleIcon className="h-3.5 w-3.5 text-muted-foreground" />
 								)}
-								<span className="text-xs">GSC</span>
+								<span className="text-xs">GSC data recorded</span>
 							</div>
 							<div className="flex items-center gap-1.5">
-								{summary?.ahrefsConnected ? (
+								{summary?.ahrefsImported ? (
 									<CheckCircle2Icon className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
 								) : (
 									<XCircleIcon className="h-3.5 w-3.5 text-muted-foreground" />
 								)}
-								<span className="text-xs">Ahrefs</span>
+								<span className="text-xs">Ahrefs data recorded</span>
 							</div>
 						</CardContent>
 					</Card>
@@ -478,7 +511,7 @@ export function SeoIntelligenceDashboard({
 							<EmptyState
 								icon={SearchIcon}
 								title="No keywords tracked yet"
-								description="Add keywords manually or sync from Google Search Console or Ahrefs."
+								description="Add keywords manually or sync from Google Search Console."
 							/>
 						) : (
 							<div className="rounded-xl border border-border overflow-hidden">
@@ -519,15 +552,21 @@ export function SeoIntelligenceDashboard({
 																>
 																	<div className="flex items-center gap-2 cursor-default">
 																		<Progress
-																			value={
-																				kw.difficulty
-																			}
+																			value={clampPercent(
+																				Number(
+																					kw.difficulty ??
+																						0,
+																				),
+																			)}
 																			className="h-1.5 w-16"
 																		/>
 																		<span className="text-xs text-muted-foreground">
-																			{
-																				kw.difficulty
-																			}
+																			{clampPercent(
+																				Number(
+																					kw.difficulty ??
+																						0,
+																				),
+																			)}
 																		</span>
 																	</div>
 																</TooltipTrigger>
@@ -734,10 +773,10 @@ export function SeoIntelligenceDashboard({
 															<TableCell>
 																<div className="flex items-center gap-2">
 																	<Progress
-																		value={
+																		value={clampPercent(
 																			decay *
-																			100
-																		}
+																				100,
+																		)}
 																		className="h-1.5 w-20"
 																	/>
 																	<span className="text-xs text-muted-foreground">
@@ -759,9 +798,9 @@ export function SeoIntelligenceDashboard({
 																/>
 															</TableCell>
 															<TableCell className="text-xs text-muted-foreground">
-																{new Date(
+																{formatCalendarDate(
 																	kw.lastUpdated,
-																).toLocaleDateString()}
+																) ?? "—"}
 															</TableCell>
 															<TableCell className="text-right">
 																<Button

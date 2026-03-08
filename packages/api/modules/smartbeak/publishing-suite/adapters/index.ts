@@ -4,7 +4,34 @@
  * Credentials are decrypted from publish_targets.encrypted_config at call time.
  */
 
+import { isIP } from "node:net";
 import { fetchWithTimeout } from "@repo/utils";
+
+function isPrivateOrLoopbackIp(hostname: string): boolean {
+	const version = isIP(hostname);
+	if (version === 4) {
+		const [first, second] = hostname.split(".").map(Number);
+		return (
+			first === 10 ||
+			first === 127 ||
+			(first === 169 && second === 254) ||
+			(first === 192 && second === 168) ||
+			(first === 172 && second >= 16 && second <= 31)
+		);
+	}
+
+	if (version === 6) {
+		const normalized = hostname.toLowerCase();
+		return (
+			normalized === "::1" ||
+			normalized.startsWith("fc") ||
+			normalized.startsWith("fd") ||
+			normalized.startsWith("fe80:")
+		);
+	}
+
+	return false;
+}
 
 function validateExternalUrl(urlStr: string): void {
 	let parsed: URL;
@@ -19,14 +46,9 @@ function validateExternalUrl(urlStr: string): void {
 	const hostname = parsed.hostname.toLowerCase();
 	const blocked =
 		hostname === "localhost" ||
-		hostname === "127.0.0.1" ||
-		hostname === "[::1]" ||
-		hostname.startsWith("10.") ||
-		hostname.startsWith("172.") ||
-		hostname.startsWith("192.168.") ||
-		hostname.startsWith("169.254.") ||
 		hostname.endsWith(".local") ||
-		hostname.endsWith(".internal");
+		hostname.endsWith(".internal") ||
+		isPrivateOrLoopbackIp(hostname);
 	if (blocked) {
 		throw new Error(
 			"URL must not point to internal or private network addresses",
@@ -67,11 +89,15 @@ export interface PublishAdapter {
 export const linkedinAdapter: PublishAdapter = {
 	name: "linkedin",
 	async publish(config, payload) {
-		const { accessToken, organizationUrn } = config as {
+		const { accessToken, organizationUrn, organizationId } = config as {
 			accessToken: string;
 			organizationUrn?: string;
+			organizationId?: string;
 		};
-		const author = organizationUrn ?? "urn:li:person:me";
+		const author =
+			organizationUrn ??
+			(organizationId ? `urn:li:organization:${organizationId}` : undefined) ??
+			"urn:li:person:me";
 		const body = {
 			author,
 			lifecycleState: "PUBLISHED",
@@ -410,11 +436,9 @@ export const emailAdapter: PublishAdapter = {
 export const webAdapter: PublishAdapter = {
 	name: "web",
 	async publish(_config, _payload) {
-		// SmartDeploy engine will be implemented via Replit Agent
 		return {
-			success: true,
-			platformPostId: `web-${Date.now()}`,
-			url: "#smartdeploy-pending",
+			success: false,
+			error: "Web publishing adapter is not implemented yet.",
 		};
 	},
 };

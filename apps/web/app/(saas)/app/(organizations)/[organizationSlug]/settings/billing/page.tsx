@@ -38,7 +38,10 @@ export default async function BillingSettingsPage({
 		}),
 	);
 
-	const purchases = error ? [] : (purchasesData?.purchases ?? []);
+	const purchasesPayload = error
+		? { purchases: [] }
+		: (purchasesData ?? { purchases: [] });
+	const purchases = purchasesPayload.purchases;
 	const queryClient = getServerQueryClient();
 
 	await queryClient.prefetchQuery({
@@ -47,7 +50,7 @@ export default async function BillingSettingsPage({
 				organizationId: organization.id,
 			},
 		}),
-		queryFn: () => purchasesData,
+		queryFn: () => purchasesPayload,
 	});
 
 	const { activePlan } = createPurchasesHelper(purchases);

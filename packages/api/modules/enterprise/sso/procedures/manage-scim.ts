@@ -90,9 +90,10 @@ export const createScimTokenProcedure = protectedProcedure
 		});
 
 		// Return the raw token ONCE — it cannot be retrieved again.
+		const { tokenHash: _, ...safeToken } = token;
 		return {
 			token: {
-				...token,
+				...safeToken,
 				rawToken,
 			},
 		};

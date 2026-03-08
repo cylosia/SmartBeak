@@ -47,7 +47,7 @@ export function PasskeysBlock() {
 	const deletePasskey = (id: string) => {
 		toastPromise(
 			async () => {
-				await authClient.passkey.deletePasskey({
+				const { error } = await authClient.passkey.deletePasskey({
 					id,
 					fetchOptions: {
 						onSuccess: () => {
@@ -57,6 +57,10 @@ export function PasskeysBlock() {
 						},
 					},
 				});
+
+				if (error) {
+					throw error;
+				}
 			},
 			{
 				loading: t(

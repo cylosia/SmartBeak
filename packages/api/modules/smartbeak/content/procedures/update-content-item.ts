@@ -44,6 +44,30 @@ export const updateContentItemProcedure = protectedProcedure
 			throw new ORPCError("FORBIDDEN", { message: "Access denied." });
 		}
 
+		const nextStatus = input.status ?? existing.status;
+		const nextScheduledFor =
+			input.scheduledFor === null
+				? null
+				: input.scheduledFor
+					? new Date(input.scheduledFor)
+					: existing.scheduledFor;
+		if (nextStatus === "scheduled") {
+			if (!nextScheduledFor || Number.isNaN(nextScheduledFor.getTime())) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"Scheduled content must include a valid scheduled publish time.",
+				});
+			}
+		} else if (
+			input.scheduledFor !== undefined &&
+			nextScheduledFor !== null
+		) {
+			throw new ORPCError("BAD_REQUEST", {
+				message:
+					"scheduledFor can only be provided when status is set to scheduled.",
+			});
+		}
+
 		// Snapshot current body as a revision before overwriting
 		if (input.body !== undefined && input.body !== existing.body) {
 			await createContentRevision({
@@ -62,10 +86,11 @@ export const updateContentItemProcedure = protectedProcedure
 			{
 				...updateData,
 				scheduledFor:
-					updateData.scheduledFor === null
-						? null
-						: updateData.scheduledFor
-							? new Date(updateData.scheduledFor)
+					nextStatus === "scheduled"
+						? nextScheduledFor
+						: updateData.scheduledFor !== undefined ||
+								existing.scheduledFor !== null
+							? null
 							: undefined,
 				version: newVersion,
 				updatedBy: user.id,

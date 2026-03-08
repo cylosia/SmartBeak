@@ -5,6 +5,10 @@ import Script from "next/script";
 const plausibleUrl = process.env.NEXT_PUBLIC_PLAUSIBLE_URL as string;
 
 export function AnalyticsScript() {
+	if (!plausibleUrl) {
+		return null;
+	}
+
 	return (
 		<Script
 			defer

@@ -242,7 +242,25 @@
 	},
 	"faq": {
 		"description": "Hast du irgendwelche Fragen? \nWir sind für dich da.",
-		"title": "Häufig gestellte Fragen"
+		"title": "Häufig gestellte Fragen",
+		"items": [
+			{
+				"question": "Wie sieht die Rückerstattungsrichtlinie aus?",
+				"answer": "Wir bieten eine 30-tägige Geld-zurück-Garantie, wenn du mit unserem Produkt nicht zufrieden bist."
+			},
+			{
+				"question": "Wie kündige ich mein Abonnement?",
+				"answer": "Du kannst dein Abonnement kündigen, indem du die Abrechnungsseite besuchst."
+			},
+			{
+				"question": "Kann ich meinen Tarif wechseln?",
+				"answer": "Ja, du kannst deinen Tarif jederzeit auf der Abrechnungsseite ändern."
+			},
+			{
+				"question": "Bietet ihr eine kostenlose Testphase an?",
+				"answer": "Ja, wir bieten eine 14-tägige kostenlose Testphase an."
+			}
+		]
 	},
 	"mail": {
 		"common": {
@@ -261,17 +279,17 @@
 			"subject": "Passwort zurücksetzen"
 		},
 		"magicLink": {
-			"body": "Hey,\ndu hast eine Anmelde-E-Mail von supastarter angefordert.\n\nKlicke auf den unten stehenden Link, um dich anzumelden.",
+			"body": "Hey,\ndu hast eine Anmelde-E-Mail von SmartBeak angefordert.\n\nKlicke auf den unten stehenden Link, um dich anzumelden.",
 			"login": "Login",
-			"subject": "Login bei supastarter"
+			"subject": "Bei SmartBeak anmelden"
 		},
 		"newUser": {
-			"body": "Hallo,\n\nVielen Dank, dass du dich bei Supastarter angemeldet hast.\n\n\nUm mit der Nutzung unserer App zu beginnen, bestätige bitte deine E-Mail-Adresse, indem du auf den untenstehenden Link klickst.",
+			"body": "Hallo,\n\nvielen Dank, dass du dich bei SmartBeak angemeldet hast.\n\nUm mit der Nutzung der Plattform zu beginnen, bestätige bitte deine E-Mail-Adresse, indem du auf den untenstehenden Link klickst.",
 			"confirmEmail": "E-Mail bestätigen",
 			"subject": "E-Mail bestätigen"
 		},
 		"newsletterSignup": {
-			"body": "Vielen Dank, dass du dich für den supastarter-Newsletter angemeldet hast. \nWir halten dich mit den neuesten Nachrichten und Updates auf dem Laufenden.",
+			"body": "Vielen Dank, dass du dich für den SmartBeak-Newsletter angemeldet hast.\nWir halten dich mit den neuesten Nachrichten und Produkt-Updates auf dem Laufenden.",
 			"subject": "Willkommen bei unserem Newsletter"
 		},
 		"organizationInvitation": {
@@ -293,7 +311,7 @@
 			}
 		},
 		"submit": "Abonnieren",
-		"subtitle": "Gehöre zu den Ersten, die Zugriff auf supastarter.nextjs erhalten.",
+		"subtitle": "Gehöre zu den Ersten, die Zugriff auf SmartBeak erhalten.",
 		"title": "Erhalte frühen Zugang"
 	},
 	"onboarding": {
@@ -840,7 +858,14 @@
 	"notFound": {
 		"code": "404",
 		"title": "Seite nicht gefunden",
-		"goToDashboard": "Zum Dashboard gehen"
+		"goToDashboard": "Zum Dashboard gehen",
+		"goToHomepage": "Zur Startseite"
+	},
+	"errorPage": {
+		"title": "Etwas ist schiefgelaufen",
+		"description": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuche es erneut oder kontaktiere den Support, wenn das Problem weiterhin besteht.",
+		"tryAgain": "Erneut versuchen",
+		"errorId": "Fehler-ID: {id}"
 	},
 	"smartbeak": {
 		"domains": {
@@ -933,18 +958,18 @@
 			"bulkSchedule": "Bulk Schedule",
 			"dlq": "Dead-Letter Queue",
 			"noJobs": "No publishing jobs",
-			"noJobsDesc": "Schedule content to publish across your connected platforms.",
+			"noJobsDesc": "Plane Inhalte fuer die Veroeffentlichung ueber deine konfigurierten Publishing-Ziele.",
 			"noAnalytics": "No analytics yet",
 			"noAnalyticsDesc": "Analytics will appear once content has been published.",
-			"noDlqJobs": "No failed jobs",
-			"noDlqJobsDesc": "All publishing jobs are healthy.",
-			"noDlqWebhooks": "No failed webhooks",
-			"noDlqWebhooksDesc": "All webhook events have been processed.",
+			"noDlqJobs": "Keine fehlgeschlagenen Jobs erfasst",
+			"noDlqJobsDesc": "Derzeit sind keine fehlgeschlagenen Publishing-Jobs in der Dead-Letter-Queue aufgefuehrt.",
+			"noDlqWebhooks": "Keine fehlgeschlagenen Webhooks erfasst",
+			"noDlqWebhooksDesc": "Derzeit sind keine fehlgeschlagenen Webhook-Ereignisse in der Dead-Letter-Queue aufgefuehrt.",
 			"executeJob": "Execute",
 			"retryJob": "Retry",
 			"bulkRetry": "Bulk Retry",
 			"replayWebhook": "Replay",
-			"platformConfigured": "Platform configured",
+			"platformConfigured": "Plattform-Einstellungen gespeichert",
 			"platformRemoved": "Platform removed",
 			"seriesCreated": "Email series created",
 			"bulkScheduled": "Bulk schedule created"
@@ -955,7 +980,7 @@
 			"portfolioRoi": "Portfolio-ROI",
 			"buyerAttribution": "Käuferzuordnung",
 			"diligenceEngine": "Sorgfaltsprüfung",
-			"sellReadyScore": "Verkaufsbereitschaft",
+			"sellReadyScore": "Geschaetzte Verkaufsbereitschaft",
 			"portfolioHealthIndex": "Portfolio-Gesundheitsindex",
 			"totalPortfolioValue": "Gesamtwert des Portfolios",
 			"avgDecay": "Durchschn. Monetarisierungsverfall",
@@ -983,24 +1008,24 @@
 		},
 		"growth": {
 			"waitlist": {
-				"title": "Join the Waitlist",
-				"description": "Get early access to SmartBeak",
-				"joinButton": "Request Early Access",
-				"successTitle": "You're on the list!",
-				"successDescription": "We'll notify you when your early access is ready.",
-				"referralLink": "Your referral link",
+				"title": "Zur Warteliste anmelden",
+				"description": "Trage dich für Updates zum gestaffelten Beta-Zugang ein",
+				"joinButton": "Beta-Zugang anfragen",
+				"successTitle": "Du stehst auf der Liste!",
+				"successDescription": "Wir benachrichtigen dich, sobald der gestaffelte Beta-Zugang erweitert wird.",
+				"referralLink": "Dein Empfehlungslink",
 				"shareX": "Share on X",
 				"shareLinkedIn": "Share on LinkedIn"
 			},
 			"referrals": {
-				"title": "Referral Program",
-				"description": "Invite friends and earn rewards",
-				"totalReferrals": "Total referrals",
-				"converted": "Converted",
-				"rewardsEarned": "Rewards earned",
-				"referralLink": "Your referral link",
-				"history": "Referral history",
-				"noReferrals": "No referrals yet. Share your link to get started!"
+				"title": "Empfehlungsprogramm",
+				"description": "Lade Personen ein, verfolge abgeschlossene Empfehlungen und sieh gewährte Prämien ein",
+				"totalReferrals": "Empfehlungen gesamt",
+				"converted": "Abgeschlossen",
+				"rewardsEarned": "Gewährte Prämien",
+				"referralLink": "Dein Empfehlungslink",
+				"history": "Empfehlungsverlauf",
+				"noReferrals": "Noch keine Empfehlungen. Teile deinen Link, um zu starten!"
 			},
 			"onboarding": {
 				"welcomeSubject": "Welcome to SmartBeak",

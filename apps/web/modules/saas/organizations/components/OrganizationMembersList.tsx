@@ -16,12 +16,16 @@ import {
 	TableRow,
 } from "@repo/ui/components/table";
 import { toastPromise } from "@repo/ui/components/toast";
+import { sessionQueryKey } from "@saas/auth/lib/api";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { useOrganizationMemberRoles } from "@saas/organizations/hooks/member-roles";
 import {
 	fullOrganizationQueryKey,
+	organizationListQueryKey,
 	useFullOrganizationQuery,
 } from "@saas/organizations/lib/api";
+import { useRouter } from "@shared/hooks/router";
+import { clearCache } from "@shared/lib/cache";
 import { UserAvatar } from "@shared/components/UserAvatar";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
@@ -48,6 +52,7 @@ export function OrganizationMembersList({
 	organizationId: string;
 }) {
 	const t = useTranslations();
+	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { user } = useSession();
 	const { data: organization } = useFullOrganizationQuery(organizationId);
@@ -63,11 +68,15 @@ export function OrganizationMembersList({
 	) => {
 		toastPromise(
 			async () => {
-				await authClient.organization.updateMemberRole({
+				const { error } = await authClient.organization.updateMemberRole({
 					memberId,
 					role,
 					organizationId,
 				});
+
+				if (error) {
+					throw error;
+				}
 			},
 			{
 				loading: t(
@@ -92,10 +101,26 @@ export function OrganizationMembersList({
 	const removeMember = async (memberId: string) => {
 		toastPromise(
 			async () => {
-				await authClient.organization.removeMember({
+				const { error } = await authClient.organization.removeMember({
 					memberIdOrEmail: memberId,
 					organizationId,
 				});
+
+				if (error) {
+					throw error;
+				}
+
+				if (memberId === user?.id) {
+					await clearCache();
+					await queryClient.invalidateQueries({
+						queryKey: organizationListQueryKey,
+					});
+					await queryClient.invalidateQueries({
+						queryKey: sessionQueryKey,
+					});
+					router.replace("/app");
+					return;
+				}
 			},
 			{
 				loading: t(

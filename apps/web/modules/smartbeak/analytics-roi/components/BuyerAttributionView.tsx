@@ -49,6 +49,15 @@ const PIE_COLORS = [
 	"hsl(var(--chart-5))",
 ];
 
+function formatCalendarDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString();
+}
+
 export function BuyerAttributionView({
 	organizationSlug,
 	domainId,
@@ -120,16 +129,16 @@ export function BuyerAttributionView({
 							subtitle="Unique buyer sessions"
 						/>
 						<MetricCard
-							title="Converted"
-							value={String(data.converted)}
+							title="Identified Buyers"
+							value={String(data.identifiedBuyers)}
 							icon={MousePointerClickIcon}
-							subtitle="Sessions with buyer email"
+							subtitle="Sessions with a captured buyer email"
 						/>
 						<MetricCard
-							title="Conversion Rate"
-							value={`${data.conversionRate}%`}
+							title="Identification Rate"
+							value={`${data.identifiedBuyerRate}%`}
 							icon={TrendingUpIcon}
-							subtitle="Sessions → identified buyers"
+							subtitle="Sessions with captured buyer emails"
 						/>
 						<MetricCard
 							title="Intent Types"
@@ -331,14 +340,14 @@ export function BuyerAttributionView({
 													)}
 												</TableCell>
 												<TableCell className="text-xs text-muted-foreground">
-													{new Date(
+													{formatCalendarDate(
 														s.createdAt,
-													).toLocaleDateString()}
+													) ?? "—"}
 												</TableCell>
 												<TableCell>
 													{s.buyerEmail ? (
 														<Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20 border text-xs">
-															Converted
+															Identified
 														</Badge>
 													) : (
 														<Badge className="bg-muted/50 text-muted-foreground text-xs">
@@ -384,16 +393,16 @@ export function BuyerAttributionView({
 						subtitle="Across all domains"
 					/>
 					<MetricCard
-						title="Total Converted"
-						value={String(orgData.totalConverted)}
+						title="Total Identified Buyers"
+						value={String(orgData.totalIdentifiedBuyers)}
 						icon={MousePointerClickIcon}
-						subtitle="Identified buyer emails"
+						subtitle="Sessions with captured buyer emails"
 					/>
 					<MetricCard
-						title="Overall Conversion"
-						value={`${orgData.overallConversionRate}%`}
+						title="Overall Identification Rate"
+						value={`${orgData.overallIdentifiedBuyerRate}%`}
 						icon={TrendingUpIcon}
-						subtitle="Portfolio-wide conversion rate"
+						subtitle="Portfolio-wide email capture rate"
 					/>
 				</div>
 
@@ -409,32 +418,32 @@ export function BuyerAttributionView({
 								<TableRow>
 									<TableHead>Domain</TableHead>
 									<TableHead>Sessions</TableHead>
-									<TableHead>Converted</TableHead>
-									<TableHead>Conversion Rate</TableHead>
+									<TableHead>Identified Buyers</TableHead>
+									<TableHead>Identification Rate</TableHead>
 									<TableHead>Top Intent</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
 								{(orgData.domains ?? []).map((d) => {
-									const topIntent = d.intentBreakdown.sort(
-										(a, b) => b.count - a.count,
-									)[0];
+									const topIntent = [
+										...(d.intentBreakdown ?? []),
+									].sort((a, b) => b.count - a.count)[0];
 									return (
 										<TableRow key={d.domain.id}>
 											<TableCell className="font-medium">
 												{d.domain.name}
 											</TableCell>
 											<TableCell>{d.total}</TableCell>
-											<TableCell>{d.converted}</TableCell>
+										<TableCell>{d.identifiedBuyers}</TableCell>
 											<TableCell>
 												<span
 													className={
-														d.conversionRate >= 20
+													d.identifiedBuyerRate >= 20
 															? "text-green-600 dark:text-green-400 font-medium"
 															: "text-muted-foreground"
 													}
 												>
-													{d.conversionRate}%
+												{d.identifiedBuyerRate}%
 												</span>
 											</TableCell>
 											<TableCell>

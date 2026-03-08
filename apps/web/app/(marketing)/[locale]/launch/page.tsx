@@ -16,7 +16,7 @@ export default function LaunchAssetsPage() {
 						SmartBeak Launch Assets
 					</h1>
 					<p className="mt-4 text-lg text-foreground/60">
-						Ready-to-use launch materials for Product Hunt, social
+						Editable launch materials for Product Hunt, social
 						media, and email announcements.
 					</p>
 				</div>
@@ -34,31 +34,31 @@ export default function LaunchAssetsPage() {
 							<p>
 								<strong>[0:00–0:15] Hook</strong>
 								<br />
-								&ldquo;What if you could turn your entire domain
-								portfolio into a content machine — publishing
-								AI-generated articles across 11 platforms,
-								tracking SEO decay before it costs you rankings,
-								and knowing exactly when your domain is
-								sell-ready? That&apos;s SmartBeak.&rdquo;
+								&ldquo;What if you could run your domain
+								portfolio from one workspace — drafting
+								AI-assisted articles for supported publishing
+								targets, tracking SEO decay signals, and
+								reviewing sell-readiness estimates from one
+								dashboard? That&apos;s SmartBeak.&rdquo;
 							</p>
 
 							<p>
 								<strong>[0:15–0:45] Problem</strong>
 								<br />
-								&ldquo;Most domain portfolio owners are leaving
-								money on the table. Their domains sit idle,
-								their SEO decays, and when it&apos;s time to
-								sell, they have no data to back up their asking
-								price. Managing content, publishing, and
-								analytics across dozens of domains is a
-								full-time job — until now.&rdquo;
+								&ldquo;Most domain portfolio owners juggle
+								disconnected tools. Their domains sit idle,
+								SEO decays, and when it&apos;s time to sell,
+								they often lack organized diligence records and
+								per-domain reporting. Managing content,
+								publishing, and analytics across dozens of
+								domains becomes operational overhead fast.&rdquo;
 							</p>
 
 							<p>
 								<strong>[0:45–1:30] Demo — Dashboard</strong>
 								<br />
 								&ldquo;This is the SmartBeak dashboard. I can
-								see all my domains, their health scores, SEO
+								see all my domains, recorded metadata, SEO
 								performance, and publishing status at a glance.
 								Let me click into one domain...&rdquo;
 							</p>
@@ -69,11 +69,10 @@ export default function LaunchAssetsPage() {
 								</strong>
 								<br />
 								&ldquo;I&apos;ll hit the AI Ideas button.
-								SmartBeak generates 5 structured content ideas
+								SmartBeak can generate structured content ideas
 								with titles, outlines, estimated read times, and
-								SEO scores — all in about 3 seconds. I can see
-								the real-time content optimizer scoring my draft
-								as I type.&rdquo;
+								heuristic SEO scores. I can see the content
+								optimizer rescore my draft as I type.&rdquo;
 							</p>
 
 							<p>
@@ -81,22 +80,21 @@ export default function LaunchAssetsPage() {
 									[2:00–2:30] Demo — Publishing + Sell-Ready
 								</strong>
 								<br />
-								&ldquo;One click schedules this article to go
-								out on LinkedIn, email, and the web
-								simultaneously. And here&apos;s the Sell-Ready
-								score — SmartBeak&apos;s Diligence Engine has
-								checked ownership, legal, financial, and content
-								signals and given this domain an 84/100 with
-								specific recommendations to hit 95.&rdquo;
+								&ldquo;One workflow schedules this article to go
+								out on supported publishing targets from one
+								calendar. And here&apos;s the sell-readiness
+								estimate — SmartBeak combines recorded diligence
+								data with portfolio signals to produce a
+								heuristic score and highlight what to review
+								next.&rdquo;
 							</p>
 
 							<p>
 								<strong>[2:30–3:00] CTA</strong>
 								<br />
 								&ldquo;SmartBeak is in early access. Join the
-								waitlist at smartbeak.io and lock in founding
-								member pricing — 40% off for life. I&apos;ll see
-								you inside.&rdquo;
+								waitlist at smartbeak.io for staged beta access
+								updates. I&apos;ll see you inside.&rdquo;
 							</p>
 						</div>
 					</div>
@@ -111,11 +109,11 @@ export default function LaunchAssetsPage() {
 						{[
 							{
 								platform: "X (Twitter)",
-								template: `🚀 Introducing SmartBeak — the AI-powered content publishing platform for domain portfolio owners.
+								template: `🚀 Introducing SmartBeak — an AI-assisted content operations workspace for domain portfolio owners.
 
-• Publish to 11 platforms from one dashboard
-• AI content ideas with real-time SEO scoring  
-• Diligence Engine + Sell-Ready score
+• Publish to supported targets from one dashboard
+• AI content ideas with responsive SEO scoring  
+• Diligence review workflows + sell-readiness estimate
 • Keyword decay signals before they hurt rankings
 
 Join the waitlist → smartbeak.io/waitlist
@@ -124,20 +122,20 @@ Join the waitlist → smartbeak.io/waitlist
 							},
 							{
 								platform: "LinkedIn",
-								template: `After months of building, I'm excited to announce SmartBeak — a premium AI-powered SaaS for domain portfolio owners.
+								template: `After months of building, I'm excited to announce SmartBeak — an AI-assisted workspace for domain portfolio owners.
 
-The problem: managing content, SEO, and publishing across dozens of domains is exhausting. Most portfolio owners are leaving significant value on the table.
+The problem: managing content, SEO, and publishing across dozens of domains is exhausting. Most portfolio owners end up juggling disconnected tools and fragmented reporting.
 
 SmartBeak solves this with:
 
-✅ AI content idea generator (title, outline, SEO score in seconds)
-✅ Real-time content optimizer with live SEO scoring
-✅ 11-platform publishing (LinkedIn, YouTube, TikTok, Instagram, and more)
+✅ AI content idea generator (titles, outlines, heuristic SEO scores)
+✅ Content optimizer with responsive SEO scoring
+✅ Supported publishing targets from one shared calendar
 ✅ Keyword tracking with decay signals
-✅ Diligence Engine with automated Sell-Ready scoring
+✅ Diligence review workflows with sell-readiness estimates
 ✅ Portfolio ROI Dashboard with buyer attribution
 
-We're opening early access to a small group of founding members who will lock in 40% off for life.
+We're opening staged beta access to a small group of early users.
 
 If you manage domain portfolios, build niche sites, or work in digital asset brokerage — this was built for you.
 
@@ -150,19 +148,19 @@ Join the waitlist: smartbeak.io/waitlist`,
 							},
 							{
 								platform: "Product Hunt Description",
-								template: `SmartBeak is the premium multi-tenant SaaS for serious domain portfolio owners.
+								template: `SmartBeak is a multi-tenant workspace for domain portfolio owners.
 
-🧠 AI Content: Generate ideas, outlines, and SEO scores in seconds. Real-time optimizer scores your content as you type.
+🧠 AI Content: Generate ideas, outlines, and heuristic SEO scores. The content optimizer rescoring updates as you edit.
 
-📡 11-Platform Publishing: Web, Email (Resend), LinkedIn, YouTube, TikTok, Instagram, Pinterest, Vimeo, Facebook, WordPress, SoundCloud — all from one calendar.
+📡 Supported Publishing Platforms: LinkedIn, Facebook, Pinterest, WordPress, and SoundCloud from one calendar, with additional adapters gated until their media workflows are implemented safely.
 
-📊 SEO Intelligence: Keyword tracking with decay signals, GSC + Ahrefs integration, automated daily reports.
+📊 SEO Intelligence: Keyword tracking with decay signals, Google Search Console imports, and manual or imported provider data where available.
 
-💼 Portfolio Analytics: Risk-adjusted ROI scoring, Diligence Engine (ownership/legal/financial checks), one-click Sell-Ready score, buyer attribution.
+💼 Portfolio Analytics: Risk-adjusted portfolio scoring, manual diligence review support, sell-readiness estimates, and buyer attribution.
 
-🔒 Enterprise-grade: Multi-tenant RBAC, immutable audit log, RLS via Supabase, Stripe billing, feature flags.
+🔒 Platform controls: Multi-tenant RBAC, immutable audit log, RLS via Supabase, Stripe billing, and feature flags.
 
-Built on Supastarter Pro + Supabase + Vercel. Locked v9 schema. Production-ready from day one.`,
+Built on Supastarter Pro + Supabase + Vercel. Locked v9 schema with staged beta rollout.`,
 							},
 						].map(({ platform, template }) => (
 							<div
@@ -190,49 +188,53 @@ Built on Supastarter Pro + Supabase + Vercel. Locked v9 schema. Production-ready
 					<div className="rounded-2xl border border-border/50 bg-card overflow-hidden">
 						<div className="px-6 py-3 border-b border-border/30 bg-muted/30">
 							<p className="text-sm font-semibold text-foreground">
-								Subject: SmartBeak is live — your early access
-								is ready
+								Subject: SmartBeak beta access update
 							</p>
 						</div>
 						<div className="p-6 text-sm text-foreground/70 leading-relaxed space-y-4">
 							<p>Hi [First Name],</p>
 							<p>
 								You&apos;re on the SmartBeak waitlist — and
-								today, your early access is ready.
+								we&apos;re opening limited beta access in
+								stages.
 							</p>
 							<p>
-								SmartBeak is the AI-powered content publishing
-								platform I built specifically for domain
+								SmartBeak is an AI-assisted content operations
+								workspace built specifically for domain
 								portfolio owners like you. Here&apos;s what you
 								get from day one:
 							</p>
 							<ul className="list-disc list-inside space-y-1 ml-2">
 								<li>
 									AI content ideas with titles, outlines, and
-									SEO scores
+									heuristic SEO scores
 								</li>
 								<li>
-									Real-time content optimizer (live scoring as
-									you type)
+									Content optimizer with responsive scoring as
+									you type
 								</li>
 								<li>
-									11-platform publishing from one calendar
+									Supported publishing targets from one
+									calendar
 								</li>
 								<li>Keyword tracking with decay signals</li>
-								<li>Diligence Engine + Sell-Ready score</li>
+								<li>
+									Diligence review workflows +
+									sell-readiness estimates
+								</li>
 								<li>
 									Portfolio ROI dashboard with buyer
 									attribution
 								</li>
 							</ul>
 							<p>
-								As a founding member, you&apos;re locked in at{" "}
-								<strong>40% off</strong> for as long as you stay
-								subscribed.
+								We&apos;ll share rollout details, onboarding
+								steps, and any future commercial terms directly
+								with approved beta users.
 							</p>
 							<p>
 								<strong>
-									→ Activate your account: [CTA BUTTON]
+									→ View beta access details: [CTA BUTTON]
 								</strong>
 							</p>
 							<p>
@@ -261,7 +263,7 @@ Built on Supastarter Pro + Supabase + Vercel. Locked v9 schema. Production-ready
 								"Configure OpenAI API key for AI features",
 								"Set up S3/R2 bucket for media storage",
 								"Configure GSC OAuth credentials for SEO sync",
-								"Configure Ahrefs API key for keyword data",
+								"Configure optional provider credentials needed for your planned SEO imports",
 								"Deploy to Vercel with all environment variables",
 								"Run `pnpm drizzle:push` against production Supabase",
 								"Record Loom demo video using the script above",

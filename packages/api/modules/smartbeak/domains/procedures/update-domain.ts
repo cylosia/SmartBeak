@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { getDomainById, updateDomain } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
+import { THEME_IDS } from "../../deploy/lib/themes";
 import { audit } from "../../lib/audit";
 import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
@@ -21,7 +22,7 @@ export const updateDomainProcedure = protectedProcedure
 			status: z
 				.enum(["active", "pending", "suspended", "deployed"])
 				.optional(),
-			themeId: z.string().min(1).optional(),
+			themeId: z.enum(THEME_IDS).optional(),
 			deployedUrl: z
 				.string()
 				.url()

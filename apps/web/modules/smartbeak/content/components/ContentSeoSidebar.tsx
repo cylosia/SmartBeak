@@ -19,17 +19,18 @@ import {
 function ScoreRing({ score }: { score: number }) {
 	const radius = 36;
 	const circumference = 2 * Math.PI * radius;
-	const progress = (score / 100) * circumference;
+	const normalizedScore = Math.min(100, Math.max(0, score));
+	const progress = (normalizedScore / 100) * circumference;
 	const strokeClass =
-		score >= 70
+		normalizedScore >= 70
 			? "stroke-emerald-500"
-			: score >= 40
+			: normalizedScore >= 40
 				? "stroke-amber-500"
 				: "stroke-red-500";
 	const textClass =
-		score >= 70
+		normalizedScore >= 70
 			? "text-emerald-600 dark:text-emerald-400"
-			: score >= 40
+			: normalizedScore >= 40
 				? "text-amber-600 dark:text-amber-400"
 				: "text-red-600 dark:text-red-400";
 
@@ -68,7 +69,7 @@ function ScoreRing({ score }: { score: number }) {
 				<span
 					className={`text-2xl font-bold tabular-nums ${textClass}`}
 				>
-					{score}
+					{normalizedScore}
 				</span>
 				<p className="text-[10px] text-muted-foreground">SEO</p>
 			</div>
@@ -138,9 +139,12 @@ export function ContentSeoSidebar({
 	);
 
 	useEffect(() => {
+		if (!isOpen) {
+			return;
+		}
 		window.addEventListener("keydown", handleEscape);
 		return () => window.removeEventListener("keydown", handleEscape);
-	}, [handleEscape]);
+	}, [handleEscape, isOpen]);
 
 	if (!isOpen) {
 		return null;

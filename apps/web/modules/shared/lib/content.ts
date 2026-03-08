@@ -7,6 +7,19 @@ export type ContentStructureItem = {
 	isPage: boolean;
 };
 
+function compareLocalePreference(
+	currentLocale: string,
+	existingLocale: string,
+	preferredLocale: string | undefined,
+) {
+	const currentMatches = currentLocale === preferredLocale;
+	const existingMatches = existingLocale === preferredLocale;
+	if (currentMatches === existingMatches) {
+		return 0;
+	}
+	return currentMatches ? 1 : -1;
+}
+
 export function getContentStructure({
 	documents,
 	meta,
@@ -25,6 +38,38 @@ export function getContentStructure({
 	locale?: string;
 }) {
 	const contentStructure: ContentStructureItem[] = [];
+	const preferredDocumentsByPath = new Map<
+		string,
+		(typeof documents)[number]
+	>();
+	for (const document of documents) {
+		const existing = preferredDocumentsByPath.get(document.path);
+		if (
+			!existing ||
+			compareLocalePreference(document.locale, existing.locale, locale) > 0
+		) {
+			preferredDocumentsByPath.set(document.path, document);
+		}
+	}
+
+	const preferredMetaByPath = new Map<string, (typeof meta)[number]>();
+	for (const metaEntry of meta) {
+		const existing = preferredMetaByPath.get(metaEntry.path);
+		if (
+			!existing ||
+			compareLocalePreference(metaEntry.locale, existing.locale, locale) > 0
+		) {
+			preferredMetaByPath.set(metaEntry.path, metaEntry);
+		}
+	}
+
+	const metaOrderByPath = new Map<string, Map<string, number>>();
+	for (const [path, metaEntry] of preferredMetaByPath.entries()) {
+		metaOrderByPath.set(
+			path,
+			new Map(Object.keys(metaEntry.data).map((key, index) => [key, index])),
+		);
+	}
 
 	function addToContentItemArray(
 		contentItemsArray: ContentStructureItem[],
@@ -47,26 +92,13 @@ export function getContentStructure({
 		const isPage = pathParts.length === 1;
 		if (!rootItem) {
 			const path = isPage ? item.path : rootItemPath;
-			const metaData = meta
-				.filter((m) => m.path === subPath)
-				.sort(
-					(a, b) =>
-						(a.locale === locale ? -1 : 1) -
-						(b.locale === locale ? -1 : 1),
-				)
-				.at(0)?.data[pathParts[0]];
+			const metaData = preferredMetaByPath.get(subPath)?.data[pathParts[0]];
 			const label = metaData
 				? typeof metaData === "string"
 					? metaData
 					: metaData.title
-				: (documents
-						.filter((page) => page.path === rootItemPath)
-						.sort(
-							(a, b) =>
-								(a.locale === locale ? -1 : 1) -
-								(b.locale === locale ? -1 : 1),
-						)
-						.at(0)?.title ?? pathParts[0]);
+				: (preferredDocumentsByPath.get(rootItemPath)?.title ??
+					pathParts[0]);
 
 			rootItem = {
 				label,
@@ -93,6 +125,7 @@ export function getContentStructure({
 
 	// recursively sort items and their children
 	function sortContentItems(items: ContentStructureItem[], basePath = "") {
+		const orderMap = metaOrderByPath.get(basePath);
 		items.sort((a, b) => {
 			if (a.path === "") {
 				return -1;
@@ -101,33 +134,13 @@ export function getContentStructure({
 				return 1;
 			}
 
-			const aIndex = Object.entries(
-				meta
-					.filter((meta) => meta.path === basePath)
-					.sort(
-						(a, b) =>
-							(a.locale === locale ? -1 : 1) -
-							(b.locale === locale ? -1 : 1),
-					)
-					.at(0)?.data ?? {},
-			).findIndex(([key]) => key === a.path.replace(`${basePath}/`, ""));
-
-			const bIndex = Object.entries(
-				meta
-					.filter((meta) => meta.path === basePath)
-					.sort(
-						(a, b) =>
-							(a.locale === locale ? -1 : 1) -
-							(b.locale === locale ? -1 : 1),
-					)
-					.at(0)?.data ?? {},
-			).findIndex(([key]) => key === b.path.replace(`${basePath}/`, ""));
+			const aIndex =
+				orderMap?.get(a.path.replace(`${basePath}/`, "")) ?? items.length;
+			const bIndex =
+				orderMap?.get(b.path.replace(`${basePath}/`, "")) ?? items.length;
 
 			// use position index from meta file or put the item at the end of the list
-			return (
-				(aIndex > -1 ? aIndex : items.length) -
-				(bIndex > -1 ? bIndex : items.length)
-			);
+			return aIndex - bIndex;
 		});
 
 		items.forEach((item) => {
@@ -149,13 +162,23 @@ export function getActivePathFromUrlParam(path: string | string[]) {
 export function getLocalizedDocumentWithFallback<
 	T extends { path: string; locale: string },
 >(documents: T[], path: string, locale: string) {
-	return documents
-		.filter((doc) => doc.path === path)
-		.sort(
-			(a, b) =>
-				(a.locale === locale ? -1 : 1) - (b.locale === locale ? -1 : 1),
-		)
-		.at(0);
+	let preferredMatch: T | undefined;
+	for (const document of documents) {
+		if (document.path !== path) {
+			continue;
+		}
+		if (
+			!preferredMatch ||
+			compareLocalePreference(
+				document.locale,
+				preferredMatch.locale,
+				locale,
+			) > 0
+		) {
+			preferredMatch = document;
+		}
+	}
+	return preferredMatch;
 }
 
 export function slugifyHeadline(headline: string) {

@@ -29,72 +29,91 @@ interface SeoDocData {
 	ahrefsData?: Record<string, unknown> | null;
 }
 
+function normalizeString(value: unknown) {
+	return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function normalizeNumber(value: unknown) {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeNonNegativeNumber(value: unknown) {
+	const normalized = normalizeNumber(value);
+	return normalized == null ? null : Math.max(0, normalized);
+}
+
+function clampPercent(value: unknown) {
+	const normalized = normalizeNumber(value);
+	if (normalized == null) {
+		return null;
+	}
+	return Math.min(1, Math.max(0, normalized));
+}
+
+function formatRecordedTimestamp(value: unknown) {
+	const normalized = normalizeString(value);
+	if (!normalized) {
+		return "—";
+	}
+
+	const date = new Date(normalized);
+	return Number.isNaN(date.getTime()) ? normalized : date.toLocaleString();
+}
+
 function GscSummary({ data }: { data: Record<string, unknown> }) {
-	const impressions =
-		typeof data.impressions === "number" ? data.impressions : null;
-	const clicks = typeof data.clicks === "number" ? data.clicks : null;
-	const ctr = typeof data.ctr === "number" ? data.ctr : null;
-	const avgPosition =
-		typeof data.avgPosition === "number" ? data.avgPosition : null;
+	const siteUrl = normalizeString(data.siteUrl);
+	const startDate = normalizeString(data.startDate);
+	const endDate = normalizeString(data.endDate);
+	const rowCount = normalizeNonNegativeNumber(data.rowCount);
+	const syncedAt = formatRecordedTimestamp(data.syncedAt);
 
 	return (
 		<div className="grid grid-cols-2 gap-3">
 			<StatItem
-				label="Impressions"
-				value={impressions != null ? impressions.toLocaleString() : "—"}
+				label="Recorded Site"
+				value={siteUrl ?? "—"}
 			/>
 			<StatItem
-				label="Clicks"
-				value={clicks != null ? clicks.toLocaleString() : "—"}
+				label="Recorded Range"
+				value={
+					startDate && endDate ? `${startDate} to ${endDate}` : "—"
+				}
 			/>
 			<StatItem
-				label="CTR"
-				value={ctr != null ? `${(ctr * 100).toFixed(1)}%` : "—"}
+				label="Recorded Rows"
+				value={rowCount != null ? rowCount.toLocaleString() : "—"}
 			/>
 			<StatItem
-				label="Avg Position"
-				value={avgPosition != null ? `#${avgPosition.toFixed(1)}` : "—"}
+				label="Last Sync"
+				value={syncedAt}
 			/>
 		</div>
 	);
 }
 
 function AhrefsSummary({ data }: { data: Record<string, unknown> }) {
-	const dr = typeof data.dr === "number" ? data.dr : null;
-	const referringDomains =
-		typeof data.referringDomains === "number"
-			? data.referringDomains
-			: null;
-	const backlinks =
-		typeof data.backlinks === "number" ? data.backlinks : null;
-	const organicKeywords =
-		typeof data.organicKeywords === "number" ? data.organicKeywords : null;
+	const target = normalizeString(data.target);
+	const mode = normalizeString(data.mode);
+	const rowCount = normalizeNonNegativeNumber(data.rowCount);
+	const syncedAt = formatRecordedTimestamp(data.syncedAt);
 
 	return (
 		<div className="grid grid-cols-2 gap-3">
 			<StatItem
-				label="Domain Rating"
-				value={dr != null ? String(dr) : "—"}
+				label="Recorded Target"
+				value={target ?? "—"}
 			/>
 			<StatItem
-				label="Ref. Domains"
-				value={
-					referringDomains != null
-						? referringDomains.toLocaleString()
-						: "—"
-				}
+				label="Recorded Mode"
+				value={mode ?? "—"}
 			/>
 			<StatItem
-				label="Backlinks"
-				value={backlinks != null ? backlinks.toLocaleString() : "—"}
+				label="Recorded Rows"
+				value={rowCount != null ? rowCount.toLocaleString() : "—"}
 			/>
 			<StatItem
-				label="Organic KW"
-				value={
-					organicKeywords != null
-						? organicKeywords.toLocaleString()
-						: "—"
-				}
+				label="Last Sync"
+				value={syncedAt}
 			/>
 		</div>
 	);
@@ -113,13 +132,13 @@ function IntegrationCard({
 	icon: Icon,
 	name,
 	description,
-	isConnected,
+	hasRecordedData,
 	children,
 }: {
 	icon: typeof SearchIcon;
 	name: string;
 	description: string;
-	isConnected: boolean;
+	hasRecordedData: boolean;
 	children?: React.ReactNode;
 }) {
 	return (
@@ -137,28 +156,28 @@ function IntegrationCard({
 							</CardDescription>
 						</div>
 					</div>
-					{isConnected ? (
+					{hasRecordedData ? (
 						<Badge status="success" className="gap-1 text-xs">
 							<CheckCircle2Icon className="h-3 w-3" />
-							Connected
+							Data Recorded
 						</Badge>
 					) : (
 						<Badge className="gap-1 text-xs bg-muted text-muted-foreground">
 							<CircleDotIcon className="h-3 w-3" />
-							Not Connected
+							No Recorded Data
 						</Badge>
 					)}
 				</div>
 			</CardHeader>
 			<CardContent>
-				{isConnected && children ? (
+				{hasRecordedData && children ? (
 					children
 				) : (
 					<div className="flex flex-col items-center gap-3 py-4 text-center">
 						<p className="text-sm text-muted-foreground">
-							{isConnected
-								? "No data available yet."
-								: "Connect to sync your data automatically."}
+							{hasRecordedData
+								? "No recorded sync metadata is available yet."
+								: "Direct integration setup is not available from this screen yet."}
 						</p>
 						<TooltipProvider>
 							<Tooltip>
@@ -170,13 +189,13 @@ function IntegrationCard({
 										className="gap-1.5"
 									>
 										<ExternalLinkIcon className="h-3.5 w-3.5" />
-										Connect
+										Unavailable
 									</Button>
 								</TooltipTrigger>
 								<TooltipContent>
 									<p>
-										Coming soon — API integrations are in
-										development
+										Setup and automatic sync are not available
+										from this panel yet.
 									</p>
 								</TooltipContent>
 							</Tooltip>
@@ -204,8 +223,8 @@ export function IntegrationsPanel({
 				<IntegrationCard
 					icon={SearchIcon}
 					name="Google Search Console"
-					description="Impressions, clicks, CTR, and position data"
-					isConnected={hasGsc}
+					description="Recorded Search Console sync metadata for this domain"
+					hasRecordedData={hasGsc}
 				>
 					{hasGsc && seoDoc?.gscData && (
 						<GscSummary data={seoDoc.gscData} />
@@ -215,8 +234,8 @@ export function IntegrationsPanel({
 				<IntegrationCard
 					icon={LinkIcon}
 					name="Ahrefs"
-					description="Domain rating, backlinks, and organic keywords"
-					isConnected={hasAhrefs}
+					description="Recorded Ahrefs sync metadata for this domain"
+					hasRecordedData={hasAhrefs}
 				>
 					{hasAhrefs && seoDoc?.ahrefsData && (
 						<AhrefsSummary data={seoDoc.ahrefsData} />
@@ -229,7 +248,7 @@ export function IntegrationsPanel({
 					<div>
 						<p className="text-sm font-medium">Manual CSV Import</p>
 						<p className="text-xs text-muted-foreground">
-							Upload keyword data from any SEO tool
+							CSV import is not available from this panel yet
 						</p>
 					</div>
 					<TooltipProvider>
@@ -242,11 +261,11 @@ export function IntegrationsPanel({
 									className="gap-1.5"
 								>
 									<UploadIcon className="h-3.5 w-3.5" />
-									Import CSV
+									Unavailable
 								</Button>
 							</TooltipTrigger>
 							<TooltipContent>
-								<p>Coming soon</p>
+								<p>CSV import is not available yet.</p>
 							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>

@@ -11,6 +11,7 @@ import { z } from "zod";
 
 // ─── SSRF Protection ─────────────────────────────────────────────────────────
 
+const MAX_READ_URL_BYTES = 512 * 1024;
 const BLOCKED_HOST_RE =
 	/^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1?\]|\[::ffff:[\d.]+\]|\[fd[0-9a-f]{2}:.*\]|\[fe80:.*\])$/i;
 
@@ -39,6 +40,43 @@ function isSafeUrl(raw: string): boolean {
 	}
 }
 
+async function readResponseTextWithLimit(
+	response: Response,
+	maxBytes: number,
+): Promise<string> {
+	const contentLength = response.headers.get("content-length");
+	if (contentLength) {
+		const parsedLength = Number.parseInt(contentLength, 10);
+		if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+			throw new Error("Response too large");
+		}
+	}
+
+	const reader = response.body?.getReader();
+	if (!reader) {
+		return "";
+	}
+
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+		totalBytes += value.byteLength;
+		if (totalBytes > maxBytes) {
+			throw new Error("Response too large");
+		}
+		text += decoder.decode(value, { stream: true });
+	}
+
+	text += decoder.decode();
+	return text;
+}
+
 // ─── Web Search Tool ──────────────────────────────────────────────────────────
 
 /**
@@ -59,18 +97,16 @@ export const webSearchTool = tool({
 			.describe("Maximum number of results to return."),
 	}),
 	execute: async ({ query, maxResults }) => {
-		// Production: integrate with Brave Search API, Serper, or Tavily
-		// For now, return a structured placeholder that the agent can reason about
 		return {
 			query,
-			results: [
-				{
-					title: `Search result for: ${query}`,
-					url: `https://example.com/search?q=${encodeURIComponent(query)}`,
-					snippet: `Relevant information about ${query}. This would contain real search results in production.`,
-				},
-			].slice(0, maxResults),
+			results: [] as Array<{
+				title: string;
+				url: string;
+				snippet: string;
+			}>,
+			error: "Web search is not configured in this environment.",
 			searchedAt: new Date().toISOString(),
+			maxResults,
 		};
 	},
 });
@@ -115,7 +151,10 @@ export const readUrlTool = tool({
 				return { url, error: `HTTP ${response.status}`, content: null };
 			}
 
-			const html = await response.text();
+			const html = await readResponseTextWithLimit(
+				response,
+				MAX_READ_URL_BYTES,
+			);
 			const text = html
 				.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
 				.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -125,10 +164,13 @@ export const readUrlTool = tool({
 				.slice(0, 8000);
 
 			return { url, content: text, fetchedAt: new Date().toISOString() };
-		} catch (_err) {
+		} catch (err) {
 			return {
 				url,
-				error: "Fetch failed",
+				error:
+					err instanceof Error && err.message === "Response too large"
+						? "Response too large"
+						: "Fetch failed",
 				content: null,
 			};
 		} finally {
@@ -149,7 +191,6 @@ export const factCheckTool = tool({
 		claim: z.string().describe("The claim or statement to fact-check."),
 	}),
 	execute: async ({ claim }) => {
-		// Production: integrate with a fact-checking API or run a search + reasoning pass
 		return {
 			claim,
 			verdict: "unverified" as
@@ -157,9 +198,9 @@ export const factCheckTool = tool({
 				| "false"
 				| "unverified"
 				| "misleading",
-			confidence: 0.5,
+			confidence: 0,
 			reasoning:
-				"Automated fact-checking requires integration with a search API. Manual review recommended.",
+				"Automated fact-checking is not configured in this environment. Manual review is required.",
 			checkedAt: new Date().toISOString(),
 		};
 	},

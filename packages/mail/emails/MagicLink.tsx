@@ -19,7 +19,7 @@ export function MagicLink({
 	});
 
 	return (
-		<Wrapper>
+		<Wrapper locale={locale}>
 			<Text>{t("mail.magicLink.body")}</Text>
 
 			<Text>{t("mail.common.useLink")}</Text>

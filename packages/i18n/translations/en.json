@@ -250,7 +250,25 @@
 	},
 	"faq": {
 		"description": "Do you have any questions? We have got you covered.",
-		"title": "Frequently asked questions"
+		"title": "Frequently asked questions",
+		"items": [
+			{
+				"question": "What is the refund policy?",
+				"answer": "Refund and commercial terms are finalized as access is granted. During the current staged beta, onboarding and billing arrangements are handled directly rather than through a published self-serve refund policy."
+			},
+			{
+				"question": "How do I cancel my subscription?",
+				"answer": "During staged beta, access and billing changes are coordinated directly with the SmartBeak team rather than through a public self-serve billing page."
+			},
+			{
+				"question": "Can I change my plan?",
+				"answer": "Plan and access changes are currently handled as part of staged beta rollout and onboarding, not through a public self-serve plan switcher."
+			},
+			{
+				"question": "Do you offer a free trial?",
+				"answer": "We currently provide waitlist and staged beta access details instead of a general self-serve free trial."
+			}
+		]
 	},
 	"mail": {
 		"common": {
@@ -269,17 +287,17 @@
 			"subject": "Reset your password"
 		},
 		"magicLink": {
-			"body": "Hey,\nyou requested a login email from supastarter.\n\nClick the link below to login.",
+			"body": "Hey,\nyou requested a login email from SmartBeak.\n\nClick the link below to log in.",
 			"login": "Login",
-			"subject": "Login to supastarter"
+			"subject": "Log in to SmartBeak"
 		},
 		"newUser": {
-			"body": "Hey,\nthanks for signing up for supastarter.\n\nTo start using our app, please confirm your email address by clicking the link below.",
+			"body": "Hey,\nthanks for signing up for SmartBeak.\n\nTo start using the platform, please confirm your email address by clicking the link below.",
 			"confirmEmail": "Confirm email",
 			"subject": "Confirm your email"
 		},
 		"newsletterSignup": {
-			"body": "Thank you for signing up for the supastarter newsletter. We will keep you updated with the latest news and updates.",
+			"body": "Thank you for signing up for the SmartBeak newsletter. We will keep you updated with the latest news and product updates.",
 			"subject": "Welcome to our newsletter"
 		},
 		"organizationInvitation": {
@@ -301,7 +319,7 @@
 			}
 		},
 		"submit": "Subscribe",
-		"subtitle": "Be among the first to get access to supastarter.nextjs.",
+		"subtitle": "Be among the first to get access to SmartBeak.",
 		"title": "Get early access"
 	},
 	"onboarding": {
@@ -848,6 +866,12 @@
 		"goToDashboard": "Go to dashboard",
 		"goToHomepage": "Go to homepage"
 	},
+	"errorPage": {
+		"title": "Something went wrong",
+		"description": "An unexpected error occurred. Please try again or contact support if the problem persists.",
+		"tryAgain": "Try again",
+		"errorId": "Error ID: {id}"
+	},
 	"smartbeak": {
 		"domains": {
 			"title": "Domains",
@@ -904,7 +928,7 @@
 		"portfolio": {
 			"title": "Portfolio ROI",
 			"diligence": "Diligence Report",
-			"sellReady": "Sell-Ready Score"
+			"sellReady": "Sell-Readiness Estimate"
 		},
 		"smartDeploy": {
 			"title": "SmartDeploy",
@@ -989,7 +1013,7 @@
 				"endDate": "End Date",
 				"sync": "Sync Now",
 				"syncing": "Syncing...",
-				"success": "GSC sync complete",
+				"success": "GSC sync recorded",
 				"failed": "GSC sync failed"
 			}
 		},
@@ -1003,18 +1027,18 @@
 			"bulkSchedule": "Bulk Schedule",
 			"dlq": "Dead-Letter Queue",
 			"noJobs": "No publishing jobs",
-			"noJobsDesc": "Schedule content to publish across your connected platforms.",
+			"noJobsDesc": "Schedule content to publish across your configured publishing targets.",
 			"noAnalytics": "No analytics yet",
 			"noAnalyticsDesc": "Analytics will appear once content has been published.",
-			"noDlqJobs": "No failed jobs",
-			"noDlqJobsDesc": "All publishing jobs are healthy.",
-			"noDlqWebhooks": "No failed webhooks",
-			"noDlqWebhooksDesc": "All webhook events have been processed.",
+			"noDlqJobs": "No failed jobs recorded",
+			"noDlqJobsDesc": "No failed publishing jobs are currently listed in the dead-letter queue.",
+			"noDlqWebhooks": "No failed webhooks recorded",
+			"noDlqWebhooksDesc": "No failed webhook events are currently listed in the dead-letter queue.",
 			"executeJob": "Execute",
 			"retryJob": "Retry",
 			"bulkRetry": "Bulk Retry",
 			"replayWebhook": "Replay",
-			"platformConfigured": "Platform configured",
+			"platformConfigured": "Platform settings saved",
 			"platformRemoved": "Platform removed",
 			"seriesCreated": "Email series created",
 			"bulkScheduled": "Bulk schedule created"
@@ -1025,7 +1049,7 @@
 			"portfolioRoi": "Portfolio ROI",
 			"buyerAttribution": "Buyer Attribution",
 			"diligenceEngine": "Diligence Engine",
-			"sellReadyScore": "Sell-Ready Score",
+			"sellReadyScore": "Sell-Readiness Estimate",
 			"portfolioHealthIndex": "Portfolio Health Index",
 			"totalPortfolioValue": "Total Portfolio Value",
 			"avgDecay": "Avg Monetization Decay",
@@ -1054,20 +1078,20 @@
 		"growth": {
 			"waitlist": {
 				"title": "Join the Waitlist",
-				"description": "Get early access to SmartBeak",
-				"joinButton": "Request Early Access",
+				"description": "Join the waitlist for staged beta access updates",
+				"joinButton": "Request Beta Access",
 				"successTitle": "You're on the list!",
-				"successDescription": "We'll notify you when your early access is ready.",
+				"successDescription": "We'll notify you as staged beta access rolls out.",
 				"referralLink": "Your referral link",
 				"shareX": "Share on X",
 				"shareLinkedIn": "Share on LinkedIn"
 			},
 			"referrals": {
 				"title": "Referral Program",
-				"description": "Invite friends and earn rewards",
+				"description": "Invite people, track completed referrals, and review granted rewards",
 				"totalReferrals": "Total referrals",
-				"converted": "Converted",
-				"rewardsEarned": "Rewards earned",
+				"converted": "Completed",
+				"rewardsEarned": "Rewards granted",
 				"referralLink": "Your referral link",
 				"history": "Referral history",
 				"noReferrals": "No referrals yet. Share your link to get started!"

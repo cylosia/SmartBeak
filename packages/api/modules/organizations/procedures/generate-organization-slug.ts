@@ -1,9 +1,14 @@
 import { getOrganizationBySlug } from "@repo/database";
 import slugify from "@sindresorhus/slugify";
-import { nanoid } from "nanoid";
+import { customAlphabet } from "nanoid";
 import { z } from "zod";
 import { publicRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
 import { publicProcedure } from "../../../orpc/procedures";
+
+const randomSlugSuffix = customAlphabet(
+	"abcdefghijklmnopqrstuvwxyz0123456789",
+	6,
+);
 
 export const generateOrganizationSlug = publicProcedure
 	.route({
@@ -20,14 +25,15 @@ export const generateOrganizationSlug = publicProcedure
 	)
 	.use(publicRateLimitMiddleware({ limit: 15, windowMs: 60_000 }))
 	.handler(async ({ input: { name } }) => {
-		const baseSlug = slugify(name, {
+		const generatedSlug = slugify(name, {
 			lowercase: true,
 		});
+		const baseSlug = generatedSlug || `organization-${randomSlugSuffix()}`;
 
 		let slug = baseSlug;
 		const existing = await getOrganizationBySlug(slug);
 		if (existing) {
-			slug = `${baseSlug}-${nanoid(5)}`;
+			slug = `${baseSlug}-${randomSlugSuffix()}`;
 		}
 
 		return { slug };

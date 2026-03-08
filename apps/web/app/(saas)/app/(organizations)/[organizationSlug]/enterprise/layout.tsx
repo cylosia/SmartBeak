@@ -43,7 +43,7 @@ export default async function EnterpriseLayout({
 					icon: <UsersIcon className="size-4 opacity-50" />,
 				},
 				{
-					title: "Single Sign-On",
+					title: "SSO Configuration",
 					href: `${basePath}/sso`,
 					icon: <ShieldCheckIcon className="size-4 opacity-50" />,
 				},
@@ -65,7 +65,7 @@ export default async function EnterpriseLayout({
 		<>
 			<PageHeader
 				title="Enterprise"
-				subtitle="Security, compliance, and scaling controls for your organization."
+				subtitle="Security, administration, and scaling controls for your organization."
 			/>
 			<SettingsMenu menuItems={menuItems} className="mb-6" />
 			{children}

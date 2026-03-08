@@ -1,7 +1,7 @@
 import { SsoConfigPage } from "@/modules/smartbeak/enterprise/sso/components/SsoConfigPage";
 
 export async function generateMetadata() {
-	return { title: "Single Sign-On — Enterprise" };
+	return { title: "SSO Configuration — Enterprise" };
 }
 
 export default async function EnterpriseSsoPage({

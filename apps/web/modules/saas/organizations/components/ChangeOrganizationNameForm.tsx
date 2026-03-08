@@ -10,6 +10,7 @@ import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useRouter } from "@shared/hooks/router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -21,7 +22,8 @@ export function ChangeOrganizationNameForm() {
 	const t = useTranslations();
 	const router = useRouter();
 	const queryClient = useQueryClient();
-	const { activeOrganization } = useActiveOrganization();
+	const { activeOrganization, refetchActiveOrganization } =
+		useActiveOrganization();
 
 	const form = useForm({
 		resolver: zodResolver(formSchema),
@@ -30,16 +32,26 @@ export function ChangeOrganizationNameForm() {
 		},
 	});
 
+	useEffect(() => {
+		if (activeOrganization) {
+			form.reset({
+				name: activeOrganization.name,
+			});
+		}
+	}, [activeOrganization, form]);
+
 	const onSubmit = form.handleSubmit(async ({ name }) => {
 		if (!activeOrganization) {
 			return;
 		}
 
+		const trimmedName = name.trim();
+
 		try {
 			const { error } = await authClient.organization.update({
 				organizationId: activeOrganization.id,
 				data: {
-					name,
+					name: trimmedName,
 				},
 			});
 
@@ -56,6 +68,7 @@ export function ChangeOrganizationNameForm() {
 			queryClient.invalidateQueries({
 				queryKey: organizationListQueryKey,
 			});
+			await refetchActiveOrganization();
 			router.refresh();
 		} catch {
 			toastError(

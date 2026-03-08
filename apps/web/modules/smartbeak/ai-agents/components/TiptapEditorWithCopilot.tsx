@@ -27,7 +27,10 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useState } from "react";
-import { AiCopilotExtension } from "./AiCopilotExtension";
+import {
+	AiCopilotExtension,
+	type CopilotAction,
+} from "./AiCopilotExtension";
 import { AiCopilotToolbar } from "./AiCopilotToolbar";
 
 interface TiptapEditorWithCopilotProps {
@@ -48,6 +51,10 @@ export function TiptapEditorWithCopilot({
 	editable = true,
 }: TiptapEditorWithCopilotProps) {
 	const [isMounted, setIsMounted] = useState(false);
+	const [requestedAction, setRequestedAction] = useState<{
+		id: number;
+		action: CopilotAction;
+	} | null>(null);
 
 	useEffect(() => {
 		setIsMounted(true);
@@ -63,6 +70,12 @@ export function TiptapEditorWithCopilot({
 			}),
 			AiCopilotExtension.configure({
 				enabled: true,
+				onAction: (action) => {
+					setRequestedAction({
+						id: Date.now(),
+						action,
+					});
+				},
 			}),
 		],
 		content: value,
@@ -85,6 +98,17 @@ export function TiptapEditorWithCopilot({
 		},
 	});
 
+	useEffect(() => {
+		if (!editor) {
+			return;
+		}
+
+		const currentHtml = editor.getHTML();
+		if (value !== currentHtml) {
+			editor.commands.setContent(value, false);
+		}
+	}, [editor, value]);
+
 	if (!isMounted) {
 		return (
 			<div className="rounded-xl border bg-background">
@@ -101,6 +125,12 @@ export function TiptapEditorWithCopilot({
 				<AiCopilotToolbar
 					editor={editor}
 					documentTitle={documentTitle}
+					requestedAction={requestedAction}
+					onRequestedActionHandled={(id) => {
+						setRequestedAction((current) =>
+							current?.id === id ? null : current,
+						);
+					}}
 				/>
 			</div>
 

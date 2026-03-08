@@ -49,14 +49,22 @@ interface SeoDocData {
 	updatedAt: string | Date;
 }
 
+function clampPercent(value: number | null | undefined) {
+	if (typeof value !== "number" || Number.isNaN(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, Math.round(value)));
+}
+
 function generateScoreTrend(currentScore: number, days = 30) {
+	const safeScore = clampPercent(currentScore);
 	return Array.from({ length: days }, (_, i) => {
 		const dayOffset = days - 1 - i;
 		const noise = Math.sin(i * 0.8) * 6 + Math.cos(i * 0.3) * 4;
-		const growth = (i / days) * (currentScore * 0.3);
+		const growth = (i / days) * (safeScore * 0.3);
 		const score = Math.max(
 			0,
-			Math.min(100, Math.round(currentScore * 0.6 + growth + noise)),
+			Math.min(100, Math.round(safeScore * 0.6 + growth + noise)),
 		);
 		const date = new Date();
 		date.setDate(date.getDate() - dayOffset);
@@ -98,9 +106,11 @@ export function SeoDashboard({
 		return { avgDifficulty, bestPosition, decayWarnings };
 	}, [keywords]);
 
+	const normalizedScore = clampPercent(seoDoc?.score);
+
 	const scoreTrend = useMemo(
-		() => generateScoreTrend(seoDoc?.score ?? 0),
-		[seoDoc?.score],
+		() => generateScoreTrend(normalizedScore),
+		[normalizedScore],
 	);
 
 	const clusters = useMemo(() => {
@@ -140,13 +150,13 @@ export function SeoDashboard({
 				icon: TrendingDownIcon,
 			});
 		}
-		if ((seoDoc?.score ?? 0) < 40) {
+		if (normalizedScore < 40) {
 			items.push({
 				type: "danger",
 				message: "SEO score is critically low",
 				icon: AlertCircleIcon,
 			});
-		} else if ((seoDoc?.score ?? 0) < 70) {
+		} else if (normalizedScore < 70) {
 			items.push({
 				type: "warning",
 				message: "SEO score needs improvement",
@@ -169,7 +179,7 @@ export function SeoDashboard({
 			});
 		}
 		return items;
-	}, [keywords, seoDoc?.score]);
+	}, [keywords, normalizedScore]);
 
 	const chartConfig = {
 		score: { label: "SEO Score", color: "hsl(var(--chart-1))" },
@@ -206,7 +216,7 @@ export function SeoDashboard({
 					subtitle={
 						stats.decayWarnings > 0
 							? "Keywords need attention"
-							: "All healthy"
+							: "No current decay warnings"
 					}
 					icon={AlertTriangleIcon}
 				/>

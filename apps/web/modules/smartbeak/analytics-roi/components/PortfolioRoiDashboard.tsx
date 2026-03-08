@@ -23,7 +23,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
 	ActivityIcon,
 	AlertTriangleIcon,
-	DollarSignIcon,
 	GlobeIcon,
 	TrendingUpIcon,
 } from "lucide-react";
@@ -42,6 +41,20 @@ import {
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
+
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
+function clampRatio(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(1, Math.max(0, value));
+}
 
 function RiskBadge({ score }: { score: number }) {
 	if (score >= 75) {
@@ -107,8 +120,12 @@ export function PortfolioRoiDashboard({
 	if (!data) {
 		return null;
 	}
+	const totalScore = Number(data.totalScore ?? 0);
 
-	const trendData = trendQuery.data?.trend ?? [];
+	const trendData = (trendQuery.data?.trend ?? []).map((point) => ({
+		...point,
+		avgDecay: clampRatio(Number(point.avgDecay ?? 0)),
+	}));
 
 	const topDomains = [...(data.domains ?? [])]
 		.sort((a, b) => b.riskAdjustedScore - a.riskAdjustedScore)
@@ -119,8 +136,7 @@ export function PortfolioRoiDashboard({
 			(d.name ?? "").length > 20
 				? `${(d.name ?? "").slice(0, 18)}…`
 				: (d.name ?? ""),
-		value: d.riskAdjustedScore,
-		estimatedValue: Math.round(Number(d.estimatedValue) || 0),
+		value: clampPercent(Number(d.riskAdjustedScore ?? 0)),
 	}));
 
 	return (
@@ -129,15 +145,15 @@ export function PortfolioRoiDashboard({
 				{/* Metric Cards */}
 				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					<MetricCard
-						title="Total Portfolio Value"
-						value={`$${((data.totalValue ?? 0) / 1000).toFixed(1)}K`}
-						icon={DollarSignIcon}
-						subtitle="Risk-adjusted estimated value"
+						title="Total Portfolio Score"
+						value={totalScore.toFixed(1)}
+						icon={TrendingUpIcon}
+						subtitle="Aggregate risk-adjusted score"
 					/>
 					<MetricCard
 						title="Average ROI Score"
 						value={`${(data.avgRoi ?? 0).toFixed(1)}`}
-						icon={TrendingUpIcon}
+						icon={ActivityIcon}
 						subtitle="Weighted health × decay factor"
 					/>
 					<MetricCard
@@ -321,8 +337,8 @@ export function PortfolioRoiDashboard({
 							Domain Portfolio Breakdown
 						</CardTitle>
 						<CardDescription>
-							All domains with risk-adjusted scores and estimated
-							values
+							All domains with risk-adjusted scores and share of
+							portfolio score
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="p-0">
@@ -333,12 +349,31 @@ export function PortfolioRoiDashboard({
 									<TableHead>Health Score</TableHead>
 									<TableHead>Decay Factor</TableHead>
 									<TableHead>Risk-Adjusted Score</TableHead>
-									<TableHead>Est. Value</TableHead>
+									<TableHead>Portfolio Share</TableHead>
 									<TableHead>Risk Level</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
 								{(data.domains ?? []).map((domain) => (
+									(() => {
+										const healthScore = clampPercent(
+											Number(domain.healthScore ?? 0),
+										);
+										const decayFactor = clampRatio(
+											Number(domain.decayFactor ?? 0),
+										);
+										const riskAdjustedScore = clampPercent(
+											Number(
+												domain.riskAdjustedScore ?? 0,
+											),
+										);
+										const portfolioShare =
+											totalScore > 0
+												? (Number(domain.riskAdjustedScore ?? 0) /
+														totalScore) *
+													100
+												: 0;
+										return (
 									<TableRow key={domain.id}>
 										<TableCell className="font-medium">
 											{domain.name}
@@ -346,65 +381,50 @@ export function PortfolioRoiDashboard({
 										<TableCell>
 											<div className="flex items-center gap-2">
 												<Progress
-													value={
-														domain.healthScore ?? 0
-													}
+													value={healthScore}
 													className="h-1.5 w-20"
 												/>
 												<span className="text-xs text-muted-foreground">
-													{domain.healthScore ?? 0}
+													{healthScore}
 												</span>
 											</div>
 										</TableCell>
 										<TableCell>
 											<span
 												className={
-													(domain.decayFactor ?? 0) >=
-													0.7
+													decayFactor >= 0.7
 														? "text-green-600 dark:text-green-400"
-														: (domain.decayFactor ??
-																	0) >= 0.4
+														: decayFactor >= 0.4
 															? "text-amber-600 dark:text-amber-400"
 															: "text-red-600 dark:text-red-400"
 												}
 											>
-												{(
-													(domain.decayFactor ?? 0) *
-													100
-												).toFixed(1)}
+												{(decayFactor * 100).toFixed(1)}
 												%
 											</span>
 										</TableCell>
 										<TableCell>
 											<div className="flex items-center gap-2">
 												<Progress
-													value={
-														domain.riskAdjustedScore ??
-														0
-													}
+													value={riskAdjustedScore}
 													className="h-1.5 w-20"
 												/>
 												<span className="text-xs font-medium">
-													{(
-														domain.riskAdjustedScore ??
-														0
-													).toFixed(1)}
+													{riskAdjustedScore.toFixed(1)}
 												</span>
 											</div>
 										</TableCell>
 										<TableCell className="font-medium">
-											$
-											{(
-												Number(domain.estimatedValue) ||
-												0
-											).toLocaleString()}
+											{portfolioShare.toFixed(1)}%
 										</TableCell>
 										<TableCell>
 											<RiskBadge
-												score={domain.riskAdjustedScore}
+												score={riskAdjustedScore}
 											/>
 										</TableCell>
 									</TableRow>
+										);
+									})()
 								))}
 								{(data.domains ?? []).length === 0 && (
 									<TableRow>

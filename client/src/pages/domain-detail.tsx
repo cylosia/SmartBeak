@@ -65,7 +65,7 @@ function StatusBadge({ status }: { status: string }) {
 					className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
 				>
 					<CheckCircle2 className="w-3 h-3 mr-1" />
-					Live
+					Ready
 				</Badge>
 			);
 		case "building":
@@ -110,7 +110,7 @@ export default function DomainDetailPage() {
 	});
 
 	const { data: auditLogs } = useQuery<AuditLog[]>({
-		queryKey: ["/api/audit-logs"],
+		queryKey: [`/api/audit-logs?domainId=${encodeURIComponent(id)}`],
 	});
 
 	const isDeploying =
@@ -124,6 +124,9 @@ export default function DomainDetailPage() {
 			pollingRef.current = setInterval(() => {
 				queryClient.invalidateQueries({
 					queryKey: ["/api/domains", id],
+				});
+				queryClient.invalidateQueries({
+					queryKey: [`/api/audit-logs?domainId=${encodeURIComponent(id)}`],
 				});
 			}, 2000);
 		} else {
@@ -148,6 +151,9 @@ export default function DomainDetailPage() {
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["/api/domains", id] });
+			queryClient.invalidateQueries({
+				queryKey: [`/api/audit-logs?domainId=${encodeURIComponent(id)}`],
+			});
 			toast({
 				title: "Deployment started",
 				description: "Your site is being deployed to Vercel.",
@@ -192,12 +198,7 @@ export default function DomainDetailPage() {
 	}
 
 	const latestShard = domain.latestShard;
-	const domainAuditLogs =
-		auditLogs?.filter(
-			(log) =>
-				log.entityId === domain.id ||
-				domain.shards.some((s) => s.id === log.entityId),
-		) || [];
+	const domainAuditLogs = auditLogs ?? [];
 
 	return (
 		<div className="min-h-screen bg-background">
@@ -230,7 +231,8 @@ export default function DomainDetailPage() {
 						)}
 					</div>
 					<div className="flex items-center gap-2">
-						{latestShard?.deployedUrl && (
+						{latestShard?.deployedUrl &&
+							latestShard.status === "ready" && (
 							<Button
 								variant="outline"
 								data-testid="button-visit-site"
@@ -242,7 +244,7 @@ export default function DomainDetailPage() {
 								}
 							>
 								<ExternalLink className="w-4 h-4 mr-2" />
-								Visit Site
+								Open Deployed URL
 							</Button>
 						)}
 						<Button
@@ -371,7 +373,7 @@ export default function DomainDetailPage() {
 							<Card>
 								<CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
 									<CardTitle className="text-base">
-										Live Preview
+										Deployed Preview
 									</CardTitle>
 									<div className="flex items-center gap-2">
 										<Button
@@ -396,7 +398,7 @@ export default function DomainDetailPage() {
 											}
 										>
 											<ExternalLink className="w-3 h-3 mr-1" />
-											Open
+											Open URL
 										</Button>
 									</div>
 								</CardHeader>
@@ -429,8 +431,8 @@ export default function DomainDetailPage() {
 									</h3>
 									<p className="text-muted-foreground mb-6 max-w-sm">
 										{isDeploying
-											? "Your site is currently being deployed. The preview will appear once it's live."
-											: "Deploy your site to see a live preview here."}
+											? "Your site is currently being deployed. The preview will appear once Vercel reports the deployment as ready."
+											: "Deploy your site to load the deployed URL here once it is ready."}
 									</p>
 									{!isDeploying && (
 										<Button
@@ -513,7 +515,8 @@ export default function DomainDetailPage() {
 															{new Date(
 																shard.createdAt,
 															).toLocaleString()}
-															{shard.deployedUrl && (
+															{shard.deployedUrl &&
+																shard.status === "ready" && (
 																<span>
 																	{" "}
 																	·{" "}
@@ -626,8 +629,8 @@ export default function DomainDetailPage() {
 					<DialogHeader>
 						<DialogTitle>Deploy {domain.name}</DialogTitle>
 						<DialogDescription>
-							Choose a theme and deploy a production-ready static
-							site to Vercel.
+							Choose a theme and deploy a generated static site
+							to Vercel.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="py-4 space-y-4">
@@ -692,12 +695,12 @@ export default function DomainDetailPage() {
 			<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
 				<DialogContent className="max-w-5xl h-[85vh]">
 					<DialogHeader>
-						<DialogTitle>{domain.name} - Live Preview</DialogTitle>
+						<DialogTitle>{domain.name} - Deployed Preview</DialogTitle>
 						<DialogDescription>
-							Full preview of your deployed site
+							Embedded view of the deployed URL
 						</DialogDescription>
 					</DialogHeader>
-					{latestShard?.deployedUrl && (
+					{latestShard?.deployedUrl && latestShard.status === "ready" && (
 						<iframe
 							src={latestShard.deployedUrl}
 							className="w-full flex-1 rounded-md border"

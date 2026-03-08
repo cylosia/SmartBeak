@@ -34,7 +34,6 @@ export {
 	getSellReadyScore,
 	PORTFOLIO_ROI_MATERIALIZED_VIEW_SQL,
 	REFRESH_PORTFOLIO_ROI_VIEW_SQL,
-	runDiligenceChecksForDomain,
 	upsertDiligenceCheck,
 } from "./drizzle/queries/analytics-roi";
 // Enterprise Readiness & Scaling queries, schemas, and Zod (Phase 3A)
@@ -98,6 +97,7 @@ export {
 	bulkRetryJobs,
 	bulkRetryJobsForOrg,
 	cancelPublishingJob,
+	claimPublishingJobForExecution,
 	countAttemptsForJob,
 	createWebhookEvent,
 	deletePublishTarget,

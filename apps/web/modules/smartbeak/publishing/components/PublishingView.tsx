@@ -28,10 +28,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
 	ActivityIcon,
-	GlobeIcon,
 	LinkedinIcon,
 	Loader2Icon,
-	MailIcon,
 	PlusIcon,
 	SendIcon,
 } from "lucide-react";
@@ -42,18 +40,25 @@ import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkel
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 
 const PUBLISH_TARGETS = [
-	{ value: "web", label: "Web (Site)", icon: GlobeIcon },
-	{ value: "email", label: "Email (Resend)", icon: MailIcon },
 	{ value: "linkedin", label: "LinkedIn", icon: LinkedinIcon },
 	{ value: "facebook", label: "Facebook", icon: ActivityIcon },
-	{ value: "instagram", label: "Instagram", icon: ActivityIcon },
-	{ value: "youtube", label: "YouTube", icon: ActivityIcon },
 	{ value: "wordpress", label: "WordPress", icon: ActivityIcon },
-	{ value: "tiktok", label: "TikTok", icon: ActivityIcon },
 	{ value: "pinterest", label: "Pinterest", icon: ActivityIcon },
-	{ value: "vimeo", label: "Vimeo", icon: ActivityIcon },
 	{ value: "soundcloud", label: "SoundCloud", icon: ActivityIcon },
 ] as const;
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
+}
 
 export function PublishingView({
 	organizationSlug,
@@ -63,9 +68,15 @@ export function PublishingView({
 	domainId: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const [target, setTarget] = useState<string>("web");
+	const [target, setTarget] = useState<string>("linkedin");
 	const [selectedContentId, setSelectedContentId] = useState<string>("");
 	const queryClient = useQueryClient();
+
+	const resetDialog = () => {
+		setSelectedContentId("");
+		setTarget("linkedin");
+		setOpen(false);
+	};
 
 	const contentQuery = useQuery(
 		orpc.smartbeak.content.list.queryOptions({
@@ -86,13 +97,32 @@ export function PublishingView({
 					queryKey: orpc.smartbeak.publishing.listJobs.key(),
 				});
 				toastSuccess("Publishing job queued");
-				setOpen(false);
+				resetDialog();
 			},
 			onError: (err) => {
 				toastError("Error", err.message);
 			},
 		}),
 	);
+
+	const handleCreateJob = () => {
+		const trimmedContentId = selectedContentId.trim();
+		if (!trimmedContentId) {
+			toastError("Error", "Select a content item to publish.");
+			return;
+		}
+		createMutation.mutate({
+			organizationSlug,
+			domainId,
+			contentId: trimmedContentId,
+			target: target as
+				| "linkedin"
+				| "facebook"
+				| "wordpress"
+				| "pinterest"
+				| "soundcloud",
+		});
+	};
 
 	return (
 		<ErrorBoundary>
@@ -173,25 +203,15 @@ export function PublishingView({
 										</TableCell>
 										<TableCell className="text-muted-foreground text-sm">
 											{job.scheduledFor
-												? formatDistanceToNow(
-														new Date(
-															job.scheduledFor,
-														),
-														{
-															addSuffix: true,
-														},
-													)
+												? formatRelativeDate(
+														job.scheduledFor,
+													) ?? "—"
 												: "Immediate"}
 										</TableCell>
 										<TableCell className="text-muted-foreground text-sm">
-											{job.createdAt
-												? formatDistanceToNow(
-														new Date(job.createdAt),
-														{
-															addSuffix: true,
-														},
-													)
-												: "—"}
+											{formatRelativeDate(
+												job.createdAt,
+											) ?? "—"}
 										</TableCell>
 									</TableRow>
 								))}
@@ -201,7 +221,16 @@ export function PublishingView({
 				)}
 
 				{/* Create Job Dialog */}
-				<Dialog open={open} onOpenChange={setOpen}>
+				<Dialog
+					open={open}
+					onOpenChange={(nextOpen) => {
+						if (!nextOpen) {
+							resetDialog();
+							return;
+						}
+						setOpen(true);
+					}}
+				>
 					<DialogContent>
 						<DialogHeader>
 							<DialogTitle>New Publishing Job</DialogTitle>
@@ -265,32 +294,16 @@ export function PublishingView({
 						<DialogFooter>
 							<Button
 								variant="outline"
-								onClick={() => setOpen(false)}
+								onClick={resetDialog}
 							>
 								Cancel
 							</Button>
 							<Button
-								onClick={() =>
-									createMutation.mutate({
-										organizationSlug,
-										domainId,
-										contentId:
-											selectedContentId || undefined,
-										target: target as
-											| "web"
-											| "linkedin"
-											| "facebook"
-											| "instagram"
-											| "youtube"
-											| "wordpress"
-											| "email"
-											| "tiktok"
-											| "pinterest"
-											| "vimeo"
-											| "soundcloud",
-									})
+								onClick={handleCreateJob}
+								disabled={
+									createMutation.isPending ||
+									!selectedContentId.trim()
 								}
-								disabled={createMutation.isPending}
 							>
 								{createMutation.isPending && (
 									<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />

@@ -12,7 +12,7 @@ export function NewsletterSignup({ locale, translations }: BaseMailProps) {
 	});
 
 	return (
-		<Wrapper>
+		<Wrapper locale={locale}>
 			<Heading className="text-xl">
 				{t("mail.newsletterSignup.subject")}
 			</Heading>

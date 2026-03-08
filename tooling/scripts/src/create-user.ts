@@ -1,5 +1,10 @@
 import { auth } from "@repo/auth";
-import { createUser, createUserAccount, getUserByEmail } from "@repo/database";
+import {
+	createUser,
+	createUserAccount,
+	deleteUserById,
+	getUserByEmail,
+} from "@repo/database";
 import { logger } from "@repo/logs";
 import { nanoid } from "nanoid";
 
@@ -49,12 +54,21 @@ async function main() {
 		return;
 	}
 
-	await createUserAccount({
-		userId: adminUser.id,
-		providerId: "credential",
-		accountId: adminUser.id,
-		hashedPassword,
-	});
+	try {
+		await createUserAccount({
+			userId: adminUser.id,
+			providerId: "credential",
+			accountId: adminUser.id,
+			hashedPassword,
+		});
+	} catch (error) {
+		await deleteUserById(adminUser.id);
+		logger.error("Failed to create user account. Rolled back user creation.", {
+			error,
+			userId: adminUser.id,
+		});
+		return;
+	}
 
 	logger.success("User created successfully!");
 	process.stdout.write(`Password: ${adminPassword}\n`);

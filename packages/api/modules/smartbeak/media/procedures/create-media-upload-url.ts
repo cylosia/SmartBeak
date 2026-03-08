@@ -37,8 +37,7 @@ export const createMediaUploadUrl = protectedProcedure
 				.number()
 				.int()
 				.positive()
-				.max(100 * 1024 * 1024)
-				.optional(),
+				.max(100 * 1024 * 1024),
 		}),
 	)
 	.handler(async ({ context: { user }, input }) => {
@@ -78,6 +77,7 @@ export const createMediaUploadUrl = protectedProcedure
 		const path = `${org.id}/${input.domainId}/${Date.now()}-${safeFileName}`;
 		const signedUploadUrl = await getSignedUploadUrl(path, {
 			bucket: "avatars", // reuse existing bucket; production would use a dedicated media bucket
+			size: input.size,
 		});
 		// Pre-register the asset so the client can reference it immediately
 		const publicUrl = `${getBaseUrl()}/api/media/${path}`;
@@ -87,13 +87,23 @@ export const createMediaUploadUrl = protectedProcedure
 			url: publicUrl,
 			type: input.type,
 			size: input.size,
+			metadata: { storagePath: path },
+			lifecycle: {
+				uploadStatus: "pending",
+				createdAt: new Date().toISOString(),
+			},
 		});
+		if (!asset) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to create media asset.",
+			});
+		}
 		await audit({
 			orgId: org.id,
 			actorId: user.id,
 			action: "media.created",
 			entityType: "media_asset",
-			entityId: asset?.id,
+			entityId: asset.id,
 			details: { fileName: input.fileName, type: input.type },
 		});
 		return { signedUploadUrl, path, asset };

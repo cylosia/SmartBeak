@@ -7,6 +7,7 @@ import { orpcClient } from "@shared/lib/orpc-client";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { getServerQueryClient } from "@shared/lib/server";
 import { attemptAsync } from "es-toolkit";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 export async function generateMetadata() {
@@ -19,6 +20,11 @@ export async function generateMetadata() {
 
 export default async function BillingSettingsPage() {
 	const session = await getSession();
+
+	if (!session) {
+		redirect("/auth/login");
+	}
+
 	const [error, data] = await attemptAsync(() =>
 		orpcClient.payments.listPurchases({}),
 	);
@@ -27,7 +33,8 @@ export default async function BillingSettingsPage() {
 		throw new Error("Failed to fetch purchases");
 	}
 
-	const purchases = data?.purchases ?? [];
+	const purchasesPayload = data ?? { purchases: [] };
+	const purchases = purchasesPayload.purchases;
 
 	const queryClient = getServerQueryClient();
 
@@ -35,7 +42,7 @@ export default async function BillingSettingsPage() {
 		queryKey: orpc.payments.listPurchases.queryKey({
 			input: {},
 		}),
-		queryFn: () => purchases,
+		queryFn: () => purchasesPayload,
 	});
 
 	const { activePlan } = createPurchasesHelper(purchases);
@@ -44,7 +51,7 @@ export default async function BillingSettingsPage() {
 		<SettingsList>
 			{activePlan && <ActivePlan />}
 			<ChangePlan
-				userId={session?.user.id}
+				userId={session.user.id}
 				activePlanId={activePlan?.id}
 			/>
 		</SettingsList>

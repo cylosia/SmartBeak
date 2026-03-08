@@ -11,7 +11,6 @@ import {
 	CreateAiAgentInputSchema,
 	createAgent,
 	deleteAgent,
-	getActiveAgentsForOrg,
 	getAgentById,
 	getAgentsForOrg,
 	UpdateAiAgentInputSchema,
@@ -161,11 +160,6 @@ export const seedDefaultAgents = protectedProcedure
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgEditor(org.supastarterOrgId, user.id);
 
-		const existing = await getActiveAgentsForOrg(org.id);
-		if (existing.length > 0) {
-			return { agents: existing, seeded: false };
-		}
-
 		const defaults = [
 			{
 				name: "Research Agent",
@@ -202,8 +196,8 @@ Your role is to:
 2. Write in a clear, engaging, and authoritative voice appropriate for the target audience.
 3. Use short paragraphs, active voice, and strong headlines for readability.
 4. Naturally incorporate target keywords without keyword stuffing.
-5. Ensure the content is original, valuable, and publication-ready.
-Produce complete, polished drafts that require minimal editing.`,
+5. Ensure the content is original, valuable, and suitable for human review.
+Produce complete, polished drafts that should still be reviewed before publication.`,
 				}),
 			},
 			{
@@ -222,24 +216,41 @@ Your role is to:
 2. Improve sentence structure, word choice, and transitions.
 3. Check for factual accuracy and flag any unsupported claims.
 4. Optimize for the target audience and SEO without changing the core message.
-5. Ensure the content meets publication standards.
+5. Ensure the content is ready for editorial review and clearly flag anything uncertain.
 Return the improved version followed by a brief "Editor's Notes" section summarizing key changes.`,
 				}),
 			},
 		];
 
+		const existingAgents = await getAgentsForOrg(org.id);
+		const existingByName = new Map(
+			existingAgents.map((agent) => [agent.name, agent]),
+		);
+
 		const agents = await Promise.all(
-			defaults.map((d) =>
-				createAgent({
+			defaults.map(async (d) => {
+				const existing = existingByName.get(d.name);
+				if (existing) {
+					return (
+						(await updateAgent(existing.id, {
+							description: d.description,
+							config: d.config,
+							isActive: true,
+						})) ?? existing
+					);
+				}
+
+				return createAgent({
 					orgId: org.id,
 					name: d.name,
 					description: d.description,
 					agentType: d.agentType,
 					config: d.config,
 					createdBy: user.id,
-				}),
-			),
+				});
+			}),
 		);
 
-		return { agents, seeded: true };
+		const createdAny = defaults.some((d) => !existingByName.has(d.name));
+		return { agents, seeded: createdAny };
 	});

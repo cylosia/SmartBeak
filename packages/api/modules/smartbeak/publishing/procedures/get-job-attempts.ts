@@ -31,7 +31,7 @@ export const getJobAttempts = protectedProcedure
 		}
 		const domain = await getDomainById(job.domainId);
 		if (!domain || domain.orgId !== org.id) {
-			throw new ORPCError("FORBIDDEN", { message: "Access denied." });
+			throw new ORPCError("NOT_FOUND", { message: "Job not found." });
 		}
 		const attempts = await getPublishAttemptsForJob(input.jobId);
 		return { job, attempts };

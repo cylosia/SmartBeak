@@ -28,6 +28,11 @@ export const getCalendarProcedure = protectedProcedure
 		const fromDate = new Date(input.from);
 		const toDate = new Date(input.to);
 		const maxRangeMs = 93 * 24 * 60 * 60 * 1000;
+		if (toDate.getTime() < fromDate.getTime()) {
+			throw new ORPCError("BAD_REQUEST", {
+				message: "End date must be on or after the start date.",
+			});
+		}
 		if (toDate.getTime() - fromDate.getTime() > maxRangeMs) {
 			throw new ORPCError("BAD_REQUEST", {
 				message: "Date range must not exceed 93 days.",

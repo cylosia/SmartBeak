@@ -332,7 +332,12 @@ export async function getStorageUsageBytesForOrg(orgId: string) {
 		.select({ total: sql<string>`coalesce(sum(${mediaAssets.size}), 0)` })
 		.from(mediaAssets)
 		.innerJoin(domains, eq(mediaAssets.domainId, domains.id))
-		.where(eq(domains.orgId, orgId));
+		.where(
+			and(
+				eq(domains.orgId, orgId),
+				sql`${mediaAssets.lifecycle} ->> 'uploadStatus' IS DISTINCT FROM 'pending'`,
+			),
+		);
 	return Number(result[0]?.total ?? 0);
 }
 
@@ -341,10 +346,16 @@ export async function getMediaAssetsForDomain(
 	opts?: { limit?: number; offset?: number; type?: string },
 ) {
 	return db.query.mediaAssets.findMany({
-		where: (m, { eq, and }) =>
-			opts?.type
-				? and(eq(m.domainId, domainId), eq(m.type, opts.type))
-				: eq(m.domainId, domainId),
+		where: (m, { eq, and }) => {
+			const conditions = [
+				eq(m.domainId, domainId),
+				sql`${m.lifecycle} ->> 'uploadStatus' IS DISTINCT FROM 'pending'`,
+			];
+			if (opts?.type) {
+				conditions.push(eq(m.type, opts.type));
+			}
+			return and(...conditions);
+		},
 		limit: opts?.limit ?? 50,
 		offset: opts?.offset ?? 0,
 		orderBy: (m, { desc }) => [desc(m.createdAt)],
@@ -355,7 +366,10 @@ export async function countMediaAssetsForDomain(
 	domainId: string,
 	opts?: { type?: string },
 ) {
-	const conditions = [eq(mediaAssets.domainId, domainId)];
+	const conditions = [
+		eq(mediaAssets.domainId, domainId),
+		sql`${mediaAssets.lifecycle} ->> 'uploadStatus' IS DISTINCT FROM 'pending'`,
+	];
 	if (opts?.type) {
 		conditions.push(eq(mediaAssets.type, opts.type));
 	}
@@ -379,6 +393,7 @@ export async function createMediaAsset(data: {
 	type: string;
 	size?: number;
 	metadata?: Record<string, unknown>;
+	lifecycle?: Record<string, unknown>;
 }) {
 	return db.insert(mediaAssets).values(data).returning();
 }
@@ -398,7 +413,7 @@ export async function updateMediaAsset(
 }
 
 export async function deleteMediaAsset(id: string) {
-	return db.delete(mediaAssets).where(eq(mediaAssets.id, id));
+	return db.delete(mediaAssets).where(eq(mediaAssets.id, id)).returning();
 }
 
 // ─── Publish Targets ──────────────────────────────────────────────────────────

@@ -60,6 +60,8 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
 	const queryClient = useQueryClient();
 	const [showCreate, setShowCreate] = useState(false);
 	const [form, setForm] = useState({ name: "", description: "" });
+	const trimmedName = form.name.trim();
+	const trimmedDescription = form.description.trim();
 
 	const workflowsQuery = useQuery(
 		orpc.aiAgents.listWorkflows.queryOptions({
@@ -299,12 +301,13 @@ export default function WorkflowsPage({ params }: WorkflowsPageProps) {
 							onClick={() =>
 								createMutation.mutate({
 									organizationSlug,
-									name: form.name,
-									description: form.description || undefined,
+									name: trimmedName,
+									description:
+										trimmedDescription || undefined,
 									stepsJson: { nodes: [], edges: [] },
 								})
 							}
-							disabled={!form.name || createMutation.isPending}
+							disabled={!trimmedName || createMutation.isPending}
 						>
 							{createMutation.isPending && (
 								<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />

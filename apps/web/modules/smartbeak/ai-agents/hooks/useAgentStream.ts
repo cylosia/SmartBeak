@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface AgentStreamEvent {
 	type:
@@ -60,9 +60,12 @@ export function useAgentStream(): UseAgentStreamReturn {
 	const [totalCostCents, setTotalCostCents] = useState(0);
 
 	const abortRef = useRef<AbortController | null>(null);
+	const runIdRef = useRef(0);
 
 	const reset = useCallback(() => {
+		runIdRef.current += 1;
 		abortRef.current?.abort();
+		abortRef.current = null;
 		setIsStreaming(false);
 		setIsComplete(false);
 		setError(null);
@@ -71,13 +74,24 @@ export function useAgentStream(): UseAgentStreamReturn {
 		setTotalCostCents(0);
 	}, []);
 
+	useEffect(() => {
+		return () => {
+			abortRef.current?.abort();
+			abortRef.current = null;
+			runIdRef.current += 1;
+		};
+	}, []);
+
 	const startStream = useCallback(
 		(sessionId: string) => {
 			reset();
 			setIsStreaming(true);
 
+			const runId = runIdRef.current;
 			const controller = new AbortController();
 			abortRef.current = controller;
+			const isCurrentRun = () =>
+				runIdRef.current === runId && abortRef.current === controller;
 
 			(async () => {
 				try {
@@ -131,21 +145,41 @@ export function useAgentStream(): UseAgentStreamReturn {
 								continue;
 							}
 
+							if (!isCurrentRun()) {
+								return;
+							}
 							handleEvent(event);
 						}
 					}
 				} catch (err) {
-					if ((err as Error).name !== "AbortError") {
+					if (
+						isCurrentRun() &&
+						(err as Error).name !== "AbortError"
+					) {
 						setError(
 							err instanceof Error ? err.message : "Stream error",
 						);
+						setNodeStates((prev) =>
+							prev.map((node) =>
+								node.status === "running"
+									? { ...node, status: "error" }
+									: node,
+							),
+						);
 					}
 				} finally {
-					setIsStreaming(false);
+					if (isCurrentRun()) {
+						abortRef.current = null;
+						setIsStreaming(false);
+					}
 				}
 			})();
 
 			function handleEvent(event: AgentStreamEvent) {
+				if (!isCurrentRun()) {
+					return;
+				}
+
 				switch (event.type) {
 					case "node_start":
 						setNodeStates((prev) => [

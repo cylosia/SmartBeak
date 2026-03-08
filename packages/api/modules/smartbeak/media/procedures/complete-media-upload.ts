@@ -1,22 +1,21 @@
 import { ORPCError } from "@orpc/server";
 import {
-	deleteMediaAsset,
 	getDomainById,
 	getMediaAssetById,
+	updateMediaAsset,
 } from "@repo/database";
-import { deleteObject } from "@repo/storage";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
-export const deleteMediaProcedure = protectedProcedure
+export const completeMediaUploadProcedure = protectedProcedure
 	.route({
-		method: "DELETE",
-		path: "/smartbeak/media/{id}",
+		method: "POST",
+		path: "/smartbeak/media/{id}/complete",
 		tags: ["SmartBeak - Media"],
-		summary: "Delete a media asset",
+		summary: "Finalize a completed media upload",
 	})
 	.input(
 		z.object({
@@ -27,40 +26,34 @@ export const deleteMediaProcedure = protectedProcedure
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgEditor(org.supastarterOrgId, user.id);
+
 		const asset = await getMediaAssetById(input.id);
 		if (!asset) {
 			throw new ORPCError("NOT_FOUND", {
 				message: "Media asset not found.",
 			});
 		}
+
 		const domain = await getDomainById(asset.domainId);
 		if (!domain || domain.orgId !== org.id) {
-			throw new ORPCError("NOT_FOUND", {
-				message: "Media asset not found.",
-			});
+			throw new ORPCError("FORBIDDEN", { message: "Access denied." });
 		}
 
-		const storagePath =
-			typeof asset.metadata?.storagePath === "string"
-				? asset.metadata.storagePath
-				: null;
-		if (storagePath) {
-			await deleteObject(storagePath, { bucket: "avatars" });
-		}
+		const lifecycle = {
+			...((asset.lifecycle as Record<string, unknown> | null) ?? {}),
+			uploadStatus: "uploaded",
+			uploadedAt: new Date().toISOString(),
+		};
 
-		const [deleted] = await deleteMediaAsset(input.id);
-		if (!deleted) {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", {
-				message: "Failed to delete media asset.",
-			});
-		}
+		await updateMediaAsset(input.id, { lifecycle });
 		await audit({
 			orgId: org.id,
 			actorId: user.id,
-			action: "media.deleted",
+			action: "media.upload_completed",
 			entityType: "media_asset",
 			entityId: input.id,
 			details: { fileName: asset.fileName },
 		});
+
 		return { success: true };
 	});

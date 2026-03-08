@@ -2,7 +2,7 @@
 import { authClient } from "@repo/auth/client";
 import { Button } from "@repo/ui/components/button";
 import { Skeleton } from "@repo/ui/components/skeleton";
-import { toastSuccess } from "@repo/ui/components/toast";
+import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { sessionQueryKey } from "@saas/auth/lib/api";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
@@ -56,6 +56,13 @@ export function ActiveSessionsBlock() {
 							queryKey: ["active-sessions"],
 						});
 					}
+				},
+				onError: () => {
+					toastError(
+						t(
+							"settings.account.security.activeSessions.notifications.revokeSession.error",
+						),
+					);
 				},
 			},
 		);

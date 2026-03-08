@@ -15,7 +15,7 @@ import {
 import { LanguagesIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const { locales } = config;
 
@@ -31,6 +31,10 @@ export function LocaleSwitch({
 	const currentLocale = useLocale();
 	const [value, setValue] = useState<string>(currentLocale);
 
+	useEffect(() => {
+		setValue(currentLocale);
+	}, [currentLocale]);
+
 	return (
 		<DropdownMenu modal={false}>
 			<DropdownMenuTrigger asChild>
@@ -43,11 +47,16 @@ export function LocaleSwitch({
 				<DropdownMenuRadioGroup
 					value={value}
 					onValueChange={(value) => {
+						if (!(value in locales)) {
+							return;
+						}
+
 						setValue(value);
 
 						if (withLocaleInUrl) {
+							const query = searchParams.toString();
 							localeRouter.replace(
-								`${localePathname}?${searchParams.toString()}`,
+								query ? `${localePathname}?${query}` : localePathname,
 								{
 									locale: value,
 								},

@@ -20,31 +20,31 @@ export type ThemeId = (typeof THEME_IDS)[number];
 export const THEME_CONFIGS: Record<ThemeId, ThemeConfig> = {
 	"affiliate-comparison": {
 		name: "Affiliate Comparison",
-		description: "Product comparison and affiliate marketing site",
+		description: "Product comparison website template",
 		primaryColor: "#6366f1",
 		fontFamily: "'Inter', sans-serif",
 	},
 	"authority-site": {
 		name: "Authority Site",
-		description: "Authoritative content and knowledge hub",
+		description: "Editorial content and knowledge-site template",
 		primaryColor: "#0f172a",
 		fontFamily: "'Merriweather', serif",
 	},
 	"landing-leadgen": {
 		name: "Landing Page - Lead Gen",
-		description: "High-converting lead generation landing page",
+		description: "Lead-generation landing page template",
 		primaryColor: "#059669",
 		fontFamily: "'Plus Jakarta Sans', sans-serif",
 	},
 	"local-business": {
 		name: "Local Business",
-		description: "Professional local business website",
+		description: "Local business website template",
 		primaryColor: "#dc2626",
 		fontFamily: "'Open Sans', sans-serif",
 	},
 	"media-newsletter": {
 		name: "Media & Newsletter",
-		description: "Media publication and newsletter signup",
+		description: "Media publication and newsletter template",
 		primaryColor: "#7c3aed",
 		fontFamily: "'Playfair Display', serif",
 	},
@@ -91,7 +91,7 @@ function generateAffiliateComparison(d: string): string {
 		"#6366f1",
 		`
 <nav class="nav"><div class="container"><div class="nav-inner"><div class="logo">${d}</div></div></div></nav>
-<section class="hero"><div class="container"><h1>Find the Perfect Product</h1><p>Unbiased comparisons, expert reviews, and the best deals.</p></div></section>
+<section class="hero"><div class="container"><h1>Build Your Comparison Site</h1><p>Use this sample layout for comparisons and buying guides after replacing the example rankings and review claims.</p></div></section>
 <div class="container"><div class="grid">
 <div class="card"><h3>Laptops & Computers</h3><p>Compare specs, performance, and value across top brands.</p></div>
 <div class="card"><h3>Smartphones</h3><p>Side-by-side phone comparisons with camera tests and battery life.</p></div>
@@ -107,7 +107,7 @@ function generateAuthoritySite(d: string): string {
 		"#0f172a",
 		`
 <nav class="nav"><div class="container"><div class="nav-inner"><div class="logo">${d}</div></div></div></nav>
-<section class="hero" style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%)"><div class="container"><h1>Insights That Shape the Future</h1><p>Deep-dive analysis, expert perspectives, and research-backed content.</p></div></section>
+<section class="hero" style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%)"><div class="container"><h1>Publish Your Expertise Carefully</h1><p>Use this editorial template for articles or guides after replacing the sample authority claims with your real content.</p></div></section>
 <div class="container"><div class="grid">
 <div class="card"><h3>Strategic Decision Making</h3><p>Frameworks and mental models that top executives use.</p></div>
 <div class="card"><h3>Market Dynamics</h3><p>Data-driven approaches to understanding market shifts.</p></div>
@@ -123,11 +123,11 @@ function generateLandingLeadgen(d: string): string {
 		"#059669",
 		`
 <nav class="nav"><div class="container"><div class="nav-inner"><div class="logo">${d}</div></div></div></nav>
-<section class="hero"><div class="container"><h1>Grow Your Business 10x Faster</h1><p>Join thousands of companies using our platform to accelerate growth.</p></div></section>
+<section class="hero"><div class="container"><h1>Present Your Business Clearly Online</h1><p>Use this starter layout as a customizable landing page template for your business and offers.</p></div></section>
 <div class="container"><div class="grid">
 <div class="card"><h3>Lightning Fast Setup</h3><p>Get up and running in minutes, not days.</p></div>
-<div class="card"><h3>Smart Analytics</h3><p>AI-powered insights that turn numbers into strategies.</p></div>
-<div class="card"><h3>Enterprise Security</h3><p>Bank-grade encryption and compliance certifications.</p></div>
+<div class="card"><h3>Performance Highlights</h3><p>Replace this sample block with the metrics, reporting, or insights your business actually provides.</p></div>
+<div class="card"><h3>Customizable Trust Section</h3><p>Replace this placeholder with your actual security, privacy, or compliance commitments before publishing.</p></div>
 </div></div>`,
 	);
 }
@@ -139,10 +139,10 @@ function generateLocalBusiness(d: string): string {
 		"#dc2626",
 		`
 <nav class="nav"><div class="container"><div class="nav-inner"><div class="logo">${d}</div></div></div></nav>
-<section class="hero"><div class="container"><h1>Quality Service You Can Trust</h1><p>Serving our community with excellence for over 15 years.</p></div></section>
+<section class="hero"><div class="container"><h1>Describe Your Local Business Clearly</h1><p>Use this starter layout to present your real services, service area, and contact details before publishing.</p></div></section>
 <div class="container"><div class="grid">
 <div class="card"><h3>Maintenance</h3><p>Regular upkeep to keep everything running smoothly.</p></div>
-<div class="card"><h3>Repairs</h3><p>Fast, reliable repair services with a satisfaction guarantee.</p></div>
+<div class="card"><h3>Repairs</h3><p>Describe the repair or support work you actually provide, including any real service commitments you want to publish.</p></div>
 <div class="card"><h3>Consultation</h3><p>Expert advice to help you make informed decisions.</p></div>
 </div></div>`,
 	);
@@ -155,7 +155,7 @@ function generateMediaNewsletter(d: string): string {
 		"#7c3aed",
 		`
 <nav class="nav"><div class="container"><div class="nav-inner"><div class="logo">${d}</div></div></div></nav>
-<section class="hero"><div class="container"><h1>Stories That Shape Our World</h1><p>In-depth reporting, thoughtful analysis, and perspectives that matter.</p></div></section>
+<section class="hero"><div class="container"><h1>Publish Your Stories and Updates</h1><p>Use this media or newsletter template for your real editorial voice, publishing cadence, and subscription offer.</p></div></section>
 <div class="container"><div class="grid">
 <div class="card"><h3>Technology</h3><p>The quiet revolution reshaping how we work and live.</p></div>
 <div class="card"><h3>Culture</h3><p>Bridging worlds through the new global creative movement.</p></div>

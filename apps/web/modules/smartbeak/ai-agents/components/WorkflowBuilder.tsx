@@ -196,6 +196,27 @@ export function WorkflowBuilder({
 		setSelectedNodeId(null);
 	}, []);
 
+	const moveNodeBy = useCallback(
+		(nodeId: string, deltaX: number, deltaY: number) => {
+			setGraph((prev) => ({
+				...prev,
+				nodes: prev.nodes.map((node) =>
+					node.id === nodeId
+						? {
+								...node,
+								position: {
+									x: Math.max(0, node.position.x + deltaX),
+									y: Math.max(0, node.position.y + deltaY),
+								},
+							}
+						: node,
+				),
+			}));
+			setSelectedNodeId(nodeId);
+		},
+		[],
+	);
+
 	// ── Drag Handling ────────────────────────────────────────────────────────────
 
 	const handleMouseDown = useCallback(
@@ -241,6 +262,48 @@ export function WorkflowBuilder({
 	const handleMouseUp = useCallback(() => {
 		setDragging(null);
 	}, []);
+
+	const handleNodeKeyDown = useCallback(
+		(e: React.KeyboardEvent, nodeId: string) => {
+			const step = e.shiftKey ? 40 : 20;
+
+			switch (e.key) {
+				case "Enter":
+				case " ": {
+					e.preventDefault();
+					setSelectedNodeId(nodeId);
+					break;
+				}
+				case "ArrowUp": {
+					e.preventDefault();
+					moveNodeBy(nodeId, 0, -step);
+					break;
+				}
+				case "ArrowDown": {
+					e.preventDefault();
+					moveNodeBy(nodeId, 0, step);
+					break;
+				}
+				case "ArrowLeft": {
+					e.preventDefault();
+					moveNodeBy(nodeId, -step, 0);
+					break;
+				}
+				case "ArrowRight": {
+					e.preventDefault();
+					moveNodeBy(nodeId, step, 0);
+					break;
+				}
+				case "Backspace":
+				case "Delete": {
+					e.preventDefault();
+					removeNode(nodeId);
+					break;
+				}
+			}
+		},
+		[moveNodeBy, removeNode],
+	);
 
 	// ── Save & Run ────────────────────────────────────────────────────────────────
 
@@ -532,6 +595,8 @@ export function WorkflowBuilder({
 									key={node.id}
 									role="button"
 									tabIndex={0}
+									aria-pressed={isSelected}
+									aria-label={`${node.label} workflow node`}
 									className={`absolute select-none rounded-xl border-2 bg-background shadow-sm transition-shadow cursor-grab active:cursor-grabbing ${
 										isSelected
 											? "border-primary shadow-md"
@@ -545,14 +610,10 @@ export function WorkflowBuilder({
 									onMouseDown={(e) =>
 										handleMouseDown(e, node.id)
 									}
-									onKeyDown={(e) => {
-										if (
-											e.key === "Enter" ||
-											e.key === " "
-										) {
-											e.preventDefault();
-										}
-									}}
+									onFocus={() => setSelectedNodeId(node.id)}
+									onKeyDown={(e) =>
+										handleNodeKeyDown(e, node.id)
+									}
 								>
 									<div
 										className={`flex items-center gap-2 rounded-t-xl px-3 py-2 ${
@@ -594,7 +655,7 @@ export function WorkflowBuilder({
 													<>
 														<CheckCircle2Icon className="h-3 w-3 text-green-500 dark:text-green-400" />
 														<span className="text-green-600 dark:text-green-400">
-															Done · $
+															Completed · $
 															{(
 																nodeState.costCents /
 																100
@@ -615,7 +676,7 @@ export function WorkflowBuilder({
 										) : (
 											<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
 												<CircleDotIcon className="h-3 w-3" />
-												<span>Ready</span>
+												<span>Not run yet</span>
 											</div>
 										)}
 									</div>
@@ -684,12 +745,12 @@ export function WorkflowBuilder({
 							</CardContent>
 						</Card>
 
-						{/* Live Output */}
+						{/* Run Output */}
 						{(isStreaming || isComplete || streamError) && (
 							<Card>
 								<CardHeader className="pb-2">
 									<CardTitle className="text-sm">
-										Live Output
+										Run Output
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="space-y-3">

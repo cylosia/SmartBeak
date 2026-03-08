@@ -13,6 +13,9 @@ export async function getPurchasesByOrganizationId(organizationId: string) {
 		where: {
 			organizationId,
 		},
+		orderBy: {
+			createdAt: "desc",
+		},
 		take: 100,
 	});
 }
@@ -22,6 +25,9 @@ export async function getPurchasesByUserId(userId: string) {
 		where: {
 			userId,
 		},
+		orderBy: {
+			createdAt: "desc",
+		},
 		take: 100,
 	});
 }
@@ -30,6 +36,9 @@ export async function getPurchaseBySubscriptionId(subscriptionId: string) {
 	return db.purchase.findFirst({
 		where: {
 			subscriptionId,
+		},
+		orderBy: {
+			createdAt: "desc",
 		},
 	});
 }

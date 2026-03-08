@@ -4,7 +4,7 @@ import {
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
-import { requireOrgMembership } from "../../lib/membership";
+import { requireOrgEditor, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getOnboardingProgress = protectedProcedure
@@ -37,7 +37,7 @@ export const completeOnboardingStep = protectedProcedure
 	)
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgEditor(org.supastarterOrgId, user.id);
 		const [record] = await upsertOnboardingStep({
 			orgId: org.id,
 			step: input.step,

@@ -10,17 +10,6 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { useQuery } from "@tanstack/react-query";
 import { ActivityIcon, GlobeIcon, TrendingUpIcon, ZapIcon } from "lucide-react";
 import Link from "next/link";
-import {
-	Area,
-	AreaChart,
-	Bar,
-	BarChart,
-	CartesianGrid,
-	ResponsiveContainer,
-	Tooltip,
-	XAxis,
-	YAxis,
-} from "recharts";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import {
 	CardGridSkeleton,
@@ -28,26 +17,6 @@ import {
 } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 import { MetricCard } from "@/modules/smartbeak/shared/components/MetricCard";
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
-
-// Mock chart data — in production these would come from materialized views
-const MOCK_PUBLISH_DATA = [
-	{ month: "Jan", jobs: 4 },
-	{ month: "Feb", jobs: 7 },
-	{ month: "Mar", jobs: 12 },
-	{ month: "Apr", jobs: 9 },
-	{ month: "May", jobs: 15 },
-	{ month: "Jun", jobs: 21 },
-];
-
-const MOCK_TRAFFIC_DATA = [
-	{ day: "Mon", visits: 120 },
-	{ day: "Tue", visits: 145 },
-	{ day: "Wed", visits: 98 },
-	{ day: "Thu", visits: 210 },
-	{ day: "Fri", visits: 185 },
-	{ day: "Sat", visits: 90 },
-	{ day: "Sun", visits: 75 },
-];
 
 export function DashboardOverview({
 	organizationSlug,
@@ -87,6 +56,7 @@ export function DashboardOverview({
 	};
 
 	const summary = portfolioQuery.data?.summary;
+	const portfolioScore = Number(portfolioQuery.data?.portfolioScore ?? 0);
 	const subscription = billingQuery.data?.subscription;
 
 	return (
@@ -123,19 +93,19 @@ export function DashboardOverview({
 							trend={{ value: 12, label: "vs last month" }}
 						/>
 						<MetricCard
-							title="Portfolio Value"
-							value={
-								summary?.totalValue
-									? `$${(Number(summary.totalValue) || 0).toLocaleString()}`
-									: "—"
-							}
-							subtitle="Estimated total value"
+							title="Portfolio Score"
+							value={portfolioScore.toFixed(1)}
+							subtitle="Aggregate risk-adjusted score"
 							icon={TrendingUpIcon}
 							trend={{ value: 8.4, label: "vs last quarter" }}
 						/>
 						<MetricCard
 							title="Avg. ROI"
-							value={summary?.avgRoi ? `${summary.avgRoi}%` : "—"}
+							value={
+								summary?.avgRoi != null
+									? `${summary.avgRoi}%`
+									: "—"
+							}
 							subtitle="Across all domains"
 							icon={ActivityIcon}
 							trend={{ value: 3.2, label: "vs last month" }}
@@ -156,110 +126,48 @@ export function DashboardOverview({
 				{/* Charts Row */}
 				<div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 					<Card>
-						<CardHeader className="flex flex-row items-center justify-between">
+						<CardHeader>
 							<CardTitle className="text-sm font-medium">
 								Publishing Activity
 							</CardTitle>
-							<span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-								Sample data
-							</span>
 						</CardHeader>
 						<CardContent>
-							<ResponsiveContainer width="100%" height={200}>
-								<BarChart data={MOCK_PUBLISH_DATA}>
-									<CartesianGrid
-										strokeDasharray="3 3"
-										className="stroke-border"
-									/>
-									<XAxis
-										dataKey="month"
-										tick={{ fontSize: 12 }}
-										className="fill-muted-foreground"
-									/>
-									<YAxis
-										tick={{ fontSize: 12 }}
-										className="fill-muted-foreground"
-									/>
-									<Tooltip
-										contentStyle={{
-											background: "hsl(var(--card))",
-											border: "1px solid hsl(var(--border))",
-											borderRadius: "8px",
-											fontSize: "12px",
-										}}
-									/>
-									<Bar
-										dataKey="jobs"
-										fill="hsl(var(--primary))"
-										radius={[4, 4, 0, 0]}
-									/>
-								</BarChart>
-							</ResponsiveContainer>
+							<div className="flex min-h-[200px] flex-col items-center justify-center gap-4 text-center">
+								<p className="max-w-sm text-sm text-muted-foreground">
+									Live publishing charts are not available in the
+									overview yet. Open the publishing suite for current job
+									status, queue state, and platform activity.
+								</p>
+								<Button variant="outline" size="sm" asChild>
+									<Link
+										href={`/app/${organizationSlug}/publishing-suite`}
+									>
+										Open Publishing Suite
+									</Link>
+								</Button>
+							</div>
 						</CardContent>
 					</Card>
 
 					<Card>
-						<CardHeader className="flex flex-row items-center justify-between">
+						<CardHeader>
 							<CardTitle className="text-sm font-medium">
 								Traffic Overview
 							</CardTitle>
-							<span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-								Sample data
-							</span>
 						</CardHeader>
 						<CardContent>
-							<ResponsiveContainer width="100%" height={200}>
-								<AreaChart data={MOCK_TRAFFIC_DATA}>
-									<defs>
-										<linearGradient
-											id="trafficGrad"
-											x1="0"
-											y1="0"
-											x2="0"
-											y2="1"
-										>
-											<stop
-												offset="5%"
-												stopColor="hsl(var(--primary))"
-												stopOpacity={0.3}
-											/>
-											<stop
-												offset="95%"
-												stopColor="hsl(var(--primary))"
-												stopOpacity={0}
-											/>
-										</linearGradient>
-									</defs>
-									<CartesianGrid
-										strokeDasharray="3 3"
-										className="stroke-border"
-									/>
-									<XAxis
-										dataKey="day"
-										tick={{ fontSize: 12 }}
-										className="fill-muted-foreground"
-									/>
-									<YAxis
-										tick={{ fontSize: 12 }}
-										className="fill-muted-foreground"
-									/>
-									<Tooltip
-										contentStyle={{
-											background: "hsl(var(--card))",
-											border: "1px solid hsl(var(--border))",
-											borderRadius: "8px",
-											fontSize: "12px",
-										}}
-									/>
-									<Area
-										type="monotone"
-										dataKey="visits"
-										stroke="hsl(var(--primary))"
-										fill="url(#trafficGrad)"
-										strokeWidth={2}
-									/>
-								</AreaChart>
-							</ResponsiveContainer>
+							<div className="flex min-h-[200px] flex-col items-center justify-center gap-4 text-center">
+								<p className="max-w-sm text-sm text-muted-foreground">
+									This overview no longer shows synthetic traffic data.
+									Use the analytics area and domain-level reports to review
+									recorded portfolio and buyer activity.
+								</p>
+								<Button variant="outline" size="sm" asChild>
+									<Link href={`/app/${organizationSlug}/analytics`}>
+										Open Analytics
+									</Link>
+								</Button>
+							</div>
 						</CardContent>
 					</Card>
 				</div>
@@ -345,8 +253,9 @@ export function DashboardOverview({
 						</div>
 						<h3 className="text-base font-semibold">SmartDeploy</h3>
 						<p className="mt-1 max-w-sm text-sm text-muted-foreground">
-							One-click site deployment engine. Powered by edge
-							infrastructure for instant global publishing.
+							Deploy supported site themes when SmartDeploy is
+							configured for your workspace. Open the deployment
+							area to select a domain and review current status.
 						</p>
 						<Button className="mt-4" asChild>
 							<Link

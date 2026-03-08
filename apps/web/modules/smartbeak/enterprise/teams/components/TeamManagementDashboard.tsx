@@ -73,14 +73,25 @@ import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBounda
 import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 
 const createTeamSchema = z.object({
-	name: z.string().min(1, "Team name is required").max(100),
-	description: z.string().max(500).optional(),
+	name: z.string().trim().min(1, "Team name is required").max(100),
+	description: z.string().trim().max(500).optional(),
 });
 
 type CreateTeamForm = z.infer<typeof createTeamSchema>;
 
 interface TeamManagementDashboardProps {
 	organizationSlug: string;
+}
+
+function formatRelativeDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime())
+		? null
+		: formatDistanceToNow(parsed, { addSuffix: true });
 }
 
 export function TeamManagementDashboard({
@@ -219,6 +230,21 @@ export function TeamManagementDashboard({
 		}),
 	);
 
+	const handleCreateDialogOpenChange = (open: boolean) => {
+		setCreateDialogOpen(open);
+		if (!open) {
+			form.reset();
+		}
+	};
+
+	const handleAddMemberDialogOpenChange = (open: boolean) => {
+		setAddMemberDialogOpen(open);
+		if (!open) {
+			setAddMemberUserId("");
+			setAddMemberRole("member");
+		}
+	};
+
 	return (
 		<ErrorBoundary>
 			<div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
@@ -231,7 +257,7 @@ export function TeamManagementDashboard({
 							</CardTitle>
 							<Dialog
 								open={createDialogOpen}
-								onOpenChange={setCreateDialogOpen}
+								onOpenChange={handleCreateDialogOpenChange}
 							>
 								<DialogTrigger asChild>
 									<Button
@@ -255,7 +281,10 @@ export function TeamManagementDashboard({
 										onSubmit={form.handleSubmit((data) =>
 											createTeamMutation.mutate({
 												organizationSlug,
-												...data,
+												name: data.name.trim(),
+												description:
+													data.description?.trim() ||
+													undefined,
 											}),
 										)}
 										className="space-y-4"
@@ -492,7 +521,7 @@ export function TeamManagementDashboard({
 										<Dialog
 											open={addMemberDialogOpen}
 											onOpenChange={
-												setAddMemberDialogOpen
+												handleAddMemberDialogOpenChange
 											}
 										>
 											<DialogTrigger asChild>
@@ -578,13 +607,13 @@ export function TeamManagementDashboard({
 																{
 																	organizationSlug,
 																	teamId: selectedTeam.id,
-																	userId: addMemberUserId,
+																	userId: addMemberUserId.trim(),
 																	role: addMemberRole,
 																},
 															)
 														}
 														disabled={
-															!addMemberUserId ||
+															!addMemberUserId.trim() ||
 															addMemberMutation.isPending
 														}
 													>
@@ -677,14 +706,9 @@ export function TeamManagementDashboard({
 															</Badge>
 														</TableCell>
 														<TableCell className="text-sm text-muted-foreground">
-															{formatDistanceToNow(
-																new Date(
-																	member.createdAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)}
+															{formatRelativeDate(
+																member.createdAt,
+															) ?? "—"}
 														</TableCell>
 														<TableCell>
 															<DropdownMenu>
@@ -816,14 +840,9 @@ export function TeamManagementDashboard({
 															)}
 														</div>
 														<p className="text-xs text-muted-foreground whitespace-nowrap">
-															{formatDistanceToNow(
-																new Date(
-																	event.createdAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)}
+															{formatRelativeDate(
+																event.createdAt,
+															) ?? "—"}
 														</p>
 													</div>
 												))}

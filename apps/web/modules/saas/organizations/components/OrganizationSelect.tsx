@@ -161,7 +161,7 @@ export function OrganizationSelect({
 						onValueChange={async (value: string) => {
 							if (value === user.id) {
 								await clearCache();
-								router.replace("/app");
+								await setActiveOrganization(null);
 							}
 						}}
 					>

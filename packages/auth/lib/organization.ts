@@ -2,6 +2,17 @@ import { getOrganizationWithPurchasesAndMembersCount } from "@repo/database";
 import { logger } from "@repo/logs";
 import { setSubscriptionSeats } from "@repo/payments";
 
+const INACTIVE_SUBSCRIPTION_STATUSES = new Set([
+	"canceled",
+	"cancelled",
+	"expired",
+	"unpaid",
+	"past_due",
+	"incomplete",
+	"incomplete_expired",
+	"paused",
+]);
+
 export async function updateSeatsInOrganizationSubscription(
 	organizationId: string,
 ) {
@@ -13,7 +24,10 @@ export async function updateSeatsInOrganizationSubscription(
 	}
 
 	const activeSubscription = organization.purchases.find(
-		(purchase) => purchase.type === "SUBSCRIPTION",
+		(purchase) =>
+			purchase.type === "SUBSCRIPTION" &&
+			!INACTIVE_SUBSCRIPTION_STATUSES.has(purchase.status ?? "") &&
+			Boolean(purchase.subscriptionId),
 	);
 
 	if (!activeSubscription?.subscriptionId) {

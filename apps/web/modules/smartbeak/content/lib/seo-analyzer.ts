@@ -22,10 +22,53 @@ export interface SeoAnalysis {
 
 function stripHtml(html: string): string {
 	return html
+		.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, " ")
+		.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ")
 		.replace(/<[^>]*>/g, " ")
 		.replace(/&nbsp;/g, " ")
+		.replace(/&(amp|lt|gt|quot|#39);/g, (entity) => {
+			switch (entity) {
+				case "&amp;":
+					return "&";
+				case "&lt;":
+					return "<";
+				case "&gt;":
+					return ">";
+				case "&quot;":
+					return '"';
+				case "&#39;":
+					return "'";
+				default:
+					return " ";
+			}
+		})
 		.replace(/\s+/g, " ")
 		.trim();
+}
+
+function classifyLinkHref(href: string): "internal" | "external" | null {
+	const normalized = href.trim().toLowerCase();
+
+	if (
+		!normalized ||
+		normalized.startsWith("#") ||
+		normalized.startsWith("mailto:") ||
+		normalized.startsWith("tel:") ||
+		normalized.startsWith("javascript:") ||
+		normalized.startsWith("data:")
+	) {
+		return null;
+	}
+
+	if (
+		normalized.startsWith("http://") ||
+		normalized.startsWith("https://") ||
+		normalized.startsWith("//")
+	) {
+		return "external";
+	}
+
+	return "internal";
 }
 
 function countSyllables(word: string): number {
@@ -95,16 +138,18 @@ export function analyzeContent(
 		keywordDensity = ((matches?.length ?? 0) / wordCount) * 100;
 	}
 
-	const linkMatches = html.match(/<a[^>]+href="([^"]*)"[^>]*>/gi) ?? [];
+	const linkMatches =
+		html.match(/<a\b[^>]*\bhref\s*=\s*(['"])(.*?)\1[^>]*>/gi) ?? [];
 	let internal = 0;
 	let external = 0;
 	for (const link of linkMatches) {
-		const hrefMatch = link.match(/href="([^"]*)"/);
+		const hrefMatch = link.match(/\bhref\s*=\s*(['"])(.*?)\1/i);
 		if (hrefMatch) {
-			const href = hrefMatch[1];
-			if (href.startsWith("http://") || href.startsWith("https://")) {
+			const href = hrefMatch[2];
+			const classification = classifyLinkHref(href);
+			if (classification === "external") {
 				external++;
-			} else {
+			} else if (classification === "internal") {
 				internal++;
 			}
 		}

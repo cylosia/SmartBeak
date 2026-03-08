@@ -5,6 +5,10 @@ import Script from "next/script";
 const umamiTrackingId = process.env.NEXT_PUBLIC_UMAMI_TRACKING_ID as string;
 
 export function AnalyticsScript() {
+	if (!umamiTrackingId) {
+		return null;
+	}
+
 	return (
 		<Script
 			async

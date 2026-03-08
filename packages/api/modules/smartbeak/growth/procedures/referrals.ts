@@ -26,12 +26,13 @@ export const getMyReferralsProcedure = protectedProcedure
 		tags: ["SmartBeak - Growth"],
 		summary: "Get my referrals",
 	})
-	.input(z.object({ email: z.string().email() }))
-	.handler(async ({ input, context }) => {
-		if (context.user.email !== input.email) {
+	.input(z.object({}))
+	.handler(async ({ context }) => {
+		const email = context.user.email;
+		if (!email) {
 			throw new ORPCError("FORBIDDEN", { message: "Access denied." });
 		}
-		const entry = await getWaitlistEntryByEmail(input.email);
+		const entry = await getWaitlistEntryByEmail(email);
 		if (!entry) {
 			return { referrals: [], stats: null };
 		}

@@ -18,10 +18,12 @@ import { orpc } from "@shared/lib/orpc-query-utils";
 import { useMutation } from "@tanstack/react-query";
 import { MailCheckIcon, MailIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 export function ContactForm() {
 	const t = useTranslations();
+	const [submittedSuccessfully, setSubmittedSuccessfully] = useState(false);
 	const contactFormMutation = useMutation(
 		orpc.contact.submit.mutationOptions(),
 	);
@@ -36,8 +38,12 @@ export function ContactForm() {
 	});
 
 	const onSubmit = form.handleSubmit(async (values) => {
+		setSubmittedSuccessfully(false);
+		form.clearErrors("root");
+
 		try {
 			await contactFormMutation.mutateAsync(values);
+			setSubmittedSuccessfully(true);
 		} catch {
 			form.setError("root", {
 				message: t("contact.form.notifications.error"),
@@ -47,7 +53,7 @@ export function ContactForm() {
 
 	return (
 		<div>
-			{form.formState.isSubmitSuccessful ? (
+			{submittedSuccessfully ? (
 				<Alert variant="success">
 					<MailCheckIcon />
 					<AlertTitle>

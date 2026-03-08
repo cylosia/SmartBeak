@@ -32,7 +32,7 @@ export const getPortfolioRoi = protectedProcedure
 			await upsertPortfolioSummary({
 				orgId: org.id,
 				totalDomains: live.totalDomains,
-				totalValue: live.totalValue.toFixed(2),
+				totalValue: null,
 				avgRoi: live.avgRoi.toFixed(2),
 			}).catch((err) => {
 				logger.error("[portfolio-roi] Failed to upsert summary", {

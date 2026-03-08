@@ -20,6 +20,44 @@ import type {
 } from "../../types";
 
 let polarClient: Polar;
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+async function readRequestTextWithLimit(
+	req: Request,
+	maxBytes: number,
+): Promise<string> {
+	const contentLength = req.headers.get("content-length");
+	if (contentLength) {
+		const parsedLength = Number.parseInt(contentLength, 10);
+		if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+	}
+
+	const reader = req.body?.getReader();
+	if (!reader) {
+		throw new Error("Invalid request body");
+	}
+
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+		totalBytes += value.byteLength;
+		if (totalBytes > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+		text += decoder.decode(value, { stream: true });
+	}
+
+	text += decoder.decode();
+	return text;
+}
 
 function getPolarClient() {
 	if (polarClient) {
@@ -101,7 +139,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			});
 		}
 
-		const rawBody = await req.text();
+		const rawBody = await readRequestTextWithLimit(
+			req,
+			MAX_WEBHOOK_BODY_BYTES,
+		);
 		const event = validateEvent(
 			rawBody,
 			Object.fromEntries(req.headers.entries()),
@@ -209,6 +250,14 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			status: 202,
 		});
 	} catch (error) {
+		if (
+			error instanceof Error &&
+			error.message === "Webhook payload too large"
+		) {
+			return new Response("Payload too large.", {
+				status: 413,
+			});
+		}
 		if (error instanceof WebhookVerificationError) {
 			return new Response("Invalid request.", {
 				status: 403,

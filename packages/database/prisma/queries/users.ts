@@ -30,6 +30,9 @@ export async function getUsers({
 					],
 				}
 			: undefined,
+		orderBy: {
+			createdAt: "desc",
+		},
 		take: limit,
 		skip: offset,
 	});
@@ -96,6 +99,14 @@ export async function createUser({
 			onboardingComplete,
 			createdAt: new Date(),
 			updatedAt: new Date(),
+		},
+	});
+}
+
+export async function deleteUserById(id: string) {
+	return await db.user.delete({
+		where: {
+			id,
 		},
 	});
 }

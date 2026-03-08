@@ -12,6 +12,23 @@ import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgEditor } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
+function normalizeDomainHost(value: string): string {
+	const trimmed = value.trim().toLowerCase();
+	if (!trimmed) {
+		return "";
+	}
+
+	const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+		? trimmed
+		: `https://${trimmed}`;
+
+	try {
+		return new URL(candidate).hostname.replace(/^www\./, "");
+	} catch {
+		return trimmed.replace(/^www\./, "").replace(/\/.*$/, "");
+	}
+}
+
 /**
  * Google Search Console adapter.
  *
@@ -130,6 +147,15 @@ export const syncGsc = protectedProcedure
 		const domain = await getDomainById(input.domainId);
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
+		}
+
+		const expectedHost = normalizeDomainHost(domain.name);
+		const actualHost = normalizeDomainHost(input.siteUrl);
+		if (!expectedHost || expectedHost !== actualHost) {
+			throw new ORPCError("BAD_REQUEST", {
+				message:
+					"Google Search Console site URL must match the selected domain.",
+			});
 		}
 
 		let rows: Awaited<ReturnType<typeof fetchGscData>>;

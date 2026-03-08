@@ -36,7 +36,7 @@ export const openApiHandler = new OpenAPIHandler(router, {
 				return {
 					...(authSchema as Record<string, unknown>),
 					info: {
-						title: "supastarter API",
+						title: "SmartBeak API",
 						version: "1.0.0",
 					},
 					servers: [

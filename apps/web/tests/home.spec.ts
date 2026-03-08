@@ -8,7 +8,7 @@ test.describe("home page", () => {
 
 			await expect(
 				page.getByRole("heading", {
-					name: "Your revolutionary SaaS built with Next.js",
+					name: "Scale domain portfolio growth with SmartBeak",
 				}),
 			).toBeVisible();
 		});

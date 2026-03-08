@@ -55,14 +55,20 @@ export function ActiveOrganizationProvider({
 						},
 			);
 
-		if (!newActiveOrganization) {
+		if (!newActiveOrganization && organizationSlug !== null) {
 			nProgress.done();
 			return;
 		}
 
-		await refetchActiveOrganization();
+		if (organizationSlug !== null) {
+			await refetchActiveOrganization();
+		}
 
-		if (paymentsConfig.billingAttachedTo === "organization") {
+		if (
+			newActiveOrganization &&
+			paymentsConfig.billingAttachedTo === "organization" &&
+			isOrganizationAdmin(newActiveOrganization, user)
+		) {
 			await queryClient.prefetchQuery(
 				orpc.payments.listPurchases.queryOptions({
 					input: {
@@ -85,12 +91,14 @@ export function ActiveOrganizationProvider({
 				...prev,
 				session: {
 					...prevSession,
-					activeOrganizationId: newActiveOrganization.id,
+					activeOrganizationId: newActiveOrganization?.id ?? null,
 				},
 			};
 		});
 
-		router.push(`/app/${newActiveOrganization.slug}`);
+		router.push(
+			newActiveOrganization ? `/app/${newActiveOrganization.slug}` : "/app",
+		);
 	};
 
 	const [loaded, setLoaded] = useState(activeOrganization !== undefined);

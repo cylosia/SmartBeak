@@ -4,11 +4,12 @@ import { Button } from "@repo/ui/components/button";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
 } from "@repo/ui/components/dialog";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ReactCropperElement } from "react-cropper";
 import Cropper from "react-cropper";
 
@@ -45,11 +46,23 @@ export function CropImageDialog({
 		[image],
 	);
 
+	useEffect(() => {
+		return () => {
+			if (imageSrc) {
+				URL.revokeObjectURL(imageSrc);
+			}
+		};
+	}, [imageSrc]);
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle />
+					<DialogTitle>Crop image</DialogTitle>
+					<DialogDescription>
+						Adjust the crop area, then save to upload the updated
+						image.
+					</DialogDescription>
 				</DialogHeader>
 				<div>
 					{imageSrc && (

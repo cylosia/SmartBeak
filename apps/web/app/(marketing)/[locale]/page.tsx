@@ -9,11 +9,11 @@ import { WaitlistSection } from "@/modules/marketing/waitlist/components/Waitlis
 export const metadata: Metadata = {
 	title: "SmartBeak — AI-Powered Domain Portfolio Management",
 	description:
-		"Manage, publish, and grow your domain portfolio with AI-driven insights, automated publishing, and real-time analytics.",
+		"Manage, publish, and grow your domain portfolio with AI-assisted workflows, supported publishing targets, and operator-facing analytics.",
 	openGraph: {
 		title: "SmartBeak — AI-Powered Domain Portfolio Management",
 		description:
-			"Manage, publish, and grow your domain portfolio with AI-driven insights, automated publishing, and real-time analytics.",
+			"Manage, publish, and grow your domain portfolio with AI-assisted workflows, supported publishing targets, and operator-facing analytics.",
 	},
 };
 

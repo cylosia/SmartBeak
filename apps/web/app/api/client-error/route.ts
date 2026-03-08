@@ -34,6 +34,7 @@ if (!globalRef.__clientErrorCleanupInterval) {
 			}
 		}
 	}, 60_000);
+	globalRef.__clientErrorCleanupInterval.unref?.();
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
 
 	try {
 		const raw = await request.text();
-		if (raw.length > MAX_BODY_BYTES) {
+		if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) {
 			return new Response(null, { status: 413 });
 		}
 		const body = JSON.parse(raw);

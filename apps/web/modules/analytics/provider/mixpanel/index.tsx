@@ -8,6 +8,10 @@ const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN as string;
 
 export function AnalyticsScript() {
 	useEffect(() => {
+		if (!mixpanelToken) {
+			return;
+		}
+
 		mixpanel.init(mixpanelToken, {
 			debug: process.env.NODE_ENV === "development",
 			track_pageview: true,
@@ -20,6 +24,10 @@ export function AnalyticsScript() {
 
 export function useAnalytics() {
 	const trackEvent = (event: string, data?: Record<string, unknown>) => {
+		if (!mixpanelToken) {
+			return;
+		}
+
 		mixpanel.track(event, data);
 	};
 

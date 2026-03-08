@@ -13,6 +13,7 @@ import { logger } from "@repo/logs";
 
 const EVENT_TTL_SECONDS = 86_400; // 24 hours
 const KEY_PREFIX = "smartbeak:webhook:";
+const MAX_IN_MEMORY_EVENTS = 10_000;
 
 // ─── Redis client (lazy-loaded, same pattern as redis-cache) ────────────────
 
@@ -76,6 +77,16 @@ interface ProcessedEvent {
 
 const processedEvents = new Map<string, ProcessedEvent>();
 
+function evictOldestProcessedEvents() {
+	while (processedEvents.size >= MAX_IN_MEMORY_EVENTS) {
+		const oldestKey = processedEvents.keys().next().value;
+		if (!oldestKey) {
+			break;
+		}
+		processedEvents.delete(oldestKey);
+	}
+}
+
 const globalRef = globalThis as typeof globalThis & {
 	__webhookIdempotencyCleanup?: ReturnType<typeof setInterval>;
 };
@@ -133,6 +144,7 @@ export async function isWebhookDuplicate(
 		);
 		return true;
 	}
+	evictOldestProcessedEvents();
 	processedEvents.set(key, { processedAt: Date.now() });
 	return false;
 }

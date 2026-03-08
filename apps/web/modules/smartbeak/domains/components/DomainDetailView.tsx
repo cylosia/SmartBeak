@@ -14,6 +14,27 @@ function isSafeUrl(url: string | null | undefined): url is string {
 	}
 }
 
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed
+		? formatDistanceToNow(parsed, { addSuffix: true })
+		: null;
+}
+
+function formatCalendarDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? parsed.toLocaleDateString() : null;
+}
+
 import { Button } from "@repo/ui/components/button";
 import {
 	Card,
@@ -98,6 +119,8 @@ export function DomainDetailView({
 	const registry = (domain?.registryData ?? {}) as Record<string, unknown>;
 	const healthData = (domain?.health ?? {}) as Record<string, unknown>;
 	const latestShard = deployStatusQuery.data?.latest;
+	const deploymentConfigured =
+		deployStatusQuery.data?.deploymentConfigured ?? true;
 	const isDeploying =
 		latestShard?.status === "building" ||
 		latestShard?.status === "deploying";
@@ -137,13 +160,13 @@ export function DomainDetailView({
 			label: "Analytics",
 			icon: TrendingUpIcon,
 			href: `/app/${organizationSlug}/domains/${domainId}/analytics`,
-			description: "Diligence, sell-ready score, and attribution",
+			description: "Diligence, sell-readiness estimate, and attribution",
 		},
 		{
 			label: "SmartDeploy",
 			icon: ZapIcon,
 			href: `/app/${organizationSlug}/smart-deploy`,
-			description: "Deploy to edge network",
+			description: "Deploy supported theme builds",
 		},
 	];
 
@@ -182,26 +205,26 @@ export function DomainDetailView({
 							icon={ShieldCheckIcon}
 						/>
 						<MetricCard
-							title="DNS Verified"
-							value={registry.dnsVerified ? "Yes" : "No"}
+							title="DNS Status"
+							value={registry.dnsVerified ? "Recorded" : "Not recorded"}
 							subtitle={
-								registry.dnsVerifiedAt
-									? `Verified ${formatDistanceToNow(new Date(registry.dnsVerifiedAt as string), { addSuffix: true })}`
-									: "Not yet verified"
+								formatRelativeDate(registry.dnsVerifiedAt)
+									? `Updated ${formatRelativeDate(registry.dnsVerifiedAt)}`
+									: "No DNS status recorded"
 							}
 							icon={ShieldCheckIcon}
 						/>
 						<MetricCard
-							title="Health Score"
+							title="Recorded Health Score"
 							value={
 								healthData.score != null
 									? `${healthData.score}/100`
 									: "—"
 							}
 							subtitle={
-								healthData.lastCheck
-									? `Checked ${formatDistanceToNow(new Date(healthData.lastCheck as string), { addSuffix: true })}`
-									: "No checks yet"
+								formatRelativeDate(healthData.lastCheck)
+									? `Updated ${formatRelativeDate(healthData.lastCheck)}`
+									: "No health snapshot recorded"
 							}
 							icon={TrendingUpIcon}
 						/>
@@ -213,7 +236,7 @@ export function DomainDetailView({
 					<Card>
 						<CardHeader>
 							<CardTitle className="text-sm font-medium">
-								Domain Configuration
+								Recorded Domain Metadata
 							</CardTitle>
 						</CardHeader>
 						<CardContent>
@@ -231,11 +254,8 @@ export function DomainDetailView({
 										Expiry Date
 									</p>
 									<p className="text-sm font-medium mt-1">
-										{registry.expiryDate
-											? new Date(
-													registry.expiryDate as string,
-												).toLocaleDateString()
-											: "—"}
+										{formatCalendarDate(registry.expiryDate) ??
+											"—"}
 									</p>
 								</div>
 								<div>
@@ -273,14 +293,8 @@ export function DomainDetailView({
 										Created
 									</p>
 									<p className="text-sm font-medium mt-1">
-										{domain.createdAt
-											? formatDistanceToNow(
-													new Date(domain.createdAt),
-													{
-														addSuffix: true,
-													},
-												)
-											: "—"}
+										{formatRelativeDate(domain.createdAt) ??
+											"—"}
 									</p>
 								</div>
 							</div>
@@ -318,6 +332,12 @@ export function DomainDetailView({
 								</div>
 							</div>
 							<div className="flex items-center gap-2">
+								{!deploymentConfigured && (
+									<p className="text-xs text-amber-700 dark:text-amber-300">
+										Deployment is not configured for this
+										environment.
+									</p>
+								)}
 								{isSafeUrl(latestShard?.deployedUrl) && (
 									<Button
 										variant="outline"
@@ -341,7 +361,9 @@ export function DomainDetailView({
 										})
 									}
 									disabled={
-										deployMutation.isPending || isDeploying
+										deployMutation.isPending ||
+										isDeploying ||
+										!deploymentConfigured
 									}
 								>
 									{deployMutation.isPending || isDeploying ? (
@@ -351,7 +373,9 @@ export function DomainDetailView({
 									)}
 									{isDeploying
 										? "Deploying..."
-										: "Deploy Site"}
+										: deploymentConfigured
+											? "Deploy Site"
+											: "Unavailable"}
 								</Button>
 							</div>
 						</CardContent>

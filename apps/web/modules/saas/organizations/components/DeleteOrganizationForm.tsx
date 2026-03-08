@@ -40,7 +40,7 @@ export function DeleteOrganizationForm() {
 							"organizations.settings.notifications.organizationNotDeleted",
 						),
 					);
-					return;
+					throw error;
 				}
 
 				toastSuccess(

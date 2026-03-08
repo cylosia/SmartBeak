@@ -197,8 +197,8 @@ export async function getSeoDashboardSummary(domainId: string) {
 	return {
 		...summary,
 		seoScore: seoDoc?.score ?? 0,
-		gscConnected: !!seoDoc?.gscData,
-		ahrefsConnected: !!seoDoc?.ahrefsData,
+		gscImported: !!seoDoc?.gscData,
+		ahrefsImported: !!seoDoc?.ahrefsData,
 	};
 }
 

@@ -33,6 +33,7 @@ export const getDeployStatus = protectedProcedure
 		const latest = shards[0] ?? null;
 		const isInProgress =
 			domain.status === "pending" || domain.status === "building";
+		const deploymentConfigured = Boolean(process.env.VERCEL_TOKEN);
 
 		return {
 			domain: {
@@ -45,6 +46,7 @@ export const getDeployStatus = protectedProcedure
 			latest,
 			shards,
 			isInProgress,
+			deploymentConfigured,
 			lastError: latest?.status === "error" ? latest.errorMessage : null,
 		};
 	});

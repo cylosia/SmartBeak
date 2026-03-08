@@ -11,7 +11,7 @@ import {
 	Rocket,
 	Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ type DomainWithShard = Domain & { latestShard?: SiteShard | null };
 export default function DomainsPage() {
 	const [, setLocation] = useLocation();
 	const { toast } = useToast();
+	const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const [addOpen, setAddOpen] = useState(false);
 	const [deployOpen, setDeployOpen] = useState(false);
 	const [selectedDomain, setSelectedDomain] =
@@ -73,6 +74,31 @@ export default function DomainsPage() {
 	const { data: domainList, isLoading } = useQuery<DomainWithShard[]>({
 		queryKey: ["/api/domains"],
 	});
+
+	const hasActiveDeployment =
+		domainList?.some((domain) =>
+			["pending", "building", "deploying"].includes(
+				domain.latestShard?.status ?? "",
+			),
+		) ?? false;
+
+	useEffect(() => {
+		if (hasActiveDeployment) {
+			pollingRef.current = setInterval(() => {
+				queryClient.invalidateQueries({ queryKey: ["/api/domains"] });
+			}, 2000);
+		} else if (pollingRef.current) {
+			clearInterval(pollingRef.current);
+			pollingRef.current = null;
+		}
+
+		return () => {
+			if (pollingRef.current) {
+				clearInterval(pollingRef.current);
+				pollingRef.current = null;
+			}
+		};
+	}, [hasActiveDeployment]);
 
 	const createMutation = useMutation({
 		mutationFn: async () => {
@@ -356,10 +382,12 @@ export default function DomainsPage() {
 												variant="secondary"
 												className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
 											>
-												Live
+												Ready
 											</Badge>
 										)}
 										{domain.latestShard?.status ===
+											"pending" ||
+										domain.latestShard?.status ===
 											"deploying" ||
 										domain.latestShard?.status ===
 											"building" ? (
@@ -412,11 +440,27 @@ export default function DomainsPage() {
 												e.stopPropagation();
 												openDeployDialog(domain);
 											}}
+											disabled={
+												domain.latestShard?.status ===
+													"pending" ||
+												domain.latestShard?.status ===
+													"building" ||
+												domain.latestShard?.status ===
+													"deploying"
+											}
 										>
 											<Rocket className="w-4 h-4 mr-2" />
-											Deploy Site
+											{domain.latestShard?.status ===
+												"pending" ||
+											domain.latestShard?.status ===
+												"building" ||
+											domain.latestShard?.status ===
+												"deploying"
+												? "Deploying..."
+												: "Deploy Site"}
 										</Button>
-										{domain.latestShard?.deployedUrl && (
+										{domain.latestShard?.deployedUrl &&
+											domain.latestShard?.status === "ready" && (
 											<Button
 												variant="outline"
 												size="icon"
@@ -462,8 +506,8 @@ export default function DomainsPage() {
 					<DialogHeader>
 						<DialogTitle>Deploy {selectedDomain?.name}</DialogTitle>
 						<DialogDescription>
-							Select a theme and deploy to Vercel. This generates
-							a production-ready static site.
+							Select a theme and deploy it to Vercel as a
+							generated static site.
 						</DialogDescription>
 					</DialogHeader>
 					<div className="py-4 space-y-4">

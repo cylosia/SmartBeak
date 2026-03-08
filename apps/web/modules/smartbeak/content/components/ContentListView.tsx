@@ -36,7 +36,7 @@ import {
 	TrashIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useForm } from "react-hook-form";
 import z from "zod";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
@@ -45,7 +45,7 @@ import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkel
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 
 const CreateContentSchema = z.object({
-	title: z.string().min(1, "Title is required").max(500),
+	title: z.string().trim().min(1, "Title is required").max(500),
 });
 
 type CreateContentForm = z.infer<typeof CreateContentSchema>;
@@ -58,6 +58,17 @@ const STATUS_FILTERS = [
 	"archived",
 ] as const;
 
+function formatRelativeDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime())
+		? null
+		: formatDistanceToNow(parsed, { addSuffix: true });
+}
+
 export function ContentListView({
 	organizationSlug,
 	domainId,
@@ -68,6 +79,7 @@ export function ContentListView({
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState<string>("all");
+	const deferredSearch = useDeferredValue(search);
 	const queryClient = useQueryClient();
 
 	const contentQuery = useQuery(
@@ -75,7 +87,7 @@ export function ContentListView({
 			input: {
 				organizationSlug,
 				domainId,
-				query: search || undefined,
+				query: deferredSearch.trim() || undefined,
 				status:
 					statusFilter !== "all"
 						? (statusFilter as
@@ -133,9 +145,16 @@ export function ContentListView({
 		createMutation.mutate({
 			organizationSlug,
 			domainId,
-			title: data.title,
+			title: data.title.trim(),
 			status: "draft",
 		});
+	};
+
+	const handleDialogOpenChange = (nextOpen: boolean) => {
+		setOpen(nextOpen);
+		if (!nextOpen) {
+			reset();
+		}
 	};
 
 	return (
@@ -249,16 +268,9 @@ export function ContentListView({
 												v{item.version ?? 1}
 											</TableCell>
 											<TableCell className="text-muted-foreground text-sm">
-												{item.updatedAt
-													? formatDistanceToNow(
-															new Date(
-																item.updatedAt,
-															),
-															{
-																addSuffix: true,
-															},
-														)
-													: "—"}
+												{formatRelativeDate(
+													item.updatedAt,
+												) ?? "—"}
 											</TableCell>
 											<TableCell className="text-right">
 												<DropdownMenu>
@@ -310,7 +322,7 @@ export function ContentListView({
 				)}
 
 				{/* Create Content Dialog */}
-				<Dialog open={open} onOpenChange={setOpen}>
+				<Dialog open={open} onOpenChange={handleDialogOpenChange}>
 					<DialogContent>
 						<DialogHeader>
 							<DialogTitle>New Content</DialogTitle>

@@ -52,6 +52,35 @@ function getActionColor(action: string): string {
 	return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
 
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
+}
+
+function formatAuditDetails(details: unknown) {
+	if (details == null) {
+		return null;
+	}
+
+	try {
+		const serialized = JSON.stringify(details);
+		return serialized.length > 60
+			? `${serialized.slice(0, 59)}...`
+			: serialized;
+	} catch {
+		return "[unavailable]";
+	}
+}
+
 export function AuditLogView({
 	organizationSlug,
 }: {
@@ -158,7 +187,7 @@ export function AuditLogView({
 											<span
 												className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getActionColor(event.action ?? "")}`}
 											>
-												{event.action}
+												{event.action ?? "unknown"}
 											</span>
 										</TableCell>
 										<TableCell>
@@ -186,11 +215,11 @@ export function AuditLogView({
 												: "system"}
 										</TableCell>
 										<TableCell>
-											{event.details ? (
+											{formatAuditDetails(event.details) ? (
 												<code className="text-xs bg-muted rounded px-1.5 py-0.5 max-w-xs truncate block">
-													{JSON.stringify(
+													{formatAuditDetails(
 														event.details,
-													).slice(0, 60)}
+													)}
 												</code>
 											) : (
 												<span className="text-muted-foreground text-sm">
@@ -199,16 +228,9 @@ export function AuditLogView({
 											)}
 										</TableCell>
 										<TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-											{event.createdAt
-												? formatDistanceToNow(
-														new Date(
-															event.createdAt,
-														),
-														{
-															addSuffix: true,
-														},
-													)
-												: "—"}
+											{formatRelativeDate(
+												event.createdAt,
+											) ?? "—"}
 										</TableCell>
 									</TableRow>
 								))}

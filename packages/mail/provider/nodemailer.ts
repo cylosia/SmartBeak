@@ -22,9 +22,13 @@ export const send: SendEmailHandler = async ({
 			"Missing required MAIL_* environment variables for nodemailer",
 		);
 	}
+	const port = Number.parseInt(process.env.MAIL_PORT, 10);
+	if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
+		throw new Error(`Invalid MAIL_PORT value: ${process.env.MAIL_PORT}`);
+	}
 	const transporter = nodemailer.createTransport({
 		host: process.env.MAIL_HOST,
-		port: Number.parseInt(process.env.MAIL_PORT, 10),
+		port,
 		auth: {
 			user: process.env.MAIL_USER,
 			pass: process.env.MAIL_PASS,

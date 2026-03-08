@@ -13,7 +13,6 @@ export const DomainRoiSchema = z.object({
 	createdAt: z.date(),
 	riskAdjustedScore: z.number(),
 	decayFactor: z.number(),
-	estimatedValue: z.number(),
 });
 
 export const PortfolioRoiResponseSchema = z.object({
@@ -28,7 +27,7 @@ export const PortfolioRoiResponseSchema = z.object({
 		})
 		.nullable(),
 	domains: z.array(DomainRoiSchema),
-	totalValue: z.number(),
+	totalScore: z.number(),
 	avgRoi: z.number(),
 	totalDomains: z.number(),
 });
@@ -59,7 +58,7 @@ export const RunDiligenceInputSchema = z.object({
 	domainId: z.string().uuid(),
 });
 
-// ─── Sell-Ready Score ─────────────────────────────────────────────────────────
+// ─── Sell-Readiness Estimate ──────────────────────────────────────────────────
 
 export const SellReadyRecommendationSchema = z.object({
 	area: z.string(),
@@ -95,8 +94,8 @@ export const BuyerSessionSchema = z.object({
 export const BuyerAttributionResponseSchema = z.object({
 	sessions: z.array(BuyerSessionSchema),
 	total: z.number(),
-	converted: z.number(),
-	conversionRate: z.number(),
+	identifiedBuyers: z.number(),
+	identifiedBuyerRate: z.number(),
 	intentBreakdown: z.array(
 		z.object({ intent: z.string(), count: z.number() }),
 	),

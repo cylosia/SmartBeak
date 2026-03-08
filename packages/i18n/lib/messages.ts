@@ -17,5 +17,7 @@ export const getMessagesForLocale = async (
 		return localeMessages;
 	}
 	const defaultLocaleMessages = await importLocale(config.defaultLocale);
-	return deepmerge(defaultLocaleMessages, localeMessages);
+	return deepmerge(defaultLocaleMessages, localeMessages, {
+		arrayMerge: (_defaultArray, localeArray) => localeArray,
+	});
 };

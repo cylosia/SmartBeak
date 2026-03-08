@@ -31,6 +31,8 @@ interface SeriesStep {
 }
 
 const DEFAULT_STEP: SeriesStep = { subject: "", htmlBody: "", delayDays: 0 };
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_SERIES_SUPPORTED = false;
 
 export function EmailSeriesBuilder({
 	organizationSlug,
@@ -52,6 +54,16 @@ export function EmailSeriesBuilder({
 	const [steps, setSteps] = useState<SeriesStep[]>([{ ...DEFAULT_STEP }]);
 	const [expandedStep, setExpandedStep] = useState<number>(0);
 
+	const resetForm = () => {
+		setSeriesName("");
+		setFromName("");
+		setFromEmail("");
+		setReplyTo("");
+		setStartAt("");
+		setSteps([{ ...DEFAULT_STEP }]);
+		setExpandedStep(0);
+	};
+
 	const createMutation = useMutation(
 		orpc.smartbeak.publishingSuite.emailSeries.mutationOptions({
 			onSuccess: (data) => {
@@ -62,6 +74,7 @@ export function EmailSeriesBuilder({
 				queryClient.invalidateQueries({
 					queryKey: ["smartbeak", "publishingSuite"],
 				});
+				resetForm();
 				onClose();
 			},
 			onError: (err: unknown) =>
@@ -80,8 +93,18 @@ export function EmailSeriesBuilder({
 				delayDays: (s[s.length - 1]?.delayDays ?? 0) + 7,
 			},
 		]);
-	const removeStep = (i: number) =>
+	const removeStep = (i: number) => {
 		setSteps((s) => s.filter((_, idx) => idx !== i));
+		setExpandedStep((current) => {
+			if (current === i) {
+				return -1;
+			}
+			if (current > i) {
+				return current - 1;
+			}
+			return current;
+		});
+	};
 	const updateStep = (i: number, patch: Partial<SeriesStep>) =>
 		setSteps((s) =>
 			s.map((step, idx) => (idx === i ? { ...step, ...patch } : step)),
@@ -104,27 +127,82 @@ export function EmailSeriesBuilder({
 	};
 
 	const handleSubmit = () => {
-		if (!seriesName || !fromName || !fromEmail || steps.length === 0) {
+		const trimmedSeriesName = seriesName.trim();
+		const trimmedFromName = fromName.trim();
+		const normalizedFromEmail = fromEmail.trim().toLowerCase();
+		const normalizedReplyTo = replyTo.trim().toLowerCase();
+		const normalizedSteps = steps.map((step) => ({
+			...step,
+			subject: step.subject.trim(),
+			htmlBody: step.htmlBody.trim(),
+			delayDays: Math.min(
+				365,
+				Math.max(0, Math.round(Number(step.delayDays) || 0)),
+			),
+		}));
+
+		if (
+			!trimmedSeriesName ||
+			!trimmedFromName ||
+			!normalizedFromEmail ||
+			steps.length === 0
+		) {
 			toastError(
 				"Missing fields",
 				"Fill in series name, sender, and at least one step.",
 			);
 			return;
 		}
+
+		if (!EMAIL_PATTERN.test(normalizedFromEmail)) {
+			toastError(
+				"Invalid sender email",
+				"Enter a valid From Email address.",
+			);
+			return;
+		}
+
+		if (normalizedReplyTo && !EMAIL_PATTERN.test(normalizedReplyTo)) {
+			toastError(
+				"Invalid reply-to email",
+				"Enter a valid Reply-To address or leave it blank.",
+			);
+			return;
+		}
+
+		const invalidStepIndex = normalizedSteps.findIndex(
+			(step) => !step.subject || !step.htmlBody,
+		);
+		if (invalidStepIndex !== -1) {
+			setExpandedStep(invalidStepIndex);
+			toastError(
+				"Incomplete step",
+				`Step ${invalidStepIndex + 1} needs both a subject and HTML body.`,
+			);
+			return;
+		}
+
 		createMutation.mutate({
 			organizationSlug,
 			domainId,
-			seriesName,
-			fromName,
-			fromEmail,
-			replyTo: replyTo || undefined,
+			seriesName: trimmedSeriesName,
+			fromName: trimmedFromName,
+			fromEmail: normalizedFromEmail,
+			replyTo: normalizedReplyTo || undefined,
 			startAt: startAt || undefined,
-			steps,
+			steps: normalizedSteps,
 		});
 	};
 
+	const handleOpenChange = (nextOpen: boolean) => {
+		if (!nextOpen) {
+			resetForm();
+			onClose();
+		}
+	};
+
 	return (
-		<Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
@@ -133,7 +211,16 @@ export function EmailSeriesBuilder({
 					</DialogTitle>
 				</DialogHeader>
 
-				<div className="space-y-4">
+				<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+					Email series automation is not available yet. The current
+					publishing queue cannot safely store per-step email bodies,
+					subjects, or recipients, so series creation is disabled.
+				</div>
+
+				<fieldset
+					disabled={!EMAIL_SERIES_SUPPORTED}
+					className="space-y-4"
+				>
 					{/* Series metadata */}
 					<div className="grid grid-cols-2 gap-3">
 						<div className="col-span-2">
@@ -173,6 +260,7 @@ export function EmailSeriesBuilder({
 							</label>
 							<Input
 								id="from-email"
+								type="email"
 								placeholder="you@domain.com"
 								value={fromEmail}
 								onChange={(e) => setFromEmail(e.target.value)}
@@ -187,6 +275,7 @@ export function EmailSeriesBuilder({
 							</label>
 							<Input
 								id="reply-to"
+								type="email"
 								placeholder="reply@domain.com"
 								value={replyTo}
 								onChange={(e) => setReplyTo(e.target.value)}
@@ -368,21 +457,31 @@ export function EmailSeriesBuilder({
 							</div>
 						))}
 					</div>
-				</div>
+				</fieldset>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={onClose}>
+					<Button
+						variant="outline"
+						onClick={() => {
+							resetForm();
+							onClose();
+						}}
+					>
 						Cancel
 					</Button>
 					<Button
 						onClick={handleSubmit}
-						disabled={createMutation.isPending}
+						disabled={
+							createMutation.isPending || !EMAIL_SERIES_SUPPORTED
+						}
 						className="gap-2"
 					>
 						<SendIcon className="h-4 w-4" />
 						{createMutation.isPending
 							? "Creating…"
-							: "Create Series"}
+							: EMAIL_SERIES_SUPPORTED
+								? "Create Series"
+								: "Unavailable"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

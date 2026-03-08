@@ -28,6 +28,24 @@ export const createContentItemProcedure = protectedProcedure
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgEditor(org.supastarterOrgId, user.id);
+		const status = input.status ?? "draft";
+		const scheduledFor = input.scheduledFor
+			? new Date(input.scheduledFor)
+			: undefined;
+		if (status === "scheduled") {
+			if (!scheduledFor || Number.isNaN(scheduledFor.getTime())) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"Scheduled content must include a valid scheduled publish time.",
+				});
+			}
+		} else if (scheduledFor) {
+			throw new ORPCError("BAD_REQUEST", {
+				message:
+					"scheduledFor can only be provided when status is set to scheduled.",
+			});
+		}
+
 		const domain = await getDomainById(input.domainId);
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
@@ -36,10 +54,8 @@ export const createContentItemProcedure = protectedProcedure
 			domainId: input.domainId,
 			title: input.title,
 			body: input.body,
-			status: input.status ?? "draft",
-			scheduledFor: input.scheduledFor
-				? new Date(input.scheduledFor)
-				: undefined,
+			status,
+			scheduledFor,
 			createdBy: user.id,
 		});
 		const item = rows[0];

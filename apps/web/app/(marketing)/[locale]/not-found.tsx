@@ -12,7 +12,7 @@ export default async function NotFoundPage() {
 			<p className="mt-2 text-2xl">{t("notFound.title")}</p>
 
 			<Button asChild className="mt-4">
-				<LocaleLink href="/app">
+				<LocaleLink href="/">
 					<ArrowLeftIcon className="mr-2 size-4" />{" "}
 					{t("notFound.goToHomepage")}
 				</LocaleLink>

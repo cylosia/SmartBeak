@@ -21,7 +21,7 @@ export function OrganizationInvitation({
 	});
 
 	return (
-		<Wrapper>
+		<Wrapper locale={locale}>
 			<Heading className="text-xl">
 				{t.markup("mail.organizationInvitation.headline", {
 					organizationName,

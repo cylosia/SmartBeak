@@ -1,6 +1,6 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 
 function isSafeUrl(url: string | null | undefined): url is string {
 	if (!url) {
@@ -59,9 +59,11 @@ import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkel
 import { StatusBadge } from "@/modules/smartbeak/shared/components/StatusBadge";
 
 const CreateDomainSchema = z.object({
-	name: z.string().min(1, "Name is required").max(255),
+	name: z.string().trim().min(1, "Name is required").max(255),
 	slug: z
 		.string()
+		.trim()
+		.toLowerCase()
 		.min(1, "Slug is required")
 		.max(255)
 		.regex(
@@ -79,13 +81,14 @@ export function DomainsListView({
 }) {
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
+	const deferredSearch = useDeferredValue(search);
 	const queryClient = useQueryClient();
 
 	const domainsQuery = useQuery(
 		orpc.smartbeak.domains.list.queryOptions({
 			input: {
 				organizationSlug,
-				query: search || undefined,
+				query: deferredSearch.trim() || undefined,
 				limit: 50,
 				offset: 0,
 			},

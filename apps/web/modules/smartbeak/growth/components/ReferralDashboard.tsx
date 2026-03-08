@@ -22,8 +22,18 @@ import {
 import { useSession } from "@saas/auth/hooks/use-session";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useQuery } from "@tanstack/react-query";
+import { toastError } from "@repo/ui/components/toast";
 import { CopyIcon, GiftIcon, TrendingUpIcon, UsersIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+
+function formatCalendarDate(value: string | Date | null | undefined) {
+	if (!value) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString();
+}
 
 export function ReferralDashboard() {
 	const { user } = useSession();
@@ -33,17 +43,24 @@ export function ReferralDashboard() {
 
 	const { data, isLoading, error, refetch } = useQuery(
 		orpc.smartbeak.growth.getMyReferrals.queryOptions({
-			input: { email: user?.email ?? "" },
+			input: {},
 			enabled: !!user?.email,
 		}),
 	);
 
-	const copyLink = () => {
-		if (data?.referralLink) {
-			navigator.clipboard.writeText(data.referralLink);
+	const copyLink = async () => {
+		if (!data?.referralLink || !navigator.clipboard?.writeText) {
+			toastError("Copy failed", "Referral link is unavailable.");
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(data.referralLink);
 			setCopied(true);
 			clearTimeout(copyTimerRef.current);
 			copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+		} catch {
+			toastError("Copy failed", "Could not copy referral link.");
 		}
 	};
 
@@ -72,8 +89,8 @@ export function ReferralDashboard() {
 					Referral Program
 				</h1>
 				<p className="text-foreground/60 mt-1">
-					Invite friends and earn rewards — extra credits, domains,
-					and more.
+					Invite people to SmartBeak, track completed signups, and
+					review any rewards that have been granted.
 				</p>
 			</div>
 
@@ -118,7 +135,7 @@ export function ReferralDashboard() {
 											{data?.stats?.completed ?? 0}
 										</div>
 										<div className="text-sm text-foreground/60">
-											Converted
+											Completed
 										</div>
 									</div>
 								</div>
@@ -135,7 +152,7 @@ export function ReferralDashboard() {
 											{data?.stats?.rewarded ?? 0}
 										</div>
 										<div className="text-sm text-foreground/60">
-											Rewards earned
+											Rewards granted
 										</div>
 									</div>
 								</div>
@@ -165,8 +182,9 @@ export function ReferralDashboard() {
 							<Button
 								variant="outline"
 								size="icon"
-								onClick={copyLink}
+								onClick={() => void copyLink()}
 								aria-label="Copy to clipboard"
+								disabled={!data?.referralLink}
 							>
 								<CopyIcon className="size-4" />
 							</Button>
@@ -179,7 +197,8 @@ export function ReferralDashboard() {
 					)}
 					<p className="text-xs text-foreground/50">
 						Share this link with friends. When they sign up and
-						activate their account, you both earn rewards.
+						complete onboarding, the referral is tracked here and
+						any granted reward will appear in your history.
 					</p>
 					{/* Share buttons */}
 					<div className="flex flex-wrap gap-2 pt-2">
@@ -284,9 +303,9 @@ export function ReferralDashboard() {
 												)}
 											</TableCell>
 											<TableCell className="text-sm text-foreground/60">
-												{new Date(
+												{formatCalendarDate(
 													ref.createdAt,
-												).toLocaleDateString()}
+												) ?? "—"}
 											</TableCell>
 										</TableRow>
 									),

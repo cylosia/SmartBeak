@@ -1,9 +1,13 @@
 import type { SiteShard, ThemeOption } from "@shared/schema";
-import { log } from "./index";
 import { storage } from "./storage";
 import { generateThemeHtml } from "./themes";
 
 const VERCEL_API = "https://api.vercel.com";
+
+function log(message: string, source = "deploy") {
+	const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+	console.log(`${timestamp} [${source}] ${message}`);
+}
 
 function getVercelToken(): string {
 	const token = process.env.VERCEL_TOKEN;
@@ -35,6 +39,18 @@ async function vercelFetch(
 	}
 }
 
+async function assertVercelDeploymentAvailable(): Promise<void> {
+	const response = await vercelFetch("/v2/user");
+	if (response.ok) {
+		return;
+	}
+
+	const detail = await response.text();
+	throw new Error(
+		`Vercel deployment is unavailable (${response.status}): ${detail || "request failed"}`,
+	);
+}
+
 function sanitizeProjectName(name: string): string {
 	return name
 		.toLowerCase()
@@ -49,6 +65,11 @@ export async function deployToVercel(
 	theme: ThemeOption,
 	domainName: string,
 ): Promise<SiteShard> {
+	// Fail before creating any shard/version records so the caller does not
+	// report a deployment as started when required credentials are missing.
+	getVercelToken();
+	await assertVercelDeploymentAvailable();
+
 	const latestShard = await storage.getLatestSiteShard(domainId);
 	const nextVersion = latestShard ? latestShard.version + 1 : 1;
 
@@ -151,7 +172,6 @@ export async function deployToVercel(
 			await storage.updateSiteShard(shard.id, {
 				vercelDeploymentId: deployData.id,
 				vercelProjectId: deployData.projectId || "",
-				deployedUrl: `https://${deployData.url}`,
 				progress: 70,
 			});
 
@@ -205,7 +225,7 @@ export async function deployToVercel(
 			await storage.updateDeploymentVersion(deployVersion.id, {
 				status: "ready",
 				deployedUrl: `https://${deployData.url}`,
-				buildLog: `Deployed successfully at ${new Date().toISOString()}`,
+				buildLog: `Vercel reported deployment ready at ${new Date().toISOString()}`,
 			});
 
 			await storage.createAuditLog({

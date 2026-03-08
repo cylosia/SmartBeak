@@ -43,6 +43,10 @@ export function WaitlistSection() {
 	const joinMutation = useMutation(
 		orpc.smartbeak.growth.joinWaitlist.mutationOptions(),
 	);
+	const canCopyReferralLink =
+		typeof navigator !== "undefined" &&
+		typeof navigator.clipboard?.writeText === "function" &&
+		Boolean(result?.referralLink);
 
 	const form = useForm<FormData>({
 		resolver: zodResolver(formSchema),
@@ -60,12 +64,18 @@ export function WaitlistSection() {
 		}
 	});
 
-	const copyReferralLink = () => {
-		if (result?.referralLink) {
-			navigator.clipboard.writeText(result.referralLink);
+	const copyReferralLink = async () => {
+		if (!result?.referralLink || !canCopyReferralLink) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(result.referralLink);
 			setCopied(true);
 			clearTimeout(copyTimerRef.current);
 			copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+		} catch {
+			setCopied(false);
 		}
 	};
 
@@ -100,8 +110,8 @@ export function WaitlistSection() {
 							<div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
 								{[
 									{ icon: "🚀", label: "Early access" },
-									{ icon: "💰", label: "Founding pricing" },
-									{ icon: "🎁", label: "Referral rewards" },
+									{ icon: "🗂️", label: "Beta rollout updates" },
+									{ icon: "🎁", label: "Referral priority" },
 								].map(({ icon, label }) => (
 									<div
 										key={label}
@@ -175,7 +185,7 @@ export function WaitlistSection() {
 								<p className="mt-2 text-foreground/60">
 									{result.alreadyJoined
 										? "We already have your email. Here's your referral link to move up the queue."
-										: "We'll notify you when your early access is ready. In the meantime, share your referral link to move up the queue."}
+										: "We'll notify you as staged beta access expands. In the meantime, share your referral link to move up the queue."}
 								</p>
 							</div>
 
@@ -190,10 +200,12 @@ export function WaitlistSection() {
 										{result.referralLink}
 									</div>
 									<Button
+										type="button"
 										variant="outline"
 										size="sm"
-										onClick={copyReferralLink}
+										onClick={() => void copyReferralLink()}
 										className="shrink-0"
+										disabled={!canCopyReferralLink}
 									>
 										{copied ? "Copied!" : "Copy"}
 									</Button>

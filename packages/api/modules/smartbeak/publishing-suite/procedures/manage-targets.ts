@@ -27,6 +27,22 @@ const PUBLISH_TARGETS = [
 	"soundcloud",
 ] as const;
 
+const UNSUPPORTED_TARGET_MESSAGES: Partial<
+	Record<(typeof PUBLISH_TARGETS)[number], string>
+> = {
+	web: "Web publishing targets are not supported yet. Use SmartDeploy directly until the web adapter is implemented.",
+	email:
+		"Email publishing targets are not supported yet. The current email adapter cannot safely model recipients or per-message content.",
+	youtube:
+		"YouTube publishing targets are not supported yet. The current publishing queue cannot upload the required video assets.",
+	instagram:
+		"Instagram publishing targets are not supported yet. The current publishing queue cannot attach the required media assets.",
+	tiktok:
+		"TikTok publishing targets are not supported yet. The current publishing queue cannot attach the required video assets.",
+	vimeo:
+		"Vimeo publishing targets are not supported yet. The current publishing queue cannot attach the required video assets.",
+};
+
 export const listPlatformTargetsProcedure = protectedProcedure
 	.route({
 		method: "GET",
@@ -88,6 +104,12 @@ export const upsertPlatformTargetProcedure = protectedProcedure
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });
 		}
+		const unsupportedMessage = UNSUPPORTED_TARGET_MESSAGES[input.target];
+		if (unsupportedMessage) {
+			throw new ORPCError("PRECONDITION_FAILED", {
+				message: unsupportedMessage,
+			});
+		}
 		const { encrypt } = await import("@repo/utils");
 		const configSecret = process.env.SMARTBEAK_ENCRYPTION_KEY;
 		if (!configSecret) {
@@ -105,17 +127,22 @@ export const upsertPlatformTargetProcedure = protectedProcedure
 			encryptedConfig,
 			enabled: input.enabled,
 		});
+		if (!target) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to configure publishing target.",
+			});
+		}
 		await audit({
 			orgId: org.id,
 			actorId: user.id,
 			action: "publishing.target_configured",
 			entityType: "publish_target",
-			entityId: target?.id,
+			entityId: target.id,
 			details: { target: input.target },
 		});
 		return {
 			target: {
-				id: target?.id,
+				id: target.id,
 				target: input.target,
 				enabled: input.enabled,
 			},

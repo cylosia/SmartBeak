@@ -8,6 +8,7 @@ import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useTranslations } from "next-intl";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -26,6 +27,12 @@ export function ChangeEmailForm() {
 		},
 	});
 
+	useEffect(() => {
+		form.reset({
+			email: user?.email ?? "",
+		});
+	}, [form, user?.email]);
+
 	const onSubmit = form.handleSubmit(async ({ email }) => {
 		const { error } = await authClient.changeEmail({
 			newEmail: email,
@@ -39,6 +46,9 @@ export function ChangeEmailForm() {
 		toastSuccess(t("settings.account.changeEmail.notifications.success"));
 
 		await reloadSession();
+		form.reset({
+			email,
+		});
 	});
 
 	return (

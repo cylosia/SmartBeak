@@ -44,6 +44,11 @@ export function TwoFactorBlock() {
 
 	useEffect(() => {
 		setPassword("");
+		if (!dialogOpen) {
+			setDialogView("password");
+			setTotpURI("");
+			setTotpCode("");
+		}
 	}, [dialogOpen]);
 
 	const totpURISecret = useMemo(() => {
@@ -78,7 +83,7 @@ export function TwoFactorBlock() {
 		onError: () => {
 			toastError(
 				t(
-					"settings.account.security.twoFactor.notifications.enable.error.title",
+					"settings.account.security.twoFactor.notifications.disable.error.title",
 				),
 			);
 		},
@@ -134,6 +139,13 @@ export function TwoFactorBlock() {
 
 			await reloadSession();
 			setDialogOpen(false);
+		},
+		onError: () => {
+			toastError(
+				t(
+					"settings.account.security.twoFactor.notifications.verify.error.title",
+				),
+			);
 		},
 	});
 

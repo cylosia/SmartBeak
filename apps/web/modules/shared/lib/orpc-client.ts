@@ -4,6 +4,28 @@ import type { ApiRouterClient } from "@repo/api/orpc/router";
 import { logger } from "@repo/logs";
 import { getBaseUrl } from "@repo/utils";
 
+const FORWARDED_SERVER_HEADERS = [
+	"authorization",
+	"cookie",
+	"accept-language",
+	"traceparent",
+	"tracestate",
+	"baggage",
+	"x-request-id",
+] as const;
+
+async function getServerRpcHeaders() {
+	const { headers } = await import("next/headers");
+	const requestHeaders = await headers();
+
+	return Object.fromEntries(
+		FORWARDED_SERVER_HEADERS.flatMap((headerName) => {
+			const headerValue = requestHeaders.get(headerName);
+			return headerValue ? [[headerName, headerValue]] : [];
+		}),
+	);
+}
+
 const link = new RPCLink({
 	url: `${getBaseUrl()}/api/rpc`,
 	headers: async () => {
@@ -11,8 +33,7 @@ const link = new RPCLink({
 			return {};
 		}
 
-		const { headers } = await import("next/headers");
-		return Object.fromEntries(await headers());
+		return getServerRpcHeaders();
 	},
 	interceptors: [
 		onError((error) => {

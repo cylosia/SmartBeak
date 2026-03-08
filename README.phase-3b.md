@@ -1,6 +1,6 @@
 # Phase 3B: Advanced AI Agents
 
-This phase introduces a powerful multi-agent system, a no-code workflow builder, persistent memory, and an AI co-pilot directly inside the content editor. It transforms SmartBeak from a content management system into an autonomous content creation platform.
+This phase introduces a multi-agent system, a no-code workflow builder, persistent memory, and an AI co-pilot directly inside the content editor. It extends SmartBeak from a content management system into a more automation-assisted content operations platform.
 
 ## Features
 

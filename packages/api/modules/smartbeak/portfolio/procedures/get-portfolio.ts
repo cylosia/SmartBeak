@@ -4,12 +4,13 @@ import {
 	getDecaySignalsForDomain,
 	getDiligenceChecksForDomain,
 	getDomainById,
+	getPortfolioRoiForOrg,
 	getPortfolioSummaryForOrg,
 	getTimelineEventsForDomain,
 } from "@repo/database";
 import z from "zod";
 import { protectedProcedure } from "../../../../orpc/procedures";
-import { requireOrgMembership } from "../../lib/membership";
+import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const getPortfolioSummary = protectedProcedure
@@ -23,8 +24,11 @@ export const getPortfolioSummary = protectedProcedure
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgMembership(org.supastarterOrgId, user.id);
-		const summary = await getPortfolioSummaryForOrg(org.id);
-		return { summary };
+		const [summary, roi] = await Promise.all([
+			getPortfolioSummaryForOrg(org.id),
+			getPortfolioRoiForOrg(org.id),
+		]);
+		return { summary, portfolioScore: roi.totalScore };
 	});
 
 export const getDomainDiligence = protectedProcedure
@@ -43,7 +47,7 @@ export const getDomainDiligence = protectedProcedure
 	)
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgAdmin(org.supastarterOrgId, user.id);
 		const domain = await getDomainById(input.domainId);
 		if (!domain || domain.orgId !== org.id) {
 			throw new ORPCError("NOT_FOUND", { message: "Domain not found." });

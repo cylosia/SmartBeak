@@ -1,10 +1,32 @@
 import { type ConsolaReporter, createConsola, type LogObject } from "consola";
 import { redactSensitive } from "./redact";
 
+function serializeLogArg(arg: unknown): string {
+	if (typeof arg === "string") {
+		return arg;
+	}
+
+	if (arg instanceof Error) {
+		return JSON.stringify({
+			name: arg.name,
+			message: arg.message,
+			stack: arg.stack,
+		});
+	}
+
+	try {
+		return JSON.stringify(arg, (_, value) =>
+			typeof value === "bigint" ? value.toString() : value,
+		);
+	} catch {
+		return "[Unserializable log argument]";
+	}
+}
+
 const jsonReporter: ConsolaReporter = {
 	log(logObj: LogObject) {
 		const rawMessage = logObj.args
-			.map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+			.map((arg) => serializeLogArg(arg))
 			.join(" ");
 		const entry = {
 			level: logObj.type,

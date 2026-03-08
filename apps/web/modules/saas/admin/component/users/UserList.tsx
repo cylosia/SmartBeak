@@ -17,7 +17,13 @@ import {
 	TableCell,
 	TableRow,
 } from "@repo/ui/components/table";
-import { dismiss, toastLoading, toastPromise } from "@repo/ui/components/toast";
+import {
+	dismiss,
+	toastError,
+	toastLoading,
+	toastPromise,
+	toastSuccess,
+} from "@repo/ui/components/toast";
 import { useConfirmationAlert } from "@saas/shared/components/ConfirmationAlertProvider";
 import { Pagination } from "@saas/shared/components/Pagination";
 import { UserAvatar } from "@shared/components/UserAvatar";
@@ -97,15 +103,19 @@ export function UserList() {
 			}),
 		);
 
-		await authClient.admin.impersonateUser({
+		dismiss(toastId);
+
+		const { error } = await authClient.admin.impersonateUser({
 			userId,
 		});
+
+		if (error) {
+			toastError(t("admin.users.impersonation.error"));
+			return;
+		}
+
 		await refetch();
-		dismiss(toastId);
-		window.location.href = new URL(
-			"/app",
-			window.location.origin,
-		).toString();
+		window.location.href = new URL("/app", window.location.origin).toString();
 	};
 
 	const deleteUser = async (id: string) => {
@@ -122,6 +132,9 @@ export function UserList() {
 			{
 				loading: t("admin.users.deleteUser.deleting"),
 				success: () => {
+					queryClient.invalidateQueries({
+						queryKey: orpc.admin.users.list.key(),
+					});
 					return t("admin.users.deleteUser.deleted");
 				},
 				error: t("admin.users.deleteUser.notDeleted"),
@@ -151,25 +164,37 @@ export function UserList() {
 	};
 
 	const assignAdminRole = async (id: string) => {
-		await authClient.admin.setRole({
+		const { error } = await authClient.admin.setRole({
 			userId: id,
 			role: "admin",
 		});
 
+		if (error) {
+			toastError(t("admin.users.assignAdminRoleError"));
+			return;
+		}
+
 		await queryClient.invalidateQueries({
 			queryKey: orpc.admin.users.list.key(),
 		});
+		toastSuccess(t("admin.users.assignAdminRoleSuccess"));
 	};
 
 	const removeAdminRole = async (id: string) => {
-		await authClient.admin.setRole({
+		const { error } = await authClient.admin.setRole({
 			userId: id,
 			role: "user",
 		});
 
+		if (error) {
+			toastError(t("admin.users.removeAdminRoleError"));
+			return;
+		}
+
 		await queryClient.invalidateQueries({
 			queryKey: orpc.admin.users.list.key(),
 		});
+		toastSuccess(t("admin.users.removeAdminRoleSuccess"));
 	};
 
 	const columns: ColumnDef<

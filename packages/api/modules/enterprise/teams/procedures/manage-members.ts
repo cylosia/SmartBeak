@@ -36,7 +36,7 @@ export const listTeamMembers = protectedProcedure
 	)
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgAdmin(org.supastarterOrgId, user.id);
 		await requireEnterpriseFeature(org.id, "teams");
 
 		const team = await getTeamById(input.teamId);
@@ -231,7 +231,7 @@ export const listTeamActivityProcedure = protectedProcedure
 	)
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgAdmin(org.supastarterOrgId, user.id);
 		await requireEnterpriseFeature(org.id, "teams");
 
 		const team = await getTeamById(input.teamId);

@@ -1,6 +1,6 @@
 {
 	"installCommand": "corepack enable && pnpm install",
-	"buildCommand": "cd ../.. && npx turbo run build --filter=web",
+	"buildCommand": "pnpm exec turbo run build --filter=web",
 	"headers": [
 		{
 			"source": "/(.*)",

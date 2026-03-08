@@ -1,6 +1,6 @@
 # SmartBeak — Premium AI-Powered Multi-Tenant Content Publishing SaaS
 
-SmartBeak is a production-ready, multi-tenant content publishing platform built on **Supastarter Pro** (Turborepo + Next.js 15 + Hono + Drizzle ORM + Supabase). It delivers a premium SaaS experience for domain portfolio management, AI-assisted content creation, multi-channel publishing, SEO tracking, and investor-grade diligence dashboards.
+SmartBeak is a staged-beta, multi-tenant content publishing platform built on **Supastarter Pro** (Turborepo + Next.js 15 + Hono + Drizzle ORM + Supabase). It delivers a premium SaaS experience for domain portfolio management, AI-assisted content creation, supported publishing workflows, SEO tracking, and operator-facing diligence review surfaces.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Cylosia/SmartBeak)
 
@@ -29,7 +29,7 @@ The monorepo is structured as follows:
 - `packages/api` — Hono + oRPC API server with all SmartBeak modules (domains, content, media, publishing, SEO, billing, audit, portfolio, onboarding, AI ideas, settings)
 - `packages/database` — Drizzle ORM + Prisma dual adapter
   - `drizzle/schema/smartbeak.ts` — **LOCKED v9 schema** (single source of truth)
-  - `drizzle/schema/postgres.ts` — Supastarter base tables
+  - `drizzle/schema/postgres.ts` — core SaaS tables
 - `packages/auth` — better-auth configuration
 - `packages/payments` — Stripe / Lemonsqueezy / Polar adapters
 - `packages/mail` — Resend / Nodemailer / Postmark adapters
@@ -45,15 +45,15 @@ The monorepo is structured as follows:
 ### Core Platform
 
 - **Multi-tenant organizations** with full RBAC (owner / admin / editor / viewer)
-- **Domain management** — DNS verification, registry info, health scores, transfer readiness
+- **Domain management** — recorded registry metadata, health snapshots, and deployment status
 - **Rich content editor** — Tiptap-powered with revision history and AI idea generation
-- **Media library** — S3-backed upload, lifecycle management, and analytics
-- **Publishing orchestration** — web themes, email via Resend, social adapters with retry and live status
+- **Media library** — S3-backed upload, storage, preview, and deletion workflows
+- **Publishing orchestration** — supported social adapters with retry and live status, plus gated setup for unfinished targets
 - **SEO tools** — per-domain SEO documents and keyword tracking
 
 ### Premium Dashboards
 
-- **Portfolio ROI Dashboard** — aggregate domain value, revenue, and ROI metrics
+- **Portfolio ROI Dashboard** — aggregate portfolio scoring, trend analysis, and ROI metrics
 - **Diligence Report** — per-domain checks, decay signals, and sell-readiness score
 - **Timeline** — chronological event history per domain
 - **Buyer Attribution** — session tracking and attribution for domain sale pipelines
@@ -64,7 +64,7 @@ The monorepo is structured as follows:
 - **Immutable Audit Log** — every mutation recorded via database trigger
 - **Onboarding Wizard** — step-by-step guided setup with progress tracking
 - **Feature Flags and Guardrails** — per-org feature toggles and abuse protection
-- **SmartDeploy Stub** — placeholder for the Replit Agent-powered deploy engine
+- **SmartDeploy** — standalone legacy deploy surface for domain/site generation and Vercel deployment workflows
 
 ### Developer Experience
 
@@ -99,7 +99,7 @@ The monorepo is structured as follows:
 
 ### Prerequisites
 
-- **Node.js** >= 22 (via `nvm` or `fnm`)
+- **Node.js** >= 20 (via `nvm` or `fnm`)
 - **pnpm** >= 9 (`npm install -g pnpm`)
 - **Docker** (for local PostgreSQL + MinIO via Docker Compose)
 
@@ -117,7 +117,7 @@ pnpm install
 docker-compose up -d
 ```
 
-This starts PostgreSQL on `localhost:5432`, MinIO on `localhost:9000`, and MailHog on `localhost:8025`.
+This starts PostgreSQL on `localhost:5432` and MinIO on `localhost:9000`.
 
 ### 3. Configure environment
 
@@ -129,7 +129,6 @@ Minimum required variables for local development:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/supastarter"
-DIRECT_URL="postgresql://postgres:postgres@localhost:5432/supastarter"
 NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 BETTER_AUTH_SECRET="any-random-32-char-string"
 S3_ACCESS_KEY_ID="minioadmin"
@@ -137,14 +136,13 @@ S3_SECRET_ACCESS_KEY="minioadmin"
 S3_ENDPOINT="http://localhost:9000"
 S3_REGION="us-east-1"
 NEXT_PUBLIC_AVATARS_BUCKET_NAME="avatars"
-NEXT_PUBLIC_MEDIA_BUCKET_NAME="media"
 OPENAI_API_KEY="sk-..."
 ```
 
 ### 4. Run database migrations
 
 ```bash
-# Push the Prisma schema (Supastarter base tables)
+# Push the Prisma schema (core SaaS tables)
 pnpm --filter @repo/database push
 
 # Push the Drizzle schema (SmartBeak v9 tables)
@@ -168,7 +166,6 @@ The app will be available at http://localhost:3000.
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string (with connection pooling) |
-| `DIRECT_URL` | Direct PostgreSQL connection string (for migrations) |
 | `NEXT_PUBLIC_SITE_URL` | Public URL of the application |
 | `BETTER_AUTH_SECRET` | Random secret for better-auth session signing |
 
@@ -207,7 +204,6 @@ The app will be available at http://localhost:3000.
 | `S3_ENDPOINT` | S3 endpoint URL (e.g., Supabase Storage endpoint) |
 | `S3_REGION` | S3 region |
 | `NEXT_PUBLIC_AVATARS_BUCKET_NAME` | Bucket for user avatars |
-| `NEXT_PUBLIC_MEDIA_BUCKET_NAME` | Bucket for SmartBeak media assets |
 
 ### AI
 
@@ -230,11 +226,11 @@ The app will be available at http://localhost:3000.
 
 SmartBeak uses a **dual-adapter** database strategy:
 
-- **Prisma** manages the Supastarter base tables (users, sessions, organizations, members, invitations, purchases).
+- **Prisma** manages the core SaaS tables (users, sessions, organizations, members, invitations, purchases).
 - **Drizzle ORM** manages the SmartBeak v9 tables (domains, content, media, publishing, SEO, billing, audit, portfolio, etc.).
 
 ```bash
-# Prisma (Supastarter base)
+# Prisma (core SaaS tables)
 pnpm --filter @repo/database migrate
 
 # Drizzle (SmartBeak v9)
@@ -254,8 +250,8 @@ pnpm --filter @repo/database drizzle:push
 1. Create a Supabase project at https://supabase.com. Copy the connection strings.
 2. Create storage buckets: `avatars` and `media`.
 3. Connect your GitHub repo to Vercel with these settings:
-   - **Root Directory:** `apps/web`
-   - **Build Command:** `cd ../.. && pnpm build --filter=web`
+   - **Root Directory:** repository root
+   - **Build Command:** `pnpm exec turbo run build --filter=web`
    - **Install Command:** `pnpm install`
 4. Add all environment variables to Vercel.
 5. Run migrations against Supabase:
@@ -294,11 +290,12 @@ Enforcement happens at three layers:
 
 ## SmartDeploy
 
-SmartDeploy is a planned one-click site deployment engine. The current implementation is a stub/placeholder accessible at `/app/[org]/smart-deploy`.
+SmartDeploy exists today as two separate surfaces in this repository:
 
-> **SmartDeploy engine will be implemented via Replit Agent.**
+- The main SaaS route at `/app/[org]/smart-deploy`, which provides the in-app SmartBeak experience.
+- A legacy standalone deploy surface under `client/` and `server/`, which manages themed static-site generation and Vercel deployments.
 
-The stub includes a premium card UI with a "Deploy Site" button and route scaffolding ready for the engine integration.
+The standalone legacy surface is still present in the repo and has been partially hardened during this audit, but its supporting client toolchain files are incomplete in this snapshot.
 
 ---
 
@@ -311,7 +308,7 @@ The stub includes a premium card UI with a "Deploy Site" button and route scaffo
 | `pnpm type-check` | TypeScript type checking across the monorepo |
 | `pnpm lint` | Biome linting across the monorepo |
 | `pnpm --filter @repo/database push` | Push Prisma schema to database |
-| `pnpm --filter @repo/database drizzle:push` | Push Drizzle schema to database |
+| `pnpm --filter @repo/database drizzle:push` | Push Drizzle-managed SmartBeak schema changes |
 | `pnpm --filter @repo/database studio` | Open Prisma Studio |
 
 ---
@@ -324,7 +321,7 @@ Proprietary — SmartBeak / Cylosia. All rights reserved.
 
 ## Phase 2A — SEO Intelligence & AI Content Module
 
-Phase 2A extends the SmartBeak MVP with a fully integrated, production-ready SEO Intelligence layer. All features are built on top of the existing v9 schema — no tables were added or modified.
+Phase 2A extends the SmartBeak MVP with an integrated SEO Intelligence layer. All features are built on top of the existing v9 schema — no tables were added or modified.
 
 ### New Features
 
@@ -336,8 +333,8 @@ Phase 2A extends the SmartBeak MVP with a fully integrated, production-ready SEO
 | **AI Content Idea Generator** | One-click generation of structured content ideas using the Vercel AI SDK. Each idea includes: title, meta description, full outline, target keywords, estimated read time, SEO score (0–100), and difficulty rating. Supports niche filtering and content type selection (article, listicle, guide, case study, comparison). |
 | **Real-time Content Optimizer** | Live SEO scoring panel that updates as you type (600 ms debounce). Scores title, body, keywords, readability, and meta description independently. Shows keyword density per target keyword, a full suggestions list with severity levels (info/warning/error), and an overall score ring. |
 | **Google Search Console Integration** | `syncGsc` procedure fetches keyword impressions, clicks, and average positions from the GSC Search Analytics API and upserts them into `keyword_tracking`. Includes a dialog UI for token and date range configuration. |
-| **Ahrefs Integration** | `syncAhrefs` procedure follows the same adapter pattern, importing keyword volume and difficulty from the Ahrefs Keywords Explorer API. |
-| **Daily SEO Report** | `getSeoReport` returns a structured domain-level or org-level report: top 10 keywords, decaying keywords, high-volume keywords, and per-domain summaries. Schedule via Supabase Edge Functions cron for automated daily delivery. |
+| **Ahrefs Integration** | The `syncAhrefs` procedure exists for manual/operator-driven imports, but the primary SmartBeak UI currently exposes Google Search Console sync as the supported SEO import flow. |
+| **Daily SEO Report** | `getSeoReport` returns a structured domain-level or org-level report: top 10 keywords, decaying keywords, high-volume keywords, and per-domain summaries. External scheduling is possible if you wire your own cron or job runner. |
 | **Org-level SEO Report Page** | `/[org]/seo-report` — table of all domains with SEO score progress bars, keyword counts, average positions, and decay badge counts. |
 | **Domain-level SEO Intelligence Page** | `/[org]/domains/[domainId]/seo-intelligence` — the full keyword dashboard with all tabs and action panels. |
 | **Materialized View** | `seo_dashboard_summary` materialized view (defined in v9 schema) is queried by `getSeoDashboardSummary()` for fast dashboard loads without full table scans. |
@@ -415,20 +412,20 @@ Phase 2A uses **only existing v9 schema tables**: `keyword_tracking`, `seo_metad
 
 ## Phase 2B — Full Publishing Suite
 
-Phase 2B adds a complete multi-platform publishing engine on top of the existing SmartBeak MVP, using only the locked v9 schema tables (`publish_targets`, `publishing_jobs`, `publish_attempts`, `webhook_events`, `integrations`).
+Phase 2B adds a multi-platform publishing workflow on top of the existing SmartBeak MVP, using only the locked v9 schema tables (`publish_targets`, `publishing_jobs`, `publish_attempts`, `webhook_events`, `integrations`).
 
 ### New Features
 
 | Feature | Description |
 |---|---|
-| **11 Platform Adapters** | Web, Email (Resend), LinkedIn, YouTube, TikTok, Instagram, Pinterest, Vimeo, Facebook, WordPress, SoundCloud — each with a typed adapter interface and encrypted credential storage |
-| **Email Series Builder** | Drag-and-drop multi-step drip sequence builder with Resend integration, per-step delay, subject, and HTML body |
+| **Supported Platform Adapters** | LinkedIn, Pinterest, Facebook, WordPress, and SoundCloud are currently exposed as configurable publishing targets with encrypted credential storage |
+| **Email Series Builder (Planned)** | Email series automation is not generally available yet; the current surface is guarded until per-step content and recipient modeling is implemented safely |
 | **Bulk Scheduling** | Schedule multiple content items across multiple platforms in a single form submission |
 | **Publishing Calendar** | Monthly calendar view showing all scheduled jobs per day, colour-coded by platform |
 | **Unified Dashboard** | Org-level view of all publishing jobs with status summary, platform breakdown, and per-job execute/retry controls |
-| **Post-Publish Analytics** | Per-platform views, clicks, engagement, impressions, and CTR with bar charts and breakdown table |
+| **Post-Publish Analytics** | Not currently available in the SmartBeak UI because adapters do not yet ingest post-performance metrics such as views, clicks, engagement, or impressions |
 | **Retry + DLQ** | Automatic retry on failure; dead-letter queue UI for reviewing, retrying, and bulk-retrying failed jobs and webhook events |
-| **Platform Target Manager** | Configure and toggle all 11 platforms per domain with encrypted API key storage |
+| **Platform Target Manager** | Configure and toggle supported publishing targets per domain with encrypted credential storage |
 
 ### New Files
 
@@ -436,13 +433,13 @@ Phase 2B adds a complete multi-platform publishing engine on top of the existing
 packages/database/drizzle/queries/publishing-suite.ts   <- DB queries
 packages/database/drizzle/zod-publishing-suite.ts       <- Zod schemas
 packages/api/modules/smartbeak/publishing-suite/
-  adapters/index.ts                                      <- 11 platform adapters
+  adapters/index.ts                                      <- adapter registry (supported and gated targets)
   procedures/execute-job.ts                              <- Job executor
   procedures/bulk-schedule.ts                            <- Bulk scheduler
   procedures/get-calendar.ts                             <- Calendar data
   procedures/get-unified-dashboard.ts                    <- Unified dashboard
-  procedures/get-analytics.ts                            <- Post-publish analytics
-  procedures/email-series.ts                             <- Resend email series
+  procedures/get-analytics.ts                            <- reserved analytics endpoint (UI currently unavailable)
+  procedures/email-series.ts                             <- guarded placeholder (not yet available)
   procedures/manage-targets.ts                           <- Platform target CRUD
   procedures/dlq.ts                                      <- DLQ list/retry/replay
   router.ts                                              <- Router
@@ -486,10 +483,10 @@ No v9 schema tables were modified. All Phase 2B features use existing tables:
 
 | Feature | Description |
 |---|---|
-| **Portfolio ROI Dashboard** | Risk-adjusted scoring, total value estimate, performance trends, and Recharts visualisations |
-| **Diligence Engine** | Automated ownership, legal, financial, traffic, content, technical, brand, and monetisation checks with manual override |
-| **Sell-Ready Score** | Composite 0–100 score with breakdown by dimension and prioritised improvement recommendations |
-| **Buyer Attribution** | Session tracking, conversion rate, intent breakdown pie chart, daily trend area chart, per-session table |
+| **Portfolio ROI Dashboard** | Risk-adjusted scoring, aggregate portfolio score, performance trends, and Recharts visualisations |
+| **Diligence Engine** | Recorded ownership, legal, financial, traffic, content, technical, brand, and monetisation checks with manual review controls |
+| **Sell-Readiness Estimate** | Composite 0–100 estimate with breakdown by dimension and prioritised improvement recommendations |
+| **Buyer Attribution** | Recorded buyer sessions, identified buyer/email capture metrics, intent breakdown pie chart, daily trend area chart, per-session table |
 | **Advanced Analytics Overview** | Portfolio health radar, monetisation decay bar chart, decay signals table with risk badges |
 | **Materialized View Helpers** | `refreshPortfolioSummaries()` and `refreshBuyerAttributionView()` for fast dashboard queries |
 
@@ -500,14 +497,14 @@ No v9 schema tables were modified. All Phase 2B features use existing tables:
 | `packages/database/drizzle/queries/analytics-roi.ts` | All Phase 2C DB query functions |
 | `packages/database/drizzle/zod-analytics-roi.ts` | Zod schemas for all Phase 2C inputs/outputs |
 | `packages/api/modules/smartbeak/analytics-roi/procedures/get-portfolio-roi.ts` | Portfolio ROI + timeline procedure |
-| `packages/api/modules/smartbeak/analytics-roi/procedures/diligence-engine.ts` | Run diligence, get report, update check |
-| `packages/api/modules/smartbeak/analytics-roi/procedures/sell-ready-score.ts` | Sell-ready score + recommendations |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/diligence-engine.ts` | Run diligence, get report, and update recorded review checks |
+| `packages/api/modules/smartbeak/analytics-roi/procedures/sell-ready-score.ts` | Sell-readiness estimate + recommendations |
 | `packages/api/modules/smartbeak/analytics-roi/procedures/buyer-attribution.ts` | Domain + org-level buyer attribution |
 | `packages/api/modules/smartbeak/analytics-roi/procedures/analytics-views.ts` | Overview, monetisation decay, materialized view refresh |
 | `packages/api/modules/smartbeak/analytics-roi/router.ts` | Analytics ROI router |
 | `apps/web/modules/smartbeak/analytics-roi/components/PortfolioRoiDashboard.tsx` | Portfolio ROI dashboard |
-| `apps/web/modules/smartbeak/analytics-roi/components/DiligenceEngineView.tsx` | Diligence engine with manual override |
-| `apps/web/modules/smartbeak/analytics-roi/components/SellReadyPanel.tsx` | Sell-ready score ring + recommendations |
+| `apps/web/modules/smartbeak/analytics-roi/components/DiligenceEngineView.tsx` | Diligence engine with recorded review controls |
+| `apps/web/modules/smartbeak/analytics-roi/components/SellReadyPanel.tsx` | Sell-readiness estimate panel + recommendations |
 | `apps/web/modules/smartbeak/analytics-roi/components/BuyerAttributionView.tsx` | Buyer attribution charts + session table |
 | `apps/web/modules/smartbeak/analytics-roi/components/AdvancedAnalyticsOverview.tsx` | Radar + decay bar + decay table |
 | `apps/web/app/.../analytics/page.tsx` | Org-level analytics page (3 tabs) |
@@ -523,14 +520,14 @@ Only existing v9 tables used: `portfolio_summaries`, `diligence_checks`, `buyer_
 ## Phase 2D — Growth & Marketing Layer
 
 ### Overview
-Phase 2D adds the complete growth and marketing infrastructure: a premium public marketing site, waitlist system with referral tracking, referral program with rewards, polished onboarding email sequences, and full launch assets.
+Phase 2D adds the growth and marketing infrastructure: a public marketing site, waitlist system with referral tracking, admin-managed referral reward state, onboarding emails, and launch assets.
 
 ### New Database Tables
 
 | Table | Description |
 |---|---|
 | `waitlist_entries` | Email waitlist with referral codes, status, and join timestamp |
-| `referrals` | Referral tracking linking referrer → referred user with reward state |
+| `referrals` | Referral tracking linking referrer → referred user, plus admin-managed reward state |
 
 > These are new Drizzle tables in `packages/database/drizzle/schema/growth.ts`. The locked v9 `smartbeak.ts` is untouched.
 
@@ -567,22 +564,22 @@ Phase 2D adds the complete growth and marketing infrastructure: a premium public
 
 ```bash
 # Waitlist & Referrals (no new vars needed — uses existing Resend + DB)
-NEXT_PUBLIC_APP_URL=https://your-domain.com   # Used to generate referral links
+NEXT_PUBLIC_SITE_URL=https://your-domain.com   # Used to generate referral links
 ```
 
 ### Launch Instructions
 
 1. Deploy to Vercel and set all environment variables
-2. Run `pnpm drizzle:push` to create the `waitlist_entries` and `referrals` tables
+2. Run `pnpm --filter @repo/database drizzle:push` to create the `waitlist_entries` and `referrals` tables
 3. Visit `/launch` for the complete launch checklist, Loom script, and social templates
 4. Share `/waitlist` to start collecting early access signups
 5. Approve waitlist entries via the admin API (`growth.approveWaitlistEntry`)
-6. Onboarding emails are sent automatically via Resend when a user activates their account
+6. The first onboarding email is sent immediately via Resend when a user activates their account; later onboarding steps require an admin/queue trigger
 
 ### Referral Program
 
 - Each user gets a unique referral code stored in `waitlist_entries.referralCode`
 - Referral links are `{APP_URL}/waitlist?ref={code}`
 - When a referred user signs up, a `referrals` record is created
-- Rewards are granted manually or automatically via `growth.grantReward`
+- Rewards are granted by an admin via `growth.grantReward`
 - Leaderboard available via `growth.getReferralLeaderboard`

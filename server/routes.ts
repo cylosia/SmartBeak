@@ -16,7 +16,33 @@ function log(message: string, source = "routes") {
 	console.log(`${timestamp} [${source}] ${message}`);
 }
 
+function isPublicApiRoute(req: Request): boolean {
+	return (
+		req.method === "GET" &&
+		(req.path === "/themes" || /^\/themes\/[^/]+\/preview$/.test(req.path))
+	);
+}
+
+const domainNameSchema = z
+	.string()
+	.trim()
+	.min(1, "Domain name is required")
+	.max(253, "Domain name is too long")
+	.regex(
+		/^(?=.{1,253}$)(?:(?!-)[a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$/i,
+		"Invalid domain name",
+	);
+
+function normalizeDomainName(value: string): string {
+	return domainNameSchema.parse(value).toLowerCase();
+}
+
 function requireApiKey(req: Request, res: Response, next: NextFunction): void {
+	if (isPublicApiRoute(req)) {
+		next();
+		return;
+	}
+
 	const apiKey = req.headers["x-api-key"];
 	const expected = process.env.SERVER_API_KEY;
 	if (!expected) {
@@ -68,8 +94,10 @@ export async function registerRoutes(
 			if (!domain) {
 				return res.status(404).json({ message: "Domain not found" });
 			}
-			const shards = await storage.getSiteShards(domain.id);
-			const latestShard = shards[0] || null;
+			const [shards, latestShard] = await Promise.all([
+				storage.getSiteShards(domain.id),
+				storage.getLatestSiteShard(domain.id),
+			]);
 			res.json({ ...domain, shards, latestShard });
 		} catch (err) {
 			log(
@@ -83,7 +111,10 @@ export async function registerRoutes(
 	app.post("/api/domains", async (req, res) => {
 		try {
 			const parsed = insertDomainSchema.parse(req.body);
-			const domain = await storage.createDomain(parsed);
+			const domain = await storage.createDomain({
+				...parsed,
+				name: normalizeDomainName(parsed.name),
+			});
 			await storage.createAuditLog({
 				action: "domain_created",
 				entityType: "domain",
@@ -108,7 +139,13 @@ export async function registerRoutes(
 			}
 			const updateSchema = insertDomainSchema.partial();
 			const parsed = updateSchema.parse(req.body);
-			const updated = await storage.updateDomain(req.params.id, parsed);
+			const updated = await storage.updateDomain(req.params.id, {
+				...parsed,
+				name:
+					typeof parsed.name === "string"
+						? normalizeDomainName(parsed.name)
+						: parsed.name,
+			});
 			res.json(updated);
 		} catch (err) {
 			log(
@@ -145,6 +182,16 @@ export async function registerRoutes(
 				return res.status(404).json({ message: "Domain not found" });
 			}
 
+			const latestShard = await storage.getLatestSiteShard(domain.id);
+			if (
+				latestShard &&
+				["pending", "building", "deploying"].includes(latestShard.status)
+			) {
+				return res.status(409).json({
+					message: "A deployment is already in progress for this domain.",
+				});
+			}
+
 			const themeSchema = z.object({
 				theme: z.enum(THEME_OPTIONS).optional(),
 			});
@@ -164,11 +211,13 @@ export async function registerRoutes(
 			);
 			res.status(201).json(shard);
 		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : "Deployment failed.";
 			log(
 				`POST /api/domains/:id/deploy failed: ${err instanceof Error ? err.message : String(err)}`,
 				"error",
 			);
-			res.status(500).json({ message: "Deployment failed." });
+			res.status(500).json({ message });
 		}
 	});
 
@@ -211,7 +260,11 @@ export async function registerRoutes(
 			if (!THEME_OPTIONS.includes(theme)) {
 				return res.status(400).json({ message: "Invalid theme" });
 			}
-			const domainName = (req.query.domain as string) || "example.com";
+			const requestedDomain =
+				typeof req.query.domain === "string"
+					? req.query.domain
+					: "example.com";
+			const domainName = normalizeDomainName(requestedDomain);
 			const html = generateThemeHtml(theme, domainName);
 			res.setHeader("Content-Type", "text/html");
 			res.send(html);
@@ -226,10 +279,17 @@ export async function registerRoutes(
 
 	app.get("/api/audit-logs", async (req, res) => {
 		try {
-			const logs = await storage.getAuditLogs(
-				req.query.entityType as string,
-				req.query.entityId as string,
-			);
+			const domainId =
+				typeof req.query.domainId === "string" ? req.query.domainId : undefined;
+			const entityType =
+				typeof req.query.entityType === "string"
+					? req.query.entityType
+					: undefined;
+			const entityId =
+				typeof req.query.entityId === "string" ? req.query.entityId : undefined;
+			const logs = domainId
+				? await storage.getAuditLogsForDomain(domainId)
+				: await storage.getAuditLogs(entityType, entityId);
 			res.json(logs);
 		} catch (err) {
 			log(

@@ -1,9 +1,9 @@
 "use client";
 
+import { LocaleLink } from "@i18n/routing";
 import { Badge } from "@repo/ui/components/badge";
 import { Button } from "@repo/ui/components/button";
 import { CheckIcon } from "lucide-react";
-import Link from "next/link";
 
 const PLANS = [
 	{
@@ -19,7 +19,7 @@ const PLANS = [
 			"3 publishing platforms",
 			"Basic SEO tracking (10 keywords/domain)",
 			"Media library (5 GB)",
-			"Email publishing via Resend",
+			"Supported publishing targets",
 			"Standard support",
 		],
 		cta: "Join Waitlist",
@@ -35,14 +35,14 @@ const PLANS = [
 		features: [
 			"Up to 25 domains",
 			"AI content ideas (unlimited)",
-			"All 11 publishing platforms",
+			"Supported publishing platforms",
 			"Advanced SEO Intelligence",
 			"Portfolio ROI Dashboard",
-			"Diligence Engine + Sell-Ready Score",
+			"Diligence Engine + Sell-Readiness Estimate",
 			"Buyer attribution tracking",
 			"Media library (50 GB)",
-			"Email series builder",
-			"Priority support",
+			"Publishing calendar + retry controls",
+			"Beta onboarding support",
 		],
 		cta: "Join Waitlist",
 		href: "/waitlist",
@@ -59,11 +59,11 @@ const PLANS = [
 			"Unlimited domains",
 			"Multi-tenant client workspaces",
 			"Full RBAC (owner/admin/editor/viewer)",
-			"White-label ready",
-			"Custom analytics reports",
+			"Expanded organization controls",
+			"Portfolio and billing analytics surfaces",
 			"API access",
-			"SLA + dedicated support",
-			"SmartDeploy early access",
+			"Enterprise rollout planning",
+			"SmartDeploy configuration support",
 		],
 		cta: "Contact Sales",
 		href: "/waitlist",
@@ -79,8 +79,8 @@ export function SmartBeakPricing() {
 						Simple, transparent pricing
 					</h2>
 					<p className="mt-4 text-lg text-foreground/60">
-						Start free during the beta. Founding members lock in 40%
-						off for life.
+						Pricing is shown for beta planning while access is
+						still managed through the waitlist.
 					</p>
 				</div>
 
@@ -148,7 +148,7 @@ export function SmartBeakPricing() {
 									variant={highlight ? "primary" : "outline"}
 									className="w-full"
 								>
-									<Link href={href}>{cta}</Link>
+									<LocaleLink href={href}>{cta}</LocaleLink>
 								</Button>
 							</div>
 						),
@@ -156,8 +156,9 @@ export function SmartBeakPricing() {
 				</div>
 
 				<p className="mt-8 text-center text-sm text-foreground/40">
-					All plans include a 14-day free trial. No credit card
-					required to join the waitlist.
+					Pricing is shown for beta planning and may change before
+					general availability. No credit card is required to join
+					the waitlist.
 				</p>
 			</div>
 		</section>

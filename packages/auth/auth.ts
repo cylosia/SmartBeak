@@ -49,6 +49,16 @@ if (process.env.VERCEL_BRANCH_URL) {
 	trustedOrigins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
 }
 const uniqueOrigins = [...new Set(trustedOrigins)];
+const INACTIVE_SUBSCRIPTION_STATUSES = new Set([
+	"canceled",
+	"cancelled",
+	"expired",
+	"unpaid",
+	"past_due",
+	"incomplete",
+	"incomplete_expired",
+	"paused",
+]);
 
 export const auth = betterAuth({
 	baseURL: appUrl,
@@ -115,7 +125,10 @@ export const auth = betterAuth({
 					const subscriptions = purchases.filter(
 						(purchase) =>
 							purchase.type === "SUBSCRIPTION" &&
-							purchase.subscriptionId !== null,
+							purchase.subscriptionId !== null &&
+							!INACTIVE_SUBSCRIPTION_STATUSES.has(
+								purchase.status ?? "",
+							),
 					);
 
 					if (subscriptions.length > 0) {

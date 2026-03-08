@@ -21,7 +21,7 @@ export function EmailVerification({
 	});
 
 	return (
-		<Wrapper>
+		<Wrapper locale={locale}>
 			<Text>{t("mail.emailVerification.body", { name })}</Text>
 
 			<PrimaryButton href={url}>

@@ -94,6 +94,15 @@ export const createCheckoutLink = protectedProcedure
 				price && "trialPeriodDays" in price
 					? price.trialPeriodDays
 					: undefined;
+			const expectedCheckoutType =
+				price?.type === "one-time" ? "one-time" : "subscription";
+
+			if (price && type !== expectedCheckoutType) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"Selected product does not support the requested checkout type.",
+				});
+			}
 
 			const organization = organizationId
 				? await getOrganizationById(organizationId)

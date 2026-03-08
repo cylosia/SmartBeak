@@ -22,6 +22,7 @@ export async function getOrganizations({
 			? (org, { ilike, or }) =>
 					or(ilike(org.name, `%${escapeLikePattern(query)}%`))
 			: undefined,
+		orderBy: (org, { desc }) => [desc(org.createdAt)],
 		limit,
 		offset,
 		extras: {
@@ -92,7 +93,9 @@ export async function getOrganizationWithPurchasesAndMembersCount(
 	return db.query.organization.findFirst({
 		where: (org, { eq }) => eq(org.id, organizationId),
 		with: {
-			purchases: true,
+			purchases: {
+				orderBy: (purchase, { desc }) => [desc(purchase.createdAt)],
+			},
 		},
 		extras: {
 			membersCount:

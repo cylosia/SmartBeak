@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
-	createPurchase,
+	createPurchaseWithCustomer,
 	deletePurchaseBySubscriptionId,
 	updatePurchaseBySubscriptionId,
 } from "@repo/database";
@@ -15,6 +15,45 @@ import type {
 	SetSubscriptionSeats,
 	WebhookHandler,
 } from "../../types";
+
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+async function readRequestTextWithLimit(
+	req: Request,
+	maxBytes: number,
+): Promise<string> {
+	const contentLength = req.headers.get("content-length");
+	if (contentLength) {
+		const parsedLength = Number.parseInt(contentLength, 10);
+		if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+	}
+
+	const reader = req.body?.getReader();
+	if (!reader) {
+		throw new Error("Invalid request body");
+	}
+
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+		totalBytes += value.byteLength;
+		if (totalBytes > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+		text += decoder.decode(value, { stream: true });
+	}
+
+	text += decoder.decode();
+	return text;
+}
 
 export function creemFetch(path: string, init: Parameters<typeof fetch>[1]) {
 	const creemApiKey = requireEnv("CREEM_API_KEY");
@@ -167,11 +206,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		return new Response("Internal server error.", { status: 500 });
 	}
 
-	const bodyText = await req.text();
-	const MAX_WEBHOOK_BODY = 256 * 1024;
-	if (bodyText.length > MAX_WEBHOOK_BODY) {
-		return new Response("Payload too large.", { status: 413 });
-	}
+	const bodyText = await readRequestTextWithLimit(
+		req,
+		MAX_WEBHOOK_BODY_BYTES,
+	);
 
 	const computedSignature = createHmac("sha256", secret)
 		.update(bodyText)
@@ -216,13 +254,20 @@ export const webhookHandler: WebhookHandler = async (req) => {
 					break;
 				}
 
-				await createPurchase({
-					organizationId: metadata?.organization_id || null,
-					userId: metadata?.user_id || null,
-					customerId: customer as string,
-					type: "ONE_TIME",
-					productId: product.id,
-				});
+				await createPurchaseWithCustomer(
+					{
+						organizationId: metadata?.organization_id || null,
+						userId: metadata?.user_id || null,
+						customerId: customer as string,
+						type: "ONE_TIME",
+						productId: product.id,
+					},
+					{
+						customerId: customer as string,
+						organizationId: metadata?.organization_id,
+						userId: metadata?.user_id,
+					},
+				);
 
 				break;
 			}
@@ -235,14 +280,21 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				});
 
 				if (!updated) {
-					await createPurchase({
-						subscriptionId: id,
-						customerId: customer.id,
-						type: "SUBSCRIPTION",
-						productId: product.id,
-						organizationId: metadata?.organization_id || null,
-						userId: metadata?.user_id || null,
-					});
+					await createPurchaseWithCustomer(
+						{
+							subscriptionId: id,
+							customerId: customer.id,
+							type: "SUBSCRIPTION",
+							productId: product.id,
+							organizationId: metadata?.organization_id || null,
+							userId: metadata?.user_id || null,
+						},
+						{
+							customerId: customer.id,
+							organizationId: metadata?.organization_id,
+							userId: metadata?.user_id,
+						},
+					);
 				}
 
 				break;
@@ -264,6 +316,14 @@ export const webhookHandler: WebhookHandler = async (req) => {
 		}
 		return new Response(null, { status: 204 });
 	} catch (error) {
+		if (
+			error instanceof Error &&
+			error.message === "Webhook payload too large"
+		) {
+			return new Response("Payload too large.", {
+				status: 413,
+			});
+		}
 		logger.error("Creem webhook processing error", error);
 		return new Response("Webhook processing failed", {
 			status: 400,

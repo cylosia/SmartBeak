@@ -34,14 +34,30 @@ export const GET = async (
 		return new Response("Invalid path", { status: 400 });
 	}
 
+	if (fileSegments.length !== 1 && fileSegments.length < 3) {
+		return new Response("Invalid path", { status: 400 });
+	}
+
+	const orgs = await auth.api.listOrganizations({
+		headers: req.headers,
+	});
+	const orgIds = new Set(
+		(orgs as Array<{ id: string }>).map((org) => org.id),
+	);
+
+	if (fileSegments.length === 1) {
+		const objectId = fileSegments[0]?.replace(/\.[^.]+$/, "");
+		const isOwnAvatar = objectId === session.user.id;
+		const isOrgLogo = objectId ? orgIds.has(objectId) : false;
+
+		if (!isOwnAvatar && !isOrgLogo) {
+			return new Response("Forbidden", { status: 403 });
+		}
+	}
+
 	if (fileSegments.length >= 3) {
 		const orgId = fileSegments[0];
-		const orgs = await auth.api.listOrganizations({
-			headers: req.headers,
-		});
-		const isMember = (orgs as Array<{ id: string }>).some(
-			(o) => o.id === orgId,
-		);
+		const isMember = orgIds.has(orgId);
 		if (!isMember) {
 			return new Response("Forbidden", { status: 403 });
 		}

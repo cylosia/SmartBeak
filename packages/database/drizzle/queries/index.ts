@@ -10,7 +10,6 @@ export {
 	getSellReadyScore,
 	PORTFOLIO_ROI_MATERIALIZED_VIEW_SQL,
 	REFRESH_PORTFOLIO_ROI_VIEW_SQL,
-	runDiligenceChecksForDomain,
 	upsertDiligenceCheck,
 } from "./analytics-roi";
 export * from "./enterprise";

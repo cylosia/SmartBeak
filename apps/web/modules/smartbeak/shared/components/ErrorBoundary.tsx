@@ -17,11 +17,16 @@ function reportErrorToServer(error: Error, componentStack?: string | null) {
 	try {
 		void fetch("/api/client-error", {
 			method: "POST",
+			keepalive: true,
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
 				message: error.message,
 				stack: error.stack?.slice(0, 2000),
 				componentStack: componentStack?.slice(0, 2000),
+				path:
+					typeof window !== "undefined"
+						? window.location.pathname
+						: undefined,
 			}),
 		}).catch(() => {});
 	} catch {

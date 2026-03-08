@@ -47,11 +47,19 @@ import {
 	ZoomInIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CopilotAction } from "./AiCopilotExtension";
+import {
+	type CopilotAction,
+	setCopilotSuggestion,
+} from "./AiCopilotExtension";
 
 interface AiCopilotToolbarProps {
 	editor: Editor | null;
 	documentTitle?: string;
+	requestedAction?: {
+		id: number;
+		action: CopilotAction;
+	} | null;
+	onRequestedActionHandled?: (id: number) => void;
 }
 
 const ACTION_META: Record<
@@ -106,6 +114,8 @@ const TONE_OPTIONS = [
 export function AiCopilotToolbar({
 	editor,
 	documentTitle,
+	requestedAction,
+	onRequestedActionHandled,
 }: AiCopilotToolbarProps) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [activeAction, setActiveAction] = useState<CopilotAction | null>(
@@ -115,6 +125,27 @@ export function AiCopilotToolbar({
 	const [showResult, setShowResult] = useState(false);
 	const [hasSelection, setHasSelection] = useState(false);
 	const abortRef = useRef<AbortController | null>(null);
+	const resultTargetRef = useRef<{
+		from: number;
+		to: number;
+		empty: boolean;
+	} | null>(null);
+
+	useEffect(() => {
+		return () => {
+			abortRef.current?.abort();
+			abortRef.current = null;
+		};
+	}, []);
+
+	useEffect(() => {
+		if (!requestedAction) {
+			return;
+		}
+
+		void runAction(requestedAction.action);
+		onRequestedActionHandled?.(requestedAction.id);
+	}, [onRequestedActionHandled, requestedAction, runAction]);
 
 	// Track selection state
 	useEffect(() => {
@@ -144,6 +175,7 @@ export function AiCopilotToolbar({
 			abortRef.current = controller;
 
 			const { from, to, empty } = editor.state.selection;
+			resultTargetRef.current = { from, to, empty };
 			const selectedText = empty
 				? editor.getText().slice(Math.max(0, from - 500), from)
 				: editor.state.doc.textBetween(from, to, " ");
@@ -156,6 +188,7 @@ export function AiCopilotToolbar({
 			setShowResult(false);
 
 			try {
+				let shouldClearAction = true;
 				const response = await fetch("/api/ai/stream/copilot", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -191,12 +224,16 @@ export function AiCopilotToolbar({
 				}
 
 				if (action === "suggest") {
-					// For suggestions, insert ghost text
-					editor.commands.insertCopilotResult(fullText);
+					// Suggestions should stay as ghost text until the user accepts them.
+					setCopilotSuggestion(editor, fullText, from);
 				} else {
 					// For other actions, show the result in a popover for review
 					setResultText(fullText);
 					setShowResult(true);
+					shouldClearAction = false;
+				}
+				if (shouldClearAction) {
+					setActiveAction(null);
 				}
 			} catch (err) {
 				if ((err as Error).name !== "AbortError") {
@@ -205,9 +242,9 @@ export function AiCopilotToolbar({
 						"AI co-pilot request failed. Please try again.",
 					);
 				}
+				setActiveAction(null);
 			} finally {
 				setIsLoading(false);
-				setActiveAction(null);
 			}
 		},
 		[editor, documentTitle],
@@ -217,14 +254,29 @@ export function AiCopilotToolbar({
 		if (!editor || !resultText) {
 			return;
 		}
-		editor.commands.insertCopilotResult(resultText);
+
+		const target = resultTargetRef.current;
+		if (target) {
+			const tr = editor.state.tr.insertText(
+				resultText,
+				target.from,
+				target.empty ? target.from : target.to,
+			);
+			editor.view.dispatch(tr);
+		} else {
+			editor.commands.insertCopilotResult(resultText);
+		}
 		setShowResult(false);
 		setResultText(null);
+		setActiveAction(null);
+		resultTargetRef.current = null;
 	}, [editor, resultText]);
 
 	const dismissResult = useCallback(() => {
 		setShowResult(false);
 		setResultText(null);
+		setActiveAction(null);
+		resultTargetRef.current = null;
 		abortRef.current?.abort();
 	}, []);
 

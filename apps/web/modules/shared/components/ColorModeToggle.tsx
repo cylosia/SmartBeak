@@ -13,42 +13,50 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useIsClient } from "usehooks-ts";
 
+const COLOR_MODE_OPTIONS = [
+	{
+		value: "system",
+		icon: MonitorCogIcon,
+	},
+	{
+		value: "light",
+		icon: SunIcon,
+	},
+	{
+		value: "dark",
+		icon: MoonIcon,
+	},
+] as const;
+
+type ColorModeValue = (typeof COLOR_MODE_OPTIONS)[number]["value"];
+
+function normalizeColorMode(value: string | undefined): ColorModeValue {
+	return COLOR_MODE_OPTIONS.some((option) => option.value === value)
+		? (value as ColorModeValue)
+		: "system";
+}
+
 export function ColorModeToggle() {
 	const { setTheme, theme } = useTheme();
-	const [value, setValue] = useState<string>(theme ?? "system");
+	const [value, setValue] = useState<ColorModeValue>(
+		normalizeColorMode(theme),
+	);
 	const isClient = useIsClient();
 	const t = useTranslations();
 
-	const colorModeOptions = [
-		{
-			value: "system",
-			icon: MonitorCogIcon,
-		},
-		{
-			value: "light",
-			icon: SunIcon,
-		},
-		{
-			value: "dark",
-			icon: MoonIcon,
-		},
-	] as const;
-
 	useEffect(() => {
-		if (theme) {
-			setValue(theme);
-		}
+		setValue(normalizeColorMode(theme));
 	}, [theme]);
 
 	if (!isClient) {
 		return null;
 	}
 
-	const activeIndex = colorModeOptions.findIndex(
+	const activeIndex = COLOR_MODE_OPTIONS.findIndex(
 		(option) => option.value === value,
 	);
 
-	const handleClick = (optionValue: string) => {
+	const handleClick = (optionValue: ColorModeValue) => {
 		setTheme(optionValue);
 		setValue(optionValue);
 	};
@@ -69,7 +77,7 @@ export function ColorModeToggle() {
 				/>
 
 				{/* Icons */}
-				{colorModeOptions.map((option) => {
+				{COLOR_MODE_OPTIONS.map((option) => {
 					const Icon = option.icon;
 					const isActive = option.value === value;
 					const label = t(`common.colorMode.${option.value}`);

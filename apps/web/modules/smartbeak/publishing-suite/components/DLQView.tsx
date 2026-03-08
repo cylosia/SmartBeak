@@ -24,10 +24,37 @@ import {
 	RotateCcwIcon,
 	WebhookIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EmptyState } from "@/modules/smartbeak/shared/components/EmptyState";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { TableSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
+}
+
+const UNSUPPORTED_TARGET_MESSAGES: Partial<Record<string, string>> = {
+	web: "Use SmartDeploy directly instead of the publishing queue.",
+	email:
+		"Email publishing is unavailable because the queue does not safely model recipients or per-message content.",
+	youtube:
+		"YouTube publishing is unavailable because the queue cannot upload required video assets.",
+	instagram:
+		"Instagram publishing is unavailable because the queue cannot attach required media assets.",
+	tiktok:
+		"TikTok publishing is unavailable because the queue cannot attach required video assets.",
+	vimeo:
+		"Vimeo publishing is unavailable because the queue cannot attach required video assets.",
+};
 
 export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 	const queryClient = useQueryClient();
@@ -95,6 +122,21 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 				),
 		}),
 	);
+
+	useEffect(() => {
+		const visibleJobIds = new Set(
+			(dlqJobsQuery.data?.jobs ?? []).map((job: { id: string }) => job.id),
+		);
+		setSelectedJobIds((current) => {
+			if (current.size === 0) {
+				return current;
+			}
+			const next = new Set(
+				Array.from(current).filter((id) => visibleJobIds.has(id)),
+			);
+			return next.size === current.size ? current : next;
+		});
+	}, [dlqJobsQuery.data?.jobs]);
 
 	const toggleJobSelection = (id: string) => {
 		setSelectedJobIds((s) => {
@@ -185,8 +227,8 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 						) : !dlqJobsQuery.data?.jobs?.length ? (
 							<EmptyState
 								icon={RefreshCwIcon}
-								title="No failed jobs"
-								description="All publishing jobs are healthy."
+								title="No failed jobs recorded"
+								description="No failed publishing jobs are currently listed in the dead-letter queue."
 							/>
 						) : (
 							<div className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -207,11 +249,20 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 																			.data
 																			?.jobs ??
 																		[]
-																	).map(
+													)
+														.filter(
+															(j: {
+																target: string;
+															}) =>
+																!UNSUPPORTED_TARGET_MESSAGES[
+																	j.target
+																],
+														)
+														.map(
 																		(j: {
-																			id: string;
+															id: string;
 																		}) =>
-																			j.id,
+															j.id,
 																	),
 																),
 															);
@@ -238,8 +289,13 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 												target: string;
 												error: string | null;
 												createdAt: Date | string;
-											}) => (
-												<TableRow key={job.id}>
+											}) => {
+												const unsupportedMessage =
+													UNSUPPORTED_TARGET_MESSAGES[
+														job.target
+													];
+												return (
+													<TableRow key={job.id}>
 													<TableCell>
 														<input
 															type="checkbox"
@@ -247,6 +303,9 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 															aria-label={`Select failed job ${job.target}`}
 															checked={selectedJobIds.has(
 																job.id,
+															)}
+															disabled={Boolean(
+																unsupportedMessage,
 															)}
 															onChange={() =>
 																toggleJobSelection(
@@ -260,15 +319,13 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 													</TableCell>
 													<TableCell className="max-w-[300px] truncate text-xs text-red-500 dark:text-red-400">
 														{job.error ??
+															unsupportedMessage ??
 															"Unknown error"}
 													</TableCell>
 													<TableCell className="text-sm text-muted-foreground">
-														{formatDistanceToNow(
-															new Date(
-																job.createdAt,
-															),
-															{ addSuffix: true },
-														)}
+														{formatRelativeDate(
+															job.createdAt,
+														) ?? "—"}
 													</TableCell>
 													<TableCell className="text-right">
 														<Button
@@ -276,6 +333,9 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 															variant="outline"
 															className="h-7 gap-1 text-xs"
 															disabled={
+																Boolean(
+																	unsupportedMessage,
+																) ||
 																retryJobMutation.isPending
 															}
 															onClick={() =>
@@ -288,11 +348,14 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 															}
 														>
 															<RotateCcwIcon className="h-3 w-3" />
-															Retry
+															{unsupportedMessage
+																? "Unsupported"
+																: "Retry"}
 														</Button>
 													</TableCell>
-												</TableRow>
-											),
+													</TableRow>
+												);
+											},
 										)}
 									</TableBody>
 								</Table>
@@ -321,8 +384,8 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 						) : !dlqWebhooksQuery.data?.events?.length ? (
 							<EmptyState
 								icon={WebhookIcon}
-								title="No failed webhooks"
-								description="All webhook events have been processed."
+								title="No failed webhooks recorded"
+								description="No failed webhook events are currently listed in the dead-letter queue."
 							/>
 						) : (
 							<div className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -365,12 +428,9 @@ export function DLQView({ organizationSlug }: { organizationSlug: string }) {
 														{event.replayCount ?? 0}
 													</TableCell>
 													<TableCell className="text-sm text-muted-foreground">
-														{formatDistanceToNow(
-															new Date(
-																event.createdAt,
-															),
-															{ addSuffix: true },
-														)}
+														{formatRelativeDate(
+															event.createdAt,
+														) ?? "—"}
 													</TableCell>
 													<TableCell className="text-right">
 														<Button

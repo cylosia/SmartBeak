@@ -70,6 +70,47 @@ interface DiligenceData {
 	timeline?: TimelineEvent[];
 }
 
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatRelativeDate(value: unknown) {
+	const parsed = parseValidDate(value);
+	return parsed ? formatDistanceToNow(parsed, { addSuffix: true }) : null;
+}
+
+function formatDisplayValue(value: unknown, maxLength = 160) {
+	if (value == null) {
+		return "—";
+	}
+
+	let formatted: string;
+	if (typeof value === "string") {
+		formatted = value;
+	} else if (
+		typeof value === "number" ||
+		typeof value === "boolean" ||
+		typeof value === "bigint"
+	) {
+		formatted = String(value);
+	} else {
+		try {
+			formatted = JSON.stringify(value);
+		} catch {
+			formatted = "[unavailable]";
+		}
+	}
+
+	return formatted.length > maxLength
+		? `${formatted.slice(0, maxLength - 1)}...`
+		: formatted;
+}
+
 function DiligenceIcon({ status }: { status: string }) {
 	if (status === "pass") {
 		return (
@@ -199,28 +240,14 @@ export function DiligenceView({
 													/>
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-													{check.result
-														? typeof check.result ===
-															"object"
-															? JSON.stringify(
-																	check.result,
-																)
-															: String(
-																	check.result,
-																)
-														: "—"}
+													{formatDisplayValue(
+														check.result,
+													)}
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{check.completedAt
-														? formatDistanceToNow(
-																new Date(
-																	check.completedAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)
-														: "—"}
+													{formatRelativeDate(
+														check.completedAt,
+													) ?? "—"}
 												</TableCell>
 											</TableRow>
 										))}
@@ -283,16 +310,9 @@ export function DiligenceView({
 													{signal.decayFactor ?? "—"}
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{signal.recordedAt
-														? formatDistanceToNow(
-																new Date(
-																	signal.recordedAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)
-														: "—"}
+													{formatRelativeDate(
+														signal.recordedAt,
+													) ?? "—"}
 												</TableCell>
 											</TableRow>
 										))}
@@ -347,16 +367,9 @@ export function DiligenceView({
 													{session.intent ?? "—"}
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{session.createdAt
-														? formatDistanceToNow(
-																new Date(
-																	session.createdAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)
-														: "—"}
+													{formatRelativeDate(
+														session.createdAt,
+													) ?? "—"}
 												</TableCell>
 											</TableRow>
 										))}
@@ -413,22 +426,15 @@ export function DiligenceView({
 															.slice(0, 3)
 															.map(
 																([k, v]) =>
-																	`${k}: ${v}`,
+																	`${k}: ${formatDisplayValue(v, 40)}`,
 															)
 															.join(" · ")}
 													</p>
 												)}
 											<p className="text-xs text-muted-foreground mt-1">
-												{event.createdAt
-													? formatDistanceToNow(
-															new Date(
-																event.createdAt,
-															),
-															{
-																addSuffix: true,
-															},
-														)
-													: "—"}
+												{formatRelativeDate(
+													event.createdAt,
+												) ?? "—"}
 											</p>
 										</div>
 									</div>

@@ -5,7 +5,13 @@ on:
     branches: [main]
 
 env:
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smartbeak_ci
+  BETTER_AUTH_SECRET: test-better-auth-secret-for-ci
+  NEXT_PUBLIC_PRICE_ID_PRO_MONTHLY: price_test_pro_monthly
+  NEXT_PUBLIC_PRICE_ID_PRO_YEARLY: price_test_pro_yearly
+  NEXT_PUBLIC_PRICE_ID_LIFETIME: price_test_lifetime
+  NEXT_PUBLIC_SITE_URL: http://localhost:3000
+  MAIL_PROVIDER: console
 
 jobs:
   lint:
@@ -16,7 +22,7 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: 2.3.13
+          version: 2.4.6
       - name: Run Biome
         run: biome ci .
   safety-checks:
@@ -44,7 +50,7 @@ jobs:
           node-version: lts/*
       - uses: pnpm/action-setup@v4
       - name: Install dependencies
-        run: pnpm install && pnpm --filter database generate
+        run: pnpm install && pnpm --filter @repo/database generate
       - name: Run knip
         run: pnpm knip
   e2e:
@@ -58,7 +64,7 @@ jobs:
           node-version: lts/*
       - uses: pnpm/action-setup@v4
       - name: Install dependencies
-        run: pnpm install && pnpm --filter database generate
+        run: pnpm install && pnpm --filter @repo/database generate
       - name: Run Playwright tests
         run: pnpm --filter web e2e:ci
       - uses: actions/upload-artifact@v4

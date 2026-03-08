@@ -18,6 +18,9 @@ async function getProvider(): Promise<SendEmailHandler> {
 		case "console":
 			return consoleSend;
 		default:
+			if (process.env.NODE_ENV === "production") {
+				throw new Error(`Unknown MAIL_PROVIDER "${provider}".`);
+			}
 			console.warn(
 				`[mail] Unknown MAIL_PROVIDER "${provider}", falling back to console.`,
 			);

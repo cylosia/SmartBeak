@@ -64,7 +64,7 @@ export const getWorkflow = protectedProcedure
 	)
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgEditor(org.supastarterOrgId, user.id);
 
 		const workflow = await getWorkflowById(input.workflowId);
 		if (!workflow || workflow.orgId !== org.id) {

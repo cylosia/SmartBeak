@@ -16,6 +16,10 @@ export async function getTemplate<T extends TemplateId>({
 	locale: Locale;
 }) {
 	const template = mailTemplates[templateId];
+	if (!template) {
+		throw new Error(`Unknown mail template: ${String(templateId)}`);
+	}
+
 	const translations = await getMessagesForLocale(locale);
 
 	const email = (template as (props: Record<string, unknown>) => JSX.Element)(
@@ -26,10 +30,19 @@ export async function getTemplate<T extends TemplateId>({
 		},
 	);
 
+	const translatedTemplate =
+		translations.mail[templateId as keyof Messages["mail"]];
 	const subject =
-		"subject" in translations.mail[templateId as keyof Messages["mail"]]
-			? translations.mail[templateId].subject
+		translatedTemplate &&
+		"subject" in translatedTemplate &&
+		typeof translatedTemplate.subject === "string"
+			? translatedTemplate.subject.trim()
 			: "";
+	if (!subject) {
+		throw new Error(
+			`Missing mail subject translation for template "${String(templateId)}" and locale "${locale}".`,
+		);
+	}
 
 	const html = await render(email);
 	const text = await render(email, { plainText: true });

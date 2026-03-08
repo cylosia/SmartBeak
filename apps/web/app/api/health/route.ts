@@ -4,7 +4,7 @@
  * GET /api/health
  *
  * Returns the health status of infrastructure components.
- * Used by load balancers, uptime monitors, and SOC2 compliance tooling.
+ * Used by load balancers, uptime monitors, and operational health tooling.
  *
  * Internal details (latency, error messages) are omitted to prevent
  * information disclosure to unauthenticated callers.

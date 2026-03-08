@@ -9,23 +9,22 @@ function ContentMenuItem({
 	activePath,
 }: ContentStructureItem & { activePath: string }) {
 	return (
-		<>
+		<li>
 			{isPage ? (
 				<LocaleLink
-					key={path}
 					className={`block rounded-full px-4 py-1 ${path === activePath ? "bg-primary/5 font-bold" : ""}`}
 					href={`/docs/${path}`}
 				>
 					{label}
 				</LocaleLink>
 			) : (
-				<span key={path} className="block px-4 py-1">
+				<span className="block px-4 py-1">
 					{label}
 				</span>
 			)}
 
 			{children && (
-				<div className="-mr-4 pl-4">
+				<ul className="-mr-4 list-none space-y-2 pl-4">
 					{children.map((subItem) => (
 						<ContentMenuItem
 							key={subItem.path}
@@ -33,9 +32,9 @@ function ContentMenuItem({
 							activePath={activePath}
 						/>
 					))}
-				</div>
+				</ul>
 			)}
-		</>
+		</li>
 	);
 }
 

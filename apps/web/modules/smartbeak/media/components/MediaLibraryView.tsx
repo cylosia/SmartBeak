@@ -57,6 +57,9 @@ export function MediaLibraryView({
 	const uploadUrlMutation = useMutation(
 		orpc.smartbeak.media.createUploadUrl.mutationOptions(),
 	);
+	const completeUploadMutation = useMutation(
+		orpc.smartbeak.media.completeUpload.mutationOptions(),
+	);
 
 	const deleteMutation = useMutation(
 		orpc.smartbeak.media.delete.mutationOptions({
@@ -102,24 +105,37 @@ export function MediaLibraryView({
 		}
 		setUploading(true);
 		try {
-			const { signedUploadUrl } = await uploadUrlMutation.mutateAsync({
-				organizationSlug,
-				domainId,
-				fileName: file.name,
-				type: file.type,
-				size: file.size,
-			});
-			await fetch(signedUploadUrl, {
+			const { signedUploadUrl, asset } =
+				await uploadUrlMutation.mutateAsync({
+					organizationSlug,
+					domainId,
+					fileName: file.name,
+					type: file.type,
+					size: file.size,
+				});
+			const response = await fetch(signedUploadUrl, {
 				method: "PUT",
 				body: file,
 				headers: { "Content-Type": file.type },
+			});
+			if (!response.ok) {
+				throw new Error(`Upload failed with status ${response.status}`);
+			}
+			await completeUploadMutation.mutateAsync({
+				organizationSlug,
+				id: asset.id,
 			});
 			queryClient.invalidateQueries({
 				queryKey: orpc.smartbeak.media.list.key(),
 			});
 			toastSuccess("Upload complete", file.name);
-		} catch {
-			toastError("Upload failed");
+		} catch (error) {
+			toastError(
+				"Upload failed",
+				error instanceof Error
+					? error.message
+					: "Could not upload the selected file.",
+			);
 		} finally {
 			setUploading(false);
 			if (fileInputRef.current) {

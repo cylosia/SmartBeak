@@ -11,7 +11,7 @@ export const getSellReadyScoreProc = protectedProcedure
 		path: "/smartbeak/analytics/sell-ready",
 		tags: ["SmartBeak - Analytics"],
 		summary:
-			"Get sell-ready score with improvement recommendations for a domain",
+			"Get sell-readiness estimate with improvement recommendations for a domain",
 	})
 	.input(
 		z.object({

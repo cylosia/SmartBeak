@@ -1,6 +1,10 @@
 import { domains } from "@shared/schema";
 import { db } from "./db";
-import { log } from "./index";
+
+function log(message: string, source = "seed") {
+	const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+	console.log(`${timestamp} [${source}] ${message}`);
+}
 
 export async function seedDatabase() {
 	try {

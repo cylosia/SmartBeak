@@ -159,6 +159,19 @@ export async function updatePublishingJobStatus(
 		.returning();
 }
 
+export async function claimPublishingJobForExecution(id: string) {
+	return db
+		.update(publishingJobs)
+		.set({ status: "running", error: null })
+		.where(
+			and(
+				eq(publishingJobs.id, id),
+				inArray(publishingJobs.status, ["pending", "failed"]),
+			),
+		)
+		.returning();
+}
+
 export async function cancelPublishingJob(id: string) {
 	return db
 		.update(publishingJobs)
@@ -319,7 +332,8 @@ export async function incrementWebhookReplayCount(id: string) {
 			replayCount: sql`${webhookEvents.replayCount} + 1`,
 			outboxStatus: "pending",
 		})
-		.where(eq(webhookEvents.id, id));
+		.where(eq(webhookEvents.id, id))
+		.returning();
 }
 
 export async function createWebhookEvent(data: {

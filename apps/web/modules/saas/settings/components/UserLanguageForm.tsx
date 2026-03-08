@@ -29,25 +29,31 @@ export function UserLanguageForm() {
 	);
 
 	const updateLocaleMutation = useMutation({
-		mutationFn: async () => {
-			if (!locale) {
+		mutationFn: async (nextLocale: Locale) => {
+			const { error } = await authClient.updateUser({
+				locale: nextLocale,
+			} as Record<string, unknown>);
+
+			if (error) {
+				throw error;
+			}
+
+			if (!nextLocale) {
 				return;
 			}
 
-			await authClient.updateUser({
-				locale,
-			} as Record<string, unknown>);
-			await updateLocale(locale);
+			await updateLocale(nextLocale);
 			router.refresh();
 		},
 	});
 
-	const saveLocale = async () => {
+	const saveLocale = async (nextLocale: Locale) => {
 		try {
-			await updateLocaleMutation.mutateAsync();
+			await updateLocaleMutation.mutateAsync(nextLocale);
 
 			toastSuccess(t("settings.account.language.notifications.success"));
 		} catch {
+			setLocale(currentLocale as Locale);
 			toastError(t("settings.account.language.notifications.error"));
 		}
 	};
@@ -60,8 +66,9 @@ export function UserLanguageForm() {
 			<Select
 				value={locale}
 				onValueChange={(value) => {
-					setLocale(value as Locale);
-					saveLocale();
+				const nextLocale = value as Locale;
+				setLocale(nextLocale);
+				saveLocale(nextLocale);
 				}}
 				disabled={updateLocaleMutation.isPending}
 			>

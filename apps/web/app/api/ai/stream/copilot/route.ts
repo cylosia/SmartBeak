@@ -30,6 +30,7 @@ import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const MAX_REQUEST_BYTES = 32_768;
 
 const CopilotRequestSchema = z.object({
 	action: z.enum([
@@ -55,7 +56,7 @@ const CopilotRequestSchema = z.object({
 
 const SYSTEM_PROMPT = `You are an expert AI writing co-pilot embedded in a content editor.
 You help writers create better content by providing inline suggestions, rewrites, and improvements.
-Always respond with clean, publication-ready text only — no explanations, no markdown wrappers,
+Always respond with clean draft-quality text only — no explanations, no markdown wrappers,
 no "Here is the rewritten version:" preambles. Just the improved text.`;
 
 function buildPrompt(
@@ -118,7 +119,20 @@ export async function POST(request: NextRequest) {
 	// ── Parse and validate request ──────────────────────────────────────────────
 	let body: unknown;
 	try {
-		body = await request.json();
+		const contentLength = request.headers.get("content-length");
+		if (
+			contentLength &&
+			Number.parseInt(contentLength, 10) > MAX_REQUEST_BYTES
+		) {
+			return new Response("Request body too large", { status: 413 });
+		}
+
+		const rawBody = await request.text();
+		if (new TextEncoder().encode(rawBody).length > MAX_REQUEST_BYTES) {
+			return new Response("Request body too large", { status: 413 });
+		}
+
+		body = JSON.parse(rawBody);
 	} catch {
 		return new Response("Invalid JSON body", { status: 400 });
 	}

@@ -37,7 +37,7 @@ export const updateKeyword = protectedProcedure
 
 		const domain = await getDomainById(kw.domainId);
 		if (!domain || domain.orgId !== org.id) {
-			throw new ORPCError("FORBIDDEN", { message: "Access denied." });
+			throw new ORPCError("NOT_FOUND", { message: "Keyword not found." });
 		}
 
 		const [updated] = await updateKeywordMetrics(input.id, {
@@ -45,12 +45,22 @@ export const updateKeyword = protectedProcedure
 			volume: input.volume,
 			difficulty: input.difficulty,
 		});
+		if (!updated) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to update keyword metrics.",
+			});
+		}
 
 		// Recalculate decay factor after update
 		const [withDecay] = await recalculateDecayFactor(
 			input.id,
 			updated.lastUpdated,
 		);
+		if (!withDecay) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to recalculate keyword decay.",
+			});
+		}
 
 		return { keyword: withDecay };
 	});

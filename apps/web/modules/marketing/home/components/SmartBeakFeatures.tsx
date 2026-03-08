@@ -18,7 +18,7 @@ const FEATURES = [
 		icon: GlobeIcon,
 		title: "Domain Management",
 		description:
-			"Manage unlimited domains with DNS verification, health scoring, and transfer-readiness tracking. Full RBAC with owner/admin/editor/viewer roles.",
+			"Manage unlimited domains with recorded registry metadata, health snapshots, deployment status, and full RBAC with owner/admin/editor/viewer roles.",
 		color: "text-blue-500 dark:text-blue-400",
 		bg: "bg-blue-500/10",
 	},
@@ -32,9 +32,9 @@ const FEATURES = [
 	},
 	{
 		icon: SendIcon,
-		title: "11-Platform Publishing",
+		title: "Supported Publishing Platforms",
 		description:
-			"Publish to Web, Email (Resend), LinkedIn, YouTube, TikTok, Instagram, Pinterest, Vimeo, Facebook, WordPress, and SoundCloud from one place.",
+			"Publish to supported platforms such as LinkedIn, Facebook, Pinterest, WordPress, and SoundCloud from one place.",
 		color: "text-pink-500 dark:text-pink-400",
 		bg: "bg-pink-500/10",
 	},
@@ -42,7 +42,7 @@ const FEATURES = [
 		icon: SearchIcon,
 		title: "SEO Intelligence",
 		description:
-			"Keyword tracking with volume, difficulty, position, and real-time decay signals. GSC + Ahrefs integration with automated daily reports.",
+			"Keyword tracking with volume, difficulty, position, and decay signals. Google Search Console imports are available, while broader provider automation remains limited.",
 		color: "text-green-500 dark:text-green-400",
 		bg: "bg-green-500/10",
 	},
@@ -50,7 +50,7 @@ const FEATURES = [
 		icon: BarChart3Icon,
 		title: "Portfolio ROI Dashboard",
 		description:
-			"Risk-adjusted scoring, total portfolio value, performance trends, and buyer attribution tracking. Materialized views for instant queries.",
+			"Risk-adjusted scoring, total portfolio score, performance trends, and buyer attribution tracking. Materialized views support faster dashboard queries.",
 		color: "text-orange-500 dark:text-orange-400",
 		bg: "bg-orange-500/10",
 	},
@@ -58,7 +58,7 @@ const FEATURES = [
 		icon: TrendingUpIcon,
 		title: "Diligence Engine",
 		description:
-			"Automated ownership, legal, financial, and content checks. One-click Sell-Ready score with specific improvement recommendations.",
+			"Structured diligence review across ownership, legal, financial, and content categories, with sell-readiness guidance based on recorded review data.",
 		color: "text-cyan-500 dark:text-cyan-400",
 		bg: "bg-cyan-500/10",
 	},
@@ -66,7 +66,7 @@ const FEATURES = [
 		icon: CalendarIcon,
 		title: "Bulk Scheduling",
 		description:
-			"Drag-and-drop calendar view for scheduling content across all platforms. Bulk schedule with one form, live status tracking.",
+			"Drag-and-drop calendar view for scheduling content across supported publishing targets, with bulk scheduling and live job status tracking.",
 		color: "text-indigo-500 dark:text-indigo-400",
 		bg: "bg-indigo-500/10",
 	},
@@ -74,7 +74,7 @@ const FEATURES = [
 		icon: ImageIcon,
 		title: "Media Library",
 		description:
-			"Upload, organise, and reuse media assets across all your domains. Full lifecycle management with analytics per asset.",
+			"Upload, organise, and reuse media assets across your domains, with secure storage, preview, copy-link, and deletion workflows.",
 		color: "text-rose-500 dark:text-rose-400",
 		bg: "bg-rose-500/10",
 	},
@@ -82,7 +82,7 @@ const FEATURES = [
 		icon: ShieldIcon,
 		title: "Immutable Audit Log",
 		description:
-			"Every action is recorded in an append-only audit trail. Full compliance-ready event history with actor, timestamp, and diff.",
+			"Every action is recorded in an append-only audit trail with actor, timestamp, and change details where available.",
 		color: "text-slate-500 dark:text-slate-400",
 		bg: "bg-slate-500/10",
 	},
@@ -98,7 +98,7 @@ const FEATURES = [
 		icon: RocketIcon,
 		title: "SmartDeploy",
 		description:
-			"One-click site deployment stub — SmartDeploy engine will be implemented via Replit Agent for full static site generation and CDN push.",
+			"Deploy supported theme builds to Vercel when SmartDeploy is configured for the current environment.",
 		color: "text-yellow-500 dark:text-yellow-400",
 		bg: "bg-yellow-500/10",
 	},
@@ -106,7 +106,7 @@ const FEATURES = [
 		icon: PenToolIcon,
 		title: "Email Series Builder",
 		description:
-			"Drag-and-drop drip campaign builder with Resend automation. Multi-step sequences with per-step delay, subject, and HTML body.",
+			"Planned drip campaign builder surface. Multi-step email automation is not generally available in the current publishing queue yet.",
 		color: "text-teal-500 dark:text-teal-400",
 		bg: "bg-teal-500/10",
 	},
@@ -125,9 +125,9 @@ export function SmartBeakFeatures() {
 						</span>
 					</h2>
 					<p className="mt-4 text-lg text-foreground/60 leading-relaxed">
-						SmartBeak is a complete operating system for domain
-						portfolio owners — from content creation to publishing,
-						SEO, analytics, and exit readiness.
+						SmartBeak gives domain portfolio owners one workspace for
+						content creation, supported publishing flows, SEO,
+						analytics, and sell-readiness review.
 					</p>
 				</div>
 

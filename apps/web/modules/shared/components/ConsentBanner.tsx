@@ -6,7 +6,7 @@ import { CookieIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function ConsentBanner() {
-	const { userHasConsented, allowCookies, declineCookies } =
+	const { hasAnsweredConsent, allowCookies, declineCookies } =
 		useCookieConsent();
 	const [mounted, setMounted] = useState(false);
 	useEffect(() => {
@@ -17,7 +17,7 @@ export function ConsentBanner() {
 		return null;
 	}
 
-	if (userHasConsented) {
+	if (hasAnsweredConsent) {
 		return null;
 	}
 

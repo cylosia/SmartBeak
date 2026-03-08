@@ -30,8 +30,7 @@ export async function sendEmail<T extends TemplateId>(
 	const { to, from, locale = i18nConfig.defaultLocale } = params;
 
 	if (!EMAIL_REGEX.test(to)) {
-		logger.error(`Invalid email recipient: ${to}`);
-		return false;
+		throw new Error(`Invalid email recipient: ${to}`);
 	}
 
 	let html: string;
@@ -40,19 +39,14 @@ export async function sendEmail<T extends TemplateId>(
 
 	if ("templateId" in params) {
 		const { templateId, context } = params;
-		try {
-			const template = await getTemplate({
-				templateId,
-				context,
-				locale,
-			});
-			subject = template.subject;
-			text = template.text;
-			html = template.html;
-		} catch (templateErr) {
-			logger.error(templateErr);
-			return false;
-		}
+		const template = await getTemplate({
+			templateId,
+			context,
+			locale,
+		});
+		subject = template.subject;
+		text = template.text;
+		html = template.html;
 	} else {
 		subject = params.subject;
 		text = params.text ?? "";
@@ -70,6 +64,6 @@ export async function sendEmail<T extends TemplateId>(
 		return true;
 	} catch (e) {
 		logger.error(e);
-		return false;
+		throw e;
 	}
 }

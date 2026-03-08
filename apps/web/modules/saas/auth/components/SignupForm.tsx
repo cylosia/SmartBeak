@@ -59,7 +59,7 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 
 	const form = useForm({
 		resolver: zodResolver(formSchema),
-		values: {
+		defaultValues: {
 			name: "",
 			email: prefillEmail ?? email ?? "",
 			password: "",
@@ -77,6 +77,14 @@ export function SignupForm({ prefillEmail }: { prefillEmail?: string }) {
 			router.replace(redirectPath);
 		}
 	}, [user, sessionLoaded, router, redirectPath]);
+
+	useEffect(() => {
+		form.reset({
+			name: "",
+			email: prefillEmail ?? email ?? "",
+			password: "",
+		});
+	}, [form, prefillEmail, email]);
 
 	const onSubmit = form.handleSubmit(async ({ email, password, name }) => {
 		try {

@@ -1,38 +1,26 @@
-# SmartBeak - SmartDeploy Module
+# SmartBeak Repository Notes
 
 ## Overview
-SmartDeploy is a module within the SmartBeak Supastarter Pro codebase that enables one-click deployment of themed static sites to Vercel. Users manage domains, select from 5 theme templates, and deploy production-ready static HTML sites via the Vercel API.
+SmartBeak is a `pnpm`/Turbo monorepo centered on a Next.js web app, shared workspace packages, and oRPC-backed API modules. SmartDeploy is implemented inside that monorepo rather than as a separate Express or Replit app.
 
 ## Architecture
-- **Frontend**: React + TypeScript with wouter routing, shadcn/ui components, TanStack Query v5
-- **Backend**: Express.js API with PostgreSQL (Drizzle ORM)
-- **Deployment**: Vercel API integration using VERCEL_TOKEN
+- **Frontend**: `apps/web` using Next.js App Router, React, TypeScript, Tailwind CSS, and TanStack Query
+- **Backend/API**: `packages/api` with oRPC procedures consumed by the web app
+- **Data layer**: `packages/database` with Drizzle and Prisma helpers over PostgreSQL
+- **Deployment**: Vercel-oriented web deployment plus SmartDeploy workflows under the SmartBeak domain/deploy modules
 
-## Key Files
-- `shared/schema.ts` - Database schema (domains, site_shards, deployment_versions, audit_logs)
-- `server/storage.ts` - DatabaseStorage implementing IStorage interface
-- `server/themes.ts` - 5 theme template generators (HTML)
-- `server/deploy.ts` - Vercel deployment service with async progress tracking
-- `server/routes.ts` - Express API routes (/api/domains, /api/shards, /api/themes, /api/audit-logs)
-- `server/seed.ts` - Database seeding with example domains
-- `client/src/pages/domains.tsx` - Domains list page with add/deploy/delete functionality
-- `client/src/pages/domain-detail.tsx` - Domain detail with preview iframe, deploy history, audit logs
+## Relevant Areas
+- `apps/web/app` - Next.js routes, API routes, and layouts
+- `apps/web/modules/smartbeak` - SmartBeak product UI modules such as domains, deploy, publishing, and SEO
+- `packages/api/modules/smartbeak` - SmartBeak backend procedures and domain logic
+- `packages/database` - shared schema, clients, and query helpers
+- `packages/auth`, `packages/payments`, `packages/storage`, `packages/mail` - cross-cutting platform packages
 
-## Themes
-1. affiliate-comparison - Product comparison site
-2. authority-site - Content & knowledge hub
-3. landing-leadgen - Lead generation landing page
-4. local-business - Local business website
-5. media-newsletter - Media publication & newsletter
+## Environment Notes
+- `DATABASE_URL` is required for server/runtime startup
+- `BETTER_AUTH_SECRET` is required for auth startup
+- `VERCEL_TOKEN` is required for deploy flows that call the Vercel API
+- `SMARTBEAK_ENCRYPTION_KEY` is required for encrypted provider credentials and AI/publishing integrations
 
-## Database Tables
-- `users` - Basic user table
-- `domains` - Domain records with name, theme, description
-- `site_shards` - Deployment records with version, URL, status, progress
-- `deployment_versions` - Version history for each shard
-- `audit_logs` - Action tracking with JSONB details
-
-## Environment Variables
-- `DATABASE_URL` - PostgreSQL connection string (auto-provisioned)
-- `VERCEL_TOKEN` - Vercel API token for deployments
-- `SESSION_SECRET` - Session encryption key
+## Status
+This file was normalized to reflect the current SmartBeak monorepo so it no longer points contributors at a different stack or a non-existent standalone Replit service.

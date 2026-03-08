@@ -16,6 +16,44 @@ import type {
 } from "../../types";
 
 let stripeClient: Stripe | null = null;
+const MAX_WEBHOOK_BYTES = 512 * 1024; // 512 KB
+
+async function readRequestTextWithLimit(
+	req: Request,
+	maxBytes: number,
+): Promise<string> {
+	const contentLength = req.headers.get("content-length");
+	if (contentLength) {
+		const parsedLength = Number.parseInt(contentLength, 10);
+		if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+	}
+
+	const reader = req.body?.getReader();
+	if (!reader) {
+		throw new Error("Invalid request.");
+	}
+
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+		totalBytes += value.byteLength;
+		if (totalBytes > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+		text += decoder.decode(value, { stream: true });
+	}
+
+	text += decoder.decode();
+	return text;
+}
 
 export function getStripeClient() {
 	if (stripeClient) {
@@ -149,12 +187,18 @@ export const webhookHandler: WebhookHandler = async (req) => {
 	let event: Stripe.Event | undefined;
 
 	try {
+		const rawBody = await readRequestTextWithLimit(req, MAX_WEBHOOK_BYTES);
 		event = await stripeClient.webhooks.constructEventAsync(
-			await req.text(),
+			rawBody,
 			signatureHeader,
 			webhookSecret,
 		);
 	} catch (e) {
+		if (e instanceof Error && e.message === "Webhook payload too large") {
+			return new Response("Payload too large.", {
+				status: 413,
+			});
+		}
 		logger.error(e);
 
 		return new Response("Invalid request.", {
@@ -189,6 +233,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 					checkoutSession.line_items?.data[0]?.price?.id;
 
 				if (!productId) {
+					endSpan(span, "error", {
+						errorMessage: "Missing product ID.",
+					});
 					return new Response("Missing product ID.", {
 						status: 400,
 					});
@@ -222,6 +269,9 @@ export const webhookHandler: WebhookHandler = async (req) => {
 				const productId = items?.data[0]?.price?.id;
 
 				if (!productId) {
+					endSpan(span, "error", {
+						errorMessage: "Missing product ID.",
+					});
 					return new Response("Missing product ID.", {
 						status: 400,
 					});
@@ -284,6 +334,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			}
 
 			default:
+				endSpan(span, "ok", {
+					handled: false,
+					eventType: event.type,
+				});
 				return new Response("Unhandled event type.", {
 					status: 200,
 				});

@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import express, {
 	type NextFunction,
 	type Request,
@@ -6,7 +8,6 @@ import express, {
 } from "express";
 import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
-import { serveStatic } from "./static";
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,6 +38,25 @@ export function log(message: string, source = "express") {
 	});
 
 	console.log(`${formattedTime} [${source}] ${message}`);
+}
+
+function registerClientFallback(app: express.Express) {
+	const clientDistDir = path.resolve(process.cwd(), "dist", "public");
+	const clientIndexPath = path.join(clientDistDir, "index.html");
+
+	if (existsSync(clientIndexPath)) {
+		app.use(express.static(clientDistDir));
+		app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+			res.sendFile(clientIndexPath);
+		});
+		return;
+	}
+
+	app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+		res.status(404).type("text/plain").send(
+			"Standalone SmartDeploy client assets are not present in this repository checkout.",
+		);
+	});
 }
 
 app.use((req, res, next) => {
@@ -93,15 +113,10 @@ app.use((req, res, next) => {
 		},
 	);
 
-	// importantly only setup vite in development and after
-	// setting up all the other routes so the catch-all route
-	// doesn't interfere with the other routes
-	if (process.env.NODE_ENV === "production") {
-		serveStatic(app);
-	} else {
-		const { setupVite } = await import("./vite");
-		await setupVite(httpServer, app);
-	}
+	// Register a non-API fallback only after API routes are mounted.
+	// This repo no longer contains the original Vite/static helpers, so the
+	// standalone server must not reference files that do not exist.
+	registerClientFallback(app);
 
 	const port = Number.parseInt(process.env.PORT || "5000", 10);
 	httpServer.listen(

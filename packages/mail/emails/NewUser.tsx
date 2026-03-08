@@ -23,7 +23,7 @@ export function NewUser({
 	});
 
 	return (
-		<Wrapper>
+		<Wrapper locale={locale}>
 			<Text>{t("mail.newUser.body", { name })}</Text>
 
 			<Text>

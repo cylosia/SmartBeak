@@ -51,7 +51,7 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 		return {
 			summary,
 			domains: [],
-			totalValue: 0,
+			totalScore: 0,
 			avgRoi: 0,
 			totalDomains: 0,
 		};
@@ -91,12 +91,11 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 			healthScore,
 			riskAdjustedScore,
 			decayFactor,
-			estimatedValue: riskAdjustedScore * 1000, // placeholder multiplier
 		};
 	});
 
-	const totalValue = domainsWithRoi.reduce(
-		(sum, d) => sum + d.estimatedValue,
+	const totalScore = domainsWithRoi.reduce(
+		(sum, d) => sum + d.riskAdjustedScore,
 		0,
 	);
 	const avgRoi =
@@ -108,7 +107,7 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 	return {
 		summary,
 		domains: domainsWithRoi,
-		totalValue,
+		totalScore: Math.round(totalScore * 100) / 100,
 		avgRoi: Math.round(avgRoi * 100) / 100,
 		totalDomains: domainList.length,
 	};
@@ -117,7 +116,7 @@ export async function getPortfolioRoiForOrg(orgId: string) {
 export async function upsertPortfolioSummary(data: {
 	orgId: string;
 	totalDomains: number;
-	totalValue: string;
+	totalValue: null | string;
 	avgRoi: string;
 }) {
 	return db.transaction(async (tx) => {
@@ -190,54 +189,7 @@ export async function upsertDiligenceCheck(data: {
 	});
 }
 
-export async function runDiligenceChecksForDomain(domainId: string) {
-	const DILIGENCE_TYPES = [
-		"ownership",
-		"legal",
-		"financial",
-		"traffic",
-		"content",
-		"technical",
-		"brand",
-		"monetization",
-	];
-
-	const domain = await db.query.domains.findFirst({
-		where: eq(domains.id, domainId),
-	});
-	if (!domain) {
-		return [];
-	}
-
-	const results = await Promise.all(
-		DILIGENCE_TYPES.map(async (type) => {
-			const healthScore = extractHealthScore(domain.health, 50);
-			const typeWeights: Record<string, number> = {
-				ownership: 1.0,
-				legal: 0.95,
-				financial: 0.9,
-				traffic: healthScore / 100,
-				content: healthScore / 100,
-				technical: 0.85,
-				brand: 0.8,
-				monetization: 0.75,
-			};
-			const weight = typeWeights[type] ?? 0.8;
-			const pass = weight >= 0.75;
-			return upsertDiligenceCheck({
-				domainId,
-				type,
-				result: { weight, healthScore, automated: true },
-				status: pass ? "passed" : "failed",
-				completedAt: new Date(),
-			});
-		}),
-	);
-
-	return results.flat();
-}
-
-// ─── Sell-Ready Score ────────────────────────────────────────────────────────
+// ─── Sell-Readiness Estimate ─────────────────────────────────────────────────
 
 export async function getSellReadyScore(domainId: string) {
 	const [domain, diligence, decay, buyerSess, timeline] = await Promise.all([
@@ -364,11 +316,11 @@ export async function getBuyerAttributionForDomain(domainId: string) {
 		return acc;
 	}, {});
 
-	// Conversion path: sessions with buyer email = converted
-	const converted = sessions.filter((s) => s.buyerEmail).length;
-	const conversionRate =
+	// An identified buyer is a session with a captured buyer email.
+	const identifiedBuyers = sessions.filter((s) => s.buyerEmail).length;
+	const identifiedBuyerRate =
 		sessions.length > 0
-			? Math.round((converted / sessions.length) * 100)
+			? Math.round((identifiedBuyers / sessions.length) * 100)
 			: 0;
 
 	// Timeline: group by day
@@ -386,8 +338,8 @@ export async function getBuyerAttributionForDomain(domainId: string) {
 	return {
 		sessions,
 		total: sessions.length,
-		converted,
-		conversionRate,
+		identifiedBuyers,
+		identifiedBuyerRate,
 		intentBreakdown: Object.entries(intentMap).map(([intent, count]) => ({
 			intent,
 			count,
@@ -407,8 +359,8 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 		return {
 			domains: [],
 			totalSessions: 0,
-			totalConverted: 0,
-			overallConversionRate: 0,
+			totalIdentifiedBuyers: 0,
+			overallIdentifiedBuyerRate: 0,
 		};
 	}
 
@@ -428,10 +380,10 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 
 	const results = orgDomains.map((d) => {
 		const sessions = sessionsByDomain.get(d.id) ?? [];
-		const converted = sessions.filter((s) => s.buyerEmail).length;
-		const conversionRate =
+		const identifiedBuyers = sessions.filter((s) => s.buyerEmail).length;
+		const identifiedBuyerRate =
 			sessions.length > 0
-				? Math.round((converted / sessions.length) * 100)
+				? Math.round((identifiedBuyers / sessions.length) * 100)
 				: 0;
 		const intentMap = sessions.reduce<Record<string, number>>((acc, s) => {
 			const intent = s.intent ?? "unknown";
@@ -452,8 +404,8 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 			domain: d,
 			sessions,
 			total: sessions.length,
-			converted,
-			conversionRate,
+			identifiedBuyers,
+			identifiedBuyerRate,
 			intentBreakdown: Object.entries(intentMap).map(
 				([intent, count]) => ({ intent, count }),
 			),
@@ -462,17 +414,20 @@ export async function getBuyerAttributionForOrg(orgId: string) {
 	});
 
 	const totalSessions = results.reduce((sum, r) => sum + r.total, 0);
-	const totalConverted = results.reduce((sum, r) => sum + r.converted, 0);
-	const overallConversionRate =
+	const totalIdentifiedBuyers = results.reduce(
+		(sum, r) => sum + r.identifiedBuyers,
+		0,
+	);
+	const overallIdentifiedBuyerRate =
 		totalSessions > 0
-			? Math.round((totalConverted / totalSessions) * 100)
+			? Math.round((totalIdentifiedBuyers / totalSessions) * 100)
 			: 0;
 
 	return {
 		domains: results,
 		totalSessions,
-		totalConverted,
-		overallConversionRate,
+		totalIdentifiedBuyers,
+		overallIdentifiedBuyerRate,
 	};
 }
 

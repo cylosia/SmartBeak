@@ -90,7 +90,7 @@ Be thorough, accurate, and cite your sources.`,
 2. Write in a clear, engaging, and authoritative voice.
 3. Optimize for readability (short paragraphs, active voice, strong headlines).
 4. Ensure the content is original, valuable, and SEO-friendly.
-Produce publication-ready content.`,
+Produce a strong draft that is ready for human editorial review.`,
 
 	editor: `You are an expert Editor Agent. Your role is to:
 1. Review content for clarity, accuracy, and flow.
@@ -176,6 +176,7 @@ export async function* executeWorkflow(
 	const tokenUsage: TokenUsageEntry[] = [];
 	const agentOutputs: Record<string, string> = {};
 	let totalCostCents = 0;
+	let terminalError: string | null = null;
 
 	yield { type: "session_start" };
 
@@ -218,10 +219,11 @@ export async function* executeWorkflow(
 
 			const elapsed = Date.now() - startTime;
 			if (elapsed >= MAX_WORKFLOW_DURATION_MS) {
+				terminalError = `Workflow execution stopped: exceeded ${MAX_WORKFLOW_DURATION_MS / 1000}s time limit.`;
 				yield {
 					type: "error",
 					nodeId: node.id,
-					error: `Workflow execution stopped: exceeded ${MAX_WORKFLOW_DURATION_MS / 1000}s time limit.`,
+					error: terminalError,
 				};
 				break;
 			}
@@ -263,10 +265,12 @@ export async function* executeWorkflow(
 					: userPrompt;
 
 			if (totalCostCents >= MAX_SESSION_COST_CENTS) {
+				terminalError =
+					"Workflow execution stopped: session cost ceiling reached.";
 				yield {
 					type: "error",
 					nodeId: node.id,
-					error: "Workflow execution stopped: session cost ceiling reached.",
+					error: terminalError,
 				};
 				break;
 			}
@@ -389,6 +393,25 @@ export async function* executeWorkflow(
 			(s, t) => s + t.outputTokens,
 			0,
 		);
+
+		if (terminalError) {
+			await updateSession(sessionId, {
+				status: "failed",
+				errorMessage: terminalError,
+				outputData: {
+					result: finalOutput,
+					agentOutputs,
+					citations: [],
+				},
+				tokenUsage,
+				costCents: totalCostCents,
+				totalInputTokens,
+				totalOutputTokens,
+				durationMs,
+				completedAt: new Date(),
+			});
+			return;
+		}
 
 		// Finalize session in database
 		await updateSession(sessionId, {

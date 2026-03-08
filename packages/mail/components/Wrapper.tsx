@@ -6,10 +6,14 @@ import {
 	Section,
 	Tailwind,
 } from "@react-email/components";
-import { Logo } from "@repo/ui";
 import React, { type PropsWithChildren } from "react";
 
-export default function Wrapper({ children }: PropsWithChildren) {
+export default function Wrapper({
+	children,
+	locale = "en",
+}: PropsWithChildren<{
+	locale?: string;
+}>) {
 	return (
 		<Tailwind
 			config={{
@@ -64,7 +68,7 @@ export default function Wrapper({ children }: PropsWithChildren) {
 				},
 			}}
 		>
-			<Html lang="en">
+			<Html lang={locale}>
 				<Head>
 					<Font
 						fontFamily="Inter"
@@ -75,7 +79,9 @@ export default function Wrapper({ children }: PropsWithChildren) {
 				</Head>
 				<Section className="bg-background p-4">
 					<Container className="rounded-lg bg-card p-6 text-card-foreground">
-						<Logo />
+						<div className="mb-6 text-lg font-semibold text-foreground">
+							SmartBeak
+						</div>
 						{children}
 					</Container>
 				</Section>

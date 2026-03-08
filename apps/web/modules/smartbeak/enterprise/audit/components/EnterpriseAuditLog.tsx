@@ -44,7 +44,7 @@ import {
 	SettingsIcon,
 	ShieldIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { TableSkeleton as LoadingSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 
@@ -65,6 +65,30 @@ function getActionColor(action: string): string {
 		}
 	}
 	return ACTION_COLORS.default ?? "text-gray-600 bg-gray-50";
+}
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatAuditDetails(details: unknown) {
+	if (details == null) {
+		return null;
+	}
+
+	try {
+		const serialized = JSON.stringify(details);
+		return serialized.length > 60
+			? `${serialized.slice(0, 59)}...`
+			: serialized;
+	} catch {
+		return "[unavailable]";
+	}
 }
 
 const ENTITY_TYPES = [
@@ -120,6 +144,15 @@ export function EnterpriseAuditLog({
 
 	const [retentionDays, setRetentionDays] = useState<number>(90);
 	const [exportEnabled, setExportEnabled] = useState(false);
+
+	useEffect(() => {
+		if (!retentionQuery.data?.retention) {
+			return;
+		}
+
+		setRetentionDays(retentionQuery.data.retention.retentionDays ?? 90);
+		setExportEnabled(retentionQuery.data.retention.exportEnabled ?? false);
+	}, [retentionQuery.data?.retention]);
 
 	const setRetentionMutation = useMutation(
 		orpc.enterprise.audit.retention.set.mutationOptions({
@@ -180,8 +213,8 @@ export function EnterpriseAuditLog({
 								Enterprise Audit Log
 							</h2>
 							<p className="text-sm text-muted-foreground">
-								Immutable, SOC2-ready event trail for your
-								organization.
+								Append-only organization event trail with
+								search and export controls.
 							</p>
 						</div>
 					</div>
@@ -433,11 +466,13 @@ export function EnterpriseAuditLog({
 															: "system"}
 													</TableCell>
 													<TableCell>
-														{event.details ? (
+														{formatAuditDetails(
+															event.details,
+														) ? (
 															<code className="text-xs bg-muted rounded px-1.5 py-0.5 max-w-xs truncate block">
-																{JSON.stringify(
+																{formatAuditDetails(
 																	event.details,
-																).slice(0, 60)}
+																)}
 															</code>
 														) : (
 															<span className="text-muted-foreground text-sm">
@@ -447,21 +482,31 @@ export function EnterpriseAuditLog({
 													</TableCell>
 													<TableCell className="text-xs text-muted-foreground whitespace-nowrap">
 														<span
-															title={format(
-																new Date(
+															title={
+																parseValidDate(
 																	event.createdAt,
-																),
-																"PPpp",
-															)}
+																)
+																	? format(
+																			parseValidDate(
+																				event.createdAt,
+																			) as Date,
+																			"PPpp",
+																		)
+																	: "Unknown time"
+															}
 														>
-															{formatDistanceToNow(
-																new Date(
-																	event.createdAt,
-																),
-																{
-																	addSuffix: true,
-																},
-															)}
+															{parseValidDate(
+																event.createdAt,
+															)
+																? formatDistanceToNow(
+																		parseValidDate(
+																			event.createdAt,
+																		) as Date,
+																		{
+																			addSuffix: true,
+																		},
+																	)
+																: "—"}
 														</span>
 													</TableCell>
 												</TableRow>
@@ -525,7 +570,7 @@ export function EnterpriseAuditLog({
 								<CardTitle>Retention Policy</CardTitle>
 								<CardDescription>
 									Configure how long audit events are
-									retained. SOC2 recommends at least 365 days.
+									retained for your organization.
 								</CardDescription>
 							</div>
 						</div>
@@ -553,10 +598,7 @@ export function EnterpriseAuditLog({
 									<div className="space-y-2">
 										<Label>Retention Period (days)</Label>
 										<Select
-											value={String(
-												retentionQuery.data?.retention
-													.retentionDays ?? 90,
-											)}
+											value={String(retentionDays)}
 											onValueChange={(v) =>
 												setRetentionDays(Number(v))
 											}
@@ -575,7 +617,7 @@ export function EnterpriseAuditLog({
 													180 days
 												</SelectItem>
 												<SelectItem value="365">
-													1 year (SOC2 recommended)
+													1 year
 												</SelectItem>
 												<SelectItem value="730">
 													2 years
@@ -588,10 +630,7 @@ export function EnterpriseAuditLog({
 									</div>
 									<div className="flex items-center gap-3 pt-6">
 										<Switch
-											checked={
-												retentionQuery.data?.retention
-													.exportEnabled ?? false
-											}
+											checked={exportEnabled}
 											onCheckedChange={setExportEnabled}
 										/>
 										<Label>Enable scheduled exports</Label>

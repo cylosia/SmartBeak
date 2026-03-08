@@ -5,6 +5,10 @@ import Script from "next/script";
 const pirschCode = process.env.NEXT_PUBLIC_PIRSCH_CODE as string;
 
 export function AnalyticsScript() {
+	if (!pirschCode) {
+		return null;
+	}
+
 	return (
 		<Script
 			defer

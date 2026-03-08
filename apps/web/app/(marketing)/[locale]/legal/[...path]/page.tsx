@@ -1,4 +1,3 @@
-import { localeRedirect } from "@i18n/routing";
 import { PostContent } from "@marketing/blog/components/PostContent";
 import {
 	getActivePathFromUrlParam,
@@ -6,6 +5,7 @@ import {
 } from "@shared/lib/content";
 import { allLegalPages } from "content-collections";
 import { getLocale } from "next-intl/server";
+import { notFound } from "next/navigation";
 
 type Params = {
 	path: string[];
@@ -47,7 +47,7 @@ export default async function BlogPostPage(props: { params: Promise<Params> }) {
 	);
 
 	if (!page) {
-		localeRedirect({ href: "/", locale });
+		notFound();
 	}
 
 	const { title, body } = page;

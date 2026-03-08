@@ -25,6 +25,7 @@ export async function getUsers({
 						ilike(user.email, `%${escapeLikePattern(query)}%`),
 					)
 			: undefined,
+		orderBy: (user, { desc }) => [desc(user.createdAt)],
 		limit,
 		offset,
 	});
@@ -84,6 +85,10 @@ export async function createUser({
 		.returning();
 
 	return newUser;
+}
+
+export async function deleteUserById(id: string) {
+	return db.delete(user).where(eq(user.id, id));
 }
 
 export async function getAccountById(id: string) {

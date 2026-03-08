@@ -137,7 +137,12 @@ export const replayWebhookProcedure = adminProcedure
 		}),
 	)
 	.handler(async ({ context: { user }, input }) => {
-		await incrementWebhookReplayCount(input.eventId);
+		const [event] = await incrementWebhookReplayCount(input.eventId);
+		if (!event) {
+			throw new ORPCError("NOT_FOUND", {
+				message: "Failed webhook event not found.",
+			});
+		}
 		await audit({
 			orgId: "system",
 			actorId: user.id,

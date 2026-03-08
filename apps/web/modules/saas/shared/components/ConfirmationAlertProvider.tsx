@@ -37,6 +37,7 @@ export function ConfirmationAlertProvider({ children }: PropsWithChildren) {
 	const [confirmOptions, setConfirmOptions] = useState<ConfirmOptions | null>(
 		null,
 	);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const confirm = (options: ConfirmOptions) => {
 		setConfirmOptions(options);
@@ -49,7 +50,7 @@ export function ConfirmationAlertProvider({ children }: PropsWithChildren) {
 			<AlertDialog
 				open={!!confirmOptions}
 				onOpenChange={(open) =>
-					setConfirmOptions(open ? confirmOptions : null)
+					setConfirmOptions(open || isSubmitting ? confirmOptions : null)
 				}
 			>
 				<AlertDialogContent>
@@ -64,6 +65,7 @@ export function ConfirmationAlertProvider({ children }: PropsWithChildren) {
 
 					<AlertDialogFooter>
 						<AlertDialogCancel>
+							disabled={isSubmitting}
 							{confirmOptions?.cancelLabel ??
 								t("common.confirmation.cancel")}
 						</AlertDialogCancel>
@@ -73,9 +75,19 @@ export function ConfirmationAlertProvider({ children }: PropsWithChildren) {
 									? "destructive"
 									: "primary"
 							}
+							disabled={isSubmitting}
 							onClick={async () => {
-								await confirmOptions?.onConfirm();
-								setConfirmOptions(null);
+								if (!confirmOptions || isSubmitting) {
+									return;
+								}
+
+								try {
+									setIsSubmitting(true);
+									await confirmOptions.onConfirm();
+									setConfirmOptions(null);
+								} finally {
+									setIsSubmitting(false);
+								}
 							}}
 						>
 							{confirmOptions?.confirmLabel ??

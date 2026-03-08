@@ -32,6 +32,12 @@ export const listPurchases = protectedProcedure
 					message: "You are not a member of this organization.",
 				});
 			}
+			if (!["owner", "admin"].includes(membership.role)) {
+				throw new ORPCError("FORBIDDEN", {
+					message:
+						"Only organization admins can view billing purchases.",
+				});
+			}
 
 			const purchases =
 				await getPurchasesByOrganizationId(organizationId);

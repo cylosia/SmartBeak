@@ -17,9 +17,14 @@ export const createLogoUploadUrl = protectedProcedure
 	.input(
 		z.object({
 			organizationId: z.string().uuid(),
+			size: z
+				.number()
+				.int()
+				.positive()
+				.max(5 * 1024 * 1024),
 		}),
 	)
-	.handler(async ({ context: { user }, input: { organizationId } }) => {
+	.handler(async ({ context: { user }, input: { organizationId, size } }) => {
 		const organization = await getOrganizationById(organizationId);
 
 		if (!organization) {
@@ -36,10 +41,17 @@ export const createLogoUploadUrl = protectedProcedure
 		if (!membership) {
 			throw new ORPCError("FORBIDDEN");
 		}
+		if (!["owner", "admin"].includes(membership.role)) {
+			throw new ORPCError("FORBIDDEN", {
+				message:
+					"Only organization admins can update the organization logo.",
+			});
+		}
 
 		const path = `${organizationId}.png`;
 		const signedUploadUrl = await getSignedUploadUrl(path, {
 			bucket: "avatars",
+			size,
 		});
 
 		return { signedUploadUrl, path };

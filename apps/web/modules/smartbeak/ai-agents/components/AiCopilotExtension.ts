@@ -92,6 +92,10 @@ export const AiCopilotExtension = Extension.create<AiCopilotOptions>({
 						return false;
 					}
 
+					if (!state.selection.empty || state.selection.from !== pluginState.from) {
+						return false;
+					}
+
 					if (dispatch) {
 						const tr = state.tr.insertText(
 							pluginState.suggestion,
@@ -110,6 +114,15 @@ export const AiCopilotExtension = Extension.create<AiCopilotOptions>({
 			dismissSuggestion:
 				() =>
 				({ state, dispatch }) => {
+					const pluginState = COPILOT_PLUGIN_KEY.getState(state) as {
+						suggestion: string | null;
+						from: number | null;
+					} | null;
+
+					if (!pluginState?.suggestion) {
+						return false;
+					}
+
 					if (dispatch) {
 						const tr = state.tr.setMeta(COPILOT_PLUGIN_KEY, {
 							suggestion: null,
@@ -186,6 +199,14 @@ export const AiCopilotExtension = Extension.create<AiCopilotOptions>({
 						}
 						// Clear suggestion if the document changed
 						if (tr.docChanged && prev.suggestion) {
+							return { suggestion: null, from: null };
+						}
+						// Suggestions are only valid at the original cursor position.
+						if (
+							tr.selectionSet &&
+							prev.suggestion &&
+							prev.from !== tr.selection.from
+						) {
 							return { suggestion: null, from: null };
 						}
 						return prev;

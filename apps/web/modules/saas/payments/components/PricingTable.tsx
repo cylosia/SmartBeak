@@ -5,6 +5,7 @@ import { cn } from "@repo/ui";
 import { Button } from "@repo/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@repo/ui/components/tabs";
 import { toastError } from "@repo/ui/components/toast";
+import { useSession } from "@saas/auth/hooks/use-session";
 import { usePlanData } from "@saas/payments/hooks/plan-data";
 import type { PlanId } from "@saas/payments/types";
 import { useLocaleCurrency } from "@shared/hooks/locale-currency";
@@ -37,6 +38,7 @@ export function PricingTable({
 	const t = useTranslations();
 	const format = useFormatter();
 	const router = useRouter();
+	const { session, user } = useSession();
 	const localeCurrency = useLocaleCurrency();
 	const [loading, setLoading] = useState<PlanId | false>(false);
 	const [interval, setInterval] = useState<"month" | "year">("month");
@@ -47,9 +49,19 @@ export function PricingTable({
 		orpc.payments.createCheckoutLink.mutationOptions(),
 	);
 
+	const effectiveOrganizationId =
+		organizationId ??
+		(paymentsConfig.billingAttachedTo === "organization"
+			? session?.activeOrganizationId ?? undefined
+			: undefined);
+	const effectiveUserId =
+		userId ??
+		(paymentsConfig.billingAttachedTo === "user" ? user?.id : undefined);
+	const hasCheckoutIdentity = !!(effectiveUserId || effectiveOrganizationId);
+
 	const onSelectPlan = async (planId: PlanId, productId?: string) => {
-		if (!(userId || organizationId)) {
-			router.push("/auth/signup");
+		if (!hasCheckoutIdentity) {
+			router.push(user ? "/app" : "/auth/signup");
 			return;
 		}
 
@@ -71,7 +83,7 @@ export function PricingTable({
 					type:
 						price.type === "one-time" ? "one-time" : "subscription",
 					productId: price.productId,
-					organizationId,
+					organizationId: effectiveOrganizationId,
 					redirectUrl: window.location.href,
 				});
 
@@ -295,7 +307,7 @@ export function PricingTable({
 												}
 												loading={loading === planId}
 											>
-												{userId || organizationId
+												{hasCheckoutIdentity
 													? t("pricing.choosePlan")
 													: t("pricing.getStarted")}
 												<ArrowRightIcon className="ml-2 size-4" />

@@ -1,124 +1,70 @@
 "use client";
 import { Card } from "@repo/ui/components/card";
-import type { ChartConfig } from "@repo/ui/components/chart";
-import { StatsTile } from "@saas/start/components/StatsTile";
-import dynamic from "next/dynamic";
+import {
+	BarChart3Icon,
+	GlobeIcon,
+	SettingsIcon,
+} from "lucide-react";
+import Link from "next/link";
 
-const StatsTileChart = dynamic(
-	() =>
-		import("@saas/start/components/StatsTileChart").then(
-			(m) => m.StatsTileChart,
-		),
+const START_LINKS = [
 	{
-		ssr: false,
-		loading: () => (
-			<div className="animate-pulse h-24 rounded-lg bg-muted" />
-		),
+		title: "Open dashboard",
+		description: "Review your current organization activity and high-level health.",
+		href: "dashboard",
+		icon: BarChart3Icon,
 	},
-);
-
-const clientsData = [
-	{ month: "Jan", clients: 289 },
-	{ month: "Feb", clients: 275 },
-	{ month: "Mar", clients: 332 },
-	{ month: "Apr", clients: 347 },
-	{ month: "May", clients: 344 },
-];
-
-const revenueData = [
-	{ month: "Jan", revenue: 4200 },
-	{ month: "Feb", revenue: 3800 },
-	{ month: "Mar", revenue: 5100 },
-	{ month: "Apr", revenue: 4900 },
-	{ month: "May", revenue: 5243 },
-];
-
-const churnData = [
-	{ month: "Jan", churn: 0.045 },
-	{ month: "Feb", churn: 0.038 },
-	{ month: "Mar", churn: 0.032 },
-	{ month: "Apr", churn: 0.028 },
-	{ month: "May", churn: 0.03 },
-];
-
-const clientsChartConfig = {
-	clients: {
-		label: "Clients",
-		color: "#3b82f6",
+	{
+		title: "Manage domains",
+		description: "Add domains, inspect assets, and continue content operations.",
+		href: "domains",
+		icon: GlobeIcon,
 	},
-} satisfies ChartConfig;
-
-const revenueChartConfig = {
-	revenue: {
-		label: "Revenue",
-		color: "#10b981",
+	{
+		title: "Update settings",
+		description: "Manage branding, members, integrations, and access controls.",
+		href: "settings/general",
+		icon: SettingsIcon,
 	},
-} satisfies ChartConfig;
-
-const churnChartConfig = {
-	churn: {
-		label: "Churn",
-		color: "#8b5cf6",
-	},
-} satisfies ChartConfig;
+] as const;
 
 export default function OrganizationStart() {
 	return (
 		<div className="@container">
-			<div className="grid @2xl:grid-cols-3 gap-4">
-				<StatsTile
-					title="New clients"
-					value={344}
-					valueFormat="number"
-					trend={0.12}
-				>
-					<StatsTileChart
-						data={clientsData}
-						dataKey="clients"
-						chartConfig={clientsChartConfig}
-						gradientId="gradientClients"
-						tooltipFormatter={(value) =>
-							Intl.NumberFormat("us").format(Number(value))
-						}
-					/>
-				</StatsTile>
-				<StatsTile
-					title="Revenue"
-					value={5243}
-					valueFormat="currency"
-					trend={0.6}
-				>
-					<StatsTileChart
-						data={revenueData}
-						dataKey="revenue"
-						chartConfig={revenueChartConfig}
-						gradientId="gradientRevenue"
-						tooltipFormatter={(value) =>
-							`$${Intl.NumberFormat("us").format(Number(value))}`
-						}
-					/>
-				</StatsTile>
-				<StatsTile
-					title="Churn"
-					value={0.03}
-					valueFormat="percentage"
-					trend={-0.3}
-				>
-					<StatsTileChart
-						data={churnData}
-						dataKey="churn"
-						chartConfig={churnChartConfig}
-						gradientId="gradientChurn"
-						tooltipFormatter={(value) =>
-							`${(Number(value) * 100).toFixed(1)}%`
-						}
-					/>
-				</StatsTile>
-			</div>
+			<Card className="p-6">
+				<div className="max-w-2xl">
+					<h2 className="font-semibold text-lg">Choose where to start</h2>
+					<p className="mt-2 text-foreground/70 text-sm">
+						This organization workspace is ready. Jump into the main areas
+						below instead of showing placeholder analytics or synthetic
+						business metrics.
+					</p>
+				</div>
 
-			<Card className="mt-6">
-				<div className="flex h-64 items-center justify-center p-8 text-foreground/60">
-					Place your content here...
+				<div className="mt-6 grid gap-4 @xl:grid-cols-3">
+					{START_LINKS.map((link) => {
+						const Icon = link.icon;
+
+						return (
+							<Link
+								key={link.href}
+								href={link.href}
+								className="rounded-xl border p-4 transition-colors hover:bg-muted/40"
+							>
+								<div className="flex items-start gap-3">
+									<div className="rounded-lg bg-primary/10 p-2 text-primary">
+										<Icon className="size-4" />
+									</div>
+									<div>
+										<div className="font-medium">{link.title}</div>
+										<p className="mt-1 text-foreground/70 text-sm">
+											{link.description}
+										</p>
+									</div>
+								</div>
+							</Link>
+						);
+					})}
 				</div>
 			</Card>
 		</div>

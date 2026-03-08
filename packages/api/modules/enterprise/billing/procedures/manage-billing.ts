@@ -28,7 +28,7 @@ import {
 } from "../../../../infrastructure/redis-cache";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { audit } from "../../lib/audit";
-import { requireOrgAdmin, requireOrgMembership } from "../../lib/membership";
+import { requireOrgAdmin } from "../../lib/membership";
 import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 
 export const listBillingTiersProcedure = protectedProcedure
@@ -57,7 +57,7 @@ export const getOrgTierProcedure = protectedProcedure
 	.input(z.object({ organizationSlug: z.string().min(1) }))
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgAdmin(org.supastarterOrgId, user.id);
 
 		const orgTier = await cachedGetOrgTier(org.id, () =>
 			getOrgTier(org.id),
@@ -171,7 +171,7 @@ export const getUsageWithLimitsProcedure = protectedProcedure
 	.input(z.object({ organizationSlug: z.string().min(1) }))
 	.handler(async ({ context: { user }, input }) => {
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
-		await requireOrgMembership(org.supastarterOrgId, user.id);
+		await requireOrgAdmin(org.supastarterOrgId, user.id);
 
 		const [orgTier, usageRecords] = await Promise.all([
 			getOrgTier(org.id),

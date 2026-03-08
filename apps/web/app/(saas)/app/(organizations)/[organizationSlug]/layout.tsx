@@ -1,5 +1,6 @@
+import { isOrganizationAdmin } from "@repo/auth/lib/helper";
 import { config as paymentsConfig } from "@repo/payments/config";
-import { getActiveOrganization } from "@saas/auth/lib/server";
+import { getActiveOrganization, getSession } from "@saas/auth/lib/server";
 import { activeOrganizationQueryKey } from "@saas/organizations/lib/api";
 import { AppWrapper } from "@saas/shared/components/AppWrapper";
 import { orpc } from "@shared/lib/orpc-query-utils";
@@ -16,6 +17,7 @@ export default async function OrganizationLayout({
 	}>;
 }>) {
 	const { organizationSlug } = await params;
+	const session = await getSession();
 
 	const organization = await getActiveOrganization(organizationSlug);
 
@@ -30,7 +32,10 @@ export default async function OrganizationLayout({
 		queryFn: () => organization,
 	});
 
-	if (paymentsConfig.billingAttachedTo === "organization") {
+	if (
+		paymentsConfig.billingAttachedTo === "organization" &&
+		isOrganizationAdmin(organization, session?.user)
+	) {
 		await queryClient.prefetchQuery(
 			orpc.payments.listPurchases.queryOptions({
 				input: {

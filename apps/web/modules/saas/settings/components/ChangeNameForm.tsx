@@ -8,6 +8,7 @@ import { toastError, toastSuccess } from "@repo/ui/components/toast";
 import { useSession } from "@saas/auth/hooks/use-session";
 import { SettingsItem } from "@saas/shared/components/SettingsItem";
 import { useTranslations } from "next-intl";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -26,9 +27,16 @@ export function ChangeNameForm() {
 		},
 	});
 
+	useEffect(() => {
+		form.reset({
+			name: user?.name ?? "",
+		});
+	}, [form, user?.name]);
+
 	const onSubmit = form.handleSubmit(async ({ name }) => {
+		const trimmedName = name.trim();
 		const { error } = await authClient.updateUser({
-			name,
+			name: trimmedName,
 		});
 
 		if (error) {
@@ -41,7 +49,7 @@ export function ChangeNameForm() {
 		await reloadSession();
 
 		form.reset({
-			name,
+			name: trimmedName,
 		});
 	});
 

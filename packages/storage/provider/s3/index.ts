@@ -1,4 +1,5 @@
 import {
+	DeleteObjectCommand,
 	GetObjectCommand,
 	PutObjectCommand,
 	S3Client,
@@ -7,6 +8,7 @@ import { getSignedUrl as getS3SignedUrl } from "@aws-sdk/s3-request-presigner";
 import { logger } from "@repo/logs";
 import { config } from "../../config";
 import type {
+	DeleteObjectHandler,
 	GetSignedUploadUrlHandler,
 	GetSignedUrlHandler,
 } from "../../types";
@@ -78,11 +80,11 @@ function inferContentType(path: string): string {
 	return map[ext ?? ""] ?? "application/octet-stream";
 }
 
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 
 export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 	path,
-	{ bucket },
+	{ bucket, size },
 ) => {
 	const bucketName =
 		config.bucketNames[bucket as keyof typeof config.bucketNames];
@@ -95,6 +97,9 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 	if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
 		throw new Error(`File type not allowed: ${contentType}`);
 	}
+	if (!Number.isInteger(size) || size <= 0 || size > MAX_UPLOAD_BYTES) {
+		throw new Error("Invalid upload size");
+	}
 
 	const s3Client = getS3Client();
 	try {
@@ -104,10 +109,10 @@ export const getSignedUploadUrl: GetSignedUploadUrlHandler = async (
 				Bucket: bucketName,
 				Key: sanitizedPath,
 				ContentType: contentType,
+				ContentLength: size,
 			}),
 			{
 				expiresIn: 60,
-				conditions: [["content-length-range", 0, MAX_UPLOAD_BYTES]],
 			},
 		);
 	} catch (e) {
@@ -138,5 +143,27 @@ export const getSignedUrl: GetSignedUrlHandler = async (
 	} catch (e) {
 		logger.error(e);
 		throw new Error("Could not get signed url");
+	}
+};
+
+export const deleteObject: DeleteObjectHandler = async (path, { bucket }) => {
+	const bucketName =
+		config.bucketNames[bucket as keyof typeof config.bucketNames];
+
+	if (!bucketName) {
+		throw new Error("Invalid bucket");
+	}
+
+	const s3Client = getS3Client();
+	try {
+		await s3Client.send(
+			new DeleteObjectCommand({
+				Bucket: bucketName,
+				Key: path.replace(/\.\./g, "").replace(/\/+/g, "/"),
+			}),
+		);
+	} catch (e) {
+		logger.error(e);
+		throw new Error("Could not delete object");
 	}
 };

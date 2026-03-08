@@ -28,7 +28,7 @@ export default async function DomainsPage({
 		<div>
 			<PageHeader
 				title="Domains"
-				subtitle="Manage your web properties, DNS verification, and deployment status."
+				subtitle="Manage your web properties, recorded metadata, and deployment status."
 			/>
 			<DomainsListView organizationSlug={organizationSlug} />
 		</div>

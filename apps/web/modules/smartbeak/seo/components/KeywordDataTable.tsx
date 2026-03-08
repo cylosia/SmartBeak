@@ -30,7 +30,7 @@ import {
 	SearchIcon,
 	TrashIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import {
 	formatVolume,
@@ -48,6 +48,13 @@ interface KeywordRow {
 	position: number | null;
 	decayFactor: string | null;
 	lastUpdated: string | Date;
+}
+
+function clampPercent(value: number | null | undefined) {
+	if (typeof value !== "number" || Number.isNaN(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
 }
 
 function MiniSparkline({ data, id }: { data: number[]; id: string }) {
@@ -189,12 +196,16 @@ const columns: ColumnDef<KeywordRow>[] = [
 		cell: ({ row }) => {
 			const d = row.original.difficulty;
 			const tier = getDifficultyTier(d);
+			const normalizedDifficulty = clampPercent(d);
 			if (d == null) {
 				return <span className="text-sm text-muted-foreground">—</span>;
 			}
 			return (
 				<div className="flex items-center gap-2">
-					<Progress value={d} className="h-1.5 w-14" />
+					<Progress
+						value={normalizedDifficulty}
+						className="h-1.5 w-14"
+					/>
 					<span
 						className={`text-xs font-medium px-1.5 py-0.5 rounded ${tier.bg} ${tier.color}`}
 					>
@@ -240,7 +251,7 @@ const columns: ColumnDef<KeywordRow>[] = [
 	{
 		id: "decay",
 		header: ({ column }) => (
-			<SortableHeader label="Health" column={column} />
+			<SortableHeader label="Decay State" column={column} />
 		),
 		accessorFn: (row) =>
 			row.decayFactor ? Number.parseFloat(row.decayFactor) : 0,
@@ -273,7 +284,7 @@ export function KeywordDataTable({
 	isDeleting,
 }: {
 	data: KeywordRow[];
-	onDelete: (ids: string[]) => void;
+	onDelete: (ids: string[]) => Promise<void>;
 	isDeleting?: boolean;
 }) {
 	const [sorting, setSorting] = useState<SortingState>([]);
@@ -281,6 +292,20 @@ export function KeywordDataTable({
 	const [rowSelection, setRowSelection] = useState<Record<string, boolean>>(
 		{},
 	);
+
+	useEffect(() => {
+		const visibleIds = new Set(data.map((row) => row.id));
+		setRowSelection((current) => {
+			const next = Object.fromEntries(
+				Object.entries(current).filter(([id, selected]) => {
+					return selected && visibleIds.has(id);
+				}),
+			);
+			return Object.keys(next).length === Object.keys(current).length
+				? current
+				: next;
+		});
+	}, [data]);
 
 	const table = useReactTable({
 		data,
@@ -316,9 +341,13 @@ export function KeywordDataTable({
 					<Button
 						variant="destructive"
 						size="sm"
-						onClick={() => {
-							onDelete(selectedIds);
-							setRowSelection({});
+						onClick={async () => {
+							try {
+								await onDelete(selectedIds);
+								setRowSelection({});
+							} catch {
+								// Keep the selection so the user can retry the failed delete.
+							}
 						}}
 						disabled={isDeleting}
 					>

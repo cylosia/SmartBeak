@@ -20,7 +20,7 @@ export function ForgotPassword({
 	});
 
 	return (
-		<Wrapper>
+		<Wrapper locale={locale}>
 			<Text>{t("mail.forgotPassword.body")}</Text>
 
 			<PrimaryButton href={url}>

@@ -14,7 +14,7 @@ export const app = new Hono()
 	// Cors middleware
 	.use(
 		cors({
-			origin: getBaseUrl(),
+			origin: new URL(getBaseUrl()).origin,
 			allowHeaders: ["Content-Type", "Authorization"],
 			allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 			exposeHeaders: ["Content-Length"],

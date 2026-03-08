@@ -63,7 +63,7 @@ export default async function DomainAnalyticsPage({
 					Domain Analytics
 				</h1>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Diligence engine, sell-ready score, and buyer attribution
+					Diligence review, sell-readiness estimate, and buyer attribution
 					for this domain
 				</p>
 			</div>
@@ -74,7 +74,7 @@ export default async function DomainAnalyticsPage({
 						Diligence Engine
 					</TabsTrigger>
 					<TabsTrigger value="sell-ready">
-						Sell-Ready Score
+						Sell-Readiness Estimate
 					</TabsTrigger>
 					<TabsTrigger value="attribution">
 						Buyer Attribution

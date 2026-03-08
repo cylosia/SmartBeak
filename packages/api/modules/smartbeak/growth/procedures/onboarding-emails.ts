@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/server";
+import { logger } from "@repo/logs";
 import { sendEmail } from "@repo/mail";
 import { escapeHtml, getBaseUrl } from "@repo/utils";
 import { z } from "zod";
@@ -10,18 +11,18 @@ import {
 const ONBOARDING_SEQUENCE = [
 	{
 		step: 1,
-		subject: "Welcome to SmartBeak — let's get your first domain live",
+		subject: "Welcome to SmartBeak — set up your first domain",
 		delayDays: 0,
 		body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
         <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Welcome${name ? `, ${escapeHtml(name)}` : ""}! 🎉</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          You've just unlocked the most powerful AI content publishing platform for domain portfolio owners.
+          Your SmartBeak workspace is ready for setup.
           Here's your 3-step quick start:
         </p>
         <ol style="color: #475569; font-size: 15px; line-height: 2;">
           <li><strong>Add your first domain</strong> — go to Domains → Add Domain</li>
-          <li><strong>Run the Diligence Engine</strong> — get your domain's sell-ready score instantly</li>
+          <li><strong>Review domain diligence</strong> — open a domain record to review ownership, legal, financial, and content checks</li>
           <li><strong>Generate your first AI content idea</strong> — use the SEO Intelligence panel</li>
         </ol>
         <a href="${getBaseUrl()}/app"
@@ -33,18 +34,18 @@ const ONBOARDING_SEQUENCE = [
 	},
 	{
 		step: 2,
-		subject: "Your SmartBeak SEO Intelligence is ready to use",
+		subject: "Explore SmartBeak SEO Intelligence",
 		delayDays: 2,
 		body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
         <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Unlock your SEO potential${name ? `, ${escapeHtml(name)}` : ""}</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           SmartBeak's SEO Intelligence module helps you find high-value keywords, track decay signals,
-          and generate AI-powered content ideas that actually rank.
+          and generate AI-assisted content ideas for review.
         </p>
         <p style="color: #475569; font-size: 15px; line-height: 1.6;">
           <strong>Try it now:</strong> Navigate to any domain → SEO Intelligence → AI Ideas Generator.
-          Enter your niche and get 5 structured content ideas with titles, outlines, and SEO scores in seconds.
+          Enter your niche to generate structured content ideas with titles, outlines, and heuristic SEO scores.
         </p>
         <a href="${getBaseUrl()}/app"
            style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
@@ -55,22 +56,21 @@ const ONBOARDING_SEQUENCE = [
 	},
 	{
 		step: 3,
-		subject: "Is your domain sell-ready? Check your score now",
+		subject: "Review your domain sell-readiness estimate",
 		delayDays: 5,
 		body: (name: string) => `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px;">
-        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Your Sell-Ready Score${name ? `, ${escapeHtml(name)}` : ""}</h1>
+        <h1 style="font-size: 22px; font-weight: 700; color: #0f172a;">Your Sell-Readiness Estimate${name ? `, ${escapeHtml(name)}` : ""}</h1>
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          SmartBeak's Diligence Engine automatically checks ownership, legal, financial, and content signals
-          to give you a composite Sell-Ready Score for each domain.
+          SmartBeak's diligence and analytics views combine recorded ownership, legal, financial, and content signals
+          into a sell-readiness estimate for each domain.
         </p>
         <p style="color: #475569; font-size: 15px; line-height: 1.6;">
-          Domains with a score above 80 sell for <strong>2-4x more</strong> than unoptimized ones.
-          See exactly what to fix to maximise your exit value.
+          Use the estimate and recommendations as review guidance, not as a guarantee of sale outcome or valuation.
         </p>
         <a href="${getBaseUrl()}/app"
            style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">
-          Check My Score →
+          Review My Estimate →
         </a>
       </div>
     `,
@@ -108,7 +108,13 @@ export const triggerOnboardingSequenceProcedure = protectedProcedure
 				text: `Welcome to SmartBeak! Open the app at: ${getBaseUrl()}/app`,
 			});
 			results.push({ step: 1, sent: true });
-		} catch (_err) {
+		} catch (err) {
+			logger.warn("[growth:onboarding] Failed to send onboarding email", {
+				userId: user.id,
+				email,
+				step: step1.step,
+				error: err instanceof Error ? err.message : String(err),
+			});
 			results.push({
 				step: 1,
 				sent: false,

@@ -75,7 +75,7 @@ function generateAffiliateComparison(domainName: string): string {
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(domainName)} - Best Product Comparisons</title>
-<meta name="description" content="Compare top products side by side. Find the best deals and honest reviews at ${escapeHtml(domainName)}.">
+<meta name="description" content="Product comparison website template for ${escapeHtml(domainName)}. Replace sample rankings, reviews, and deal claims with your real content before publishing.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;color:#1e293b;background:#f8fafc}
@@ -120,9 +120,9 @@ function generateAffiliateComparison(domainName: string): string {
 <ul class="nav-links"><li><a href="#">Reviews</a></li><li><a href="#">Categories</a></li><li><a href="#">Deals</a></li><li><a href="#">About</a></li></ul>
 </div></div></nav>
 <section class="hero"><div class="container">
-<div class="hero-badge">Trusted by 50,000+ readers</div>
-<h1>Find the Perfect Product</h1>
-<p>Unbiased comparisons, expert reviews, and the best deals — all in one place.</p>
+<div class="hero-badge">Comparison template preview</div>
+<h1>Build Your Comparison Site</h1>
+<p>Use this sample layout for product comparisons, buying guides, and editorial content after replacing the example rankings and review claims.</p>
 <div class="search-box"><input type="text" placeholder="Search products to compare..."></div>
 </div></section>
 <section class="categories"><div class="container">
@@ -133,18 +133,18 @@ function generateAffiliateComparison(domainName: string): string {
 <div class="card"><div class="card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></div><h3>Audio & Headphones</h3><p>Find the best headphones, speakers, and audio gear for your needs.</p></div>
 </div></div></section>
 <section class="comparison"><div class="container">
-<h2 class="section-title">Top Comparisons This Week</h2>
+<h2 class="section-title">Sample Comparison Layout</h2>
 <table class="comp-table">
 <thead><tr><th>Product</th><th>Rating</th><th>Price</th><th>Best For</th><th></th></tr></thead>
 <tbody>
-<tr><td><strong>Product Alpha Pro</strong></td><td><span class="stars">★★★★★</span> 4.9</td><td>$299</td><td><span class="badge badge-green">Best Overall</span></td><td><a href="#" class="cta">Compare</a></td></tr>
-<tr><td><strong>Product Beta Max</strong></td><td><span class="stars">★★★★</span> 4.7</td><td>$249</td><td><span class="badge badge-blue">Best Value</span></td><td><a href="#" class="cta">Compare</a></td></tr>
-<tr><td><strong>Product Gamma Ultra</strong></td><td><span class="stars">★★★★</span> 4.5</td><td>$199</td><td><span class="badge badge-blue">Budget Pick</span></td><td><a href="#" class="cta">Compare</a></td></tr>
+<tr><td><strong>Product A</strong></td><td><span class="stars">Sample</span></td><td>Replace</td><td><span class="badge badge-green">Customize</span></td><td><a href="#" class="cta">Edit</a></td></tr>
+<tr><td><strong>Product B</strong></td><td><span class="stars">Sample</span></td><td>Replace</td><td><span class="badge badge-blue">Customize</span></td><td><a href="#" class="cta">Edit</a></td></tr>
+<tr><td><strong>Product C</strong></td><td><span class="stars">Sample</span></td><td>Replace</td><td><span class="badge badge-blue">Customize</span></td><td><a href="#" class="cta">Edit</a></td></tr>
 </tbody></table>
 </div></section>
 <footer class="footer"><div class="container">
 <p style="font-size:1.25rem;color:#fff;font-weight:700;margin-bottom:16px">${escapeHtml(domainName)}</p>
-<p>Honest reviews and comparisons you can trust.</p>
+<p>Replace this sample comparison copy with your actual editorial standards and review data.</p>
 <p style="margin-top:24px;font-size:.875rem">Built with SmartBeak SmartDeploy</p>
 </div></footer>
 </body></html>`;
@@ -156,7 +156,7 @@ function generateAuthoritySite(domainName: string): string {
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(domainName)} - Expert Knowledge Hub</title>
-<meta name="description" content="${escapeHtml(domainName)} is your authoritative source for in-depth articles, research, and expert insights.">
+<meta name="description" content="${escapeHtml(domainName)} knowledge-site template. Replace sample editorial claims and article copy with your real content before publishing.">
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;color:#1e293b;background:#fff}
@@ -205,20 +205,20 @@ function generateAuthoritySite(domainName: string): string {
 <section class="hero"><div class="container">
 <div class="hero-label">Featured</div>
 <h1>Insights That Shape the Future of Industry</h1>
-<p>Deep-dive analysis, expert perspectives, and research-backed content to keep you ahead of the curve.</p>
+<p>Use this editorial template for articles, essays, or documentation after replacing the example authority and research claims with your real content.</p>
 </div></section>
 <section class="content"><div class="container"><div class="grid-2">
 <div class="articles">
-<div class="article"><div class="article-meta">Analysis &bull; 12 min read</div><h2><a href="#">The Complete Guide to Strategic Decision Making in 2025</a></h2><p>An in-depth exploration of frameworks and mental models that top executives use to make better decisions under uncertainty.</p><a href="#" class="read-more">Read full article →</a></div>
-<div class="article"><div class="article-meta">Research &bull; 8 min read</div><h2><a href="#">Understanding Market Dynamics: A Data-Driven Approach</a></h2><p>How modern analytics and AI-driven insights are transforming the way organizations understand and respond to market shifts.</p><a href="#" class="read-more">Read full article →</a></div>
-<div class="article"><div class="article-meta">Guide &bull; 15 min read</div><h2><a href="#">Building Resilient Systems: Lessons from Industry Leaders</a></h2><p>Key principles and practical strategies for creating systems that thrive in volatile, uncertain environments.</p><a href="#" class="read-more">Read full article →</a></div>
+<div class="article"><div class="article-meta">Sample Article &bull; 12 min read</div><h2><a href="#">Replace this headline with your first long-form article</a></h2><p>Use this section for your real analysis, documentation, or educational content before publishing the site.</p><a href="#" class="read-more">Read full article →</a></div>
+<div class="article"><div class="article-meta">Sample Article &bull; 8 min read</div><h2><a href="#">Replace this headline with your second article or guide</a></h2><p>Swap in your own editorial copy, research summary, or operating guidance instead of these starter examples.</p><a href="#" class="read-more">Read full article →</a></div>
+<div class="article"><div class="article-meta">Sample Article &bull; 15 min read</div><h2><a href="#">Replace this headline with your flagship resource</a></h2><p>Use this block for a real case study, reference guide, or knowledge-base article that matches your domain.</p><a href="#" class="read-more">Read full article →</a></div>
 </div>
 <div class="sidebar">
-<div class="subscribe-box"><h3>Stay Informed</h3><p>Get weekly insights delivered to your inbox.</p><input type="email" placeholder="your@email.com"><button class="btn">Subscribe Free</button></div>
+<div class="subscribe-box"><h3>Stay Informed</h3><p>Replace this sample signup box with your real newsletter or update flow.</p><input type="email" placeholder="your@email.com"><button class="btn">Subscribe</button></div>
 <div class="widget"><h3>Popular Topics</h3><ul><li><a href="#">Strategy & Leadership</a></li><li><a href="#">Data & Analytics</a></li><li><a href="#">Innovation & Technology</a></li><li><a href="#">Organizational Design</a></li><li><a href="#">Market Research</a></li></ul></div>
 </div>
 </div></div></section>
-<footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Expert Knowledge Hub &bull; Built with SmartBeak SmartDeploy</p></div></footer>
+<footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Knowledge Site Template &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
 }
 
@@ -281,28 +281,28 @@ function generateLandingLeadgen(domainName: string): string {
 <a href="#" class="nav-cta">Get Started</a>
 </div></div></nav>
 <section class="hero"><div class="container"><div class="hero-content">
-<div class="hero-pill">New: AI-Powered Analytics Dashboard</div>
-<h1>Grow Your Business 10x Faster</h1>
-<p>Join thousands of companies using our platform to accelerate growth, increase conversions, and scale effortlessly.</p>
-<div class="hero-form"><input type="email" placeholder="Enter your work email"><button>Start Free Trial</button></div>
-<p style="margin-top:16px;font-size:.875rem;opacity:.7">No credit card required. 14-day free trial.</p>
+<div class="hero-pill">Marketing site template preview</div>
+<h1>Present Your Business Clearly Online</h1>
+<p>Use this starter layout as a customizable marketing template for your business, offers, and contact funnel.</p>
+<div class="hero-form"><input type="email" placeholder="Enter your work email"><button>Join Waitlist</button></div>
+<p style="margin-top:16px;font-size:.875rem;opacity:.7">Join the waitlist for staged beta access updates.</p>
 </div></div></section>
 <section class="social-proof"><div class="container">
-<p>Trusted by forward-thinking companies</p>
-<div class="logos"><span>Acme Inc</span><span>TechCorp</span><span>Global AI</span><span>DataFlow</span><span>ScaleUp</span></div>
+<p>Customize this section with your own customer logos or proof points</p>
+<div class="logos"><span>Your Brand</span><span>Case Study</span><span>Partner</span><span>Customer</span><span>Award</span></div>
 </div></section>
 <section class="features"><div class="container">
 <h2 class="section-title">Everything You Need</h2>
 <p class="section-sub">Powerful tools designed to help you succeed at every stage of growth.</p>
 <div class="grid-3">
 <div class="feat-card"><div class="feat-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><h3>Lightning Fast Setup</h3><p>Get up and running in minutes, not days. Our intuitive onboarding guides you every step of the way.</p></div>
-<div class="feat-card"><div class="feat-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><h3>Smart Analytics</h3><p>Understand your data with AI-powered insights that turn numbers into actionable strategies.</p></div>
-<div class="feat-card"><div class="feat-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h3>Enterprise Security</h3><p>Bank-grade encryption and compliance certifications to keep your data safe and secure.</p></div>
+<div class="feat-card"><div class="feat-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><h3>Performance Highlights</h3><p>Replace this sample block with the metrics, reporting, or insights your business actually provides.</p></div>
+<div class="feat-card"><div class="feat-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h3>Customizable Trust Section</h3><p>Replace this placeholder copy with your actual security, privacy, or compliance commitments before publishing.</p></div>
 </div></div></section>
 <section class="cta-section"><div class="container">
 <h2>Ready to Transform Your Business?</h2>
-<p>Join 10,000+ companies already growing with us.</p>
-<a href="#" class="cta-btn">Start Your Free Trial →</a>
+<p>Replace this placeholder text with your own launch, contact, or conversion message.</p>
+<a href="#" class="cta-btn">Join the Waitlist →</a>
 </div></section>
 <footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
@@ -314,7 +314,7 @@ function generateLocalBusiness(domainName: string): string {
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(domainName)} - Your Local Business</title>
-<meta name="description" content="${escapeHtml(domainName)} - Quality service, trusted by your community. Contact us today.">
+<meta name="description" content="${escapeHtml(domainName)} - Local business website template. Replace this copy with your real services, service area, and contact details before publishing.">
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Open Sans',sans-serif;color:#1e293b}
@@ -366,35 +366,35 @@ function generateLocalBusiness(domainName: string): string {
 <a href="tel:+15551234567" class="phone">Call (555) 123-4567</a>
 </div></div></nav>
 <section class="hero"><div class="container"><div class="hero-grid">
-<div><h1>Quality Service You Can Trust</h1><p>Serving our community with excellence for over 15 years. Professional, reliable, and always here when you need us.</p><a href="#" class="hero-btn">Get a Free Quote</a></div>
+<div><h1>Describe Your Local Business Clearly</h1><p>Use this template to present your actual services, service area, and contact details before publishing your site.</p><a href="#" class="hero-btn">Contact Us</a></div>
 <div class="hero-img"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.5"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><line x1="9" y1="14" x2="9" y2="14.01"/><line x1="15" y1="14" x2="15" y2="14.01"/><rect x="9" y="18" width="6" height="4"/></svg></div>
 </div></div></section>
 <section class="stats"><div class="container"><div class="stats-grid">
-<div><div class="stat-num">15+</div><div class="stat-label">Years in Business</div></div>
-<div><div class="stat-num">2,500+</div><div class="stat-label">Happy Clients</div></div>
-<div><div class="stat-num">4.9</div><div class="stat-label">Star Rating</div></div>
-<div><div class="stat-num">24/7</div><div class="stat-label">Support</div></div>
+<div><div class="stat-num">01</div><div class="stat-label">Add your first proof point</div></div>
+<div><div class="stat-num">02</div><div class="stat-label">Add your second proof point</div></div>
+<div><div class="stat-num">03</div><div class="stat-label">Add your third proof point</div></div>
+<div><div class="stat-num">04</div><div class="stat-label">Add your fourth proof point</div></div>
 </div></div></section>
 <section class="services"><div class="container">
 <h2 class="section-title">Our Services</h2>
-<p class="section-sub">Comprehensive solutions tailored to your needs</p>
+<p class="section-sub">Replace these examples with the real services your business offers</p>
 <div class="grid-3">
 <div class="service-card"><h3>Maintenance</h3><p>Regular maintenance and upkeep to keep everything running smoothly and prevent costly repairs.</p></div>
-<div class="service-card"><h3>Repairs</h3><p>Fast, reliable repair services with a satisfaction guarantee. We fix it right the first time.</p></div>
+<div class="service-card"><h3>Repairs</h3><p>Describe the repair or support work you actually provide, including any real service commitments you want to publish.</p></div>
 <div class="service-card"><h3>Consultation</h3><p>Expert advice and planning to help you make informed decisions about your property or business.</p></div>
 </div></div></section>
 <section class="testimonials"><div class="container">
-<h2 class="section-title">What Our Clients Say</h2>
-<p class="section-sub">Real reviews from real customers</p>
+<h2 class="section-title">Customer Proof</h2>
+<p class="section-sub">Replace these placeholders with real testimonials, certifications, or case studies before publishing</p>
 <div class="grid-3">
-<div class="test-card"><p>"Absolutely outstanding service. They went above and beyond what I expected. Highly recommend!"</p><div class="test-author">Sarah M.</div><div class="test-role">Homeowner</div></div>
-<div class="test-card"><p>"Professional, punctual, and fair pricing. They've been our go-to service provider for years."</p><div class="test-author">James R.</div><div class="test-role">Business Owner</div></div>
-<div class="test-card"><p>"Quick response time and excellent workmanship. Will definitely use them again for future projects."</p><div class="test-author">Maria L.</div><div class="test-role">Property Manager</div></div>
+<div class="test-card"><p>"Add a real customer testimonial, review excerpt, or short case study here."</p><div class="test-author">Customer Name</div><div class="test-role">Role or company</div></div>
+<div class="test-card"><p>"Use this area for verified proof such as service outcomes, review snippets, or accreditation details."</p><div class="test-author">Proof point</div><div class="test-role">Source</div></div>
+<div class="test-card"><p>"If you do not have testimonials yet, replace this block with operating hours, service area, or contact information."</p><div class="test-author">Optional section</div><div class="test-role">Customize before publishing</div></div>
 </div></div></section>
 <section class="contact"><div class="container">
 <h2>Ready to Get Started?</h2>
-<p>Contact us today for a free consultation and quote.</p>
-<a href="#" class="contact-btn">Request a Free Quote</a>
+<p>Replace this section with your real contact flow, service availability, and response expectations.</p>
+<a href="#" class="contact-btn">Get in Touch</a>
 </div></section>
 <footer class="footer"><div class="container"><p>${escapeHtml(domainName)} &bull; Built with SmartBeak SmartDeploy</p></div></footer>
 </body></html>`;
@@ -463,10 +463,10 @@ function generateMediaNewsletter(domainName: string): string {
 <a href="#" class="sub-btn">Subscribe</a>
 </div></div></nav>
 <section class="hero"><div class="container">
-<h1>Stories That Shape Our World</h1>
-<p>In-depth reporting, thoughtful analysis, and perspectives that matter. Delivered free, every morning.</p>
-<div class="hero-form"><input type="email" placeholder="you@email.com"><button>Subscribe Free</button></div>
-<div class="hero-stats"><span><strong>25,000+</strong> subscribers</span><span><strong>Daily</strong> delivery</span><span><strong>5 min</strong> read</span></div>
+<h1>Publish Your Stories and Updates</h1>
+<p>Use this media or newsletter template for your real editorial voice, publishing cadence, and subscription offer.</p>
+<div class="hero-form"><input type="email" placeholder="you@email.com"><button>Subscribe</button></div>
+<div class="hero-stats"><span><strong>Audience</strong> metric</span><span><strong>Cadence</strong> placeholder</span><span><strong>Read time</strong> placeholder</span></div>
 </div></section>
 <section class="featured"><div class="container">
 <div class="section-label">Featured Stories</div>

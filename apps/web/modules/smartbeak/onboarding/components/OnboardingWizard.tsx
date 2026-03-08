@@ -5,6 +5,7 @@ import { Progress } from "@repo/ui/components/progress";
 import { toastError } from "@repo/ui/components/toast";
 import { orpc } from "@shared/lib/orpc-query-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
 	CheckCircleIcon,
 	CreditCardIcon,
@@ -23,7 +24,7 @@ const ONBOARDING_STEPS = [
 		key: "add_domain",
 		title: "Add your first domain",
 		description:
-			"Connect a web property to start publishing and tracking performance.",
+			"Add a domain record to begin publishing workflows and review domain data.",
 		icon: GlobeIcon,
 		href: (slug: string) => `/app/${slug}/domains`,
 		cta: "Add Domain",
@@ -50,7 +51,7 @@ const ONBOARDING_STEPS = [
 		key: "publish_content",
 		title: "Publish to a channel",
 		description:
-			"Use the publishing engine to distribute content to web, email, or social.",
+			"Use the publishing engine to distribute content to supported social and publishing channels.",
 		icon: SendIcon,
 		href: (slug: string) => `/app/${slug}/domains`,
 		cta: "Publish",
@@ -68,7 +69,7 @@ const ONBOARDING_STEPS = [
 		key: "deploy_site",
 		title: "Deploy your site",
 		description:
-			"Use SmartDeploy to push your site to the global edge network.",
+			"Use SmartDeploy to publish a supported theme once deployment is configured for your workspace.",
 		icon: ZapIcon,
 		href: (slug: string) => `/app/${slug}/smart-deploy`,
 		cta: "Deploy",
@@ -81,6 +82,7 @@ export function OnboardingWizard({
 	organizationSlug: string;
 }) {
 	const queryClient = useQueryClient();
+	const [pendingStep, setPendingStep] = useState<string | null>(null);
 
 	const progressQuery = useQuery(
 		orpc.smartbeak.onboarding.getProgress.queryOptions({
@@ -90,6 +92,9 @@ export function OnboardingWizard({
 
 	const completeMutation = useMutation(
 		orpc.smartbeak.onboarding.completeStep.mutationOptions({
+			onMutate: ({ step }) => {
+				setPendingStep(step);
+			},
 			onSuccess: () => {
 				queryClient.invalidateQueries({
 					queryKey: orpc.smartbeak.onboarding.getProgress.key(),
@@ -97,6 +102,9 @@ export function OnboardingWizard({
 			},
 			onError: (err) => {
 				toastError("Error", err.message);
+			},
+			onSettled: () => {
+				setPendingStep(null);
 			},
 		}),
 	);
@@ -161,8 +169,8 @@ export function OnboardingWizard({
 							{progressPct === 100 && (
 								<p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-2">
 									<CheckCircleIcon className="h-4 w-4" />
-									All steps complete — your workspace is fully
-									configured!
+									All checklist steps are complete — review
+									your workspace settings before launch.
 								</p>
 							)}
 						</div>
@@ -171,6 +179,7 @@ export function OnboardingWizard({
 						<div className="space-y-3">
 							{ONBOARDING_STEPS.map((step, index) => {
 								const isComplete = completedSteps.has(step.key);
+								const isPendingStep = pendingStep === step.key;
 								return (
 									<Card
 										key={step.key}
@@ -253,7 +262,7 @@ export function OnboardingWizard({
 																completeMutation.isPending
 															}
 														>
-															{completeMutation.isPending && (
+															{isPendingStep && (
 																<Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
 															)}
 															Mark done

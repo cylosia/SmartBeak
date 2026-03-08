@@ -56,6 +56,13 @@ type OptimizerResult = {
 	keywordDensity: Record<string, number>;
 };
 
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
 function SeverityIcon({ severity }: { severity: string }) {
 	if (severity === "error") {
 		return (
@@ -81,7 +88,8 @@ function ScoreBar({
 	score: number;
 	max: number;
 }) {
-	const pct = Math.round((score / max) * 100);
+	const safeScore = Math.max(0, Math.min(max, score));
+	const pct = max > 0 ? clampPercent(Math.round((safeScore / max) * 100)) : 0;
 	const color =
 		pct >= 70
 			? "bg-emerald-500 dark:bg-emerald-400"
@@ -93,7 +101,7 @@ function ScoreBar({
 			<div className="flex justify-between text-xs">
 				<span className="text-muted-foreground">{label}</span>
 				<span className="font-medium">
-					{score}/{max}
+					{safeScore}/{max}
 				</span>
 			</div>
 			<div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -117,36 +125,47 @@ export function ContentOptimizerPanel({
 	const [keywordsInput, setKeywordsInput] = useState("");
 	const [result, setResult] = useState<OptimizerResult | null>(null);
 	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const latestRequestIdRef = useRef(0);
 
 	const optimizeMutation = useMutation(
-		orpc.smartbeak.seoIntelligence.optimizeContent.mutationOptions({
-			onSuccess: (data) => {
-				setResult(data as OptimizerResult);
-			},
-			onError: (err: Error) => {
-				toastError(
-					"Optimization failed",
-					err.message ?? "Could not analyze content.",
-				);
-			},
-		}),
+		orpc.smartbeak.seoIntelligence.optimizeContent.mutationOptions(),
 	);
 
 	const runOptimizer = useCallback(
 		(t: string, b: string, meta: string, kwInput: string) => {
+			const requestId = latestRequestIdRef.current + 1;
+			latestRequestIdRef.current = requestId;
 			const keywords = kwInput
 				.split(",")
 				.map((k) => k.trim())
 				.filter(Boolean);
-			optimizeMutation.mutate({
-				title: t,
-				body: b,
-				metaDescription: meta || undefined,
-				targetKeywords: keywords.length > 0 ? keywords : undefined,
-			});
+			optimizeMutation.mutate(
+				{
+					title: t,
+					body: b,
+					metaDescription: meta || undefined,
+					targetKeywords: keywords.length > 0 ? keywords : undefined,
+				},
+				{
+					onSuccess: (data) => {
+						if (requestId !== latestRequestIdRef.current) {
+							return;
+						}
+						setResult(data as OptimizerResult);
+					},
+					onError: (err: Error) => {
+						if (requestId !== latestRequestIdRef.current) {
+							return;
+						}
+						toastError(
+							"Optimization failed",
+							err.message ?? "Could not analyze content.",
+						);
+					},
+				},
+			);
 		},
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[],
+		[optimizeMutation],
 	);
 
 	// Debounced live scoring
@@ -168,10 +187,11 @@ export function ContentOptimizerPanel({
 	}, [title, body, metaDescription, keywordsInput, runOptimizer]);
 
 	const score = result?.overallScore ?? 0;
+	const normalizedScore = clampPercent(score);
 	const scoreColor =
-		score >= 70
+		normalizedScore >= 70
 			? "text-emerald-500 dark:text-emerald-400"
-			: score >= 40
+			: normalizedScore >= 40
 				? "text-amber-500 dark:text-amber-400"
 				: "text-red-500 dark:text-red-400";
 
@@ -295,17 +315,17 @@ export function ContentOptimizerPanel({
 									>
 										{optimizeMutation.isPending
 											? "…"
-											: score}
+											: normalizedScore}
 									</span>
 									<div className="flex-1 space-y-2">
 										<Progress
-											value={score}
+											value={normalizedScore}
 											className="h-2"
 										/>
 										<p className="text-xs text-muted-foreground">
-											{score >= 70
-												? "Strong — ready to publish"
-												: score >= 40
+											{normalizedScore >= 70
+												? "Strong heuristic score — review before publishing"
+												: normalizedScore >= 40
 													? "Moderate — review suggestions"
 													: "Needs work — follow suggestions below"}
 										</p>

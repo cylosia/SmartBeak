@@ -21,6 +21,13 @@ import {
 import { ErrorBoundary } from "@/modules/smartbeak/shared/components/ErrorBoundary";
 import { CardGridSkeleton } from "@/modules/smartbeak/shared/components/LoadingSkeleton";
 
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
 const PRIORITY_CONFIG = {
 	high: {
 		icon: AlertTriangleIcon,
@@ -45,21 +52,23 @@ const PRIORITY_CONFIG = {
 function ScoreRing({ score }: { score: number }) {
 	const radius = 54;
 	const circumference = 2 * Math.PI * radius;
-	const dashOffset = circumference - (score / 100) * circumference;
+	const normalizedScore = clampPercent(score);
+	const dashOffset =
+		circumference - (normalizedScore / 100) * circumference;
 	const strokeColor =
-		score >= 80
+		normalizedScore >= 80
 			? "hsl(var(--chart-1))"
-			: score >= 60
+			: normalizedScore >= 60
 				? "hsl(var(--chart-3))"
-				: score >= 40
+				: normalizedScore >= 40
 					? "hsl(var(--chart-3))"
 					: "hsl(var(--chart-5))";
 	const textClass =
-		score >= 80
+		normalizedScore >= 80
 			? "text-green-600 dark:text-green-400"
-			: score >= 60
+			: normalizedScore >= 60
 				? "text-amber-600 dark:text-amber-400"
-				: score >= 40
+				: normalizedScore >= 40
 					? "text-orange-600 dark:text-orange-400"
 					: "text-red-600 dark:text-red-400";
 
@@ -94,7 +103,9 @@ function ScoreRing({ score }: { score: number }) {
 				/>
 			</svg>
 			<div className="text-center">
-				<div className={`text-3xl font-bold ${textClass}`}>{score}</div>
+				<div className={`text-3xl font-bold ${textClass}`}>
+					{normalizedScore}
+				</div>
 				<div className="text-xs text-muted-foreground">/ 100</div>
 			</div>
 		</div>
@@ -123,7 +134,7 @@ export function SellReadyPanel({
 		return (
 			<div className="flex flex-col items-center py-8 text-center">
 				<p className="text-sm text-destructive">
-					Failed to load sell-ready score.
+					Failed to load sell-readiness estimate.
 				</p>
 				<Button
 					variant="outline"
@@ -141,20 +152,21 @@ export function SellReadyPanel({
 	if (!data) {
 		return null;
 	}
+	const score = clampPercent(Number(data.score ?? 0));
 
 	const readinessLabel =
-		data.score >= 80
-			? "Sell-Ready"
-			: data.score >= 60
-				? "Nearly Ready"
-				: data.score >= 40
-					? "Needs Work"
-					: "Not Ready";
+		score >= 80
+			? "Higher Readiness"
+			: score >= 60
+				? "Moderate Readiness"
+				: score >= 40
+					? "Developing Readiness"
+					: "Low Readiness";
 
 	const readinessColor =
-		data.score >= 80
+		score >= 80
 			? "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20"
-			: data.score >= 60
+			: score >= 60
 				? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20"
 				: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20";
 
@@ -167,7 +179,7 @@ export function SellReadyPanel({
 						<div className="flex items-center justify-between">
 							<div>
 								<CardTitle className="text-base">
-									Sell-Ready Score
+									Sell-Readiness Estimate
 								</CardTitle>
 								<CardDescription>
 									{domainName ?? domainId}
@@ -180,8 +192,14 @@ export function SellReadyPanel({
 						</div>
 					</CardHeader>
 					<CardContent>
+						<p className="mb-4 text-sm text-muted-foreground">
+							This estimate is derived from available health,
+							diligence, monetization, buyer-session, and timeline
+							signals. It is not a legal, financial, or brokerage
+							readiness determination.
+						</p>
 						<div className="flex flex-col items-center gap-6 sm:flex-row">
-							<ScoreRing score={data.score} />
+							<ScoreRing score={score} />
 							<div className="flex-1 space-y-3">
 								{Object.entries(data.breakdown ?? {}).map(
 									([key, value]) => {
@@ -221,13 +239,17 @@ export function SellReadyPanel({
 														{cfg.label}
 													</span>
 													<span className="font-medium">
-														{value} / {cfg.max}
+														{clampPercent(
+															Number(value ?? 0),
+														)} / {cfg.max}
 													</span>
 												</div>
 												<Progress
-													value={
-														(value / cfg.max) * 100
-													}
+													value={clampPercent(
+														(Number(value ?? 0) /
+															cfg.max) *
+															100,
+													)}
 													className="h-1.5"
 												/>
 											</div>
@@ -244,11 +266,11 @@ export function SellReadyPanel({
 					<Card>
 						<CardHeader>
 							<CardTitle className="text-sm font-semibold">
-								Improvement Recommendations
+								Readiness Signals
 							</CardTitle>
 							<CardDescription>
-								Address these items to increase your sell-ready
-								score
+								Address these heuristic signals to improve the
+								estimated readiness score
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-3">
@@ -295,8 +317,9 @@ export function SellReadyPanel({
 						<CardContent className="flex items-center gap-3 py-4">
 							<CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
 							<p className="text-sm font-medium text-green-700 dark:text-green-300">
-								This domain meets all sell-ready criteria. It is
-								ready to list.
+								Current signals look strong, but this remains an
+								estimate rather than a definitive listing
+								determination.
 							</p>
 						</CardContent>
 					</Card>

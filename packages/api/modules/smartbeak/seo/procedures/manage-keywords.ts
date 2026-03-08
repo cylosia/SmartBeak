@@ -42,6 +42,11 @@ export const addKeyword = protectedProcedure
 			difficulty: input.difficulty,
 			position: input.position,
 		});
+		if (!keyword) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: "Failed to save keyword.",
+			});
+		}
 		return { keyword };
 	});
 
@@ -67,7 +72,7 @@ export const removeKeyword = protectedProcedure
 		}
 		const domain = await getDomainById(keyword.domainId);
 		if (!domain || domain.orgId !== org.id) {
-			throw new ORPCError("FORBIDDEN", { message: "Access denied." });
+			throw new ORPCError("NOT_FOUND", { message: "Keyword not found." });
 		}
 		await deleteKeyword(input.id);
 		await audit({

@@ -56,6 +56,13 @@ type Idea = {
 	difficulty: "easy" | "medium" | "hard";
 };
 
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
 	const map: Record<string, string> = {
 		easy: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
@@ -70,13 +77,16 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
 }
 
 function ScoreBadge({ score }: { score: number }) {
+	const normalizedScore = clampPercent(score);
 	const color =
-		score >= 70
+		normalizedScore >= 70
 			? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
-			: score >= 40
+			: normalizedScore >= 40
 				? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
 				: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30";
-	return <Badge className={`text-xs ${color}`}>SEO {score}/100</Badge>;
+	return (
+		<Badge className={`text-xs ${color}`}>SEO {normalizedScore}/100</Badge>
+	);
 }
 
 function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
@@ -84,18 +94,20 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
 	const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 	useEffect(() => () => clearTimeout(copyTimerRef.current), []);
 
-	const copyToClipboard = () => {
+	const copyToClipboard = async () => {
 		const text = `# ${idea.title}\n\n${idea.metaDescription}\n\n## Outline\n${(idea.outline ?? []).map((h) => `- ${h}`).join("\n")}\n\nKeywords: ${(idea.targetKeywords ?? []).join(", ")}`;
-		navigator.clipboard
-			.writeText(text)
-			.then(() => {
-				setCopied(true);
-				clearTimeout(copyTimerRef.current);
-				copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
-			})
-			.catch(() => {
-				toastError("Copy failed", "Could not copy to clipboard.");
-			});
+		if (!navigator.clipboard?.writeText) {
+			toastError("Copy failed", "Clipboard is unavailable.");
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+			clearTimeout(copyTimerRef.current);
+			copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+		} catch {
+			toastError("Copy failed", "Could not copy to clipboard.");
+		}
 	};
 
 	return (
@@ -162,9 +174,9 @@ function IdeaCard({ idea, index }: { idea: Idea; index: number }) {
 						Target Keywords
 					</p>
 					<div className="flex flex-wrap gap-1">
-						{(idea.targetKeywords ?? []).map((kw) => (
+						{(idea.targetKeywords ?? []).map((kw, i) => (
 							<Badge
-								key={kw}
+								key={`${kw}-${i}`}
 								className="bg-muted text-muted-foreground text-xs"
 							>
 								{kw}
@@ -197,6 +209,9 @@ export function AiIdeaPanel({ organizationSlug, domainId, onClose }: Props) {
 
 	const generateMutation = useMutation(
 		orpc.smartbeak.seoIntelligence.generateAiIdeas.mutationOptions({
+			onMutate: () => {
+				setIdeas([]);
+			},
 			onSuccess: (data) => {
 				setIdeas(data.ideas as Idea[]);
 			},
@@ -297,7 +312,7 @@ export function AiIdeaPanel({ organizationSlug, domainId, onClose }: Props) {
 							generateMutation.mutate({
 								organizationSlug,
 								domainId,
-								niche: niche || undefined,
+								niche: niche.trim() || undefined,
 								contentType,
 								count: Number(count) || 5,
 							})

@@ -75,6 +75,8 @@ export function OtpForm() {
 		}
 	});
 
+	const codeValue = form.watch("code");
+
 	return (
 		<>
 			<h1 className="font-bold text-xl md:text-2xl">
@@ -109,10 +111,7 @@ export function OtpForm() {
 										maxLength={6}
 										{...field}
 										autoComplete="one-time-code"
-										onChange={(value) => {
-											field.onChange(value);
-											onSubmit();
-										}}
+										onChange={field.onChange}
 									>
 										<InputOTPGroup>
 											<InputOTPSlot
@@ -150,7 +149,10 @@ export function OtpForm() {
 						)}
 					/>
 
-					<Button loading={form.formState.isSubmitting}>
+					<Button
+						loading={form.formState.isSubmitting}
+						disabled={codeValue.length !== 6}
+					>
 						{t("auth.verify.submit")}
 					</Button>
 				</form>

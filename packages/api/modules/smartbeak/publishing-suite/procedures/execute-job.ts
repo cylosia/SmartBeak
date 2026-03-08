@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import {
+	claimPublishingJobForExecution,
 	getContentItemById,
 	getDomainById,
 	getPublishAttemptsForJobFull,
@@ -17,6 +18,19 @@ import { resolveSmartBeakOrg } from "../../lib/resolve-org";
 import { getAdapter, type PublishResult } from "../adapters";
 
 const MAX_ATTEMPTS = 3;
+const UNSUPPORTED_EXECUTION_MESSAGES = {
+	web: "Web publishing is not supported yet. Use SmartDeploy directly instead of the publishing queue.",
+	email:
+		"Email publishing is not supported yet. The current email adapter cannot safely model recipients or per-message content.",
+	youtube:
+		"YouTube publishing is not supported yet. The current publishing queue cannot upload the required video assets.",
+	instagram:
+		"Instagram publishing is not supported yet. The current publishing queue cannot attach the required media assets.",
+	tiktok:
+		"TikTok publishing is not supported yet. The current publishing queue cannot attach the required video assets.",
+	vimeo:
+		"Vimeo publishing is not supported yet. The current publishing queue cannot attach the required video assets.",
+} as const;
 
 export const executePublishingJobProcedure = protectedProcedure
 	.route({
@@ -42,9 +56,7 @@ export const executePublishingJobProcedure = protectedProcedure
 
 		const domain = await getDomainById(job.domainId);
 		if (!domain || domain.orgId !== org.id) {
-			throw new ORPCError("FORBIDDEN", {
-				message: "Job does not belong to this org.",
-			});
+			throw new ORPCError("NOT_FOUND", { message: "Job not found." });
 		}
 
 		const existingAttempts = await getPublishAttemptsForJobFull(
@@ -65,6 +77,19 @@ export const executePublishingJobProcedure = protectedProcedure
 			});
 			throw new ORPCError("BAD_REQUEST", {
 				message: `Max retry attempts (${MAX_ATTEMPTS}) exceeded. Job moved to DLQ.`,
+			});
+		}
+
+		const unsupportedMessage =
+			UNSUPPORTED_EXECUTION_MESSAGES[
+				job.target as keyof typeof UNSUPPORTED_EXECUTION_MESSAGES
+			];
+		if (unsupportedMessage) {
+			await updatePublishingJobStatus(input.jobId, "failed", {
+				error: unsupportedMessage,
+			});
+			throw new ORPCError("PRECONDITION_FAILED", {
+				message: unsupportedMessage,
 			});
 		}
 
@@ -116,18 +141,25 @@ export const executePublishingJobProcedure = protectedProcedure
 		};
 		if (job.contentId) {
 			const content = await getContentItemById(job.contentId);
-			if (content) {
-				payload = {
-					title: content.title,
-					body:
-						typeof content.body === "string"
-							? content.body
-							: JSON.stringify(content.body),
-					excerpt: "",
-					mediaUrls: [],
-					tags: [],
-				};
+			if (!content || content.domainId !== job.domainId) {
+				await updatePublishingJobStatus(input.jobId, "failed", {
+					error: "Associated content item is missing or does not belong to this domain.",
+				});
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"Associated content item is missing or does not belong to this domain.",
+				});
 			}
+			payload = {
+				title: content.title,
+				body:
+					typeof content.body === "string"
+						? content.body
+						: JSON.stringify(content.body),
+				excerpt: "",
+				mediaUrls: [],
+				tags: [],
+			};
 		}
 
 		// Get adapter
@@ -141,8 +173,13 @@ export const executePublishingJobProcedure = protectedProcedure
 			});
 		}
 
-		// Mark as running
-		await updatePublishingJobStatus(input.jobId, "running");
+		const [claimedJob] = await claimPublishingJobForExecution(input.jobId);
+		if (!claimedJob) {
+			throw new ORPCError("CONFLICT", {
+				message:
+					"Job is already running or has already been processed.",
+			});
+		}
 
 		// Execute
 		let result: PublishResult;

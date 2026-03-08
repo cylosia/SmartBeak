@@ -8,7 +8,7 @@
  *  - Team workspaces with granular permissions
  *  - SSO (SAML/OIDC) provider configuration
  *  - SCIM provisioning tokens
- *  - SOC2-ready audit log retention policies
+ *  - audit log retention policies
  *  - Usage-based billing tiers and seat management
  */
 
@@ -126,7 +126,7 @@ export const enterpriseTeamMembers = pgTable(
 
 /**
  * enterprise_team_activity — Immutable activity log scoped to a team.
- * Provides a team-level view of actions for SOC2 compliance.
+ * Provides a team-level view of recorded actions.
  */
 export const enterpriseTeamActivity = pgTable(
 	"enterprise_team_activity",
@@ -156,7 +156,7 @@ export const enterpriseTeamActivity = pgTable(
  * enterprise_sso_providers — Stores SAML/OIDC configuration per organization.
  * The `encryptedConfig` bytea column stores the full IdP metadata or OIDC
  * client secret, encrypted with AES-256-GCM at the application layer.
- * Only one active provider per type per org is allowed.
+ * Only one stored provider configuration per type per org is allowed.
  */
 export const enterpriseSsoProviders = pgTable(
 	"enterprise_sso_providers",
@@ -321,11 +321,11 @@ export const enterpriseOrgTier = pgTable(
 			.references(() => enterpriseBillingTiers.id, {
 				onDelete: "cascade",
 			}),
-		/** Number of licensed seats for this organization. */
+		/** Configured seat count for this organization. */
 		seats: integer("seats").notNull().default(1),
-		/** Whether to allow usage beyond the tier limits (with overage charges). */
+		/** Whether to allow usage beyond the tier limits in org settings. */
 		overageEnabled: boolean("overage_enabled").notNull().default(false),
-		/** External billing provider's subscription ID for this org-tier link. */
+		/** Optional external subscription identifier for billing integrations. */
 		externalSubscriptionId: text("external_subscription_id"),
 		/** Timestamp when the current tier period ends. */
 		periodEnd: timestamp("period_end", { withTimezone: true }),

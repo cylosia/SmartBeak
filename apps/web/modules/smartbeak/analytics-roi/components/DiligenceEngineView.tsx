@@ -25,7 +25,6 @@ import {
 	CheckCircleIcon,
 	ClockIcon,
 	PencilIcon,
-	PlayIcon,
 	ShieldCheckIcon,
 	XCircleIcon,
 } from "lucide-react";
@@ -67,6 +66,22 @@ const TYPE_LABELS: Record<string, string> = {
 	monetization: "Monetization Stability",
 };
 
+function clampPercent(value: number) {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+	return Math.min(100, Math.max(0, value));
+}
+
+function formatCalendarDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString();
+}
+
 export function DiligenceEngineView({
 	organizationSlug,
 	domainId,
@@ -82,22 +97,6 @@ export function DiligenceEngineView({
 	const reportQuery = useQuery(
 		orpc.smartbeak.analyticsRoi.getDiligenceReport.queryOptions({
 			input: { organizationSlug, domainId },
-		}),
-	);
-
-	const runMutation = useMutation(
-		orpc.smartbeak.analyticsRoi.runDiligence.mutationOptions({
-			onSuccess: () => {
-				queryClient.invalidateQueries({
-					queryKey: [
-						"smartbeak",
-						"analyticsRoi",
-						"getDiligenceReport",
-					],
-				});
-				toastSuccess("Diligence checks completed");
-			},
-			onError: (e: Error) => toastError("Diligence failed", e.message),
 		}),
 	);
 
@@ -143,11 +142,26 @@ export function DiligenceEngineView({
 	if (!report) {
 		return null;
 	}
+	const existingChecks = report.checks ?? [];
+	const checksByType = new Map(
+		existingChecks.map((check) => [check.type, check] as const),
+	);
+	const checks = Object.keys(TYPE_LABELS).map(
+		(type) =>
+			checksByType.get(type) ?? {
+				id: `manual-${type}`,
+				type,
+				status: "pending",
+				completedAt: null,
+				result: null,
+			},
+	);
+	const reportScore = clampPercent(report.score);
 
 	const scoreColor =
-		report.score >= 80
+		reportScore >= 80
 			? "text-green-600 dark:text-green-400"
-			: report.score >= 60
+			: reportScore >= 60
 				? "text-amber-600 dark:text-amber-400"
 				: "text-red-600 dark:text-red-400";
 
@@ -173,28 +187,24 @@ export function DiligenceEngineView({
 							</div>
 							<Button
 								size="sm"
-								onClick={() =>
-									runMutation.mutate({
-										organizationSlug,
-										domainId,
-									})
-								}
-								disabled={runMutation.isPending}
+								disabled
 							>
-								<PlayIcon className="mr-2 h-3.5 w-3.5" />
-								{runMutation.isPending
-									? "Running…"
-									: "Run All Checks"}
+								Unavailable
 							</Button>
 						</div>
 					</CardHeader>
 					<CardContent>
+						<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+							Automated diligence is not available yet. Record
+							manual review outcomes for each diligence category
+							using the edit controls below.
+						</div>
 						<div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
 							<div className="text-center">
 								<div
 									className={`text-3xl font-bold ${scoreColor}`}
 								>
-									{report.score}%
+									{reportScore}%
 								</div>
 								<div className="mt-1 text-xs text-muted-foreground">
 									Overall Score
@@ -225,7 +235,7 @@ export function DiligenceEngineView({
 								</div>
 							</div>
 						</div>
-						<Progress value={report.score} className="mt-4 h-2" />
+						<Progress value={reportScore} className="mt-4 h-2" />
 					</CardContent>
 				</Card>
 
@@ -236,8 +246,8 @@ export function DiligenceEngineView({
 							Check Results
 						</CardTitle>
 						<CardDescription>
-							Click the edit icon to manually override any check
-							status
+							Use the edit icon to record a manual review status for
+							each diligence category.
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="p-0">
@@ -252,7 +262,7 @@ export function DiligenceEngineView({
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{(report.checks ?? []).map((check) => {
+								{checks.map((check) => {
 									const cfg =
 										STATUS_CONFIG[
 											check.status as keyof typeof STATUS_CONFIG
@@ -273,16 +283,17 @@ export function DiligenceEngineView({
 												</Badge>
 											</TableCell>
 											<TableCell className="text-xs text-muted-foreground">
-												{check.completedAt
-													? new Date(
-															check.completedAt,
-														).toLocaleDateString()
-													: "—"}
+												{formatCalendarDate(
+													check.completedAt,
+												) ?? "—"}
 											</TableCell>
 											<TableCell className="text-xs text-muted-foreground">
-												{check.result
-													? `Score: ${(check.result as Record<string, unknown>).weight ?? "—"}`
-													: "—"}
+												{(check.result as Record<
+													string,
+													unknown
+												> | null)?.manual
+													? "Manually reviewed"
+													: "Manual review required"}
 											</TableCell>
 											<TableCell>
 												<Button
@@ -305,18 +316,6 @@ export function DiligenceEngineView({
 										</TableRow>
 									);
 								})}
-								{report.checks.length === 0 && (
-									<TableRow>
-										<TableCell
-											colSpan={5}
-											className="py-8 text-center text-muted-foreground"
-										>
-											No checks run yet. Click "Run All
-											Checks" to start automated
-											diligence.
-										</TableCell>
-									</TableRow>
-								)}
 							</TableBody>
 						</Table>
 					</CardContent>

@@ -4,7 +4,7 @@
  * Extends the basic audit log with:
  * - Full-text search and multi-field filtering
  * - CSV/JSON export with date range selection
- * - Retention policy management (SOC2-ready)
+ * - Retention policy management
  */
 
 import {
@@ -229,12 +229,39 @@ export const setAuditRetentionProcedure = protectedProcedure
 		await requireOrgAdmin(org.supastarterOrgId, user.id);
 		await requireEnterpriseFeature(org.id, "auditLog");
 
+		if (input.exportEnabled) {
+			if (!input.exportSchedule) {
+				throw new z.ZodError([
+					{
+						code: "custom",
+						path: ["exportSchedule"],
+						message:
+							"exportSchedule is required when scheduled exports are enabled",
+					},
+				]);
+			}
+			if (!input.exportRecipients) {
+				throw new z.ZodError([
+					{
+						code: "custom",
+						path: ["exportRecipients"],
+						message:
+							"exportRecipients is required when scheduled exports are enabled",
+					},
+				]);
+			}
+		}
+
 		const retention = await upsertAuditRetention({
 			orgId: org.id,
 			retentionDays: input.retentionDays,
 			exportEnabled: input.exportEnabled,
-			exportSchedule: input.exportSchedule,
-			exportRecipients: input.exportRecipients,
+			exportSchedule: input.exportEnabled
+				? input.exportSchedule
+				: undefined,
+			exportRecipients: input.exportEnabled
+				? input.exportRecipients
+				: undefined,
 			updatedBy: user.id,
 		});
 

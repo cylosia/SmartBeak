@@ -34,6 +34,7 @@ import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const MAX_REQUEST_BYTES = 2_048;
 
 export async function POST(request: NextRequest) {
 	// ── Authentication ──────────────────────────────────────────────────────────
@@ -47,7 +48,20 @@ export async function POST(request: NextRequest) {
 
 	let sessionId: string | null = null;
 	try {
-		const body = (await request.json()) as { sessionId?: string };
+		const contentLength = request.headers.get("content-length");
+		if (
+			contentLength &&
+			Number.parseInt(contentLength, 10) > MAX_REQUEST_BYTES
+		) {
+			return new Response("Request body too large", { status: 413 });
+		}
+
+		const rawBody = await request.text();
+		if (new TextEncoder().encode(rawBody).length > MAX_REQUEST_BYTES) {
+			return new Response("Request body too large", { status: 413 });
+		}
+
+		const body = JSON.parse(rawBody) as { sessionId?: string };
 		sessionId = body.sessionId ?? null;
 	} catch {
 		return new Response("Invalid JSON body", { status: 400 });
@@ -78,16 +92,6 @@ export async function POST(request: NextRequest) {
 		);
 	}
 
-	const claimed = await claimSession(sessionId);
-	if (!claimed) {
-		return new Response(
-			JSON.stringify({
-				error: "Session already claimed by another request",
-			}),
-			{ status: 409, headers: { "Content-Type": "application/json" } },
-		);
-	}
-
 	// ── Load workflow ───────────────────────────────────────────────────────────
 	if (!agentSession.workflowId) {
 		return new Response("Session has no associated workflow", {
@@ -103,6 +107,16 @@ export async function POST(request: NextRequest) {
 	const graph = WorkflowGraphSchema.safeParse(workflow.stepsJson);
 	if (!graph.success) {
 		return new Response("Invalid workflow graph", { status: 400 });
+	}
+
+	const claimed = await claimSession(sessionId);
+	if (!claimed) {
+		return new Response(
+			JSON.stringify({
+				error: "Session already claimed by another request",
+			}),
+			{ status: 409, headers: { "Content-Type": "application/json" } },
+		);
 	}
 
 	const inputData = agentSession.inputData as {

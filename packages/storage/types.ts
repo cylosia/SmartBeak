@@ -11,6 +11,7 @@ export type GetSignedUploadUrlHandler = (
 	path: string,
 	options: {
 		bucket: keyof typeof config.bucketNames;
+		size: number;
 	},
 ) => Promise<string>;
 
@@ -21,3 +22,10 @@ export type GetSignedUrlHandler = (
 		expiresIn?: number;
 	},
 ) => Promise<string>;
+
+export type DeleteObjectHandler = (
+	path: string,
+	options: {
+		bucket: keyof typeof config.bucketNames;
+	},
+) => Promise<void>;

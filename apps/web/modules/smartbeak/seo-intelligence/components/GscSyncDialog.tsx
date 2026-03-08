@@ -41,13 +41,26 @@ export function GscSyncDialog({
 	const [startDate, setStartDate] = useState(thirtyDaysAgo);
 	const [endDate, setEndDate] = useState(today);
 
+	const resetForm = () => {
+		setSiteUrl("https://");
+		setAccessToken("");
+		setStartDate(thirtyDaysAgo);
+		setEndDate(today);
+	};
+
+	const handleClose = () => {
+		resetForm();
+		onClose();
+	};
+
 	const syncMutation = useMutation(
 		orpc.smartbeak.seoIntelligence.syncGsc.mutationOptions({
 			onSuccess: (data) => {
 				toastSuccess(
-					"GSC sync complete",
-					`Imported ${data.keywordsImported} keywords. SEO score updated to ${data.newScore}.`,
+					"GSC sync recorded",
+					`Recorded ${data.keywordsImported} keyword rows. Heuristic SEO score recalculated to ${data.newScore}.`,
 				);
+				resetForm();
 				onSuccess();
 			},
 			onError: (err) => {
@@ -59,8 +72,32 @@ export function GscSyncDialog({
 		}),
 	);
 
+	const trimmedSiteUrl = siteUrl.trim();
+	const trimmedAccessToken = accessToken.trim();
+	const hasValidDateRange =
+		Boolean(startDate) && Boolean(endDate) && startDate <= endDate;
+
+	const handleSync = () => {
+		if (!hasValidDateRange) {
+			toastError(
+				"Invalid date range",
+				"Start date must be on or before end date.",
+			);
+			return;
+		}
+
+		syncMutation.mutate({
+			organizationSlug,
+			domainId,
+			siteUrl: trimmedSiteUrl,
+			accessToken: trimmedAccessToken,
+			startDate,
+			endDate,
+		});
+	};
+
 	return (
-		<Dialog open onOpenChange={(open: boolean) => !open && onClose()}>
+		<Dialog open onOpenChange={(open: boolean) => !open && handleClose()}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
@@ -150,28 +187,20 @@ export function GscSyncDialog({
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={onClose}>
+					<Button variant="outline" onClick={handleClose}>
 						Cancel
 					</Button>
 					<Button
-						onClick={() =>
-							syncMutation.mutate({
-								organizationSlug,
-								domainId,
-								siteUrl,
-								accessToken,
-								startDate,
-								endDate,
-							})
-						}
+						onClick={handleSync}
 						disabled={
 							syncMutation.isPending ||
-							!siteUrl ||
-							!siteUrl.startsWith("https://") ||
-							siteUrl.length < 10 ||
-							!accessToken ||
+							!trimmedSiteUrl ||
+							!trimmedSiteUrl.startsWith("https://") ||
+							trimmedSiteUrl.length < 10 ||
+							!trimmedAccessToken ||
 							!startDate ||
-							!endDate
+							!endDate ||
+							!hasValidDateRange
 						}
 					>
 						{syncMutation.isPending ? (

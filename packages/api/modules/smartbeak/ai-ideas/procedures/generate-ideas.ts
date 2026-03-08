@@ -1,5 +1,9 @@
 import { generateText } from "@repo/ai";
 import z from "zod";
+import {
+	checkAiBudget,
+	recordAiSpend,
+} from "../../../../infrastructure/ai-budget";
 import { protectedProcedure } from "../../../../orpc/procedures";
 import { requireOrgMembership } from "../../lib/membership";
 import { resolveTextModel } from "../../lib/resolve-ai";
@@ -14,6 +18,7 @@ const ideaSchema = z.object({
 	seoScore: z.number(),
 });
 const ideasArraySchema = z.array(ideaSchema).max(25);
+const ESTIMATED_IDEA_GENERATION_COST_CENTS = 2;
 
 const SYSTEM_PROMPT = `You are a premium content strategist.
 Return ONLY a JSON array (no markdown fences) where each object has:
@@ -45,6 +50,7 @@ export const generateContentIdeas = protectedProcedure
 		const org = await resolveSmartBeakOrg(input.organizationSlug);
 		await requireOrgMembership(org.supastarterOrgId, user.id);
 		const { domainName, niche, count } = input;
+		await checkAiBudget(org.id, ESTIMATED_IDEA_GENERATION_COST_CENTS);
 
 		const model = await resolveTextModel(org.id);
 
@@ -66,8 +72,14 @@ export const generateContentIdeas = protectedProcedure
 				.replace(/```\s*/g, "")
 				.trim();
 			const parsed = ideasArraySchema.parse(JSON.parse(cleaned));
+			recordAiSpend(org.id, ESTIMATED_IDEA_GENERATION_COST_CENTS).catch(
+				() => {},
+			);
 			return { ideas: JSON.stringify(parsed), structured: parsed };
 		} catch {
+			recordAiSpend(org.id, ESTIMATED_IDEA_GENERATION_COST_CENTS).catch(
+				() => {},
+			);
 			return { ideas: response.text, structured: [] };
 		}
 	});

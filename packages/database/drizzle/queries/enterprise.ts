@@ -79,6 +79,7 @@ export async function updateTeam(
 	teamId: string,
 	data: {
 		name?: string;
+		slug?: string;
 		description?: string | null;
 		settings?: Record<string, unknown>;
 	},
@@ -87,6 +88,7 @@ export async function updateTeam(
 		.update(enterpriseTeams)
 		.set({
 			...(data.name !== undefined && { name: data.name }),
+			...(data.slug !== undefined && { slug: data.slug }),
 			...(data.description !== undefined && {
 				description: data.description,
 			}),
@@ -656,7 +658,7 @@ export async function seedDefaultBillingTiers() {
 			name: "enterprise",
 			displayName: "Enterprise",
 			description:
-				"For large organizations requiring SSO, SCIM, and SLA guarantees.",
+				"For large organizations needing SSO, SCIM, and expanded enterprise administration controls.",
 			pricePerSeatCents: 14900,
 			interval: "monthly" as const,
 			features: {

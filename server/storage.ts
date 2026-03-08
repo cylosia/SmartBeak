@@ -15,7 +15,7 @@ import {
 	type User,
 	users,
 } from "@shared/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "./db";
 
 export interface IStorage {
@@ -51,6 +51,7 @@ export interface IStorage {
 	): Promise<DeploymentVersion>;
 
 	getAuditLogs(entityType?: string, entityId?: string): Promise<AuditLog[]>;
+	getAuditLogsForDomain(domainId: string): Promise<AuditLog[]>;
 	createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
 }
 
@@ -115,7 +116,7 @@ export class DatabaseStorage implements IStorage {
 			.select()
 			.from(siteShards)
 			.where(eq(siteShards.domainId, domainId))
-			.orderBy(desc(siteShards.createdAt))
+			.orderBy(desc(siteShards.version), desc(siteShards.createdAt))
 			.limit(100);
 	}
 
@@ -143,15 +144,20 @@ export class DatabaseStorage implements IStorage {
 		if (domainIds.length === 0) {
 			return new Map();
 		}
-		const rows = await db.execute<SiteShard>(
-			sql`SELECT DISTINCT ON (domain_id) *
-				FROM site_shards
-				WHERE domain_id = ANY(${domainIds}::uuid[])
-				ORDER BY domain_id, version DESC`,
-		);
+		const rows = await db
+			.select()
+			.from(siteShards)
+			.where(inArray(siteShards.domainId, domainIds))
+			.orderBy(
+				siteShards.domainId,
+				desc(siteShards.version),
+				desc(siteShards.createdAt),
+			);
 		const map = new Map<string, SiteShard>();
 		for (const row of rows) {
-			map.set(row.domainId, row);
+			if (!map.has(row.domainId)) {
+				map.set(row.domainId, row);
+			}
 		}
 		return map;
 	}
@@ -209,7 +215,6 @@ export class DatabaseStorage implements IStorage {
 		entityId?: string,
 	): Promise<AuditLog[]> {
 		if (entityType && entityId) {
-			const { and } = await import("drizzle-orm");
 			return db
 				.select()
 				.from(auditLogs)
@@ -225,6 +230,34 @@ export class DatabaseStorage implements IStorage {
 		return db
 			.select()
 			.from(auditLogs)
+			.orderBy(desc(auditLogs.createdAt))
+			.limit(100);
+	}
+
+	async getAuditLogsForDomain(domainId: string): Promise<AuditLog[]> {
+		const shardRows = await db
+			.select({ id: siteShards.id })
+			.from(siteShards)
+			.where(eq(siteShards.domainId, domainId));
+		const shardIds = shardRows.map((row) => row.id);
+
+		const filters = [
+			and(eq(auditLogs.entityType, "domain"), eq(auditLogs.entityId, domainId)),
+		];
+
+		if (shardIds.length > 0) {
+			filters.push(
+				and(
+					eq(auditLogs.entityType, "site_shard"),
+					inArray(auditLogs.entityId, shardIds),
+				),
+			);
+		}
+
+		return db
+			.select()
+			.from(auditLogs)
+			.where(or(...filters))
 			.orderBy(desc(auditLogs.createdAt))
 			.limit(100);
 	}

@@ -3,8 +3,10 @@
 import { LocaleLink } from "@i18n/routing";
 import type { Post } from "@marketing/blog/types";
 import Image from "next/image";
+import { useLocale } from "next-intl";
 
 export function PostListItem({ post }: { post: Post }) {
+	const locale = useLocale();
 	const { title, excerpt, authorName, image, date, path, authorImage, tags } =
 		post;
 
@@ -71,7 +73,7 @@ export function PostListItem({ post }: { post: Post }) {
 
 				<div className="mr-0 ml-auto">
 					<p className="text-sm opacity-30">
-						{Intl.DateTimeFormat("en-US").format(new Date(date))}
+						{Intl.DateTimeFormat(locale).format(new Date(date))}
 					</p>
 				</div>
 			</div>

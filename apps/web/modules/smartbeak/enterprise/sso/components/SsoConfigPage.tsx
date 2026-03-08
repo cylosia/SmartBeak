@@ -92,8 +92,23 @@ const statusColors: Record<string, string> = {
 		"bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-400 dark:border-yellow-800",
 };
 
+const statusLabels: Record<string, string> = {
+	active: "Enabled by Admin",
+	inactive: "Disabled",
+	testing: "Testing Mode",
+};
+
 interface SsoConfigPageProps {
 	organizationSlug: string;
+}
+
+function parseValidDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
@@ -118,6 +133,15 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 	const samlForm = useForm({ resolver: zodResolver(samlSchema) });
 	const oidcForm = useForm({ resolver: zodResolver(oidcSchema) });
 
+	const handleSsoDialogOpenChange = (open: boolean) => {
+		setSsoDialogOpen(open);
+		if (!open) {
+			samlForm.reset();
+			oidcForm.reset();
+			setSsoType("saml");
+		}
+	};
+
 	const upsertSsoMutation = useMutation(
 		orpc.enterprise.sso.providers.upsert.mutationOptions({
 			onSuccess: () => {
@@ -129,7 +153,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 				setSsoDialogOpen(false);
 				samlForm.reset();
 				oidcForm.reset();
-				toastSuccess("SSO provider saved successfully.");
+				toastSuccess("SSO provider configuration saved.");
 			},
 			onError: (err) => toastError("Error", err.message),
 		}),
@@ -143,7 +167,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 						input: { organizationSlug },
 					}),
 				});
-				toastSuccess("Provider status updated.");
+				toastSuccess("Provider configuration status saved.");
 			},
 			onError: (err) => toastError("Error", err.message),
 		}),
@@ -157,7 +181,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 						input: { organizationSlug },
 					}),
 				});
-				toastSuccess("SSO provider deleted.");
+				toastSuccess("SSO provider configuration removed.");
 			},
 			onError: (err) => toastError("Error", err.message),
 		}),
@@ -227,6 +251,20 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 		});
 	});
 
+	const handleCopyScimToken = async () => {
+		if (!newScimToken || !navigator.clipboard?.writeText) {
+			toastError("Copy failed", "SCIM token is unavailable.");
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(newScimToken);
+			toastSuccess("Copied to clipboard.");
+		} catch {
+			toastError("Copy failed", "Could not copy SCIM token.");
+		}
+	};
+
 	return (
 		<ErrorBoundary>
 			<div className="space-y-8">
@@ -239,10 +277,11 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 									<ShieldCheckIcon className="size-5 text-blue-600 dark:text-blue-400" />
 								</div>
 								<div>
-									<CardTitle>Single Sign-On</CardTitle>
+									<CardTitle>SSO Configuration</CardTitle>
 									<CardDescription>
-										Configure SAML 2.0 or OIDC providers for
-										your organization.
+										Store SAML 2.0 or OIDC provider settings
+										for your organization. End-to-end sign-in
+										flows are not configured from this UI.
 									</CardDescription>
 								</div>
 							</div>
@@ -251,7 +290,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 								className="gap-2"
 							>
 								<PlusIcon className="size-4" />
-								Add Provider
+								Add Provider Settings
 							</Button>
 						</div>
 					</CardHeader>
@@ -287,8 +326,8 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 										No SSO providers configured
 									</p>
 									<p className="text-xs text-muted-foreground mt-1">
-										Add a SAML or OIDC provider to enable
-										single sign-on.
+										Add SAML or OIDC provider settings to
+										prepare for future SSO rollout.
 									</p>
 								</div>
 								<Button
@@ -296,7 +335,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 									size="sm"
 									onClick={() => setSsoDialogOpen(true)}
 								>
-									Configure SSO
+									Add Provider Settings
 								</Button>
 							</div>
 						) : (
@@ -341,7 +380,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 															"active" && (
 															<CheckCircle2Icon className="size-3 mr-1" />
 														)}
-														{provider.status}
+														{statusLabels[
+															provider.status
+														] ?? provider.status}
 													</Badge>
 												</TableCell>
 												<TableCell>
@@ -371,13 +412,13 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 															</SelectTrigger>
 															<SelectContent>
 																<SelectItem value="active">
-																	Active
+																	Enabled by Admin
 																</SelectItem>
 																<SelectItem value="testing">
-																	Testing
+																	Testing Mode
 																</SelectItem>
 																<SelectItem value="inactive">
-																	Inactive
+																	Disabled
 																</SelectItem>
 															</SelectContent>
 														</Select>
@@ -409,7 +450,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 					</CardContent>
 				</Card>
 
-				{/* SCIM Provisioning */}
+				{/* SCIM Tokens */}
 				<Card>
 					<CardHeader>
 						<div className="flex items-center justify-between">
@@ -418,10 +459,12 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 									<ZapIcon className="size-5 text-violet-600 dark:text-violet-400" />
 								</div>
 								<div>
-									<CardTitle>SCIM Provisioning</CardTitle>
+									<CardTitle>SCIM Tokens</CardTitle>
 									<CardDescription>
-										Automate user provisioning and
-										deprovisioning via your IdP.
+										Generate and revoke bearer tokens for
+										SCIM integrations. Automated
+										provisioning flows are not configured
+										from this UI.
 									</CardDescription>
 								</div>
 							</div>
@@ -458,14 +501,9 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 											variant="outline"
 											size="icon"
 											className="size-8 shrink-0"
-											onClick={() => {
-												navigator.clipboard.writeText(
-													newScimToken,
-												);
-												toastSuccess(
-													"Copied to clipboard.",
-												);
-											}}
+											onClick={() =>
+												void handleCopyScimToken()
+											}
 											aria-label="Copy to clipboard"
 										>
 											<CopyIcon className="size-3.5" />
@@ -540,11 +578,13 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 													••••••••{token.tokenSuffix}
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{token.lastUsedAt
+													{parseValidDate(
+														token.lastUsedAt,
+													)
 														? formatDistanceToNow(
-																new Date(
+																parseValidDate(
 																	token.lastUsedAt,
-																),
+																) as Date,
 																{
 																	addSuffix: true,
 																},
@@ -552,11 +592,13 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 														: "Never"}
 												</TableCell>
 												<TableCell className="text-sm text-muted-foreground">
-													{token.expiresAt
+													{parseValidDate(
+														token.expiresAt,
+													)
 														? format(
-																new Date(
+																parseValidDate(
 																	token.expiresAt,
-																),
+																) as Date,
 																"MMM d, yyyy",
 															)
 														: "Never"}
@@ -590,13 +632,16 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 				</Card>
 
 				{/* SSO Config Dialog */}
-				<Dialog open={ssoDialogOpen} onOpenChange={setSsoDialogOpen}>
+				<Dialog
+					open={ssoDialogOpen}
+					onOpenChange={handleSsoDialogOpenChange}
+				>
 					<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
 						<DialogHeader>
-							<DialogTitle>Configure SSO Provider</DialogTitle>
+							<DialogTitle>Save SSO Provider Settings</DialogTitle>
 							<DialogDescription>
-								Set up SAML 2.0 or OpenID Connect for your
-								organization.
+								Store SAML 2.0 or OpenID Connect provider
+								settings for your organization.
 							</DialogDescription>
 						</DialogHeader>
 
@@ -714,7 +759,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 										>
 											{upsertSsoMutation.isPending
 												? "Saving…"
-												: "Save SAML Provider"}
+												: "Save SAML Settings"}
 										</Button>
 									</DialogFooter>
 								</form>
@@ -800,7 +845,7 @@ export function SsoConfigPage({ organizationSlug }: SsoConfigPageProps) {
 										>
 											{upsertSsoMutation.isPending
 												? "Saving…"
-												: "Save OIDC Provider"}
+												: "Save OIDC Settings"}
 										</Button>
 									</DialogFooter>
 								</form>

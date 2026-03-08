@@ -3,9 +3,11 @@
 import { authClient } from "@repo/auth/client";
 import { Button } from "@repo/ui/components/button";
 import { toastError } from "@repo/ui/components/toast";
+import { sessionQueryKey } from "@saas/auth/lib/api";
 import { OrganizationLogo } from "@saas/organizations/components/OrganizationLogo";
 import { organizationListQueryKey } from "@saas/organizations/lib/api";
 import { useRouter } from "@shared/hooks/router";
+import { clearCache } from "@shared/lib/cache";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -45,6 +47,9 @@ export function OrganizationInvitationModal({
 				await queryClient.invalidateQueries({
 					queryKey: organizationListQueryKey,
 				});
+				await queryClient.invalidateQueries({
+					queryKey: sessionQueryKey,
+				});
 
 				router.replace(`/app/${organizationSlug}`);
 			} else {
@@ -57,6 +62,13 @@ export function OrganizationInvitationModal({
 					throw error;
 				}
 
+				await clearCache();
+				await queryClient.invalidateQueries({
+					queryKey: organizationListQueryKey,
+				});
+				await queryClient.invalidateQueries({
+					queryKey: sessionQueryKey,
+				});
 				router.replace("/app");
 			}
 		} catch (error) {

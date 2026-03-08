@@ -16,6 +16,44 @@ import type {
 } from "../../types";
 
 let dodoPaymentsClient: DodoPayments | null = null;
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+async function readRequestTextWithLimit(
+	req: Request,
+	maxBytes: number,
+): Promise<string> {
+	const contentLength = req.headers.get("content-length");
+	if (contentLength) {
+		const parsedLength = Number.parseInt(contentLength, 10);
+		if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+	}
+
+	const reader = req.body?.getReader();
+	if (!reader) {
+		throw new Error("Invalid request body");
+	}
+
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+		totalBytes += value.byteLength;
+		if (totalBytes > maxBytes) {
+			throw new Error("Webhook payload too large");
+		}
+		text += decoder.decode(value, { stream: true });
+	}
+
+	text += decoder.decode();
+	return text;
+}
 
 export function getDodoPaymentsClient() {
 	if (dodoPaymentsClient) {
@@ -135,7 +173,10 @@ export const webhookHandler: WebhookHandler = async (req) => {
 	}
 
 	try {
-		const body = await req.text();
+		const body = await readRequestTextWithLimit(
+			req,
+			MAX_WEBHOOK_BODY_BYTES,
+		);
 		const headers = req.headers;
 
 		const webhookId = headers.get("webhook-id");
@@ -306,6 +347,14 @@ export const webhookHandler: WebhookHandler = async (req) => {
 			});
 		}
 	} catch (error) {
+		if (
+			error instanceof Error &&
+			error.message === "Webhook payload too large"
+		) {
+			return new Response("Payload too large.", {
+				status: 413,
+			});
+		}
 		logger.error("Error processing webhook", {
 			error: error instanceof Error ? error.message : error,
 		});

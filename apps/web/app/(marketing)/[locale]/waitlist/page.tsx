@@ -6,7 +6,7 @@ import { WaitlistSection } from "@/modules/marketing/waitlist/components/Waitlis
 export const metadata: Metadata = {
 	title: "Join the Waitlist — SmartBeak",
 	description:
-		"Get early access to SmartBeak — the AI-powered content publishing platform for domain portfolio owners. Join the waitlist and lock in founding member pricing.",
+		"Get early access to SmartBeak — the AI-powered content publishing platform for domain portfolio owners. Join the waitlist for staged beta access updates.",
 };
 
 export default function WaitlistPage() {
@@ -19,9 +19,9 @@ export default function WaitlistPage() {
 						Get early access to SmartBeak
 					</h1>
 					<p className="mt-4 text-lg text-foreground/60 max-w-xl mx-auto">
-						Join hundreds of domain portfolio owners on the
-						waitlist. Founding members get 40% off for life and
-						priority access to every new feature.
+						Join the waitlist for staged beta access updates and
+						priority review as new SmartBeak capabilities are rolled
+						out.
 					</p>
 				</div>
 			</section>

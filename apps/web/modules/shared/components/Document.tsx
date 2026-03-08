@@ -26,6 +26,12 @@ export async function Document({
 	const consentCookie = cookieStore.get("consent");
 	const headerStore = await headers();
 	const nonce = headerStore.get("x-nonce") ?? undefined;
+	const initialConsentState =
+		consentCookie?.value === "true"
+			? "accepted"
+			: consentCookie?.value === "false"
+				? "declined"
+				: undefined;
 
 	return (
 		<html
@@ -41,9 +47,7 @@ export async function Document({
 				)}
 			>
 				<NuqsAdapter>
-					<ConsentProvider
-						initialConsent={consentCookie?.value === "true"}
-					>
+					<ConsentProvider initialConsentState={initialConsentState}>
 						<ClientProviders>{children}</ClientProviders>
 					</ConsentProvider>
 				</NuqsAdapter>

@@ -14,7 +14,18 @@ interface RateLimitWindow {
 	resetAt: number;
 }
 
+const MAX_WINDOWS = 10_000;
 const windows = new Map<string, RateLimitWindow>();
+
+function evictOldestWindows() {
+	while (windows.size >= MAX_WINDOWS) {
+		const oldestKey = windows.keys().next().value;
+		if (!oldestKey) {
+			break;
+		}
+		windows.delete(oldestKey);
+	}
+}
 
 /**
  * Checks and increments the rate limit for a given key.
@@ -34,6 +45,7 @@ export function checkRateLimit(
 
 	if (!existing || now >= existing.resetAt) {
 		// Start a new window.
+		evictOldestWindows();
 		windows.set(key, { count: 1, resetAt: now + windowMs });
 		return { allowed: true, remaining: limit - 1, resetAt: now + windowMs };
 	}

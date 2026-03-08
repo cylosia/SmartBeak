@@ -70,6 +70,17 @@ const AiIdeasResponseSchema = z.object({
 	ideas: z.string().optional(),
 });
 
+function formatRelativeDate(value: unknown) {
+	if (typeof value !== "string" && !(value instanceof Date)) {
+		return null;
+	}
+
+	const parsed = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(parsed.getTime())
+		? null
+		: formatDistanceToNow(parsed, { addSuffix: true });
+}
+
 // Isolated component keeps the dangerouslySetInnerHTML suppression scoped.
 // Safety: all html passed here is run through DOMPurify.sanitize() before render.
 function HtmlPreview({ html }: { html: string }) {
@@ -185,6 +196,14 @@ export function ContentEditorView({
 						}),
 						context.previous,
 					);
+					const previousItem =
+						(context.previous as { item?: Record<string, unknown> })
+							?.item ?? null;
+					if (previousItem) {
+						setTitle(String(previousItem.title ?? ""));
+						setBody(String(previousItem.body ?? ""));
+						setStatus(String(previousItem.status ?? "draft"));
+					}
 				}
 				toastError("Error", err.message);
 			},
@@ -195,7 +214,7 @@ export function ContentEditorView({
 		updateMutation.mutate({
 			organizationSlug,
 			id: contentId,
-			title,
+			title: title.trim(),
 			body,
 			status: status as "draft" | "published" | "scheduled" | "archived",
 		});
@@ -356,16 +375,9 @@ export function ContentEditorView({
 														Version {rev.version}
 													</span>
 													<span className="text-xs text-muted-foreground">
-														{rev.createdAt
-															? formatDistanceToNow(
-																	new Date(
-																		rev.createdAt,
-																	),
-																	{
-																		addSuffix: true,
-																	},
-																)
-															: "—"}
+														{formatRelativeDate(
+															rev.createdAt,
+														) ?? "—"}
 													</span>
 												</div>
 												<p className="text-xs text-muted-foreground line-clamp-2">
@@ -466,9 +478,9 @@ export function ContentEditorView({
 
 									{!aiLoading && aiIdeas.length > 0 && (
 										<div className="space-y-3">
-											{aiIdeas.map((idea) => (
+											{aiIdeas.map((idea, index) => (
 												<AiIdeaCard
-													key={`${idea.title}-${idea.contentType}`}
+													key={`${idea.title}-${idea.contentType}-${index}`}
 													idea={idea}
 													onUseTitle={(t) => {
 														setTitle(t);
