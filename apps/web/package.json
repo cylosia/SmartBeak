@@ -75,7 +75,7 @@
 		"@playwright/test": "^1.58.2",
 		"@repo/tailwind-config": "workspace:*",
 		"@repo/tsconfig": "workspace:*",
-		"@shikijs/rehype": "^4.0.1",
+		"@shikijs/rehype": "^4.0.2",
 		"@tailwindcss/postcss": "^4.2.1",
 		"@types/js-cookie": "^3.0.4",
 		"@types/mdx": "^2.0.13",
