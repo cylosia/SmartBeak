@@ -6,11 +6,11 @@ import {
 	textModel,
 	type UIMessage,
 } from "@repo/ai";
+import z from "zod";
 import {
 	checkAiBudget,
 	recordAiSpend,
-} from "@repo/api/infrastructure/ai-budget";
-import z from "zod";
+} from "../../../infrastructure/ai-budget";
 import { protectedRateLimitMiddleware } from "../../../orpc/middleware/rate-limit-middleware";
 import { protectedProcedure } from "../../../orpc/procedures";
 

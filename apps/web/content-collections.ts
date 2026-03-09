@@ -1,6 +1,6 @@
 import { defineCollection, defineConfig } from "@content-collections/core";
 import { compileMDX } from "@content-collections/mdx";
-import { config } from "@repo/i18n/config";
+import { config } from "./modules/i18n/config.js";
 import rehypeShiki from "@shikijs/rehype";
 import { z } from "zod";
 
