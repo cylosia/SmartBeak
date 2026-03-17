@@ -4,7 +4,7 @@
 		"@ai-sdk/openai": "^3.0.41",
 		"@ai-sdk/react": "^3.0.118",
 		"ai": "^6.0.116",
-		"openai": "^6.27.0"
+		"openai": "^6.31.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.6",
