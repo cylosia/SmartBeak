@@ -3,9 +3,9 @@
 		"deepmerge": "^4.3.1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.6",
+		"@biomejs/biome": "2.4.9",
 		"@repo/tsconfig": "workspace:*",
-		"@types/node": "^25.3.5"
+		"@types/node": "^25.5.0"
 	},
 	"name": "@repo/i18n",
 	"scripts": {
