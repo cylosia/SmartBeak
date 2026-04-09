@@ -1,14 +1,14 @@
 {
 	"dependencies": {
-		"@better-auth/passkey": "1.5.4",
-		"@better-auth/prisma-adapter": "^1.5.4",
+		"@better-auth/passkey": "1.6.1",
+		"@better-auth/prisma-adapter": "^1.6.1",
 		"@repo/database": "workspace:*",
 		"@repo/i18n": "workspace:*",
 		"@repo/logs": "workspace:*",
 		"@repo/mail": "workspace:*",
 		"@repo/payments": "workspace:*",
 		"@repo/utils": "workspace:*",
-		"better-auth": "1.5.4",
+		"better-auth": "1.6.1",
 		"cookie": "^1.0.2"
 	},
 	"devDependencies": {
