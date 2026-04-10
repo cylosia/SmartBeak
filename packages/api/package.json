@@ -25,11 +25,11 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.6",
+		"@biomejs/biome": "2.4.11",
 		"@repo/tsconfig": "workspace:*",
 		"@types/react": "19.2.14",
 		"encoding": "^0.1.13",
-		"typescript": "5.9.3"
+		"typescript": "6.0.2"
 	},
 	"main": "./index.ts",
 	"name": "@repo/api",
